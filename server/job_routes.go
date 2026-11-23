@@ -47,6 +47,10 @@ type jobLive struct {
 	// run in the request), empty until read.
 	Dir    string `json:"dir,omitempty"`
 	Branch string `json:"branch,omitempty"`
+	// OutsideWorktree: the job has a worktree and its agent's pane is in
+	// another folder now (the job was given a pane elsewhere): the job's
+	// branch and folder are the pane's, not the worktree's.
+	OutsideWorktree bool `json:"outsideWorktree,omitempty"`
 	// branchHidden: a view-only client may not read the folder's branch
 	// (a home dir, as the overview's changes)
 	branchHidden bool
@@ -533,15 +537,13 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		live := a.jobLiveIn(snap, j)
 		if viewOnly {
 			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated}
-			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir = "", "", ""
+			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir, b.Live.OutsideWorktree = "", "", "", false
 			if live.branchHidden {
 				b.Live.Branch = ""
 			}
-			switch {
-			case j.Worktree != nil:
+			b.Branch = b.Live.Branch
+			if j.Worktree != nil && !live.OutsideWorktree {
 				b.Branch = j.Worktree.Branch
-			default:
-				b.Branch = b.Live.Branch
 			}
 			brief = append(brief, b)
 			continue
@@ -587,6 +589,7 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 		return live
 	}
 	live.PaneID, live.Ref, live.Dir = p.pane.ID, p.ref(), p.cwd()
+	live.OutsideWorktree = j.Worktree != nil && live.Dir != "" && !dirInTree(j.Worktree.Dir, live.Dir)
 	if f := a.files; f != nil && f.dirs != nil && a.m.Caps().Files {
 		// Queues a read in the background when there is none yet, one git
 		// status at a time, as the overview does.
@@ -623,6 +626,20 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 	// moving agentTS meanwhile.
 	live.Unread = live.Status == "idle" && sum.agentTS != "" && (conv != j.ReadConv || tsAfter(sum.agentTS, j.ReadTS))
 	return live
+}
+
+// dirInTree: dir is the worktree at tree or a folder inside it, through
+// symlinks (a removed worktree holds nothing).
+func dirInTree(tree, dir string) bool {
+	in := func(t, d string) bool {
+		return filepath.Clean(t) == filepath.Clean(d) || pathWithin(filepath.Clean(t), filepath.Clean(d))
+	}
+	if in(tree, dir) {
+		return true
+	}
+	rt, err1 := filepath.EvalSymlinks(tree)
+	rd, err2 := filepath.EvalSymlinks(dir)
+	return err1 == nil && err2 == nil && in(rt, rd)
 }
 
 // decodeJobBody reads a JSON body of at most jobBody bytes into v.

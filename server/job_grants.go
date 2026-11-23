@@ -45,6 +45,11 @@ const (
 var errGrantPWAOnly = &codedError{"grant_pwa_only",
 	"a grant is given from the PWA, signed in with the password or a paired device", http.StatusForbidden}
 
+// errGrantOutsideWorktree: an edit grant covers the job's worktree, and
+// the job's agent works in another folder now (the job was moved).
+var errGrantOutsideWorktree = &codedError{"grant_outside_worktree",
+	"the job's agent works outside the job's worktree: a grant to edit files covers only the worktree", http.StatusConflict}
+
 // canGrant: r comes from a browser signed in with the password or as a full
 // paired device. Never the CLI (the local socket), another termote (the
 // bridge), Basic auth or a server without sign-in: a grant is the user's
@@ -128,8 +133,13 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, errJobNotFound)
 		return
 	}
-	if live := a.viewJob(cur).Live; cur.Agent == nil || live.Status == "gone" || live.Status == "unknown" {
+	live := a.viewJob(cur).Live
+	if cur.Agent == nil || live.Status == "gone" || live.Status == "unknown" {
 		writeJobError(w, invalidJob("the job's agent does not run: a grant needs it"))
+		return
+	}
+	if g.Kind == "edit" && live.OutsideWorktree {
+		writeJobError(w, errGrantOutsideWorktree)
 		return
 	}
 	j, err := a.jobs.update(id, "", func(j *job) error {

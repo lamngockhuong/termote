@@ -181,6 +181,41 @@ describe('JobGrantSheet', () => {
     ).toBeDisabled()
   })
 
+  it("gives no grant to edit files while the job's agent works outside its worktree", () => {
+    open(
+      job({
+        worktree: { branch: 'b', dir: '/w/fix' },
+        live: {
+          status: 'idle',
+          paneId: '%1',
+          ref: 'web:claude',
+          outsideWorktree: true,
+        },
+      }),
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Edit files' }))
+    expect(
+      screen.getByText(/works outside the job's worktree now/),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Give the grant' }),
+    ).toBeDisabled()
+  })
+
+  it('says why an edit grant outside the worktree was refused', async () => {
+    store.grant.mockRejectedValueOnce(
+      new RequestError(409, 'grant_outside_worktree', 'x'),
+    )
+    open(job({ worktree: { branch: 'b', dir: '/w/fix' } }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Edit files' }))
+    await give()
+    expect(
+      screen.getByText(
+        "The job's agent works outside the job's worktree, so no grant to edit files can be given",
+      ),
+    ).toBeVisible()
+  })
+
   it('tells why the server refused', async () => {
     store.grant
       .mockRejectedValueOnce(new RequestError(400, 'job_invalid', 'x'))

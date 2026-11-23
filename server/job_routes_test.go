@@ -575,3 +575,80 @@ func TestJobLiveFolderAndBranch(t *testing.T) {
 		t.Errorf("view-only, home dir: %v", b)
 	}
 }
+
+// A job keeps the worktree made for it, but shows it as its branch and
+// folder only while its agent's pane is in it: given a pane in another
+// folder (its worktree removed, say), the job shows that pane's.
+func TestJobOutsideWorktree(t *testing.T) {
+	jt := newJobsTest(t)
+	wtDir := t.TempDir()
+	jt.agent.wm = &fakeWorktreeMux{list: WorktreeList{Worktrees: []Worktree{{Path: "/repo", Branch: "main"},
+		{Path: wtDir, Branch: "job-ledger-case", Linked: true, GroupID: "w9"}}}}
+	at := func(cwd string) {
+		jt.f.mu.Lock()
+		jt.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Name: "claude", Cwd: cwd}
+		jt.f.caps = &Caps{CopyMode: true, Files: true}
+		jt.f.mu.Unlock()
+		jt.snapshot()
+	}
+	at(filepath.Join(wtDir, "src"))
+	jt.create(map[string]any{"title": "Case worktree", "pane": "w1:pa",
+		"worktree": map[string]string{"source": "w1", "branch": "job-ledger-case", "base": "main"}})
+	jt.agent.files = &filesAPI{dirs: stubDirer{}}
+	jt.agent.changes.mu.Lock()
+	jt.agent.changes.runJob = func(*filesAPI, overviewJob) (overviewChange, bool) { return overviewChange{}, false }
+	jt.agent.changes.byKey["w1:pa"] = overviewChange{status: true, branch: "main", at: time.Now(), asked: time.Now()}
+	jt.agent.changes.mu.Unlock()
+	viewBranch := func() any {
+		_, out := jt.do("view", http.MethodGet, "/api/mux/jobs", nil)
+		b := out["jobs"].([]any)[0].(map[string]any)
+		if b["live"].(map[string]any)["outsideWorktree"] != nil {
+			t.Errorf("view-only gets the flag: %v", b)
+		}
+		return b["branch"]
+	}
+	// In the worktree (a folder inside it): the worktree's branch.
+	if l := live(jt.list()[0]); l["outsideWorktree"] != nil {
+		t.Errorf("inside: %v", l)
+	}
+	if b := viewBranch(); b != "job-ledger-case" {
+		t.Errorf("view-only inside: %v", b)
+	}
+	// The worktree removed, the pane in the main checkout: the pane's.
+	os.RemoveAll(wtDir)
+	at("/src/web")
+	if l := live(jt.list()[0]); l["outsideWorktree"] != true || l["dir"] != "/src/web" || l["branch"] != "main" {
+		t.Errorf("elsewhere: %v", l)
+	}
+	if b := viewBranch(); b != "main" {
+		t.Errorf("view-only elsewhere: %v", b)
+	}
+	// The record of the worktree stays.
+	if w := jt.list()[0]["worktree"].(map[string]any); w["branch"] != "job-ledger-case" {
+		t.Errorf("worktree %v", w)
+	}
+}
+
+func TestDirInTree(t *testing.T) {
+	tree := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(tree, link); err != nil {
+		t.Skip(err) // Windows without the privilege
+	}
+	for _, c := range []struct {
+		tree, dir string
+		want      bool
+	}{
+		{tree, tree, true},
+		{tree, tree + "/", true},
+		{tree, filepath.Join(tree, "a", "b"), true},
+		{link, tree, true},
+		{tree, filepath.Dir(tree), false},
+		{tree, tree + "-other", false},
+		{"/gone/wt", "/src/web", false},
+	} {
+		if got := dirInTree(c.tree, c.dir); got != c.want {
+			t.Errorf("dirInTree(%q, %q) = %v", c.tree, c.dir, got)
+		}
+	}
+}

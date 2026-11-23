@@ -184,6 +184,33 @@ describe('JobCard', () => {
     expect(screen.getByText('/src/web')).toBeInTheDocument()
   })
 
+  it.each([
+    [false, 'job-ledger-case', '/wt/job-ledger-case'],
+    [true, 'main', '/src/termote'],
+  ])(
+    'shows the worktree only while its agent works in it (outside %s)',
+    (outsideWorktree, branch, dir) => {
+      render(
+        <JobCard
+          job={job({
+            worktree: { branch: 'job-ledger-case', dir: '/wt/job-ledger-case' },
+            live: {
+              status: 'idle',
+              paneId: '%1',
+              dir: outsideWorktree ? '/src/termote' : '/wt/job-ledger-case',
+              branch: outsideWorktree ? 'main' : 'job-ledger-case',
+              outsideWorktree,
+            },
+          })}
+          now={NOW}
+        />,
+      )
+      expect(screen.getByText(branch)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+      expect(screen.getByText(dir)).toBeInTheDocument()
+    },
+  )
+
   it('has no details without any', () => {
     render(<JobCard job={job({ worktree: undefined })} now={NOW} />)
     expect(screen.queryByRole('button', { name: 'Details' })).toBeNull()

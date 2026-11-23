@@ -116,7 +116,8 @@ A turn that ended while the orchestrator was reading another pane is then still 
 when it ended before a mark printed for another pane, and one already reported is not reported
 again. `--after <seq>` gives the mark of every pane named without one; `list --json` has the
 latest mark (`latest`) for a first wait, and names the pane it runs in (`self`) when the tmux,
-Herdr or Zellij environment says so for sure.
+Herdr or Zellij environment says so for sure. That pane is then refused to `send` and to a job's
+`--pane` (`job add`, `job set`): a job goes to the agent that does the work.
 
 `diff` shows what an agent changed in its folder: the commits of its branch since it left the
 base (by default the branch your main checkout has, or `--base <branch>`), then what is staged,
@@ -135,7 +136,8 @@ whether a turn ended that the orchestrator has not read, the branch and folder.
 
 `wait --job <id>...` reports a turn the orchestrator has not read however long ago it ended (even
 before the wait started, or while the server was down), a dialog once even if you keep it open, and
-a job whose agent is gone (tmux restarted, the pane closed). Termote tells a job's agent from another
+a job whose agent is gone (tmux restarted, the pane closed). When every job's agent is idle and its
+last turn was read, it says there is nothing to wait for instead of waiting out the timeout. Termote tells a job's agent from another
 one at the same pane address by its process, so an agent that took over a reused tmux pane id is
 never taken for it. When an agent is done the orchestrator sets the job to `review` with a note, and
 you get a push; it never marks a job `done` for you.
@@ -148,7 +150,7 @@ a job for the orchestrator to take up (`start --job <id>`), edit one, and give g
 A permission dialog (run a command, edit a file) is yours to answer. To keep a long task moving
 while you are away, you can give one job's agent a grant in the PWA, signed in with your password
 or a paired device: run commands that start with a prefix you type (`pnpm test`), or edit files in
-the job's worktree, for up to a day. Only you give grants: the orchestrator, the command line,
+the job's worktree while its agent works there, for up to a day. Only you give grants: the orchestrator, the command line,
 another Termote and a server without sign-in cannot.
 
 The orchestrator then tries `answer <pane> --delegated` first. Termote itself checks the dialog

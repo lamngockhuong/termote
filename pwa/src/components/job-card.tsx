@@ -85,9 +85,11 @@ export function JobCard({ job, now, onOpenPane, onEdit, onGrants }: Props) {
   const status = job.live.status
   const paneId = job.live.paneId
   const ref = jobPaneRef(job)
-  // A job made without a worktree shows its pane's folder and branch now.
-  const branch = job.worktree?.branch ?? job.branch ?? job.live.branch
-  const dir = job.worktree?.dir ?? job.live.dir
+  // A job made without a worktree, or given a pane outside it, shows its
+  // pane's folder and branch now.
+  const tree = job.live.outsideWorktree ? undefined : job.worktree
+  const branch = tree?.branch ?? job.branch ?? job.live.branch
+  const dir = tree?.dir ?? job.live.dir
   const grants = activeGrants(job, now)
   const uses = (job.grants ?? [])
     .flatMap((g) => g.uses ?? [])

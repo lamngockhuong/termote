@@ -90,7 +90,10 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   down), a dialog not reported yet (the user may keep one open: it is reported once), only
   background work left, or a job whose agent is gone (tmux restarted, the pane closed): then ask
   the user and give the job another pane (`job set <id> --pane <pane>`) or end it (`--state
-  abandoned`). `read` the pane after each report: that marks the turn read.
+  abandoned`). `read` the pane after each report: that marks the turn read. Exit 6: every job's
+  agent is idle and its last turn was read, so nothing would end the wait: give one work or set
+  its state; 4: the timeout passed while one still works, or still waits on a dialog or background
+  work reported before (each job's line says which).
 - When an agent finished, review its work (`diff --stat`), then `job set <id> --state review
   --note '<what was done>'`; the user gets a push. Never set `done` yourself unless the user
   looked at it and said so.
@@ -103,7 +106,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
    waiting on a dialog.
 2. **One pane at a time.** Send each message to one pane, by id. Never loop over panes to send
    the same text to several agents, and never send to your own pane (`self` in `list --json`;
-   ask the user which it is if `list` does not say).
+   ask the user which it is if `list` does not say). When termote knows your pane, `send` to it
+   and `job add`/`job set --pane` naming it are refused: a job goes to the agent that does the work.
 3. **Send, then wait, then read.** After `send`, run `wait` with the `<pane>@<seq>` it printed,
    then `read`. With several agents at work, wait on all of them in one `wait <id>@<seq>
    <id>@<seq>...`, each with its own mark, and handle each one it reports. A message to a working

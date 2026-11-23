@@ -34,6 +34,19 @@ var (
 	agentsJobAgentEvery = 500 * time.Millisecond
 )
 
+// The usage of each job command, as agentsUsage lists it (a test checks),
+// printed with a refusal of that command instead of every agents command.
+const (
+	jobsUsage    = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
+	jobAddUsage  = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
+	jobShowUsage = "usage: termote agents job show <id> [--json]"
+	jobSetUsage  = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]"
+	waitJobUsage = "usage: termote agents wait --job <id>... [--timeout <duration>]"
+)
+
+// jobSelfPane refuses --pane naming the orchestrator's own pane.
+const jobSelfPane = "--pane %s is the pane this command runs in; a job goes to the agent that does the work"
+
 type jobsListing struct {
 	Jobs      []jobView `json:"jobs"`
 	ReadOnly  bool      `json:"readOnly"`
@@ -207,7 +220,7 @@ func (c *cli) agentsJobs(args []string) error {
 		return flagErr(err)
 	}
 	if len(pos) != 0 {
-		return usageError(agentsUsage)
+		return usageError("jobs takes no arguments\n%s", jobsUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -265,10 +278,11 @@ func (c *cli) agentsJobs(args []string) error {
 		if j.Live.PaneID != "" {
 			pane = plainText(j.Live.Ref) + " (" + plainText(j.Live.PaneID) + ")"
 		}
-		if j.Worktree != nil {
+		if j.Worktree != nil && !j.Live.OutsideWorktree {
 			branch, dir = plainText(j.Worktree.Branch), plainText(c.tildeDir(j.Worktree.Dir))
 		} else {
-			// The pane's folder and branch now.
+			// The pane's folder and branch now: the job has no worktree,
+			// or it was given a pane in another folder.
 			branch, dir = dash(plainText(j.Live.Branch)), dash(plainText(c.tildeDir(j.Live.Dir)))
 		}
 		unread := ""
@@ -304,7 +318,7 @@ func (c *cli) tildeDir(dir string) string {
 
 func (c *cli) agentsJob(args []string) error {
 	if len(args) == 0 {
-		return usageError(agentsUsage)
+		return usageError("agents job needs add, show or set\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage)
 	}
 	switch args[0] {
 	case "add":
@@ -314,7 +328,7 @@ func (c *cli) agentsJob(args []string) error {
 	case "set":
 		return c.agentsJobSet(args[1:])
 	}
-	return usageError("unknown agents job command: %s\n%s", args[0], agentsUsage)
+	return usageError("unknown agents job command: %s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage)
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
@@ -329,8 +343,11 @@ func (c *cli) agentsJobAdd(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(pos) != 0 || strings.TrimSpace(title) == "" {
-		return usageError(agentsUsage)
+	switch {
+	case len(pos) != 0:
+		return usageError("job add takes no arguments; the title goes in --title\n%s", jobAddUsage)
+	case strings.TrimSpace(title) == "":
+		return usageError("job add needs --title <title>")
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -351,7 +368,7 @@ func (c *cli) agentsJobAdd(args []string) error {
 		body["note"] = note
 	}
 	if pane != "" {
-		p, err := c.agentsPane(port, pane)
+		p, err := c.agentsOtherPane(port, pane, jobSelfPane)
 		if err != nil {
 			return err
 		}
@@ -378,7 +395,7 @@ func (c *cli) agentsJobShow(args []string) error {
 		return flagErr(err)
 	}
 	if len(pos) != 1 {
-		return usageError(agentsUsage)
+		return usageError("job show takes one job id\n%s", jobShowUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -404,10 +421,15 @@ func (c *cli) agentsJobShow(args []string) error {
 		}
 		fmt.Fprintf(c.out, "Agent: %s in %s (%s): %s%s\n", plainText(j.Agent.Kind), plainText(j.Live.Ref), plainText(j.Live.PaneID), c.liveText(j.Live), unread)
 	}
-	if w := j.Worktree; w != nil {
-		fmt.Fprintf(c.out, "Worktree: branch %s (base %s) in %s\n", plainText(w.Branch), dash(plainText(w.Base)), plainText(c.tildeDir(w.Dir)))
-	} else if j.Live.Dir != "" {
+	if j.Live.Dir != "" && (j.Worktree == nil || j.Live.OutsideWorktree) {
 		fmt.Fprintf(c.out, "Folder: %s, branch %s\n", plainText(c.tildeDir(j.Live.Dir)), dash(plainText(j.Live.Branch)))
+	}
+	if w := j.Worktree; w != nil {
+		elsewhere := ""
+		if j.Live.OutsideWorktree {
+			elsewhere = "; its agent now works in another folder"
+		}
+		fmt.Fprintf(c.out, "Worktree: branch %s (base %s) in %s%s\n", plainText(w.Branch), dash(plainText(w.Base)), plainText(c.tildeDir(w.Dir)), elsewhere)
 	}
 	if d := j.Diff; d != nil {
 		fmt.Fprintf(c.out, "Last diff: %d commits, %d files (%s)\n", d.Commits, d.Files, sinceText(d.At))
@@ -446,8 +468,11 @@ func (c *cli) agentsJobSet(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(pos) != 1 || (state == "" && pane == "" && title == "" && !hasNote) {
-		return usageError(agentsUsage)
+	switch {
+	case len(pos) != 1:
+		return usageError("job set takes one job id\n%s", jobSetUsage)
+	case state == "" && pane == "" && title == "" && !hasNote:
+		return usageError("job set needs --state, --title, --note or --pane\n%s", jobSetUsage)
 	}
 	if state != "" && (!slices.Contains(jobStates, state) || state == "todo") {
 		return usageError("--state is active, review, done, failed or abandoned")
@@ -478,7 +503,7 @@ func (c *cli) agentsJobSet(args []string) error {
 		body["note"] = note
 	}
 	if pane != "" {
-		p, err := c.agentsPane(port, pane)
+		p, err := c.agentsOtherPane(port, pane, jobSelfPane)
 		if err != nil {
 			return err
 		}
@@ -555,15 +580,21 @@ func (c *cli) agentsWaitJobs(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(ids) == 0 || timeout <= 0 {
-		return usageError(agentsUsage)
+	switch {
+	case len(ids) == 0:
+		return usageError("wait --job needs at least one job id\n%s", waitJobUsage)
+	case timeout <= 0:
+		return usageError("--timeout must be more than 0\n%s", waitJobUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(timeout)
+	start := time.Now()
+	deadline := start.Add(timeout)
 	failures := 0
+	// last: the ledger as the last poll that could read it saw it.
+	var last []jobView
 	for {
 		list, err := c.jobsGet(port, true)
 		if err != nil {
@@ -579,13 +610,72 @@ func (c *cli) agentsWaitJobs(args []string) error {
 			if len(ends) > 0 {
 				return c.jobsEnded(list, ids, ends, rest)
 			}
+			last = list
+			// An agent given work a moment ago may not have started yet:
+			// as wait does for panes, idle ends the wait only after the
+			// grace, or at the timeout.
+			if jobsAllIdle(list, ids) && (time.Since(start) >= agentsWaitGrace || !time.Now().Before(deadline)) {
+				return c.jobsNothing(list, ids)
+			}
 		}
 		if !time.Now().Before(deadline) {
-			fmt.Fprintf(c.out, "Still working after %s; wait again: termote agents wait --job %s\n", timeout, strings.Join(ids, " "))
+			c.jobsStill(last, ids, timeout)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
 	}
+}
+
+// jobsAllIdle: the agent of every one of ids is idle with its last turn
+// read, so nothing would ever end a wait on them.
+func jobsAllIdle(list []jobView, ids []string) bool {
+	for _, id := range ids {
+		j, ok := findJob(list, id)
+		if !ok || j.Live.Status != "idle" || j.Live.Unread {
+			return false
+		}
+	}
+	return true
+}
+
+// jobsNothing: every job's agent is idle and its last turn was read.
+func (c *cli) jobsNothing(list []jobView, ids []string) error {
+	fmt.Fprintln(c.out, "Nothing to wait for: no job's agent is working and none ended a turn you have not read.")
+	for _, id := range ids {
+		j, _ := findJob(list, id)
+		pid := plainText(j.Live.PaneID)
+		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) is idle and its last turn was read; give it work (termote agents send %s -) or record what it did (termote agents job set %s --state review)\n",
+			plainText(j.ID), plainText(j.Title), plainText(j.Live.Ref), pid, pid, plainText(j.ID))
+	}
+	return &exitError{code: agentsExitIdle}
+}
+
+// jobsStill says, at the timeout, what each job's agent does: none of them
+// needs the orchestrator yet.
+func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration) {
+	fmt.Fprintf(c.out, "Still waiting after %s:\n", timeout)
+	for _, id := range ids {
+		j, ok := findJob(list, id)
+		if !ok {
+			// No poll could read the ledger.
+			fmt.Fprintf(c.out, "Job %s: the ledger could not be read\n", plainText(id))
+			continue
+		}
+		l := j.Live
+		what := "is " + c.liveText(l)
+		switch l.Status {
+		case "blocked":
+			what = "still waits on the dialog reported before; see it: termote agents answer " + plainText(l.PaneID)
+		case "background":
+			what = "still waits on the background work reported before (" + plainText(clipLine(l.Background, 80)) + ")"
+		case "idle":
+			what = "is idle and its last turn was read"
+		case "unknown":
+			what = "could not be read"
+		}
+		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) %s\n", plainText(j.ID), plainText(j.Title), plainText(l.Ref), plainText(l.PaneID), what)
+	}
+	fmt.Fprintf(c.out, "wait again: termote agents wait --job %s\n", strings.Join(ids, " "))
 }
 
 // jobEnds is what each of ids reports now, and the ids left to wait for.

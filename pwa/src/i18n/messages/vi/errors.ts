@@ -16,6 +16,8 @@ export default {
   'errors.base_required': 'Hãy chọn nhánh gốc: đây là worktree chính',
   'errors.branch_exists':
     'Nhánh đã tồn tại nên được checkout, bỏ qua nhánh gốc',
+  'errors.branch_clash':
+    'Tên một nhánh khác trùng với một thư mục trong tên nhánh này, hoặc ngược lại (không thể có cùng lúc test và test/x). Hãy chọn tên khác',
   'errors.busy': 'Một thay đổi khác vẫn đang chạy. Hãy thử lại',
   'errors.changed': 'Đã thay đổi từ lúc đọc. Hãy xem lại',
   'errors.cli_only': 'Chỉ CLI termote trên máy đó làm được việc này',
@@ -43,6 +45,8 @@ export default {
     'Chỉ làm được khi đăng nhập bằng mật khẩu hoặc dùng CLI',
   'errors.grant_invalid': 'Không thể ủy quyền cho tiền tố lệnh này',
   'errors.grant_not_found': 'Ủy quyền này không còn tồn tại',
+  'errors.grant_outside_worktree':
+    'Agent của việc này đang làm ở ngoài worktree của việc, nên không cấp được ủy quyền sửa file',
   'errors.grant_pwa_only':
     'Chỉ trình duyệt đăng nhập bằng mật khẩu hoặc thiết bị ghép nối toàn quyền mới cấp được ủy quyền',
   'errors.hardlink': 'File có nhiều liên kết cứng',

@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -157,9 +158,34 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitTimeout {
+	// Read and idle: nothing to wait for, said as such at the timeout (here
+	// shorter than the grace), never "still working".
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitIdle ||
+		!strings.Contains(tc.stdout.String(), "Nothing to wait for") ||
+		!strings.Contains(tc.stdout.String(), "Job "+j.ID+" (Parser): web/api (%1) is idle and its last turn was read") ||
+		strings.Contains(tc.stdout.String(), "Still working") {
 		t.Errorf("after read: exit %d %s", exitCode(err), tc.stdout)
 	}
+	// Within a longer timeout, it ends after the grace rather than at it.
+	grace := agentsWaitGrace
+	agentsWaitGrace = 100 * time.Millisecond
+	start := time.Now()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "30s"}); exitCode(err) != agentsExitIdle || time.Since(start) > 10*time.Second {
+		t.Errorf("after the grace: exit %d after %v", exitCode(err), time.Since(start))
+	}
+	agentsWaitGrace = grace
+	// A job whose agent works is still waited for: the timeout says so.
+	busy := addJob(t, tc, "--title", "Busy", "--pane", "ui")
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", busy.ID, j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitTimeout ||
+		!strings.Contains(tc.stdout.String(), "Still waiting after 200ms:") ||
+		!strings.Contains(tc.stdout.String(), "Job "+busy.ID+" (Busy): web/ui (%2) is working") ||
+		!strings.Contains(tc.stdout.String(), "Job "+j.ID+" (Parser): web/api (%1) is idle and its last turn was read") ||
+		!strings.Contains(tc.stdout.String(), "wait again: termote agents wait --job "+busy.ID+" "+j.ID) {
+		t.Errorf("working: exit %d %s", exitCode(err), tc.stdout)
+	}
+	tc.dispatch("agents", []string{"job", "set", busy.ID, "--state", "abandoned"})
 	// A turn that ends between two polls is reported too.
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -184,7 +210,8 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 		t.Errorf("dialog: exit %d %s", exitCode(err), tc.stdout)
 	}
 	tc.stdout.Reset()
-	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout {
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout ||
+		!strings.Contains(tc.stdout.String(), "still waits on the dialog reported before; see it: termote agents answer %1") {
 		t.Errorf("same dialog again: exit %d %s", exitCode(err), tc.stdout)
 	}
 	// Blocked with no dialog the server can read (Claude Code after a
@@ -411,5 +438,116 @@ func TestAgentsStartJobAgentLate(t *testing.T) {
 	out = start("--job", todo.ID, "go")
 	if j := byTitle("Never todo"); j.Agent != nil || j.State != "todo" || !strings.Contains(out, "termote agents job set "+j.ID+" --pane") {
 		t.Errorf("never, --job: %+v\n%s", j, out)
+	}
+}
+
+// jobs and job show give a job's worktree as its branch and folder only
+// while its agent's pane is in it; given a pane elsewhere, the pane's.
+func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
+	tree := &jobTree{Branch: "job-ledger-case", Base: "main", Dir: "/home/u/.herdr/worktrees/termote/job-ledger-case"}
+	listing := func(outside bool, dir, branch string) {
+		j := job{ID: "j1", Title: "Case worktree", State: "active", Worktree: tree, Agent: &jobAgent{PaneID: "%1", Kind: "claude"}}
+		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
+			Dir: dir, Branch: branch, OutsideWorktree: outside}}}}))
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", args); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return tc.stdout.String()
+	}
+	listing(false, tree.Dir, "job-ledger-case")
+	if out := run("jobs"); !strings.Contains(out, "job-ledger-case") || !strings.Contains(out, tree.Dir) {
+		t.Errorf("in the worktree:\n%s", out)
+	}
+	listing(true, "/src/termote", "main")
+	if out := run("jobs"); strings.Contains(out, "job-ledger-case") || !strings.Contains(out, "main") || !strings.Contains(out, "/src/termote") {
+		t.Errorf("elsewhere:\n%s", out)
+	}
+	if out := run("job", "show", "j1"); !strings.Contains(out, "Folder: /src/termote, branch main") ||
+		!strings.Contains(out, "Worktree: branch job-ledger-case (base main) in "+tree.Dir+"; its agent now works in another folder") {
+		t.Errorf("show elsewhere:\n%s", out)
+	}
+}
+
+// A wrong job command says what is wrong and prints its own usage, never
+// every agents command's; each usage is the line agentsUsage has.
+func TestAgentsJobUsage(t *testing.T) {
+	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, waitJobUsage} {
+		if !strings.Contains(agentsUsage, strings.TrimPrefix(u, "usage: ")) {
+			t.Errorf("agentsUsage lacks %q", u)
+		}
+	}
+	tc, _, _ := jobsCLI(t)
+	for _, c := range []struct {
+		args       []string
+		want, line string
+	}{
+		{[]string{"job", "add", "Fix X"}, "job add takes no arguments; the title goes in --title", jobAddUsage},
+		{[]string{"job", "add", "--title", "x", "extra"}, "job add takes no arguments", jobAddUsage},
+		{[]string{"job", "add"}, "job add needs --title <title>", ""},
+		{[]string{"job", "add", "--title", "  "}, "job add needs --title <title>", ""},
+		{[]string{"job"}, "agents job needs add, show or set", jobShowUsage},
+		{[]string{"job", "nope"}, "unknown agents job command: nope", jobSetUsage},
+		{[]string{"job", "show"}, "job show takes one job id", jobShowUsage},
+		{[]string{"job", "show", "a", "b"}, "job show takes one job id", jobShowUsage},
+		{[]string{"job", "set"}, "job set takes one job id", jobSetUsage},
+		{[]string{"job", "set", "a"}, "job set needs --state, --title, --note or --pane", jobSetUsage},
+		{[]string{"jobs", "x"}, "jobs takes no arguments", jobsUsage},
+		{[]string{"wait", "--job"}, "wait --job needs at least one job id", waitJobUsage},
+		{[]string{"wait", "--job", "a", "--timeout", "0s"}, "--timeout must be more than 0", waitJobUsage},
+	} {
+		err := tc.dispatch("agents", c.args)
+		if exitCode(err) != 2 || !strings.Contains(err.Error(), c.want) || (c.line != "" && !strings.Contains(err.Error(), c.line)) ||
+			strings.Contains(err.Error(), "agents list") {
+			t.Errorf("%q: %v", c.args, err)
+		}
+	}
+}
+
+// The orchestrator's own pane is refused as a job's pane and as the pane a
+// message goes to, when termote knows it for sure (here Herdr's
+// variables); where it cannot tell, the pane is not refused.
+func TestAgentsRefuseOwnPane(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	claude := &AgentInfo{Name: "claude", Status: "idle"}
+	s.set("GET /api/mux/snapshot", jsonAnswer(Snapshot{Backend: "herdr", Groups: []Group{{ID: "w1", Name: "w", Tabs: []Tab{
+		{ID: "w1:t1", Name: "orch", Panes: []Pane{{ID: "w1:pB1", Agent: claude}}},
+		{ID: "w1:t2", Name: "work", Panes: []Pane{{ID: "w1:pA", Agent: claude}}},
+	}}}}))
+	j := job{ID: "j1", Title: "x", State: "todo"}
+	s.set("POST /api/mux/jobs", answer(http.StatusCreated, `{"job":{"id":"j1","title":"x","state":"active"}}`))
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{}}}}))
+	s.set("PATCH /api/mux/jobs/j1", jsonAnswer(map[string]any{"job": jobView{j, jobLive{}}}))
+	maps.Copy(tc.env, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t1", "HERDR_PANE_ID": "w1:pB1"})
+	const self = "--pane w1:pB1 is the pane this command runs in; a job goes to the agent that does the work"
+	for _, args := range [][]string{{"job", "add", "--title", "x", "--pane", "w1:pB1"}, {"job", "add", "--title", "x", "--pane", "orch"},
+		{"job", "set", "j1", "--pane", "w1:pB1"}} {
+		if err := tc.dispatch("agents", args); err == nil || err.Error() != self {
+			t.Errorf("%q: %v", args, err)
+		}
+	}
+	err := tc.dispatch("agents", []string{"send", "w1:pB1", "hi"})
+	if err == nil || !strings.Contains(err.Error(), "pane w1:pB1 is the pane this command runs in") {
+		t.Errorf("send: %v", err)
+	}
+	if n := countPosts(s, "/api/mux/"); n != 0 {
+		t.Errorf("sent something: %v", s.posts)
+	}
+	// Another pane goes through.
+	for _, args := range [][]string{{"job", "add", "--title", "x", "--pane", "w1:pA"}, {"job", "set", "j1", "--pane", "w1:pA"}} {
+		if err := tc.dispatch("agents", args); err != nil {
+			t.Errorf("%q: %v", args, err)
+		}
+	}
+	// Its own pane, when the environment does not say so for sure: not
+	// refused here (the server decides).
+	delete(tc.env, "HERDR_TAB_ID")
+	if err := tc.dispatch("agents", []string{"job", "add", "--title", "x", "--pane", "w1:pB1"}); err != nil {
+		t.Errorf("unknown self: %v", err)
 	}
 }

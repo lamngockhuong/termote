@@ -21,6 +21,8 @@ export default {
   'errors.base_required': 'Name a base branch: this is the main worktree',
   'errors.branch_exists':
     'The branch exists, so it is checked out without a base',
+  'errors.branch_clash':
+    'Another branch is named like a folder of this one, or this one of it (test and test/x cannot both exist). Pick another name',
   'errors.busy': 'Another change is still running. Try again',
   'errors.changed': 'It changed since it was read. Look again',
   'errors.cli_only': 'Only the termote CLI on that machine can do this',
@@ -48,6 +50,8 @@ export default {
     'Only a password sign-in or the CLI can do this',
   'errors.grant_invalid': 'This command prefix cannot be granted',
   'errors.grant_not_found': 'This grant no longer exists',
+  'errors.grant_outside_worktree':
+    "The job's agent works outside the job's worktree, so no grant to edit files can be given",
   'errors.grant_pwa_only':
     'Only a browser signed in with the password, or a fully paired device, gives grants',
   'errors.hardlink': 'The file has several hard links',

@@ -496,7 +496,9 @@ GET lists the worktrees of the group's repository (`worktree.list`, or `git work
 its local branches, newest commit first, read by the server's
 own git (`for-each-ref`, at most 500). The POST checks out `branch` in a new worktree, made from
 `base` (empty: the current HEAD) when the branch is new; Herdr ignores the base of a branch that
-exists, so that pair answers 409 `branch_exists` instead. `open` opens an existing linked
+exists, so that pair answers 409 `branch_exists` instead. A new name git keeps from being made
+beside another branch (`test/x` while `test` exists, or the other way round: a branch name cannot
+also be a folder of branch names) answers 409 `branch_clash`, before anything is made. `open` opens an existing linked
 worktree (by its branch), never a branch without one. The DELETE carries the path and branch the
 user confirmed and removes nothing unless the workspace still shows that linked checkout (409
 `changed`); without `force` a worktree with changes answers 409 `dirty`, which the PWA asks

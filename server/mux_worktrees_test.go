@@ -103,6 +103,17 @@ func (f *worktreeFake) ListWorktrees(_ context.Context, id string) (WorktreeList
 	return l, f.err
 }
 
+// creates counts the creates the backend was asked for.
+func creates(f *worktreeFake) int {
+	n := 0
+	for _, c := range f.recorded() {
+		if strings.HasPrefix(c, "create ") {
+			n++
+		}
+	}
+	return n
+}
+
 func (f *worktreeFake) wait(ctx context.Context) error {
 	f.mu.Lock()
 	block := f.block
@@ -209,6 +220,10 @@ func TestWorktreeRoutes(t *testing.T) {
 		{`{"groupId":"wR","branch":"feat/new","base":"HEAD"}`, "create wR feat/new base=HEAD label=", 200, ""},
 		{`{"groupId":"wR","branch":"e2e-base"}`, "create wR e2e-base base= label=", 200, ""},
 		{`{"groupId":"wR","branch":"e2e-base","base":"main"}`, "", 409, "branch_exists"},
+		// A name git would refuse as a folder of another branch's: said so
+		// before Herdr is asked, with a base or without.
+		{`{"groupId":"wR","branch":"e2e-base/x"}`, "", 409, "branch_clash"},
+		{`{"groupId":"wR","branch":"main/x","base":"main"}`, "", 409, "branch_clash"},
 	} {
 		f.mu.Lock()
 		f.calls = nil
@@ -406,7 +421,7 @@ func TestWorktreeRoutesBusy(t *testing.T) {
 	go func() {
 		first <- serve(h, apiRequest("POST", "/api/mux/worktrees", `{"groupId":"wR","branch":"a"}`))
 	}()
-	waitUntil(t, "first create", func() bool { return len(f.recorded()) == 1 })
+	waitUntil(t, "first create", func() bool { return creates(f) == 1 })
 	start := time.Now()
 	for _, rt := range []struct{ method, path, body string }{
 		{"POST", "/api/mux/worktrees", `{"groupId":"wR","branch":"b"}`},
@@ -429,8 +444,8 @@ func TestWorktreeRoutesBusy(t *testing.T) {
 	if rec := <-first; rec.Code != 200 {
 		t.Errorf("first create = %d %s", rec.Code, rec.Body)
 	}
-	if calls := f.recorded(); len(calls) != 2 {
-		t.Errorf("calls %q", calls)
+	if creates(f) != 1 {
+		t.Errorf("calls %q", f.recorded())
 	}
 }
 
@@ -446,7 +461,7 @@ func TestWorktreeRoutesOutliveTheClient(t *testing.T) {
 	req := apiRequest("POST", "/api/mux/worktrees", `{"groupId":"wR","branch":"a"}`).WithContext(ctx)
 	done := make(chan *httptest.ResponseRecorder)
 	go func() { done <- serve(h, req) }()
-	waitUntil(t, "create", func() bool { return len(f.recorded()) == 1 })
+	waitUntil(t, "create", func() bool { return creates(f) == 1 })
 	cancel()
 	time.Sleep(50 * time.Millisecond)
 	close(f.block)
@@ -487,6 +502,7 @@ func TestHerdrWorktreeErrors(t *testing.T) {
 		{"not_linked_worktree", "", 409, "not_linked"},
 		{"ambiguous_worktree_branch", "", 409, "ambiguous"},
 		{"worktree_create_failed", "fatal: '/home/u/x' already exists", 409, "create_failed"},
+		{"worktree_create_failed", "Preparing worktree (new branch 'test/x')\nfatal: cannot lock ref 'refs/heads/test/x': 'refs/heads/test' exists; cannot create 'refs/heads/test/x'", 409, "branch_clash"},
 		{"worktree_open_failed", "", 409, "open_failed"},
 		{"dirty_worktree_requires_force", "fatal: '/home/u/x' contains modified or untracked files", 409, "dirty"},
 		{"worktree_operation_in_progress", "", 503, "busy"},

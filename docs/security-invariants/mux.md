@@ -434,7 +434,12 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   leaving never cuts git short; past that 504 `unknown` (the change may still finish; the PWA
   treats its own 75 s abort the same). Create with a non-empty `base` first runs `git show-ref
   --verify refs/heads/<branch>` on the repository root the list names: an existing branch is
-  checked out as it is, so that is 409 `branch_exists`. The DELETE needs all three fields (400
+  checked out as it is, so that is 409 `branch_exists`. Every create (`createChecks`) then refuses
+  with 409 `branch_clash` a name git would refuse as a folder of another local branch's or the other
+  way round (`test` and `test/x`): `show-ref --verify` of each prefix and `for-each-ref --count=1
+  refs/heads/<branch>/` (the name passed `validBranchName`, so it holds no pattern character), and
+  Herdr's `worktree_create_failed` with git's `cannot lock ref ... exists; cannot create` maps to it
+  too; a list or git failure there leaves the create to say what is wrong. The DELETE needs all three fields (400
   `invalid_request`; only a JSON `true` forces) and lists again under the slot: unless the entry
   whose group is the id is linked with that path and branch → 409 `changed` (`not_linked` for the
   repo's own). Codes: `unknown_group`, `not_found`, `not_git`, `linked_source`, `not_linked`,

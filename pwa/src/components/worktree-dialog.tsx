@@ -34,6 +34,7 @@ const FILTER_FROM = 15
 const WORKTREE_PROBLEMS: Record<string, MessageKey> = {
   invalid_name: 'dialogs.worktree.invalidName',
   branch_exists: 'dialogs.worktree.branchExists',
+  branch_clash: 'errors.branch_clash',
   create_failed: 'dialogs.worktree.createFailed',
   open_failed: 'dialogs.worktree.openFailed',
   not_git: 'errors.not_git',

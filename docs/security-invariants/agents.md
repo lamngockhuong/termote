@@ -691,7 +691,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   of one pane; Zellij's `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` a pane of that session; tmux's
   `TMUX_PANE` (with `TMUX` set) a pane id of the snapshot whose window id and session name, read
   from the tmux `TMUX` names with `tmux display-message` (argv only, the pane id checked against
-  `tmuxPaneIDRe` first), are its tab's key and workspace's name; nothing for psmux or herdr-core. It follows each pane by its activity key
+  `tmuxPaneIDRe` first), are its tab's key and workspace's name; nothing for psmux or herdr-core.
+  `send`, and `job add`/`job set` with `--pane`, refuse that pane before any request
+  (`agentsOtherPane`), and let a pane through when `self` is unknown; the server does not refuse
+  it (a PWA's job may name any pane). It follows each pane by its activity key
   (`activityKey`, computed from the snapshot's tab `key`), not its id, so a tmux tab that moves
   (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` requires `--cursor` (no cursor, no request),
   sends the cursor `read --json` printed and is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
@@ -743,7 +746,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   a blocked pane whose dialog signature (`reportedSig`: kind, title, body, option labels, or
   `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's
   `reported` (then sends it as `reported`, so the same command asked twice is reported twice and a
-  dialog kept open once), only background work once, and a job whose agent is gone; `jobs
+  dialog kept open once), only background work once, and a job whose agent is gone; when every
+  job's agent is idle with its last turn read it exits 6 (after `agentsWaitGrace`, or at the
+  timeout), and at the timeout it prints each job's state, never a guess; `jobs
   --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
   nothing. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
@@ -768,7 +773,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
   read found, which a view-only client does not get for a home dir (`viewHidden`), as the
-  overview's changes; the route never runs git itself. Writes:
+  overview's changes; the route never runs git itself. A job's worktree is its branch and folder
+  (a view-only client's `branch`) only while its agent's pane is in it (`dirInTree`, through
+  symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
+  and the pane's are shown, the worktree record kept. Writes:
   `requireWriteRole` first; a browser's `PATCH` and `DELETE` need `updated` (a stale one is 409
   `job_conflict`); `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
@@ -799,7 +807,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   Basic auth and a server without sign-in get 403 `grant_pwa_only`, and there is no CLI command that
   makes one. This is the user's say given where the user reads the job, not a wall against a process
   of the same OS user (which can read the password). A grant is pinned when made to the job's agent
-  as recorded (`jobAgent`) and, to edit, to the job's worktree directory; it is a bash prefix the
+  as recorded (`jobAgent`) and, to edit, to the job's worktree directory, refused with 409
+  `grant_outside_worktree` while the agent's pane is outside it (`live.outsideWorktree`, a job
+  moved to a pane elsewhere); it is a bash prefix the
   command rules accept or "edit", lasts 1 minute to 24 hours, and ends when revoked, expired, the job
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
   each. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);

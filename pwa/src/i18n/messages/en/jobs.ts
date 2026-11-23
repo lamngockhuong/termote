@@ -125,6 +125,8 @@ export default {
     'One word covers every command of {word}. A longer prefix is safer',
   'jobs.grant.editHint':
     "A file edit under the job's worktree is answered, except for the files no grant ever covers",
+  'jobs.grant.editOutsideWorktree':
+    "The job's agent works outside the job's worktree now: a grant to edit files covers only the worktree",
   'jobs.grant.editNeedsWorktree':
     'This job has no worktree: a grant to edit files needs one',
   'jobs.grant.editDenied':

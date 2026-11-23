@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -90,6 +91,9 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 		fresh = !already
 	case slices.Contains(list.Branches, branch):
 		return startTarget{}, fmt.Errorf("branch %s already exists; pick a new name or open it from the PWA", b)
+	case clashingBranch(list.Branches, branch) != "":
+		return startTarget{}, fmt.Errorf("branch %s exists, so git cannot make %s (a branch name cannot also be a folder of branch names); pick another name",
+			plainText(clashingBranch(list.Branches, branch)), b)
 	default:
 		var made bool
 		groupID, made, err = c.createWorktree(port, g.ID, branch, base, label)
@@ -121,6 +125,19 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 		t.running = &p
 	}
 	return t, nil
+}
+
+// clashingBranch is a branch of list git keeps branch from being made
+// beside: one whose name is a folder of branch's (test for test/x), or one
+// inside branch as a folder (test/x for test); "" when none is listed (the
+// server checks again).
+func clashingBranch(list []string, branch string) string {
+	for _, b := range list {
+		if strings.HasPrefix(branch, b+"/") || strings.HasPrefix(b, branch+"/") {
+			return b
+		}
+	}
+	return ""
 }
 
 // agentStillRuns says that the worktree's first pane p already runs this
