@@ -200,8 +200,12 @@ export const AgentCard = memo(function AgentCard({
   // The cursor of the session the card sums up: a Stop never reaches
   // another one, and one refused as changed is not tried again.
   const cursor = overview?.cursor
+  // Only background work left: Esc would stop nothing, and the server says so
+  const background = status === 'working' ? overview?.background : undefined
   const stopShown =
-    !!canStop && !!cursor && (status === 'working' || halt.stopping)
+    !!canStop &&
+    !!cursor &&
+    ((status === 'working' && !background) || halt.stopping)
   const stop = async (c: string) => {
     const err = await halt.stop(c)
     if (!err) return
@@ -279,6 +283,16 @@ export const AgentCard = memo(function AgentCard({
             <span className="flex items-center gap-1.5 text-[12px] text-warning">
               <Hourglass size={13} aria-hidden="true" className="shrink-0" />
               {t('tasks.card.stuck', { n: stuckFor })}
+            </span>
+          )}
+          {background && (
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
+              <Hourglass size={13} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">
+                {t('chat.activity.background', {
+                  what: visibleUnsafe(background),
+                })}
+              </span>
             </span>
           )}
           {overview?.lastText ? (

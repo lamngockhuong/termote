@@ -34,13 +34,16 @@ const agentsUsage = `usage: termote agents list [--json]
                             [--worktree <new branch> [--base <branch>]] [<prompt> | -]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
-// and 2 (usage). With several panes ending at once, the gravest wins.
+// and 2 (usage). With several panes ending at once, the gravest wins. stop
+// has its own (agentsExitStillWorking).
 const (
 	agentsExitDialog  = 3 // the agent waits on a dialog
 	agentsExitTimeout = 4 // still working when --timeout passed
 	agentsExitGone    = 5 // the pane no longer runs an agent
 	agentsExitIdle    = 6 // no pane works and none ended since the mark
 	agentsExitReset   = 7 // the server dropped the changes after the mark
+	// agentsExitStillWorking: stop sent Esc but the agent still works
+	agentsExitStillWorking = 8
 )
 
 // The longest each kind of request may take. A message can wait minutes for
@@ -59,6 +62,10 @@ var (
 	agentsWaitFailures = 5
 	// agentsStartEvery: how often start follows the agent's start.
 	agentsStartEvery = time.Second
+	// agentsStopEvery: how often stop looks whether the turn ended, for at
+	// most agentsStopWait.
+	agentsStopEvery = time.Second
+	agentsStopWait  = 8 * time.Second
 )
 
 // agentsReadMax bounds an answer the CLI reads: a transcript tail is up to
@@ -1292,13 +1299,45 @@ func (c *cli) agentsStop(args []string) error {
 		return agentsRefusal(r)
 	}
 	id := plainText(p.pane.ID)
-	c.infof("Stopped the turn of %s (%s); it may take a moment to settle: termote agents list", plainText(p.ref()), id)
+	stopped, background := c.followStop(port, p)
+	switch {
+	case !stopped:
+		c.infof("Esc was sent, but %s (%s) still works; look at it: termote agents read %s", plainText(p.ref()), id, id)
+		return &exitError{code: agentsExitStillWorking}
+	case background != "":
+		c.infof("Stopped the turn of %s (%s); it still waits for background work (%s)", plainText(p.ref()), id, plainText(background))
+	default:
+		c.infof("Stopped the turn of %s (%s)", plainText(p.ref()), id)
+	}
 	if p.pane.Agent.Name == "claude" {
 		// Claude Code puts the messages it had queued back into its input
 		// box when its turn is interrupted.
 		c.warnf("a message queued for it may be back in its input box; a send is then refused (input_has_draft) until the user sends or clears it")
 	}
 	return nil
+}
+
+// followStop reads the pane until its agent stops working, or only waits for
+// background work (what it names), for at most agentsStopWait. A pane gone
+// or no longer running an agent counts as stopped; reads that fail are
+// tried again.
+func (c *cli) followStop(port int, p snapPane) (stopped bool, background string) {
+	deadline := time.Now().Add(agentsStopWait)
+	for {
+		if s, err := c.agentsSnapshot(port); err == nil {
+			now, ok := findPaneByKey(s, p.key())
+			if !ok || now.status() != "working" {
+				return true, ""
+			}
+			if bg := c.paneBackground(port, now.pane.ID); bg != "" {
+				return true, bg
+			}
+		}
+		if !time.Now().Before(deadline) {
+			return false, ""
+		}
+		time.Sleep(agentsStopEvery)
+	}
 }
 
 // printPrompt prints a dialog and how to answer it.

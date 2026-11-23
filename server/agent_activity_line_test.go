@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,8 @@ func TestClaudeActivityScreens(t *testing.T) {
 		// Recorded in tmux (200x50) on 2.1.330 while the turn waited on a
 		// background agent, its answer written: the session file said busy.
 		"2.1.330-wait-background-agent": {Label: "Waiting", Background: "1 background agent"},
+		// Recorded in tmux (200x50) on 2.1.330 while a foreground command ran.
+		"2.1.330-working": {Label: "Architecting", Elapsed: 9, Tokens: "231"},
 		// "running PostToolUse hook · 6s · ↓ 267 tokens · thought for 1s"
 		"2.1.310-working-queued": {Label: "Coalescing", Elapsed: 6, Phase: "hooks", Detail: "running PostToolUse hook", Tokens: "267"},
 	} {
@@ -51,6 +55,96 @@ func TestClaudeActivityScreens(t *testing.T) {
 			t.Errorf("%s: activity = %+v, want %+v", name, *got, *want)
 		}
 	}
+}
+
+// TestClaudeActivityNewestScreens reads, for each state the Stop button
+// depends on, every screen of the newest Claude Code version recorded in it:
+// a version that draws its working line differently fails here, not as a
+// Stop that refuses every turn. A name is "<version>-<state>[-<more>].txt".
+func TestClaudeActivityNewestScreens(t *testing.T) {
+	entries, err := os.ReadDir("testdata/claude/screens")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type rec struct {
+		version []int
+		names   []string
+	}
+	newest := map[string]*rec{}
+	states := []string{"working", "wait-background"}
+	for _, e := range entries {
+		name := strings.TrimSuffix(e.Name(), ".txt")
+		ver, rest, ok := strings.Cut(name, "-")
+		v := versionParts(ver)
+		if !ok || v == nil {
+			continue
+		}
+		for _, st := range states {
+			if rest != st && !strings.HasPrefix(rest, st+"-") {
+				continue
+			}
+			r := newest[st]
+			var rv []int
+			if r != nil {
+				rv = r.version
+			}
+			switch c := compareVersion(v, rv); {
+			case c > 0:
+				newest[st] = &rec{v, []string{name}}
+			case c == 0:
+				r.names = append(r.names, name)
+			}
+		}
+	}
+	for _, st := range states {
+		r := newest[st]
+		if r == nil {
+			t.Fatalf("no screen recorded for %s", st)
+		}
+		for _, name := range r.names {
+			a := readClaudeScreen(fixtureScreen(t, name)).activity
+			switch {
+			case a == nil:
+				t.Errorf("%s: no working line read: Stop would refuse this version", name)
+			case st == "working" && a.Background != "":
+				t.Errorf("%s: read as waiting on background work (%q)", name, a.Background)
+			case st == "wait-background" && a.Background == "":
+				t.Errorf("%s: background work not read: Stop would show for it", name)
+			}
+		}
+	}
+}
+
+// versionParts is "2.1.330" as numbers, nil for anything else.
+func versionParts(s string) []int {
+	var out []int
+	for _, f := range strings.Split(s, ".") {
+		n, err := strconv.Atoi(f)
+		if err != nil {
+			return nil
+		}
+		out = append(out, n)
+	}
+	if len(out) != 3 {
+		return nil
+	}
+	return out
+}
+
+// compareVersion compares v with w, a nil w being older.
+func compareVersion(v, w []int) int {
+	if w == nil {
+		return 1
+	}
+	for i := range v {
+		if v[i] != w[i] {
+			if v[i] > w[i] {
+				return 1
+			}
+			return -1
+		}
+	}
+	return 0
 }
 
 func TestClaudeActivityLines(t *testing.T) {

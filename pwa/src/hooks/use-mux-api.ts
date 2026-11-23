@@ -412,6 +412,9 @@ export interface OverviewPane {
   // The signed cursor of the conversation the card sums up, which its Stop
   // names
   cursor?: string
+  // What a working Claude Code pane only waits for ("1 background agent"):
+  // its turn is done, so the card shows no Stop
+  background?: string
 }
 
 // A session's tokens and estimated cost (USD, absent when no model of it

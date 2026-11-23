@@ -8,7 +8,7 @@ export default {
   'errors.unknown': 'The server could not finish this. Try again',
   'errors.agent_blocked': 'The agent waits for an answer to a dialog',
   'errors.agent_no_turn':
-    'The agent runs no turn that Esc would stop: it may only wait for background work',
+    'No working line on its screen: the agent may only wait for background work, or this Claude Code version draws it differently. Look at the pane',
   'errors.agent_not_working':
     'The agent is not working, so there is nothing to stop',
   'errors.agent_unavailable': "The agent's service did not answer. Try again",

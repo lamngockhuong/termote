@@ -437,6 +437,71 @@ describe('AgentCard Stop', () => {
     expect(stop()).toBeNull()
   })
 
+  it('none while only background work is left, with a row saying so', async () => {
+    const working = pane({ agentStatus: 'working' })
+    const { rerender } = renderCard({
+      pane: working,
+      overview: { ...ov, background: '1 background agent' },
+      canStop: true,
+    })
+    expect(stop()).toBeNull()
+    expect(
+      screen.getByText('Turn done · 1 background agent still running'),
+    ).toBeInTheDocument()
+    // Not working: neither the row nor the button.
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane({ agentStatus: 'idle' })}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat={false}
+        onOpen={vi.fn()}
+        overview={{ ...ov, background: '1 background agent' }}
+        canStop
+      />,
+    )
+    expect(screen.queryByText(/still running/)).toBeNull()
+    // Stopping when the turn ended: the button stays until the status moves.
+    mockInterrupt.mockResolvedValueOnce(undefined)
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={working}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat={false}
+        onOpen={vi.fn()}
+        overview={ov}
+        canStop
+      />,
+    )
+    await act(async () => {
+      fireEvent.click(stop() as HTMLElement)
+    })
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={working}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat={false}
+        onOpen={vi.fn()}
+        overview={{ ...ov, background: '1 shell' }}
+        canStop
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Stopping Claude Code…' }),
+    ).toBeDisabled()
+  })
+
   it('none when not allowed, not working, or without a cursor', () => {
     const working = pane({ agentStatus: 'working' })
     const { rerender } = renderCard({ pane: working, overview: ov })

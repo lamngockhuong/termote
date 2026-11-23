@@ -599,7 +599,8 @@ Options of agents (a <pane> is its id or a name only one pane has):
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
   stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
                              refused for another session, an agent not working, one on a
-                             dialog or one whose screen shows no turn; never sent twice within 3s)
+                             dialog or one whose screen shows no turn; never sent twice within 3s),
+                             then follow it up to 8s: 8 when it still works after Esc
   diff <pane> [--stat] [--base <branch>]  What it changed: the branch's commits since it left
                              the base (default: the main worktree's branch), then what is not
                              committed; sensitive files by name only, 64 KB of diff at most
