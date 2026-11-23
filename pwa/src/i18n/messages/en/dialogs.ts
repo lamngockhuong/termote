@@ -102,4 +102,7 @@ export default {
   'dialogs.notify.settings': 'An agent proposes settings changes',
   'dialogs.notify.jobReview': 'Ready for review',
   'dialogs.notify.jobFallback': 'A job is ready for you to review',
+  'dialogs.notify.jobCIFailed': 'Checks failed',
+  'dialogs.notify.jobMerged': 'Pull requests merged',
+  'dialogs.notify.jobOther': 'A job of the plan needs a look',
 } as const

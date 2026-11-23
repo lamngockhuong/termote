@@ -130,6 +130,9 @@
       settings: 'An agent proposes settings changes',
       jobReview: 'Ready for review',
       jobFallback: 'A job is ready for you to review',
+      jobCIFailed: 'Checks failed',
+      jobMerged: 'Pull requests merged',
+      jobOther: 'A job of the plan needs a look',
     },
     vi: {
       blocked: 'Agent cần bạn',
@@ -139,6 +142,9 @@
       settings: 'Agent đề xuất thay đổi cài đặt',
       jobReview: 'Việc chờ bạn xem lại',
       jobFallback: 'Có một việc đang chờ bạn xem lại',
+      jobCIFailed: 'Check bị lỗi',
+      jobMerged: 'Pull request đã merge hết',
+      jobOther: 'Một việc trong kế hoạch cần bạn xem',
     },
   }
   // Where the page keeps the app's language, so a push read with no page
@@ -294,18 +300,21 @@
     }
   }
 
-  // {"kind":"job_review","jobId":...}: a job of the plan moved to review.
-  // The job's id (16 hex digits, as the server makes them), or ''.
-  function jobReviewId(data) {
+  // {"kind":"job_review"|"job_ci_failed"|"job_merged","jobId":...}: a job
+  // of the plan moved to review, its pull requests' checks failed anew, or
+  // every one of them merged. The kind and the job's id (16 hex digits, as
+  // the server makes them), or null.
+  const JOB_KINDS = ['job_review', 'job_ci_failed', 'job_merged']
+  function jobPush(data) {
     try {
       const ev = data?.json()
-      return ev?.kind === 'job_review' &&
+      return JOB_KINDS.includes(ev?.kind) &&
         typeof ev.jobId === 'string' &&
         /^[0-9a-f]{16}$/.test(ev.jobId)
-        ? ev.jobId
-        : ''
+        ? { kind: ev.kind, id: ev.jobId }
+        : null
     } catch {
-      return ''
+      return null
     }
   }
 
@@ -328,11 +337,19 @@
 
   async function showPush(data) {
     const text = await readText()
-    const jobId = jobReviewId(data)
-    if (jobId) {
+    const job = jobPush(data)
+    if (job) {
+      const jobId = job.id
       const title = await readJobTitle(jobId)
-      await self.registration.showNotification(text.jobReview, {
-        body: title || text.jobFallback,
+      const head =
+        job.kind === 'job_ci_failed'
+          ? text.jobCIFailed
+          : job.kind === 'job_merged'
+            ? text.jobMerged
+            : text.jobReview
+      await self.registration.showNotification(head, {
+        body:
+          title || (job.kind === 'job_review' ? text.jobFallback : text.jobOther),
         tag: `termote-job-${jobId}`,
         renotify: true,
         icon: ICON,
