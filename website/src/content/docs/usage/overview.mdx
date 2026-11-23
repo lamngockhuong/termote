@@ -21,23 +21,38 @@ which one waits on you, which is still working, which has finished.
 It covers the panes without closing them: leave with its close button, `Esc`, the browser's Back
 button, or by picking a session. Back and Forward move between the overview and the pane you came from.
 
+## Agents and Plan
+
+The overview has two tabs. **Agents** holds the agents' cards; its label counts them and, in red,
+those waiting on you. **Plan** holds the jobs of an [orchestrator](/usage/orchestrator/); its label
+counts the open jobs and, in red, those whose agent waits on you. Without a job ledger on the server
+there is only Agents, and no tabs. The overview opens on the tab you looked at last on this device;
+a job's notification opens the Plan, and the header's usage chip opens Agents on its pane's card.
+What is open in one tab (a dialog skipped, a History, a job's details) stays open while you look at
+the other.
+
 ## The cards
 
-One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one
-state, the agent that entered it most recently comes first, so the ones you just used stay on top;
-blocked agents are the exception: the one waiting on you longest comes first. Each card shows:
+One card per agent, in sections: **Needs you** (the dialogs waiting on you, then the cards of those
+agents), **Working**, **Done** and **Idle**, each named with how many it holds. Within one section,
+the agent that entered its state most recently comes first, so the ones you just used stay on top;
+in Needs you the one waiting on you longest comes first. A card that changes state moves to its new
+section as it is, its History still open. Each card shows:
 
 - the agent's state and how long it has been in it. "≥ 5 min ago" means the server found the agent
   already in that state when it started watching (after a restart, for example);
 - the session and tab it runs in, and **worktree** for a linked git worktree;
+- **Job** and its title, when the agent works on an orchestrator's job;
 - its last message;
-- the branch and the number of changed files of its directory;
-- how full its context is: a bar, the share of the context window and the tokens, for example
-  `72% 144k/200k`, and the model for Claude Code. Bars turn yellow from 70% and red from 90%.
+- under **Branch**, the branch and the number of changed files of its directory;
+- under **Context**, how full its context is: a bar, the share of the context window and the tokens,
+  for example `72% 144k/200k`, and the model for Claude Code. Bars turn yellow from 70% and red from 90%;
+- under **Session**, the tokens the session has used (see [Tokens and cost](#tokens-and-cost)).
 
 Tap a card to open the agent: its [Chat view](/usage/agent-chat/) for Claude Code and Codex, else its terminal. A Chat card
-also has a terminal button. The filter above the cards counts agents and is the overview's own: it
-does not change the sidebar's.
+also has a terminal button. The filter above the cards (**All**, **Needs you**, **Working**, each with
+its count) is the overview's own: it does not change the sidebar's. The dialogs of Needs you show
+whatever the filter or the search hides.
 
 The magnifier in the overview's header opens a search box over the cards: it keeps the agents whose
 tab, group, pane, agent or process matches, together with the filter. **Enter** opens the first one,
@@ -65,12 +80,18 @@ again to stop picking. A [view-only device](/usage/devices/#view-only) has no ch
 
 ## Plan
 
-When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** section above the cards
-shows its job ledger, grouped by what needs you: waiting for you (the agent is on a dialog), done
-and not read yet, running, to review, to do, and the finished jobs folded away. Columns on a wide
-screen, a list on a phone. A job shows its title, what its agent does, the pane (tap it to open
-that pane), the branch and the last diff counts; **Details** shows the prompt, the note, the
-worktree folder, the history and every dialog answered under a grant.
+When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger
+in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then
+done and not read yet, running, to review and to do; the groups with no job are named on one line
+under the columns. On a phone the columns stack. A job's card shows its title and state, what its
+agent does, its pane and branch, and its last diff and grants in force. **Finished** unfolds the
+finished jobs as a table: job, state, worktree, changes and when it last changed.
+
+Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide
+screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They
+hold a button that opens the job's pane, **Grants** and **Edit**, then the job's state, agent,
+branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a
+grant and its history.
 
 - **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with
   `termote agents start --job <id>` when you ask it to.
@@ -86,13 +107,13 @@ worktree folder, the history and every dialog answered under a grant.
   `--no-auth`.
 
 When the orchestrator moves a job to review, a device with notifications on gets a push; tapping
-it opens this section. A [view-only device](/usage/devices/#view-only) sees each job's title,
-state, pane and branch only, with no button.
+it opens the Plan. A [view-only device](/usage/devices/#view-only) sees each job's title,
+state, pane and branch only, and a job opens nothing.
 
 ## Stopping an agent
 
 The card of a working agent that takes messages from Termote (Claude Code, Codex and OpenCode) has a
-**Stop** button under its terminal button. It ends the turn the agent is running, as Esc in its
+**Stop** button at the top of the card, beside its terminal button. It ends the turn the agent is running, as Esc in its
 terminal, for the conversation the card sums up; see
 [Stopping the Agent](/usage/agent-chat/#stopping-the-agent) for what is refused. A refusal shows
 for a moment at the top of the screen. A Claude Code agent that has written its answer and only
@@ -109,8 +130,8 @@ Codex the share is the one Codex reports itself ("% context left", turned into t
 For OpenCode the context is the tokens of its last answer, and the window the one OpenCode's own
 list of models gives that model; a model the list does not have shows its tokens without a share.
 
-With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the cards shows that
-account's limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last
+With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip behind the header's token button
+(see [Tokens and cost](#tokens-and-cost)) shows that account's limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last
 recorded them. Numbers older than 30 minutes are dimmed, since the account may have been used
 elsewhere since. There is no such line for Claude Code: its limits are not written anywhere Termote
 reads.
@@ -123,8 +144,10 @@ off in **Settings > Sessions > Agent usage in the header**.
 
 Each card of a Claude Code, Codex or OpenCode session shows how many tokens the session has used so far and
 what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents' share
-on a line of its own. Above the cards, a strip adds up every session of the server's user, today and
-over the last 7 days, one line per agent; the days are your device's own. The same strip at the top
+on a line of its own. The overview's header shows today's tokens of every agent together, never a
+cost; tap them for a strip that adds up every session of the server's user, today and over the last
+7 days, one line per agent with its cost, and the Codex accounts' limits. The days are your device's
+own; `Esc` closes the strip and leaves the overview open. The same strip at the top
 of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane's
 folder, and an old session shows its own total under its title.
 
