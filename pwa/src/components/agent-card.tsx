@@ -257,7 +257,9 @@ export const AgentCard = memo(function AgentCard({
               : 'border-border'
       }`}
     >
-      <div className="flex items-start">
+      {/* Hovering the open button lights the whole first part of the card,
+        its Stop and terminal buttons included, as one surface */}
+      <div className="flex items-start rounded-t-panel transition-colors duration-(--duration-fast) ease-standard has-[>button:hover]:bg-surface-raised">
         <button
           ref={openRef}
           type="button"
@@ -269,7 +271,7 @@ export const AgentCard = memo(function AgentCard({
             place,
           })}
           aria-describedby={detailsId}
-          className={`flex min-h-touch min-w-0 flex-1 flex-col gap-1.5 rounded-panel p-3 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
+          className={`flex min-h-touch min-w-0 flex-1 flex-col gap-1.5 rounded-panel p-3 text-left ${FOCUS_RING}`}
         >
           <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
             <AgentStatusBadge status={status} />

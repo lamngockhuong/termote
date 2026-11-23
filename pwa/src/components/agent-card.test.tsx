@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentRequestError } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
@@ -274,6 +274,21 @@ describe('AgentCard', () => {
     expect(open).not.toHaveTextContent('Branch')
     expect(open).not.toHaveTextContent('Context')
     expect(open).not.toHaveTextContent('Session')
+  })
+
+  it('lights its whole first row on hover, not the open button alone', () => {
+    renderCard()
+    const open = screen.getByRole('button', { name: /^Open chat: / })
+    const row = open.parentElement as HTMLElement
+    expect(row).toHaveClass('has-[>button:hover]:bg-surface-raised')
+    expect(row).toHaveClass('rounded-t-panel')
+    expect(open.className).not.toMatch(/hover:bg-/)
+    // The terminal button sits in that row
+    expect(
+      within(row).getByRole('button', {
+        name: 'Open terminal: Claude Code, api / build',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('names the job its pane works on, its hidden characters shown', () => {
