@@ -487,3 +487,24 @@ func TestPushJobReview(t *testing.T) {
 		t.Errorf("sent %v", f.sent)
 	}
 }
+
+// A job's checks failing and its pull requests merging are pushed by the
+// job's id alone, only while some device can be sent one.
+func TestPushJobCI(t *testing.T) {
+	w, f, _ := newTestWatcher(t, nil)
+	w.notifyJobCIFailed("j1")
+	if len(w.queue) != 0 {
+		t.Fatal("queued with no subscription")
+	}
+	if err := w.store.add(fcmSub(t, 1)); err != nil {
+		t.Fatal(err)
+	}
+	w.notifyJobCIFailed("j1")
+	w.notifyJobMerged("j2")
+	w.deliverEvent(context.Background(), <-w.queue)
+	w.deliverEvent(context.Background(), <-w.queue)
+	if f.count() != 2 || !strings.HasSuffix(f.sent[0], `{"kind":"job_ci_failed","jobId":"j1"}`) ||
+		!strings.HasSuffix(f.sent[1], `{"kind":"job_merged","jobId":"j2"}`) {
+		t.Errorf("sent %v", f.sent)
+	}
+}

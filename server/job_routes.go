@@ -64,6 +64,9 @@ type jobView struct {
 	Live jobLive `json:"live"`
 	// CISummary: what the job's card shows of its pull requests.
 	CISummary *jobCISummary `json:"ciSummary,omitempty"`
+	// CIChecked: when its pull requests were last read or tried (kept in
+	// memory, not in the ledger).
+	CIChecked string `json:"ciChecked,omitempty"`
 }
 
 // jobBrief is a job as a view-only client sees it: never the prompt, the
@@ -567,25 +570,34 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 			brief = append(brief, b)
 			continue
 		}
-		full = append(full, jobView{j, live, ciSummary(j.CI)})
+		full = append(full, a.jobViewOf(j, live))
 	}
 	now := time.Now().UTC().Format(activityTimeFormat)
 	if viewOnly {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now})
+		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": a.ci.available()})
 		return
 	}
 	if full == nil {
 		full = []jobView{}
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r)})
+	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r),
+		"ciAvailable": a.ci.available()})
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
 	snap, _ := a.activity.lastSnapshot()
-	return jobView{j, a.jobLiveIn(snap, j), ciSummary(j.CI)}
+	return a.jobViewOf(j, a.jobLiveIn(snap, j))
+}
+
+func (a *agentAPI) jobViewOf(j job, live jobLive) jobView {
+	v := jobView{job: j, Live: live, CISummary: ciSummary(j.CI)}
+	if t := a.ci.checkedAt(j.ID); !t.IsZero() {
+		v.CIChecked = t.UTC().Format(activityTimeFormat)
+	}
+	return v
 }
 
 // jobLiveIn is what j's agent does in snap, the tracker's last snapshot

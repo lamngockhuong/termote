@@ -666,6 +666,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		}
 	}
 	agent.registerCommandsRoute(mux, files, allowed)
+	if agent.jobs != nil && files != nil && !runningInContainer() {
+		agent.ci = newCIPoller(agent, files, cfg.JobsDir)
+	}
 	registerTaskRoutes(mux, files, userTasks, agent.input)
 	agent.tasks = runsTasks(m)
 	var recent *recentGroupStore
@@ -857,6 +860,13 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 		if agent.jobs != nil {
 			agent.jobs.setOnReview(w.notifyJobReview)
 		}
+		if agent.ci != nil {
+			agent.ci.onFailed, agent.ci.onMerged = w.notifyJobCIFailed, w.notifyJobMerged
+		}
+	}
+	// After the push hooks: a read that finds something new pushes it.
+	if agent.ci != nil {
+		go agent.ci.run(ctx)
 	}
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()

@@ -402,9 +402,10 @@ func TestServeConfigUnusableWithoutSecret(t *testing.T) {
 
 func TestServiceEnvHasNoTermoteVariables(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	tc.env = map[string]string{"PATH": "/home/u/.local/bin:/usr/bin", "HERDR_SOCKET_PATH": "/run/h.sock", "TERMOTE_PASS": "x", "HOME": "/home/u"}
+	tc.env = map[string]string{"PATH": "/home/u/.local/bin:/usr/bin", "HERDR_SOCKET_PATH": "/run/h.sock", "TERMOTE_PASS": "x", "HOME": "/home/u",
+		"GH_CONFIG_DIR": "/home/u/.gh", "GH_TOKEN": "t", "GITHUB_TOKEN": "t"}
 	env := tc.serviceEnv()
-	if env["PATH"] != "/home/u/.local/bin:/usr/bin" || env["HERDR_SOCKET_PATH"] != "/run/h.sock" || len(env) != 2 {
+	if env["PATH"] != "/home/u/.local/bin:/usr/bin" || env["HERDR_SOCKET_PATH"] != "/run/h.sock" || env["GH_CONFIG_DIR"] != "/home/u/.gh" || len(env) != 3 {
 		t.Fatalf("service env %v", env)
 	}
 	got := withoutTermoteEnv([]string{"A=1", "TERMOTE_PASS=x", "termote_port=1", "TERMOTEX=2"})

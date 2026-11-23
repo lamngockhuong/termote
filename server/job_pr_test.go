@@ -186,6 +186,9 @@ func TestJobCIViews(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("view list = %d", code)
 	}
+	if out["ciAvailable"] != false {
+		t.Errorf("ciAvailable without a poller: %v", out["ciAvailable"])
+	}
 	b := out["jobs"].([]any)[0].(map[string]any)
 	ci, ok := b["ciSummary"].(map[string]any)
 	if !ok || ci["worst"] != ciFail || ci["numbers"].([]any)[0] != float64(12) {
