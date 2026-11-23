@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# A stand-in for the GitHub CLI, for pwa/e2e/job-ci.spec.ts: CI's E2E server
+# runs with this directory first on its PATH. It answers from the files the
+# spec writes in $E2E_GH_DIR and never reaches GitHub: without that dir, or
+# for a call it does not know, it fails.
+set -u
+dir="${E2E_GH_DIR:-}"
+if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+  echo "fake gh: no E2E_GH_DIR" >&2
+  exit 2
+fi
+case "${1:-} ${2:-}" in
+"auth status")
+  [ "${3:-}" = "--hostname=github.com" ] && exit 0
+  echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" >&2
+  exit 1
+  ;;
+"repo view")
+  echo '{"defaultBranchRef":{"name":"main"}}'
+  exit 0
+  ;;
+"pr list")
+  for a in "$@"; do
+    case "$a" in --head=*) branch="${a#--head=}" ;; esac
+  done
+  f="$dir/prs-${branch:-none}.json"
+  if [ -f "$f" ]; then cat "$f"; else echo '[]'; fi
+  exit 0
+  ;;
+"pr view")
+  f="$dir/pr-${3:-x}.json"
+  if [ -f "$f" ]; then
+    cat "$f"
+    exit 0
+  fi
+  echo "GraphQL: Could not resolve to a PullRequest" >&2
+  exit 1
+  ;;
+esac
+echo "fake gh: unknown call: $*" >&2
+exit 2

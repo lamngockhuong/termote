@@ -338,13 +338,16 @@ jobs:
       # XDG_STATE_HOME the recent groups (groups.spec.ts empties them).
       # CLAUDE_CONFIG_DIR is where the session history reads Claude Code's
       # transcripts (session-history.spec.ts lays its own there).
+      # pwa/e2e/bin first on PATH: the jobs' pull requests are read with its
+      # stand-in gh, which answers from E2E_GH_DIR (job-ci.spec.ts writes
+      # it) and never reaches GitHub.
       - name: Start server
         if: ${{ !matrix.extra }}
         run: |
           echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/claude"
+          mkdir -p "$RUNNER_TEMP/claude" "$RUNNER_TEMP/gh"
           XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" XDG_STATE_HOME="$RUNNER_TEMP/state" \
-            CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude" \
+            CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude" E2E_GH_DIR="$RUNNER_TEMP/gh" PATH="$GITHUB_WORKSPACE/pwa/e2e/bin:$PATH" \
             TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
           for _ in $(seq 1 30); do
             # The first snapshot also creates the server's tmux session
@@ -368,6 +371,8 @@ jobs:
           TERMOTE_E2E_CACHE: ${{ runner.temp }}/cache
           TERMOTE_E2E_STATE: ${{ runner.temp }}/state
           TERMOTE_E2E_CLAUDE_DIR: ${{ runner.temp }}/claude
+          TERMOTE_E2E_GH: "1"
+          TERMOTE_E2E_GH_DIR: ${{ runner.temp }}/gh
           SHARD: ${{ matrix.shard }}
         run: pnpm exec playwright test --workers=1 --shard="$SHARD" --grep-invert "Capture screenshots"
 
