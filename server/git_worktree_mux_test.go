@@ -140,6 +140,10 @@ func TestGitWorktreeMuxCreateOpenRemove(t *testing.T) {
 		{`{"groupId":"$nope","branch":"feat/y"}`, "unknown_group"},
 		{`{"groupId":"$main","branch":"日本"}`, "invalid_name"},
 		{`{"groupId":"$main","branch":"feat/new"}`, "create_failed"}, // checked out already
+		// git keeps a branch's name from being a folder of another's.
+		{`{"groupId":"$main","branch":"e2e-base/x"}`, "branch_clash"},
+		{`{"groupId":"$main","branch":"feat"}`, "branch_clash"},
+		{`{"groupId":"$main","branch":"feat/new/deeper"}`, "branch_clash"},
 	} {
 		if _, code, _ := x.do(t, "POST", "/api/mux/worktrees", c.body); code != c.code {
 			t.Errorf("create %s: %s, want %s", c.body, code, c.code)

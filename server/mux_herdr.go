@@ -1580,6 +1580,12 @@ func herdrWorktreeError(err error) error {
 		"worktree_busy":                  errWorktreeBusy,
 		"unknown_method":                 errWorktreeUnsupported,
 	}
+	if he.Code == "worktree_create_failed" && strings.Contains(he.Message, "cannot lock ref") && strings.Contains(he.Message, "exists; cannot create") {
+		// git's refusal of a name that clashes with another branch's as a
+		// folder, made after the route's own check (a branch made since).
+		log.Printf("herdr %s: %s", he.Code, he.Message)
+		return errWorktreeBranchClash
+	}
 	if c, ok := coded[he.Code]; ok {
 		if c != errUnknownGroup && c != errWorktreeUnsupported {
 			log.Printf("herdr %s: %s", he.Code, he.Message)

@@ -480,6 +480,10 @@ describe('worktreeProblem', () => {
     ['busy', 'Another worktree change is still running; try again'],
     ['unsupported', 'This backend cannot manage worktrees'],
     [
+      'branch_clash',
+      'Another branch is named like a folder of this one, or this one of it (test and test/x cannot both exist). Pick another name',
+    ],
+    [
       'in_use',
       'A program still has a file open in the worktree. Its workspaces were closed and nothing was deleted; close that program and remove again',
     ],

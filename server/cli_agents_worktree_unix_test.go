@@ -285,7 +285,9 @@ func TestAgentsStartWorktreeRefusals(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "at its start on Windows") {
 		t.Errorf("prompt on Windows: %v", err)
 	}
-	for branch, want := range map[string]string{"old": "already exists; pick a new name", "main": "is the main worktree's"} {
+	for branch, want := range map[string]string{"old": "already exists; pick a new name", "main": "is the main worktree's",
+		// git keeps a branch's name from being a folder of another's.
+		"old/case": "branch old exists, so git cannot make old/case", "main/x/y": "branch main exists, so git cannot make main/x/y"} {
 		if err := start("claude", branch); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", branch, err)
 		}
@@ -295,7 +297,7 @@ func TestAgentsStartWorktreeRefusals(t *testing.T) {
 	}
 	// The server's refusals, worded.
 	for code, want := range map[string]string{"linked_source": "from the main checkout's workspace", "invalid_name": "not a valid branch name",
-		"open_failed": "open it from the PWA", "branch_exists": "pick a new branch name"} {
+		"open_failed": "open it from the PWA", "branch_exists": "pick a new branch name", "branch_clash": "(branch_clash)"} {
 		s.set("POST /api/mux/worktrees", answer(http.StatusConflict, `{"error":"no","code":"`+code+`"}`))
 		// Nothing was made, so nothing is said to stay.
 		if err := start("claude", "feat"); err == nil || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), want) ||
@@ -521,5 +523,14 @@ func TestWorktreeDepsHint(t *testing.T) {
 	os.Mkdir(filepath.Join(dir, "yarn.lock"), 0o755)
 	if got := worktreeDepsHint(dir); got != "" {
 		t.Errorf("directory: %q", got)
+	}
+}
+
+func TestClashingBranch(t *testing.T) {
+	list := []string{"main", "test", "feat/a", "feature"}
+	for branch, want := range map[string]string{"test/x": "test", "feat": "feat/a", "feat/a/b": "feat/a", "feat/b": "", "test-x": "", "featur": "", "feature/x": "feature"} {
+		if got := clashingBranch(list, branch); got != want {
+			t.Errorf("%s: %q, want %q", branch, got, want)
+		}
 	}
 }

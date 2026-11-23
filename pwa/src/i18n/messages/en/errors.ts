@@ -21,6 +21,8 @@ export default {
   'errors.base_required': 'Name a base branch: this is the main worktree',
   'errors.branch_exists':
     'The branch exists, so it is checked out without a base',
+  'errors.branch_clash':
+    'Another branch is named like a folder of this one, or this one of it (test and test/x cannot both exist). Pick another name',
   'errors.busy': 'Another change is still running. Try again',
   'errors.changed': 'It changed since it was read. Look again',
   'errors.cli_only': 'Only the termote CLI on that machine can do this',

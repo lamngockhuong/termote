@@ -106,6 +106,9 @@ var (
 	errWorktreeNotLinked    = &codedError{"not_linked", "this workspace is not a linked worktree", http.StatusConflict}
 	errWorktreeChanged      = &codedError{"changed", "the worktree changed", http.StatusConflict}
 	errWorktreeBranchExists = &codedError{"branch_exists", "the branch exists, so it is checked out without a base", http.StatusConflict}
+	// errWorktreeBranchClash: git keeps a branch's name from being a folder
+	// of another's (a branch test and test/x cannot both exist).
+	errWorktreeBranchClash  = &codedError{"branch_clash", "another branch's name is a folder of this one, or this one of it (test and test/x cannot both exist): pick another name", http.StatusConflict}
 	errWorktreeAmbiguous    = &codedError{"ambiguous", "more than one worktree uses this branch", http.StatusConflict}
 	errWorktreeCreateFailed = &codedError{"create_failed", "git could not create the worktree", http.StatusConflict}
 	errWorktreeOpenFailed   = &codedError{"open_failed", "the worktree exists but its workspace did not open", http.StatusConflict}
@@ -270,18 +273,9 @@ func (a *worktreeAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
-	if body.Base != "" {
-		// Herdr ignores the base of a branch that exists: say so rather
-		// than check out something other than what was asked.
-		exists, err := a.branchExists(ctx, body.GroupID, body.Branch)
-		if err != nil {
-			worktreeFailure(w, "create worktree", err)
-			return
-		}
-		if exists {
-			worktreeFailure(w, "create worktree", errWorktreeBranchExists)
-			return
-		}
+	if err := a.createChecks(ctx, body.GroupID, body.Branch, body.Base); err != nil {
+		worktreeFailure(w, "create worktree", err)
+		return
 	}
 	id, err := a.wm.CreateWorktree(ctx, body.GroupID, body.Branch, body.Base, body.Label)
 	if err != nil {
@@ -291,19 +285,64 @@ func (a *worktreeAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"ok": true, "id": id})
 }
 
-// branchExists reports whether branch is a local branch of the source's
-// repository (git show-ref --verify, exit 1: it is not).
-func (a *worktreeAPI) branchExists(ctx context.Context, sourceID, branch string) (bool, error) {
+// createChecks refuses, before anything is made, a new branch git would
+// refuse to make: one whose name clashes with another branch's as a folder
+// (git's own refusal only says it could not create the worktree), and, with
+// a base, one that exists: Herdr ignores the base of a branch that exists,
+// so say so rather than check out something other than what was asked.
+func (a *worktreeAPI) createChecks(ctx context.Context, sourceID, branch, base string) error {
 	lctx, cancel := context.WithTimeout(ctx, worktreeCallTimeout)
 	defer cancel()
 	list, err := a.wm.ListWorktrees(lctx, sourceID)
 	if err != nil {
-		return false, listFailure(err)
+		if base == "" {
+			return nil // the create says what is wrong
+		}
+		return listFailure(err)
 	}
 	if list.RepoRoot == "" {
-		return false, errors.New("worktree.list named no repository root")
+		if base == "" {
+			return nil
+		}
+		return errors.New("worktree.list named no repository root")
 	}
-	return branchExistsIn(ctx, a.git, gitCall{root: list.RepoRoot, safeDir: list.SafeDir}, branch)
+	c := gitCall{root: list.RepoRoot, safeDir: list.SafeDir}
+	if base != "" {
+		exists, err := branchExistsIn(ctx, a.git, c, branch)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return errWorktreeBranchExists
+		}
+	}
+	clash, err := branchClash(ctx, a.git, c, branch)
+	if err != nil {
+		log.Printf("worktrees: branch check in %s: %v", list.RepoRoot, err)
+		return nil // the create says what is wrong
+	}
+	if clash {
+		return errWorktreeBranchClash
+	}
+	return nil
+}
+
+// branchClash reports whether a local branch keeps git from making branch:
+// one whose name is a folder of branch's (test for test/x), or one inside
+// branch as a folder (test/x for test). branch passed validBranchName, so
+// it holds no pattern character.
+func branchClash(ctx context.Context, git *gitRunner, c gitCall, branch string) (bool, error) {
+	for i := range len(branch) {
+		if branch[i] != '/' {
+			continue
+		}
+		ok, err := branchExistsIn(ctx, git, c, branch[:i])
+		if err != nil || ok {
+			return ok, err
+		}
+	}
+	out, _, err := git.output(ctx, c, "for-each-ref", "--count=1", "--format=%(refname)", "refs/heads/"+branch+"/")
+	return strings.TrimSpace(string(out)) != "", err
 }
 
 func (a *worktreeAPI) handleOpen(w http.ResponseWriter, r *http.Request) {
