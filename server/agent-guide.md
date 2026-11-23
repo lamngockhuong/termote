@@ -202,7 +202,8 @@ dialog goes on (its next question, another tab, a box just ticked): show it agai
 <pane>`. A pane on a dialog stays in the `next:` line, so the wait after an answer follows it.
 
 A `<pane>` is a pane id or a name only one pane has: a name two panes share is refused, with
-both ids. Send to one pane at a time, never to your own. Ask the user before `start`; it refuses
+both ids. Send to one pane at a time, never to your own: when termote knows your pane (`self`),
+`send` to it and a job's `--pane` naming it are refused. Ask the user before `start`; it refuses
 when the new tab would open in another directory than `list` shows, so when `list` shows no
 directory for the workspace, ask which workspace to use. The prompt of `start` is the agent's
 first message, for every kind (`-` reads it from stdin); a pane whose shell is PowerShell, or any

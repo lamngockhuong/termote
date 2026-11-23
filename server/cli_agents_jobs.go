@@ -44,6 +44,9 @@ const (
 	waitJobUsage = "usage: termote agents wait --job <id>... [--timeout <duration>]"
 )
 
+// jobSelfPane refuses --pane naming the orchestrator's own pane.
+const jobSelfPane = "--pane %s is the pane this command runs in; a job goes to the agent that does the work"
+
 type jobsListing struct {
 	Jobs      []jobView `json:"jobs"`
 	ReadOnly  bool      `json:"readOnly"`
@@ -365,7 +368,7 @@ func (c *cli) agentsJobAdd(args []string) error {
 		body["note"] = note
 	}
 	if pane != "" {
-		p, err := c.agentsPane(port, pane)
+		p, err := c.agentsOtherPane(port, pane, jobSelfPane)
 		if err != nil {
 			return err
 		}
@@ -500,7 +503,7 @@ func (c *cli) agentsJobSet(args []string) error {
 		body["note"] = note
 	}
 	if pane != "" {
-		p, err := c.agentsPane(port, pane)
+		p, err := c.agentsOtherPane(port, pane, jobSelfPane)
 		if err != nil {
 			return err
 		}

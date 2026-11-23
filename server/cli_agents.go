@@ -344,16 +344,37 @@ func (c *cli) agentsSnapshot(port int) (Snapshot, error) {
 
 // agentsPane resolves name to a pane running an agent.
 func (c *cli) agentsPane(port int, name string) (snapPane, error) {
+	p, _, err := c.agentsPaneIn(port, name)
+	return p, err
+}
+
+// agentsPaneIn is agentsPane with the snapshot it resolved name in.
+func (c *cli) agentsPaneIn(port int, name string) (snapPane, Snapshot, error) {
 	s, err := c.agentsSnapshot(port)
 	if err != nil {
-		return snapPane{}, err
+		return snapPane{}, s, err
 	}
 	p, err := resolvePane(s, name)
 	if err != nil {
-		return snapPane{}, err
+		return snapPane{}, s, err
 	}
 	if p.pane.Agent == nil {
-		return snapPane{}, fmt.Errorf("pane %s (%s) runs no agent", plainText(p.pane.ID), plainText(p.ref()))
+		return snapPane{}, s, fmt.Errorf("pane %s (%s) runs no agent", plainText(p.pane.ID), plainText(p.ref()))
+	}
+	return p, s, nil
+}
+
+// agentsOtherPane is agentsPane refusing the pane this command runs in,
+// with refusal (its %s the pane id), when its environment says so for sure
+// (selfPaneID); where it cannot tell (herdr-core, psmux, Windows), the pane
+// is not refused.
+func (c *cli) agentsOtherPane(port int, name, refusal string) (snapPane, error) {
+	p, s, err := c.agentsPaneIn(port, name)
+	if err != nil {
+		return snapPane{}, err
+	}
+	if p.pane.ID == c.selfPaneID(s) {
+		return snapPane{}, fmt.Errorf(refusal, plainText(p.pane.ID))
 	}
 	return p, nil
 }
@@ -730,7 +751,7 @@ func (c *cli) agentsSend(args []string) error {
 	if err != nil {
 		return err
 	}
-	p, err := c.agentsPane(port, args[0])
+	p, err := c.agentsOtherPane(port, args[0], "pane %s is the pane this command runs in; send the message to the agent that does the work, nothing was sent")
 	if err != nil {
 		return err
 	}

@@ -115,7 +115,8 @@ trong lúc orchestrator đang đọc pane khác vẫn được báo, kể cả k
 cho một pane khác, còn lượt đã báo rồi thì không báo lại. `--after <seq>` là mốc cho mọi pane được
 nêu mà không kèm mốc riêng; `list --json` có mốc mới nhất (`latest`) cho lần chờ đầu tiên, và nêu
 pane mà chính lệnh đang chạy trong đó (`self`) khi biến môi trường của tmux, Herdr hoặc Zellij cho
-biết chắc chắn.
+biết chắc chắn. Khi đó `send` tới pane ấy bị từ chối, và `--pane` của một việc (`job add`, `job set`)
+trỏ vào nó cũng vậy: việc phải giao cho agent làm việc đó.
 
 `diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
 base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì

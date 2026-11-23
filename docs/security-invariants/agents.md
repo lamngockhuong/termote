@@ -691,7 +691,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   of one pane; Zellij's `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` a pane of that session; tmux's
   `TMUX_PANE` (with `TMUX` set) a pane id of the snapshot whose window id and session name, read
   from the tmux `TMUX` names with `tmux display-message` (argv only, the pane id checked against
-  `tmuxPaneIDRe` first), are its tab's key and workspace's name; nothing for psmux or herdr-core. It follows each pane by its activity key
+  `tmuxPaneIDRe` first), are its tab's key and workspace's name; nothing for psmux or herdr-core.
+  `send`, and `job add`/`job set` with `--pane`, refuse that pane before any request
+  (`agentsOtherPane`), and let a pane through when `self` is unknown; the server does not refuse
+  it (a PWA's job may name any pane). It follows each pane by its activity key
   (`activityKey`, computed from the snapshot's tab `key`), not its id, so a tmux tab that moves
   (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` requires `--cursor` (no cursor, no request),
   sends the cursor `read --json` printed and is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file

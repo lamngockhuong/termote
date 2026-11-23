@@ -116,7 +116,8 @@ A turn that ended while the orchestrator was reading another pane is then still 
 when it ended before a mark printed for another pane, and one already reported is not reported
 again. `--after <seq>` gives the mark of every pane named without one; `list --json` has the
 latest mark (`latest`) for a first wait, and names the pane it runs in (`self`) when the tmux,
-Herdr or Zellij environment says so for sure.
+Herdr or Zellij environment says so for sure. That pane is then refused to `send` and to a job's
+`--pane` (`job add`, `job set`): a job goes to the agent that does the work.
 
 `diff` shows what an agent changed in its folder: the commits of its branch since it left the
 base (by default the branch your main checkout has, or `--base <branch>`), then what is staged,

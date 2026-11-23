@@ -106,7 +106,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
    waiting on a dialog.
 2. **One pane at a time.** Send each message to one pane, by id. Never loop over panes to send
    the same text to several agents, and never send to your own pane (`self` in `list --json`;
-   ask the user which it is if `list` does not say).
+   ask the user which it is if `list` does not say). When termote knows your pane, `send` to it
+   and `job add`/`job set --pane` naming it are refused: a job goes to the agent that does the work.
 3. **Send, then wait, then read.** After `send`, run `wait` with the `<pane>@<seq>` it printed,
    then `read`. With several agents at work, wait on all of them in one `wait <id>@<seq>
    <id>@<seq>...`, each with its own mark, and handle each one it reports. A message to a working
