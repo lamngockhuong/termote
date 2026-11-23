@@ -21,7 +21,7 @@ export function runningSubagents(
 }
 
 // The server's time (ms), a new one each second while ticking
-function useServerSeconds(ticking: boolean, clockOffset: number) {
+export function useServerSeconds(ticking: boolean, clockOffset: number) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!ticking) return
@@ -35,10 +35,13 @@ function useServerSeconds(ticking: boolean, clockOffset: number) {
 export function ChatSubagents({
   paneId,
   clockOffset = 0,
+  onOpen,
 }: {
   paneId: string
   // The server's clock minus this device's (ms)
   clockOffset?: number
+  // Opens a subagent's conversation (each row a button)
+  onOpen?: (node: SubagentNode) => void
 }) {
   const { t } = useT()
   const listId = useId()
@@ -79,7 +82,12 @@ export function ChatSubagents({
       </button>
       {open && (
         <div id={listId} className="mt-1.5 max-h-[30vh] overflow-y-auto">
-          <SubagentTree tree={{ nodes: running }} error={false} now={now} />
+          <SubagentTree
+            tree={{ nodes: running }}
+            error={false}
+            now={now}
+            onOpen={onOpen}
+          />
         </div>
       )}
     </div>

@@ -204,6 +204,32 @@ describe('router', () => {
     ])
   })
 
+  it("lists the acme-api agent's subagent and reads its conversation", async () => {
+    const tree = await call('GET', `${pane('w1:p1')}/agent/subagents`)
+    expect(tree.body.nodes.map((n: { id: string }) => n.id)).toEqual([
+      'a1d2e3f4',
+    ])
+    expect(
+      (await call('GET', `${pane('w2:p1')}/agent/subagents`)).body,
+    ).toEqual({ nodes: [] })
+    const read = await call(
+      'GET',
+      `${pane('w1:p1')}/agent/subagents/a1d2e3f4/transcript`,
+    )
+    expect(read.status).toBe(200)
+    expect(read.body.entries[0].role).toBe('user')
+    for (const path of [
+      `${pane('w1:p1')}/agent/subagents/other/transcript`,
+      `${pane('w2:p1')}/agent/subagents/a1d2e3f4/transcript`,
+    ]) {
+      const missing = await call('GET', path)
+      expect([missing.status, missing.body.code]).toEqual([
+        404,
+        'session_not_found',
+      ])
+    }
+  })
+
   it('reports an unhandled request and answers 501', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { status } = await call('GET', '/nothing-here')

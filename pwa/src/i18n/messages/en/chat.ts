@@ -113,6 +113,15 @@ export default {
   'chat.subagent.list': 'Subagents',
   'chat.subagent.more': 'and {count} more',
   'chat.subagent.truncated': 'Older or deeper subagents not shown',
+  'chat.subagent.open': 'Open the conversation of {type}: {description}',
+  'chat.subagent.openNoDesc': 'Open the conversation of {type}',
+  'chat.subagent.close': "Close the subagent's conversation",
+  'chat.subagent.conversation': 'Subagent conversation',
+  'chat.subagent.empty': 'Nothing written yet.',
+  'chat.subagent.gone':
+    "This subagent's conversation is no longer there. What was read stays.",
+  'chat.subagent.unsupported':
+    "This server cannot show a subagent's conversation yet. Update termote on it.",
 
   // The list shown while a command or a skill is typed
   // (components/slash-command-list.tsx)

@@ -46,6 +46,7 @@ import {
   fetchSignins,
   fetchSnapshot,
   fetchSubagents,
+  fetchSubagentTranscript,
   fetchTaskRun,
   fetchTasks,
   fetchTemplates,
@@ -775,6 +776,45 @@ describe('fetchSubagents', () => {
     const err = await fetchSubagents('p').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.status).toBe(404)
+  })
+})
+
+describe('fetchSubagentTranscript', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("reads one subagent's conversation, forward or older", async () => {
+    const body = { entries: [], cursor: 'c2', reset: false }
+    const { calls } = mockFetch({ body })
+    expect(await fetchSubagentTranscript('%3', 'a1')).toEqual(body)
+    await fetchSubagentTranscript('%3', 'a1', { cursor: 'c1' })
+    await fetchSubagentTranscript('%3', 'a1', { before: 'b1' })
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/%253/agent/subagents/a1/transcript',
+      '/api/mux/panes/%253/agent/subagents/a1/transcript?cursor=c1',
+      '/api/mux/panes/%253/agent/subagents/a1/transcript?before=b1',
+    ])
+  })
+
+  it('keeps the code of a refusal, with no toast for view-only', async () => {
+    const seen = vi.fn()
+    const off = onViewOnlyRefusal(seen)
+    mockFetch(
+      {
+        body: { error: 'no such session', code: 'session_not_found' },
+        status: 404,
+      },
+      { body: { error: 'view-only device', code: 'view_only' }, status: 403 },
+    )
+    const gone = await fetchSubagentTranscript('p', 'a1').catch((e) => e)
+    expect(gone).toBeInstanceOf(RequestError)
+    expect([gone.status, gone.code]).toEqual([404, 'session_not_found'])
+    const refused = await fetchSubagentTranscript('p', 'a1').catch((e) => e)
+    expect([refused.status, refused.code]).toEqual([403, 'view_only'])
+    expect(seen).not.toHaveBeenCalled()
+    off()
   })
 })
 

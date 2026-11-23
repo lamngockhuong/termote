@@ -184,6 +184,12 @@ func claudeInputSensitive(in map[string]any) bool {
 // its place. A tool result is returned as its own orphan part;
 // foldToolResults attaches it to its call.
 func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
+	return parseClaudeLines(r, start, false)
+}
+
+// parseClaudeLines is claudeJournal.Parse; sidechain keeps the rows of a
+// subagent's conversation, which the session's transcript leaves out.
+func parseClaudeLines(r io.Reader, start int64, sidechain bool) ([]TranscriptEntry, int64) {
 	br := lineReaders.Get().(*bufio.Reader)
 	br.Reset(r)
 	defer func() {
@@ -208,7 +214,7 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 			}
 			off = lineStart + n
 			if !clip.overflow {
-				if e, ok := parseClaudeRow(clip.out, lineStart); ok {
+				if e, ok := parseClaudeRowAs(clip.out, lineStart, sidechain); ok {
 					entries = addClaudeEntry(entries, e)
 				}
 				continue
@@ -228,7 +234,7 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 		if !bytes.Contains(line, []byte(`"user"`)) && !bytes.Contains(line, []byte(`"assistant"`)) {
 			continue
 		}
-		if e, ok := parseClaudeRow(line, lineStart); ok {
+		if e, ok := parseClaudeRowAs(line, lineStart, sidechain); ok {
 			entries = addClaudeEntry(entries, e)
 		}
 	}
@@ -293,11 +299,17 @@ func (c *longLineClipper) write(p []byte) {
 }
 
 func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
+	return parseClaudeRowAs(line, off, false)
+}
+
+// parseClaudeRowAs is parseClaudeRow; sidechain keeps a row of a subagent's
+// conversation (isSidechain), which every row of a subagent's own file is.
+func parseClaudeRowAs(line []byte, off int64, sidechain bool) (TranscriptEntry, bool) {
 	var row claudeRow
 	if json.Unmarshal(line, &row) != nil || row.Message == nil {
 		return TranscriptEntry{}, false
 	}
-	if (row.Type != "user" && row.Type != "assistant") || row.IsSidechain {
+	if (row.Type != "user" && row.Type != "assistant") || (row.IsSidechain && !sidechain) {
 		return TranscriptEntry{}, false
 	}
 	if row.IsMeta {

@@ -245,23 +245,12 @@ func (st *subagentStore) lastWrite(key string, s AgentSession) (time.Time, error
 // directory, under the session's lock; fn is not called when there is no
 // transcript or no directory.
 func (st *subagentStore) visit(key string, s AgentSession, fn func(*subagentSession, *os.Root)) error {
-	path, err := claudeJournal{}.Locate(s)
+	root, proj, path, err := claudeSessionDir(s)
 	if errors.Is(err, errTranscriptNotWritten) || errors.Is(err, errNoTranscript) {
 		return nil
 	}
 	if err != nil {
 		return err
-	}
-	root, err := filepath.EvalSymlinks(s.ClaudeDir)
-	if err != nil {
-		return nil
-	}
-	// Locate resolved the path inside root: it is projects/<proj>/<id>.jsonl
-	// unless the transcript was a link to another place in root.
-	rel, err := filepath.Rel(root, path)
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	if err != nil || len(parts) != 3 || parts[0] != "projects" || parts[2] != s.ID+".jsonl" {
-		return nil
 	}
 	ss := st.session(key)
 	ss.mu.Lock()
@@ -269,7 +258,7 @@ func (st *subagentStore) visit(key string, s AgentSession, fn func(*subagentSess
 	// The transcript is read before the directory: a subagent's file exists
 	// before its end is written, so every end read has its file listed.
 	ss.scan(path)
-	dir, err := openSubagentsDir(root, parts[1], s.ID)
+	dir, err := openSubagentsDir(root, proj, s.ID)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Printf("subagents: session %s: %v", s.ID, err)
@@ -279,6 +268,27 @@ func (st *subagentStore) visit(key string, s AgentSession, fn func(*subagentSess
 	defer dir.Close()
 	fn(ss, dir)
 	return nil
+}
+
+// claudeSessionDir is where s's transcript lies: its Claude dir resolved,
+// the name of its project directory and the transcript's path. Locate's
+// errors, or errNoTranscript when the transcript is not
+// projects/<proj>/<id>.jsonl of that dir (a link to another place in it).
+func claudeSessionDir(s AgentSession) (root, proj, path string, err error) {
+	path, err = claudeJournal{}.Locate(s)
+	if err != nil {
+		return "", "", "", err
+	}
+	root, err = filepath.EvalSymlinks(s.ClaudeDir)
+	if err != nil {
+		return "", "", "", errNoTranscript
+	}
+	rel, err := filepath.Rel(root, path)
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if err != nil || len(parts) != 3 || parts[0] != "projects" || parts[2] != s.ID+".jsonl" {
+		return "", "", "", errNoTranscript
+	}
+	return root, parts[1], path, nil
 }
 
 // runningWrite is the newest mtime, as listed, of the subagent files whose

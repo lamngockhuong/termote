@@ -503,6 +503,7 @@ func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agent
 	a.uploads = uploads
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/subagents", a.handleSubagents)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/subagents/{agentId}/transcript", a.handleSubagentTranscript)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/image", a.handleImage)
 	mux.HandleFunc("/api/mux/overview", a.handleOverview)
 	a.registerInputRoutes(mux)
@@ -670,7 +671,16 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	}
 	defer f.Close()
 	res := transcriptResponse{Agent: s.Agent, SessionID: s.ID, Status: s.Status}
-	sameFile := func(c agentCursor) bool { return c.Session == s.ID && c.File == id && c.Offset <= size }
+	return readJournal(adapter, f, size, id, s.ID, res, cursor, before)
+}
+
+// readJournal reads f, a transcript open with its size and identity id, into
+// res: from the end when cursor is empty or no longer valid, after cursor
+// when it is, or the entries older than before. session is what its cursors
+// name, so a cursor of another transcript starts the read over.
+func readJournal(adapter journalAdapter, f journalReader, size int64, id, session string, res transcriptResponse, cursor, before string) (transcriptResponse, error) {
+	sameFile := func(c agentCursor) bool { return c.Session == session && c.File == id && c.Offset <= size }
+	var err error
 
 	var page transcriptPage
 	switch {
@@ -683,7 +693,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 			// The session or file changed since the client's first read.
 			page, err = readTail(adapter, f, size)
 			res.Reset = true
-			res.Cursor = encodeCursor(agentCursor{s.ID, page.end, id})
+			res.Cursor = encodeCursor(agentCursor{session, page.end, id})
 			break
 		}
 		page, err = readTail(adapter, f, c.Offset)
@@ -692,25 +702,25 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		if cursor != "" && ok && sameFile(c) && size-c.Offset <= agentForwardMax && atLineStart(f, c.Offset) {
 			page, err = parseRange(adapter, f, c.Offset, size)
 			page.entries = foldToolResults(page.entries)
-			res.Cursor = encodeCursor(agentCursor{s.ID, page.end, id})
+			res.Cursor = encodeCursor(agentCursor{session, page.end, id})
 			break
 		}
 		page, err = readTail(adapter, f, size)
 		res.Reset = true
-		res.Cursor = encodeCursor(agentCursor{s.ID, page.end, id})
+		res.Cursor = encodeCursor(agentCursor{session, page.end, id})
 	}
 	if err != nil {
 		return transcriptResponse{}, err
 	}
 	res.Entries = page.entries
 	if _, ok := adapter.(journalImageReader); ok {
-		addImageRefs(res.Entries, s.ID, id)
+		addImageRefs(res.Entries, session, id)
 	}
 	if res.Entries == nil {
 		res.Entries = []TranscriptEntry{}
 	}
 	if page.start > 0 && (before != "" || res.Reset) {
-		res.Before = encodeCursor(agentCursor{s.ID, page.start, id})
+		res.Before = encodeCursor(agentCursor{session, page.start, id})
 	}
 	return res, nil
 }

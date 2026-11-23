@@ -102,6 +102,15 @@ export default {
   'chat.subagent.list': 'Subagent',
   'chat.subagent.more': 'và {count} subagent khác',
   'chat.subagent.truncated': 'Không hiện các subagent cũ hơn hoặc lồng sâu hơn',
+  'chat.subagent.open': 'Mở hội thoại của {type}: {description}',
+  'chat.subagent.openNoDesc': 'Mở hội thoại của {type}',
+  'chat.subagent.close': 'Đóng hội thoại của subagent',
+  'chat.subagent.conversation': 'Hội thoại của subagent',
+  'chat.subagent.empty': 'Subagent chưa viết gì.',
+  'chat.subagent.gone':
+    'Hội thoại của subagent này không còn nữa. Phần đã đọc vẫn giữ lại.',
+  'chat.subagent.unsupported':
+    'Server này chưa hiện được hội thoại của subagent. Hãy cập nhật termote trên máy đó.',
 
   'chat.slash.noSkill': 'Không có skill nào khớp',
   'chat.slash.noCommand': 'Không có lệnh nào khớp',

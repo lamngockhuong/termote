@@ -143,6 +143,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/subagent-tree.tsx`            | Claude subagents: status, type, last tool, time, tokens        |
 | `pwa/src/components/chat-subagents.tsx`           | Chat's strip of a Claude session's running subagents           |
 | `pwa/src/hooks/use-subagents.ts`                  | Polls a pane's subagents while its card or Chat is open        |
+| `pwa/src/hooks/use-subagent-transcript.ts`        | A subagent's chat, drawn by `subagent-transcript-sheet.tsx`    |
 | `pwa/src/components/activity-log.tsx`             | Overview: every status change, newest first, opens its pane    |
 | `pwa/src/hooks/use-activity-log.ts`               | Polls `/api/mux/activity` for new events while shown           |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                  |
@@ -294,6 +295,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key         |
 | `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                      |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree            |
+| `server/agent_subagent_transcript.go`             | `agent/subagents/{agentId}/transcript`: its own file           |
 | `server/agent_image.go`                           | `agent/image`: a pasted image of a Claude/Codex chat, by ref   |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file                |
 | `server/agent_opencode.go`                        | OpenCode TUI in a pane, status, messages as Chat view rows     |

@@ -18,6 +18,7 @@ const {
   mockSendMessage,
   mockInterrupt,
   mockFetchJobs,
+  mockFetchSubagents,
 } = vi.hoisted(() => ({
   mockFetchJobs: vi.fn(),
   mockFetchOverview: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockTranscript: vi.fn(),
   mockSendMessage: vi.fn(),
   mockInterrupt: vi.fn(),
+  mockFetchSubagents: vi.fn(),
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
@@ -37,6 +39,28 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
     mockSendMessage(pane, text, cursor),
   interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
   fetchJobs: () => mockFetchJobs(),
+  fetchSubagents: (pane: string) => mockFetchSubagents(pane),
+}))
+// The sheet itself is SubagentTranscriptSheet's own test: here a stand-in
+// that names what it shows and closes.
+vi.mock('./subagent-transcript-sheet', () => ({
+  SubagentTranscriptSheet: (p: {
+    target?: { paneId: string; node: { id: string } }
+    onClose: () => void
+    notify: (message: string) => void
+  }) =>
+    p.target ? (
+      <div role="dialog" aria-label="subagent sheet">
+        {p.target.paneId}/{p.target.node.id}
+        {/* A copy notifies through the overview's own notify */}
+        <button type="button" onClick={() => p.notify('Copied')}>
+          copy in sheet
+        </button>
+        <button type="button" onClick={p.onClose}>
+          close sheet
+        </button>
+      </div>
+    ) : null,
 }))
 
 import { resetActivityLog } from '../hooks/use-activity-log'
@@ -280,6 +304,94 @@ describe('OverviewScreen', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Needs you, 1 agent' }))
     expect(cardNames()).toEqual(['Open chat: Claude Code, Needs you, web / t3'])
     expect(screen.queryByRole('radio', { name: /^Agents/ })).toBeNull()
+  })
+
+  it("opens a Claude subagent's conversation, kept open when its card goes", async () => {
+    mockFetchSubagents.mockResolvedValue({
+      nodes: [
+        { id: 'a1', type: 'Explore', status: 'done', depth: 1, children: [] },
+      ],
+    })
+    renderScreen()
+    await act(async () => {})
+    const card = screen
+      .getByRole('button', { name: /^Open chat: Claude Code, Idle/ })
+      .closest('li') as HTMLElement
+    await act(async () =>
+      fireEvent.click(within(card).getByRole('button', { name: 'History' })),
+    )
+    fireEvent.click(
+      within(card).getByRole('button', {
+        name: 'Open the conversation of Explore',
+      }),
+    )
+    const sheet = screen.getByRole('dialog', { name: 'subagent sheet' })
+    expect(sheet).toHaveTextContent('p-idle/a1')
+    // Filtered out, the card goes; the sheet stays
+    fireEvent.click(screen.getByRole('radio', { name: 'Working, 2 agents' }))
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(
+      screen.queryByRole('button', { name: /^Open chat: Claude Code, Idle/ }),
+    ).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'subagent sheet' })).toBe(sheet)
+    // Without a notify of the App's, a copy says nothing
+    fireEvent.click(screen.getByRole('button', { name: 'copy in sheet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'close sheet' }))
+    expect(screen.queryByRole('dialog', { name: 'subagent sheet' })).toBeNull()
+  })
+
+  it('has no subagent row to open on a view-only device or for OpenCode', async () => {
+    mockFetchSubagents.mockResolvedValue({
+      nodes: [
+        { id: 'a1', type: 'Explore', status: 'done', depth: 1, children: [] },
+      ],
+    })
+    const opencode = tab('t9', 'g1', [
+      {
+        id: 'p-oc',
+        label: 'opencode',
+        hasAgent: true,
+        agentName: 'opencode',
+        agentStatus: 'idle',
+      },
+    ])
+    const { rerender } = renderScreen({
+      readOnly: true,
+      sessions: [SESSIONS[0]],
+    })
+    await act(async () => {})
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: /^History/ })),
+    )
+    expect(screen.getByText('Explore')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
+    rerender(
+      <OverviewScreen
+        sessions={[opencode]}
+        groups={GROUPS}
+        groupNoun="workspace"
+        ready
+        pollInterval={5000}
+        clockOffset={0}
+        activePaneOnly={false}
+        opensChat={() => true}
+        canAnswer={() => true}
+        readOnly={false}
+        stuckMinutes={10}
+        onOpen={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: /^History/ })),
+    )
+    expect(screen.getByText('Explore')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
   })
 
   it('says when no agent matches, and shows all again', () => {

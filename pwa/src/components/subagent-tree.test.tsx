@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import type { SubagentNode } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 import {
@@ -8,6 +8,7 @@ import {
   SUBAGENT_TREE_MAX,
   SubagentTree,
   subagentDuration,
+  subagentFacts,
   subagentSummary,
 } from './subagent-tree'
 
@@ -173,6 +174,47 @@ describe('SubagentTree', () => {
     expect(screen.getByText('Could not read subagents.')).toBeInTheDocument()
     rerender(<SubagentTree tree={{ nodes: [] }} error={false} now={NOW} />)
     expect(screen.getByText('No subagents.')).toBeInTheDocument()
+  })
+})
+
+describe('SubagentTree rows that open', () => {
+  it('makes each row a named button', () => {
+    const onOpen = vi.fn()
+    render(<SubagentTree tree={TREE} error={false} now={NOW} onOpen={onOpen} />)
+    const list = screen.getByRole('list', { name: 'Subagents' })
+    const rows = within(list).getAllByRole('button')
+    expect(rows).toHaveLength(5)
+    // A native button: Enter and Space press it
+    expect(rows[0].tagName).toBe('BUTTON')
+    expect(rows[0]).toHaveAttribute('type', 'button')
+    // A hover a card's background shows, and no margin past its row (a
+    // scrollbar for a single subagent)
+    expect(rows[0].className).toContain('hover:bg-surface-raised')
+    expect(rows[0].className).not.toMatch(/-my-/)
+    // Named by type and description, or the type alone
+    expect(rows[0]).toHaveAccessibleName(
+      'Open the conversation of code-reviewer: Review parser',
+    )
+    expect(rows[2]).toHaveAccessibleName(
+      'Open the conversation of general-purpose',
+    )
+    expect(rows[0]).toHaveTextContent('code-reviewer· done · 3 min')
+    fireEvent.click(rows[0])
+    expect(onOpen).toHaveBeenLastCalledWith(TREE.nodes[0])
+    fireEvent.click(rows[2])
+    expect(onOpen).toHaveBeenLastCalledWith(TREE.nodes[1].children[0])
+  })
+
+  it('has no button without onOpen', () => {
+    render(<SubagentTree tree={TREE} error={false} now={NOW} />)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('says what a subagent did after its type', () => {
+    expect(subagentFacts(TREE.nodes[0], NOW, en)).toBe(
+      'done · 3 min · ↓ 30k tokens',
+    )
+    expect(subagentFacts(TREE.nodes[2], NOW, en)).toBe('done (guessed)')
   })
 })
 

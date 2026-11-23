@@ -111,4 +111,24 @@ describe('ChatSubagents', () => {
     expect(status).toHaveTextContent('1 subagent running')
     expect(status.closest('button')).toBeNull()
   })
+
+  it('opens a running subagent from its row when asked to', () => {
+    store.tree = {
+      nodes: [node({ id: 'r1', type: 'seo-technical', description: 'Audit' })],
+    }
+    const onOpen = vi.fn()
+    const { rerender } = render(<ChatSubagents paneId="p1" onOpen={onOpen} />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open the conversation of seo-technical: Audit',
+      }),
+    )
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'r1', type: 'seo-technical' }),
+    )
+    rerender(<ChatSubagents paneId="p1" />)
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
+  })
 })

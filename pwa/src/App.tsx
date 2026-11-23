@@ -2785,6 +2785,7 @@ export default function App({
                       !readOnly && chatOffered ? startFromOverview : undefined
                     }
                     focusPane={overviewFocus}
+                    notify={notify}
                   />
                 </div>
               )}
