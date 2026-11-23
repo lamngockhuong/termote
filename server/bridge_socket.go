@@ -81,7 +81,8 @@ var errMachineForbidden = &codedError{code: "machine_forbidden", msg: "not avail
 // machineForbiddenPath reports whether p (cleaned) is a route a bridge
 // request never reaches: signing in or out, pairing a device, sign-in links,
 // the devices and sign-ins lists with their revokes, Web Push, and settings
-// proposals (a machine's are for its own browsers).
+// proposals (a machine's are for its own browsers), and the grants of the
+// job ledger.
 func machineForbiddenPath(p string) bool {
 	switch p {
 	case loginPath, pairPath, loginLinkPath, logoutPath, loginLinksRoute:
@@ -89,6 +90,13 @@ func machineForbiddenPath(p string) bool {
 	}
 	for _, prefix := range []string{"/api/mux/devices", "/api/mux/signins", "/api/mux/push", "/api/mux/settings"} {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	// A grant to answer dialogs is the user's own, given from this server's
+	// PWA (job_grants.go).
+	if rest, ok := strings.CutPrefix(p, "/api/mux/jobs/"); ok {
+		if _, tail, ok := strings.Cut(rest, "/"); ok && (tail == "grants" || strings.HasPrefix(tail, "grants/")) {
 			return true
 		}
 	}

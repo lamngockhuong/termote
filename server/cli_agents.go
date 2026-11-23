@@ -29,7 +29,7 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents send <pane> <text | ->
        termote agents wait <pane>[@<seq>]... [--after <seq>] [--timeout <duration>]
        termote agents wait --job <id>... [--timeout <duration>]
-       termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
+       termote agents answer <pane> [<option number> | cancel | next | --text <answer> | --delegated]
        termote agents stop <pane> --cursor <cursor>
        termote agents diff <pane> [--stat] [--base <branch>]
        termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>]
@@ -50,6 +50,9 @@ const (
 	agentsExitReset   = 7 // the server dropped the changes after the mark
 	// agentsExitStillWorking: stop sent Esc but the agent still works
 	agentsExitStillWorking = 8
+	// agentsExitNotDelegated: answer --delegated found no grant that covers
+	// the dialog; the user answers it
+	agentsExitNotDelegated = 9
 )
 
 // The longest each kind of request may take. A message can wait minutes for
@@ -213,6 +216,10 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; its answer may be written already: read it (termote agents read <pane>)"
 	case "agent_blocked":
 		hint = "; it waits on a dialog: termote agents answer <pane>"
+	case "answer_always_refused":
+		hint = "; only the user picks an option that stops it asking: ask the user, or answer Yes (this once) or No"
+	case "grant_pwa_only":
+		hint = "; only the user gives a grant, from the PWA"
 	case "interrupt_pending":
 		hint = "; it was just stopped: check it with termote agents list"
 	case "busy":
@@ -1247,14 +1254,15 @@ func findAgentPane(s Snapshot, id string) (snapPane, bool) {
 
 func (c *cli) agentsAnswer(args []string) error {
 	text := ""
-	hasText := false
+	hasText, delegated := false, false
 	fs := c.newFlagSet("agents answer")
 	fs.Func("text", "", func(s string) error { text, hasText = s, true; return nil })
+	fs.BoolVar(&delegated, "delegated", false, "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(pos) < 1 || len(pos) > 2 || (hasText && len(pos) == 2) {
+	if len(pos) < 1 || len(pos) > 2 || (hasText && len(pos) == 2) || (delegated && (hasText || len(pos) != 1)) {
 		return usageError(agentsUsage)
 	}
 	var choice any
@@ -1289,7 +1297,7 @@ func (c *cli) agentsAnswer(args []string) error {
 		}
 		return nil
 	}
-	if choice == nil {
+	if choice == nil && !delegated {
 		c.printPrompt(*pr.Prompt, p.pane.ID)
 		return nil
 	}
@@ -1300,10 +1308,18 @@ func (c *cli) agentsAnswer(args []string) error {
 		}
 		return errors.New("the dialog cannot be answered right now (it was just answered, or the agent does not show it waiting yet); check again in a moment")
 	}
-	r, err := c.agentsCall(port, http.MethodPost, panePath(p.pane.ID, "/agent/answer"),
-		map[string]any{"promptId": pr.Prompt.PromptID, "choice": choice}, agentsWriteTimeout)
+	req := map[string]any{"promptId": pr.Prompt.PromptID, "choice": choice}
+	if delegated {
+		req = map[string]any{"promptId": pr.Prompt.PromptID, "delegated": true}
+	}
+	r, err := c.agentsCall(port, http.MethodPost, panePath(p.pane.ID, "/agent/answer"), req, agentsWriteTimeout)
 	if err != nil {
 		return err
+	}
+	if r.status == http.StatusNoContent && delegated {
+		// The server noted it on the job, with the grant used.
+		c.infof("Answered the dialog of %s (%s) under the user's grant: Yes, this once", plainText(p.ref()), plainText(p.pane.ID))
+		return nil
 	}
 	if r.status == http.StatusNoContent {
 		c.infof("Answered the dialog of %s (%s)", plainText(p.ref()), plainText(p.pane.ID))
@@ -1311,6 +1327,15 @@ func (c *cli) agentsAnswer(args []string) error {
 		return nil
 	}
 	e := r.failure()
+	if delegated && e.Code == "delegation_out_of_scope" {
+		var why struct {
+			Reason string `json:"reason"`
+		}
+		json.Unmarshal(r.body, &why)
+		c.printPrompt(*pr.Prompt, p.pane.ID)
+		fmt.Fprintf(c.out, "No grant of the user covers this dialog (%s); nothing was answered: ask the user\n", plainText(why.Reason))
+		return &exitError{code: agentsExitNotDelegated}
+	}
 	var now AgentPrompt
 	if e.Code == "prompt_changed" && json.Unmarshal(e.Prompt, &now) == nil && now.Kind != "" {
 		fmt.Fprintln(c.out, "The dialog changed; it now reads:")

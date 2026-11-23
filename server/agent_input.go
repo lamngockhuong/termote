@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -146,6 +147,8 @@ type agentFailure struct {
 	prompt *AgentPrompt
 	limit  int      // bytes, for text_too_long
 	images []string // upload ids that resolve to no image, for invalid_request
+	// reason: why a delegated answer was refused (delegation_out_of_scope)
+	reason string
 }
 
 func (f *agentFailure) Error() string { return f.msg }
@@ -342,6 +345,15 @@ func (in *agentInput) consumePrompt(pane, id string, accept func(*promptRecord) 
 	}
 	delete(in.prompts, id)
 	return r, nil
+}
+
+// promptIs reports whether id is the live promptId of pane for the dialog
+// whose signature is sig, shown by the same agent as s.
+func (in *agentInput) promptIs(pane, id, sig string, s AgentSession) bool {
+	in.promptsMu.Lock()
+	defer in.promptsMu.Unlock()
+	r, ok := in.prompts[id]
+	return ok && r.pane == pane && time.Now().Before(r.expires) && r.sig == sig && sameAgent(r.session, s)
 }
 
 // restorePrompt makes a consumed promptId usable again: an answer the agent
@@ -1125,9 +1137,19 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PromptID string          `json:"promptId"`
 		Choice   json.RawMessage `json:"choice"`
+		// Delegated: answer under a grant the user gave (agent_delegate.go);
+		// the server picks the option. The CLI's alone.
+		Delegated bool `json:"delegated"`
 	}
 	// An OpenCode form's answer holds every field at once.
 	if !decodeJSONMax(w, r, &body, agentAnswerBody) {
+		return
+	}
+	socket := isLocalSocket(r.Context())
+	auth, _ := authFrom(r.Context())
+	cli := socket || auth.Kind == authMachine
+	if body.Delegated && (!socket || (len(body.Choice) > 0 && string(body.Choice) != "null")) {
+		jsonErrorCode(w, "invalid_request", "only termote agents answers under a grant, and names no option", http.StatusBadRequest)
 		return
 	}
 	paneID := r.PathValue("id")
@@ -1143,9 +1165,30 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), work)
 	defer cancel()
-	if err := a.answer(ctx, wr, paneID, body.PromptID, body.Choice); err != nil {
+	choice := body.Choice
+	var d delegation
+	if body.Delegated {
+		if d, err = a.delegatedAnswer(ctx, wr, paneID, body.PromptID); err != nil {
+			a.writeFailure(w, err)
+			return
+		}
+		choice = json.RawMessage(strconv.Itoa(d.yes))
+	}
+	var rec *promptRecord
+	if err := a.answer(ctx, wr, paneID, body.PromptID, choice, cli, &rec); err != nil {
 		a.writeFailure(w, err)
 		return
+	}
+	if body.Delegated {
+		a.recordDelegation(paneID, d)
+	}
+	if cli && rec != nil && rec.prompt.Kind == "permission" {
+		via := "socket"
+		if !socket {
+			via = auditBy(auth)
+		}
+		auditf("dialog_answer", "pane", paneID, "agent", rec.session.Agent, "dialog", rec.prompt.Title,
+			"option", optionLabel(rec.prompt, choice), "delegated", body.Delegated, "grant", d.grantID, "by", via)
 	}
 	// The screen moved on from the dialog answered: whatever shows blocked
 	// next (the next question, a new dialog) is a new dialog for a wait.
@@ -1153,12 +1196,67 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID string, choice json.RawMessage) error {
+// errAnswerAlwaysRefused: the CLI or another termote chose an option of a
+// permission dialog that would stop it from asking again.
+var errAnswerAlwaysRefused = fail(http.StatusForbidden, "answer_always_refused",
+	"an option that stops a permission dialog from asking again is never chosen from the command line; ask the user")
+
+// cliYesRe: the first option of a permission dialog that allows this once
+// (Claude Code "Yes", Codex "Yes, proceed (y)", OpenCode "Yes, once").
+var cliYesRe = regexp.MustCompile(`^Yes(, (proceed|once))?( \([a-z]\))?$`)
+
+// cliMayChoose reports whether the CLI may answer permission dialog p with
+// choice: cancel, an option that refuses ("No", "No, and tell …"), or the
+// first option when it plainly allows this once. Every other option is one
+// that allows more (always, for the project, a mode for the session), or
+// one not known for sure.
+func cliMayChoose(p AgentPrompt, choice json.RawMessage) bool {
+	var name string
+	if json.Unmarshal(choice, &name) == nil {
+		return name == "cancel"
+	}
+	var n int
+	if json.Unmarshal(choice, &n) != nil {
+		return false
+	}
+	for i, o := range p.Options {
+		if o.Index != n {
+			continue
+		}
+		label := strings.TrimSpace(o.Label)
+		no := label == "No" || strings.HasPrefix(label, "No,") || strings.HasPrefix(label, "No ")
+		return no || (i == 0 && cliYesRe.MatchString(label))
+	}
+	return false
+}
+
+// optionLabel is the label of the option choice names, for the audit log.
+func optionLabel(p AgentPrompt, choice json.RawMessage) string {
+	var n int
+	if json.Unmarshal(choice, &n) == nil {
+		for _, o := range p.Options {
+			if o.Index == n {
+				return o.Label
+			}
+		}
+	}
+	return string(choice)
+}
+
+// answer answers the dialog promptID names with choice; out, when not nil,
+// gets the dialog's record once it is taken. cli: the answer comes from the
+// CLI or another termote (cliMayChoose).
+func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID string, choice json.RawMessage, cli bool, out **promptRecord) error {
 	var key, text, decision string
 	var answer map[string]any
 	step := -1
 	typed := false
 	rec, err := a.input.consumePrompt(paneID, promptID, func(r *promptRecord) error {
+		// The CLI (and another termote over the bridge) never picks an
+		// option that stops a permission dialog from asking again.
+		if cli && r.prompt.Kind == "permission" && !cliMayChoose(r.prompt, choice) {
+			return errAnswerAlwaysRefused
+		}
 		if r.session.Agent == "opencode" {
 			var err error
 			decision, answer, err = opencodeChoice(r.prompt, choice)
@@ -1179,6 +1277,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	})
 	if err != nil {
 		return err
+	}
+	if out != nil {
+		*out = rec
 	}
 	s, err := sessionNow(ctx, wr, paneID)
 	if err != nil {
@@ -1537,6 +1638,9 @@ func (a *agentAPI) writeFailure(w http.ResponseWriter, err error) {
 	}
 	if len(f.images) > 0 {
 		body["images"] = f.images
+	}
+	if f.reason != "" {
+		body["reason"] = f.reason
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(f.status)

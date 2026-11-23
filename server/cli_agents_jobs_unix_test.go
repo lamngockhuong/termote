@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -286,5 +287,36 @@ func setJobPrompt(t *testing.T, tc *testCLI, id, prompt string) {
 	}
 	if _, err := tc.jobWrite(port, "PATCH", "/api/mux/jobs/"+id, map[string]any{"prompt": prompt}, 200); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAgentsAnswerDelegated(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("blocked")))
+	s.set("GET /api/mux/panes/%1/agent/prompt", jsonAnswer(promptResponse{Prompt: &AgentPrompt{PromptID: "p1", Kind: "permission", Title: "Bash command",
+		Body: "pnpm test --run", Options: []PromptOption{{Index: 1, Label: "Yes"}, {Index: 2, Label: "No"}}}}))
+	for _, args := range [][]string{{"answer", "%1", "1", "--delegated"}, {"answer", "%1", "--text", "x", "--delegated"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	s.set("POST /api/mux/panes/%1/agent/answer", answer(http.StatusNoContent, ""))
+	if err := tc.dispatch("agents", []string{"answer", "%1", "--delegated"}); err != nil ||
+		!strings.Contains(tc.stdout.String(), "under the user's grant: Yes, this once") {
+		t.Errorf("delegated: %v %s", err, tc.stdout)
+	}
+	if last := lastPost(s, "/api/mux/panes/%1/agent/answer"); !strings.Contains(last, `{"delegated":true,"promptId":"p1"}`) {
+		t.Errorf("post %s", last)
+	}
+	s.set("POST /api/mux/panes/%1/agent/answer", answer(http.StatusConflict, `{"error":"no","code":"delegation_out_of_scope","reason":"chars"}`))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"answer", "%1", "--delegated"}); exitCode(err) != agentsExitNotDelegated ||
+		!strings.Contains(tc.stdout.String(), "No grant of the user covers this dialog (chars); nothing was answered: ask the user") {
+		t.Errorf("refused: exit %d %s", exitCode(err), tc.stdout)
+	}
+	// An option that stops the dialog asking: refused by the server, named.
+	s.set("POST /api/mux/panes/%1/agent/answer", answer(http.StatusForbidden, `{"error":"no","code":"answer_always_refused"}`))
+	if err := tc.dispatch("agents", []string{"answer", "%1", "2"}); err == nil || !strings.Contains(err.Error(), "only the user picks an option that stops it asking") {
+		t.Errorf("always: %v", err)
 	}
 }

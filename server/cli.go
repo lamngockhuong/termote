@@ -600,7 +600,12 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              orchestrator has not read (0, however long ago), shows a dialog not
                              reported yet (3), only waits on background work (0) or is gone (5);
                              next: names the jobs left. 4: the timeout passed (default 20m)
-  answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
+  answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it; an option
+                             of a permission dialog that stops it asking (always, don't ask again,
+                             a mode for the session) is refused: only the user picks one
+    --delegated              Answer Yes, this once, under a grant the user gave in the PWA for the
+                             pane's job (Claude Code only); 9 when no grant covers the dialog:
+                             nothing was answered, ask the user
   stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
                              refused for another session, an agent not working, one on a
                              dialog or one whose screen shows no turn; never sent twice within 3s),

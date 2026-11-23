@@ -97,6 +97,8 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs", a.handleJobs)
 	mux.HandleFunc("/api/mux/jobs/{id}", a.handleJob)
 	mux.HandleFunc("/api/mux/jobs/{id}/event", a.handleJobEvent)
+	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
+	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
 }
 
 func (a *agentAPI) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -540,7 +542,7 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	if full == nil {
 		full = []jobView{}
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now})
+	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r)})
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
