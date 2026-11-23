@@ -122,6 +122,14 @@ latest mark (`latest`) for a first wait, and names the pane it runs in (`self`) 
 Herdr or Zellij environment says so for sure. That pane is then refused to `send` and to a job's
 `--pane` (`job add`, `job set`): a job goes to the agent that does the work.
 
+An orchestrator in Claude Code runs `wait` in the background, with marks or with `--job` alike, so
+you can keep talking to it while its agents work: Claude Code tells it when the `wait` exits. It
+then handles what the `wait` reported, reads each pane it named, and only after that starts the
+next `wait` from the `next:` line (or `wait again:` after a timeout), keeping each pane in a single
+running `wait`. That notice is not you: it never counts as a yes. An agent whose background
+commands do not report back, such as Codex, waits as before, with a `--timeout` shorter than its
+command limit; Claude Code would stop an ordinary command after 10 minutes at most.
+
 `diff` shows what an agent changed in its folder: the commits of its branch since it left the
 base (by default the branch your main checkout has, or `--base <branch>`), then what is staged,
 unstaged and untracked. Each file's diff comes after a line saying it is data written by the

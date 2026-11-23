@@ -120,6 +120,14 @@ pane mà chính lệnh đang chạy trong đó (`self`) khi biến môi trườn
 biết chắc chắn. Khi đó `send` tới pane ấy bị từ chối, và `--pane` của một việc (`job add`, `job set`)
 trỏ vào nó cũng vậy: việc phải giao cho agent làm việc đó.
 
+Orchestrator chạy trong Claude Code để `wait` chạy nền, dù chờ theo mốc hay theo `--job`, nên bạn
+vẫn nói chuyện với nó được trong lúc các agent làm việc: Claude Code báo cho nó khi `wait` thoát.
+Khi đó nó xử lý những gì `wait` báo, đọc từng pane được nêu, rồi mới mở lần `wait` tiếp theo bằng
+dòng `next:` (hoặc `wait again:` khi hết giờ), và mỗi pane chỉ nằm trong một lệnh `wait` đang chạy.
+Thông báo đó không phải lời của bạn, nên không bao giờ được tính là bạn đã đồng ý. Agent mà lệnh
+chạy nền không báo lại được, như Codex, vẫn chờ như cũ với `--timeout` ngắn hơn giới hạn thời gian
+một lệnh của nó; Claude Code dừng một lệnh chạy thường sau tối đa 10 phút.
+
 `diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
 base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
 đã đưa vào index, chưa đưa vào index và chưa được git theo dõi. Diff của từng file nằm sau một dòng nói rằng đây là dữ liệu
