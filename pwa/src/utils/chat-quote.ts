@@ -48,9 +48,12 @@ const BLOCKS = new Set([
   'UL',
 ])
 
-// Text that is not part of what was written: a button's label, an icon, a
-// mark drawn beside the text ("$ " before a command, a diff's sign)
-const SKIP = 'button, svg, script, style, .select-none'
+// Text that is not part of what was written: a button's label (not a path
+// the agent wrote, drawn as a button that opens it), an icon, a mark drawn
+// beside the text ("$ " before a command, a diff's sign), words only a
+// screen reader hears
+const SKIP =
+  'button:not([data-file-ref]), svg, script, style, .select-none, .sr-only'
 
 // Elements whose own whitespace between children is only layout
 const LAYOUT = new Set(['OL', 'UL', 'TABLE', 'TBODY', 'THEAD', 'TFOOT', 'TR'])
@@ -60,9 +63,15 @@ const KEEPS_SPACE = 'pre, [class*="whitespace-pre"]'
 
 class Out {
   s = ''
-  // The range's end was reached: the blocks around it end without a line
-  // after them (what a selection's start has above it is counted on this)
+  // Stop walking: the range's end was reached (the blocks around it end
+  // without a line after them), or a folded block's hidden part
   done = false
+  // Written before the next text only: a list item's number, a cell's
+  // " | " (a selection ending where one starts leaves none behind)
+  prefix = ''
+  // In a folded block on screen: text below this (client) y is hidden
+  bottom?: number
+  hidden = false
   // Starts a new line, unless one just started
   line() {
     if (this.s && !this.s.endsWith('\n')) this.s += '\n'
@@ -72,8 +81,29 @@ class Out {
       t = t.replace(/[ \t\n\r\f]+/g, ' ')
       if (this.s === '' || /[ \n]$/.test(this.s)) t = t.replace(/^ /, '')
     }
-    this.s += t
+    if (!t) return
+    this.s += this.prefix + t
+    this.prefix = ''
   }
+}
+
+// The offset of the first character of node in [from, to) not drawn whole
+// above bottom (a line cut by the block's edge is hidden), or to when none is
+function firstHidden(node: Text, from: number, to: number, bottom: number) {
+  const r = document.createRange()
+  const below = (k: number) => {
+    r.setStart(node, k)
+    r.setEnd(node, k + 1)
+    return r.getBoundingClientRect().bottom > bottom + 1
+  }
+  let lo = from
+  let hi = to
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (below(mid)) hi = mid
+    else lo = mid + 1
+  }
+  return lo
 }
 
 // The position of li in its list: "3. " in an ordered one (from its start),
@@ -99,13 +129,18 @@ function depth(li: Element, root: Element): number {
 function walk(node: Node, range: Range, root: Element, out: Out) {
   if (out.done || !range.intersectsNode(node)) return
   if (node.nodeType === Node.TEXT_NODE) {
-    const textNode = node as Text
-    let d = textNode.data
-    if (node === range.endContainer) {
-      d = d.slice(0, range.endOffset)
-      out.done = true
+    const text = node as Text
+    const from = node === range.startContainer ? range.startOffset : 0
+    let to = node === range.endContainer ? range.endOffset : text.length
+    if (node === range.endContainer) out.done = true
+    if (out.bottom !== undefined && from < to) {
+      const cut = firstHidden(text, from, to, out.bottom)
+      if (cut < to) {
+        to = cut
+        out.hidden = out.done = true
+      }
     }
-    if (node === range.startContainer) d = d.slice(range.startOffset)
+    const d = text.data.slice(from, to)
     const parent = node.parentElement as Element
     if (LAYOUT.has(parent.tagName) && !d.trim()) return
     out.text(d, !!parent.closest(KEEPS_SPACE))
@@ -126,22 +161,29 @@ function walk(node: Node, range: Range, root: Element, out: Out) {
   const block = BLOCKS.has(el.tagName)
   if (block) out.line()
   if (el.tagName === 'LI') {
-    out.s += '  '.repeat(depth(el, root)) + marker(el)
+    out.prefix = '  '.repeat(depth(el, root)) + marker(el)
   }
   if (
     (el.tagName === 'TD' || el.tagName === 'TH') &&
     el.previousElementSibling &&
     range.intersectsNode(el.previousElementSibling)
   ) {
-    out.s += ' | '
+    out.prefix = ' | '
   }
-  for (const child of el.childNodes) walk(child, range, root, out)
+  // A closed disclosure (thinking, a compacted summary) shows its summary
+  const children =
+    el.tagName === 'DETAILS' && !el.hasAttribute('open')
+      ? [...el.children].filter((c) => c.tagName === 'SUMMARY')
+      : el.childNodes
+  for (const child of children) walk(child, range, root, out)
   if (el === range.endContainer) out.done = true
   if (block && !out.done) out.line()
 }
 
-// A capped block shown folded (data-quote-clip: the lines it shows): only
-// the lines on screen, then "…" when more were selected
+// A capped block shown folded: only what is on screen, then "…" when more
+// was selected. Where the page is laid out, what is drawn below the block's
+// bottom is hidden; without a layout, the first lines it shows
+// (data-quote-clip) are.
 function clipped(
   el: Element,
   shown: number,
@@ -149,29 +191,33 @@ function clipped(
   root: Element,
   out: Out,
 ) {
+  const ends = el === range.endContainer || el.contains(range.endContainer)
   const inner = new Out()
+  const box = el.getBoundingClientRect()
+  if (box.height > 0) inner.bottom = box.bottom
   for (const child of el.childNodes) walk(child, range, root, inner)
-  // The block's lines above the selection's start
-  let above = 0
-  if (el.contains(range.startContainer) && el !== range.startContainer) {
-    const before = document.createRange()
-    before.setStart(el, 0)
-    before.setEnd(range.startContainer, range.startOffset)
-    const head = new Out()
-    for (const child of el.childNodes) walk(child, before, root, head)
-    above = head.s.split('\n').length - 1
+  let kept = inner.s.replace(/\n$/, '').split('\n')
+  let more = inner.hidden
+  if (inner.bottom === undefined) {
+    // The block's lines above the selection's start
+    let above = 0
+    if (el.contains(range.startContainer)) {
+      const before = document.createRange()
+      before.setStart(el, 0)
+      before.setEnd(range.startContainer, range.startOffset)
+      const head = new Out()
+      for (const child of el.childNodes) walk(child, before, root, head)
+      above = head.s.split('\n').length - 1
+    }
+    const room = Math.max(0, shown - above)
+    more = kept.length > room
+    kept = kept.slice(0, room)
   }
-  const room = shown - above
-  if (room <= 0) {
-    out.done = inner.done
-    return
-  }
-  const lines = inner.s.replace(/\n$/, '').split('\n')
-  const kept = lines.slice(0, room)
-  if (lines.length > room) kept.push('…')
+  out.done = ends
+  if (!kept.join('')) return
+  if (more) kept.push('…')
   out.line()
   out.s += kept.join('\n')
-  out.done = inner.done
   if (!out.done) out.line()
 }
 

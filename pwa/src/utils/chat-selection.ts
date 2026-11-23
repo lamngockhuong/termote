@@ -5,7 +5,8 @@ import { onPaneRemap, remapEntries } from './pane-remap'
 // composer's Quote button. Kept as text, not as the DOM selection: a tap on
 // the button (a phone), a message coming in or the transcript drawn again
 // drops the selection before the button is used. Forgotten once quoted, on
-// a new touch in the transcript, on leaving the pane, on another server and
+// a click or tap in the transcript that leaves nothing selected, on leaving
+// the pane, on another server and
 // on sign-out. Held in memory only, never stored.
 
 const selections = new Map<string, string>()

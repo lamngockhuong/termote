@@ -249,8 +249,14 @@ describe('ChatView', () => {
     set({ entries: entries(3) })
     rerender(<ChatView {...props} />)
     expect(chatSelection('0')).toBe('message 1')
-    // A touch in the conversation forgets it
-    fireEvent.pointerDown(screen.getByRole('region', { name: 'Conversation' }))
+    // A click that keeps the text selected (on it) keeps it; one that
+    // leaves nothing selected forgets it
+    const region = screen.getByRole('region', { name: 'Conversation' })
+    pick('message 1')
+    fireEvent.click(region)
+    expect(chatSelection('0')).toBe('message 1')
+    document.getSelection()?.removeAllRanges()
+    fireEvent.click(region)
     expect(hasChatSelection('0')).toBe(false)
     // Another pane: the one left forgets its selection, the new one keeps its own
     pick('message 2')
@@ -273,7 +279,8 @@ describe('ChatView', () => {
       <ChatView {...props} session={{ ...props.session, paneId: undefined }} />,
     )
     setChatSelection('', 'x')
-    fireEvent.pointerDown(screen.getByRole('region', { name: 'Conversation' }))
+    document.getSelection()?.removeAllRanges()
+    fireEvent.click(screen.getByRole('region', { name: 'Conversation' }))
     expect(chatSelection('')).toBe('x')
   })
 

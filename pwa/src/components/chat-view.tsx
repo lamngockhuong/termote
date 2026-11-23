@@ -509,9 +509,13 @@ function AgentChat({
       <section
         ref={listRef}
         onScroll={onScroll}
-        // A new selection, or a touch elsewhere: the one kept is not quoted
-        onPointerDown={() => {
-          if (session.paneId) setChatSelection(session.paneId, null)
+        // A click or tap that leaves nothing selected: the selection kept is
+        // not quoted (a right click, a tap on the selected text keep it; a
+        // new selection replaces it)
+        onClick={() => {
+          if (session.paneId && document.getSelection()?.isCollapsed) {
+            setChatSelection(session.paneId, null)
+          }
         }}
         aria-label={translate('chat.view.conversation')}
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
