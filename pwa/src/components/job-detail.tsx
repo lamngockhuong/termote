@@ -10,10 +10,18 @@ import {
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { formatAgo } from '../utils/format-ago'
-import { activeGrants, grantLabel, grantLeft, jobPaneRef } from '../utils/jobs'
+import { ciSetNumbers } from '../utils/job-ci'
+import {
+  activeGrants,
+  grantLabel,
+  grantLeft,
+  grantUsed,
+  jobPaneRef,
+} from '../utils/jobs'
 import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
+import { JobCISection } from './job-ci-section'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
@@ -35,6 +43,10 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   note: 'jobs.event.note',
   grant: 'jobs.event.grant',
   revoked: 'jobs.event.revoked',
+  pr: 'jobs.event.pr',
+  ci: 'jobs.event.ci',
+  ci_sent: 'jobs.event.ci_sent',
+  ci_failed_send: 'jobs.event.ci_failed_send',
 }
 
 interface Props {
@@ -50,6 +62,8 @@ interface Props {
   // This browser may end a grant here (signed in with the password or a
   // full paired device, and the job can change)
   canEndGrants?: boolean
+  // The server follows the jobs' pull requests
+  ciAvailable?: boolean
 }
 
 // What a full client knows of one job, under the title its panel gives it:
@@ -63,6 +77,7 @@ export function JobDetail({
   onEdit,
   onGrants,
   canEndGrants,
+  ciAvailable,
 }: Props) {
   const { t } = useT()
   // The grant whose end waits for a yes, and how the last end went
@@ -93,8 +108,9 @@ export function JobDetail({
   const tree = job.live.outsideWorktree ? undefined : job.worktree
   const dir = tree?.dir ?? job.live.dir
   const grants = activeGrants(job, now)
+  // The answers given under a grant, and the failed checks a ci grant sent
   const uses = (job.grants ?? [])
-    .flatMap((g) => g.uses ?? [])
+    .flatMap((g) => (g.uses ?? []).map((u) => ({ ...u, kind: g.kind })))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
   const events = [...(job.events ?? [])].reverse()
   const ago = (at: string) => {
@@ -183,6 +199,7 @@ export function JobDetail({
           </Row>
         )}
       </dl>
+      {ciAvailable && <JobCISection job={job} now={now} />}
       {job.prompt && (
         <Section label={t('jobs.card.prompt')}>
           <p className="m-0 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-control bg-surface-raised px-3 py-2.5 leading-normal ui-terminal:bg-bg">
@@ -212,7 +229,7 @@ export function JobDetail({
                   <span className="text-[11px] text-fg-muted">
                     {grantLeft(g.expires, now, t)}
                     {' · '}
-                    {t('jobs.grant.uses', { count: g.uses?.length ?? 0 })}
+                    {grantUsed(g, t)}
                   </span>
                 </span>
                 {canEndGrants && (
@@ -262,7 +279,11 @@ export function JobDetail({
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2"
               >
                 <span className="min-w-0 break-all font-term">
-                  {visibleUnsafe(u.command ?? u.path ?? '')}
+                  {u.kind === 'ci'
+                    ? t('jobs.ci.autoSent', {
+                        prs: ciSetNumbers(u.command ?? ''),
+                      })
+                    : visibleUnsafe(u.command ?? u.path ?? '')}
                 </span>
                 <span className="shrink-0 text-fg-muted">{ago(u.at)}</span>
               </li>

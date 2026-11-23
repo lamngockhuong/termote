@@ -3127,7 +3127,7 @@ export interface GrantUse {
   path?: string
 }
 
-export type GrantKind = 'bash' | 'edit'
+export type GrantKind = 'bash' | 'edit' | 'ci'
 
 // The user's leave for the orchestrator to answer one narrow kind of
 // permission dialog of the job's agent: a command that starts with prefix
@@ -3145,8 +3145,57 @@ export interface JobGrant {
   uses?: GrantUse[]
 }
 
+// One pull request of a job, as the server's gh read it last
+export interface JobPR {
+  number: number
+  repo: string
+  state: 'open' | 'merged' | 'closed'
+  draft?: boolean
+  checks?: 'pending' | 'pass' | 'fail' | 'none'
+  // The failed checks' names
+  failing?: string[]
+  failRun?: number
+  head?: string
+  // Checked by the server against the pull request's repo
+  url?: string
+  // Attached by number, not found by the branch
+  pinned?: boolean
+  // Its head is not the job's pushed repo: never sent on its own
+  foreign?: boolean
+}
+
+// The ci_* code of the last failed read
+export type JobCIError =
+  | 'ci_gh_missing'
+  | 'ci_gh_auth'
+  | 'ci_no_repo'
+  | 'ci_failed'
+
+// What the server knows of a job's pull requests (full clients)
+export interface JobCI {
+  repo?: string
+  push?: string
+  branch?: string
+  pins?: number[]
+  prs?: JobPR[]
+  error?: JobCIError
+  notified?: string
+  // The failing set last sent to the agent
+  sent?: string
+}
+
+// What a card shows of the pull requests, worked out by the server for
+// every client. worst: fail, pending, open, draft or merged (all merged or
+// closed)
+export interface JobCISummary {
+  worst?: 'fail' | 'pending' | 'open' | 'draft' | 'merged'
+  count: number
+  allMerged?: boolean
+  numbers?: number[]
+}
+
 // One line of a job's history: created, started, sent, read, answered,
-// delegated, state, agent, note, grant, revoked...
+// delegated, state, agent, note, grant, revoked, pr, ci, ci_sent...
 export interface JobEvent {
   at: string
   kind: string
@@ -3174,6 +3223,12 @@ export interface Job {
   readConv?: string
   reported?: string
   diff?: JobDiff
+  // The pull requests (full clients only)
+  ci?: JobCI
+  // What the card shows of them (every client)
+  ciSummary?: JobCISummary
+  // When they were last read or tried (full clients)
+  ciChecked?: string
   grants?: JobGrant[]
   events?: JobEvent[]
   created?: string
@@ -3188,6 +3243,8 @@ export interface JobList {
   // This browser may give and end grants: signed in with the password or a
   // full paired device (never without sign-in, nor with Basic auth)
   canGrant: boolean
+  // The server follows the jobs' pull requests (never in a container)
+  ciAvailable: boolean
 }
 
 async function jobRequest(
@@ -3210,6 +3267,7 @@ export async function fetchJobs(): Promise<JobList> {
     readOnly: body.readOnly === true,
     serverNow: typeof body.serverNow === 'string' ? body.serverNow : '',
     canGrant: body.canGrant === true,
+    ciAvailable: body.ciAvailable === true,
   }
 }
 
@@ -3236,6 +3294,9 @@ export async function updateJob(
     note?: string
     state?: JobState
     pane?: string
+    // Pull requests attached and detached by number
+    addPrs?: number[]
+    removePrs?: number[]
     updated: string
   },
 ): Promise<Job> {
@@ -3272,6 +3333,34 @@ export async function createGrant(
     )
   ).job
 }
+
+// Reads the job's pull requests again (refresh), answered once that read
+// ended, its ci_* error on the job; or sends their failed checks to the
+// job's agent (send), queued when the agent was working. Throws
+// RequestError (ci_nothing_failed, job_no_agent, ci_unavailable, ci_busy,
+// input_has_draft...).
+export async function jobCI(
+  id: string,
+  action: 'refresh' | 'send',
+): Promise<{ job: Job; queued: boolean }> {
+  const res = await fetch(`${apiBase()}/jobs/${encodeURIComponent(id)}/ci`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+    // A send waits for the pane and pastes, as a message does (no limit
+    // here: the server's own bounds it); a refresh's read is bounded
+    signal:
+      action === 'refresh'
+        ? AbortSignal.timeout(CI_REQUEST_TIMEOUT_MS)
+        : undefined,
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return { job: body.job, queued: body.queued === true }
+}
+
+// A refresh runs several gh calls on the server (90 s at most there)
+export const CI_REQUEST_TIMEOUT_MS = 100_000
 
 // Ends a grant at once. Throws RequestError (grant_not_found,
 // grant_pwa_only).

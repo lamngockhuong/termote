@@ -456,7 +456,10 @@ type agentAPI struct {
 	// jobs is the job ledger, nil when it cannot be kept; wm makes and
 	// lists worktrees, for the directory of a job's. Set by buildServer.
 	jobs *jobStore
-	wm   worktreeMux
+	// ci follows the jobs' pull requests (job_ci.go); nil in a container
+	// or without the files routes.
+	ci *ciPoller
+	wm worktreeMux
 	// instanceID: this server's id (the snapshot's instanceId); set by
 	// buildServer.
 	instanceID string

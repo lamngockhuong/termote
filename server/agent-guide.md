@@ -172,6 +172,9 @@ termote agents wait --mine                     # the same over every unfinished 
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>                 # a finished job only; jobs prune [--older-than 7d] [--dry-run]: every finished one
 termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
+termote agents job ci <id> [--refresh]          # the job's pull requests and their checks, as the server's gh read them
+termote agents job ci <id> --send               # after the user says so: the failed checks to its agent; 10: none failed, 11: agent gone
+termote agents job set <id> --pr <number>       # attach a pull request of another branch (--no-pr <number> detaches)
 ```
 
 termote keeps a job ledger for you: every `start` records a job (`--title`, never the prompt:
@@ -197,6 +200,14 @@ agent is done; leave `done` to the user. The ledger is the user's history: remov
 `job set <id> --state abandoned` it first. A turn that ends with a question for the user written in
 its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks
 it (`read --json`: `endsWithQuestion`); ask the user and `send` their answer instead.
+
+The server follows each unfinished job's pull requests with the user's own `gh` login (not in a
+container): those of the job's branch, and any you attach with `job set <id> --pr <number>`.
+`job ci <id>` lists them, their failed checks and when they were read; `--refresh` reads them again
+first. termote never opens, merges or closes a pull request: the agent pushes and opens it.
+`job ci <id> --send` sends the agent the numbers and the failed checks' names only (it reads the
+logs with `gh pr checks` and `gh run view --log-failed` itself); ask the user before you send. When
+every pull request is merged or closed, tell the user, who sets the job `done`.
 
 Keep a mark for each pane you wait on: `send` and `start` print the pane with its own
 (`<pane>@<seq>`), `wait` prints a `next:` line with each pane it did not report and its mark, and

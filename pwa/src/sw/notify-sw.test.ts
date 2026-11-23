@@ -819,6 +819,35 @@ describe('notify-sw.js job reviews', () => {
     },
   )
 
+  it.each(LOCALES)(
+    "says in %s that a job's checks failed, or that it merged",
+    async (locale) => {
+      keep(locale)
+      const t = tFor(locale)
+      for (const [kind, head] of [
+        ['job_ci_failed', t('dialogs.notify.jobCIFailed')],
+        ['job_merged', t('dialogs.notify.jobMerged')],
+      ]) {
+        stubFetch({
+          [JOBS_URL]: { body: { jobs: [{ id: ID, title: 'Fix' }] } },
+        })
+        let w = loadWorker()
+        await w.dispatch('push', pushData({ kind, jobId: ID }))
+        expect(w.registration.showNotification).toHaveBeenCalledWith(
+          head,
+          options('Fix'),
+        )
+        stubFetch({})
+        w = loadWorker()
+        await w.dispatch('push', pushData({ kind, jobId: ID }))
+        expect(w.registration.showNotification).toHaveBeenCalledWith(
+          head,
+          options(t('dialogs.notify.jobOther')),
+        )
+      }
+    },
+  )
+
   it("takes no id but the server's, and reads nothing for one", async () => {
     keep('en')
     const calls = stubFetch({})

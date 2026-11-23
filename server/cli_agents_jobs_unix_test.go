@@ -465,7 +465,7 @@ func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
 	tree := &jobTree{Branch: "job-ledger-case", Base: "main", Dir: "/home/u/.herdr/worktrees/termote/job-ledger-case"}
 	listing := func(outside bool, dir, branch string) {
 		j := job{ID: "j1", Title: "Case worktree", State: "active", Worktree: tree, Agent: &jobAgent{PaneID: "%1", Kind: "claude"}}
-		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
+		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job: j, Live: jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
 			Dir: dir, Branch: branch, OutsideWorktree: outside}}}}))
 	}
 	run := func(args ...string) string {
@@ -493,7 +493,7 @@ func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
 // A wrong job command says what is wrong and prints its own usage, never
 // every agents command's; each usage is the line agentsUsage has.
 func TestAgentsJobUsage(t *testing.T) {
-	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage, jobsPruneUsage, waitJobUsage} {
+	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage, jobsPruneUsage, waitJobUsage} {
 		if !strings.Contains(agentsUsage, strings.TrimPrefix(u, "usage: ")) {
 			t.Errorf("agentsUsage lacks %q", u)
 		}
@@ -507,12 +507,12 @@ func TestAgentsJobUsage(t *testing.T) {
 		{[]string{"job", "add", "--title", "x", "extra"}, "job add takes no arguments", jobAddUsage},
 		{[]string{"job", "add"}, "job add needs --title <title>", ""},
 		{[]string{"job", "add", "--title", "  "}, "job add needs --title <title>", ""},
-		{[]string{"job"}, "agents job needs add, show, set or remove", jobRemoveUsage},
+		{[]string{"job"}, "agents job needs add, show, set, ci or remove", jobRemoveUsage},
 		{[]string{"job", "nope"}, "unknown agents job command: nope", jobSetUsage},
 		{[]string{"job", "show"}, "job show takes one job id", jobShowUsage},
 		{[]string{"job", "show", "a", "b"}, "job show takes one job id", jobShowUsage},
 		{[]string{"job", "set"}, "job set takes one job id", jobSetUsage},
-		{[]string{"job", "set", "a"}, "job set needs --state, --title, --note or --pane", jobSetUsage},
+		{[]string{"job", "set", "a"}, "job set needs --state, --title, --note, --pane, --pr or --no-pr", jobSetUsage},
 		{[]string{"jobs", "x"}, "jobs takes no arguments", jobsUsage},
 		{[]string{"job", "remove"}, "job remove takes one job id", jobRemoveUsage},
 		{[]string{"job", "remove", "a", "b"}, "job remove takes one job id", jobRemoveUsage},
@@ -618,10 +618,10 @@ func TestAgentsJobsPruneScripted(t *testing.T) {
 	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
 	at := func(d time.Duration) time.Time { return now.Add(-d).Add(123456789 * time.Nanosecond) }
 	jobs := []jobView{
-		{job{ID: "j1", Title: "Running", State: "active", Updated: at(30 * 24 * time.Hour)}, jobLive{}},
-		{job{ID: "j2", Title: "Old done", State: "done", Updated: at(10 * 24 * time.Hour)}, jobLive{}},
-		{job{ID: "j3", Title: "Old failed", State: "failed", Updated: at(9 * 24 * time.Hour)}, jobLive{}},
-		{job{ID: "j4", Title: "New done", State: "done", Updated: at(time.Hour)}, jobLive{}},
+		{job: job{ID: "j1", Title: "Running", State: "active", Updated: at(30 * 24 * time.Hour)}},
+		{job: job{ID: "j2", Title: "Old done", State: "done", Updated: at(10 * 24 * time.Hour)}},
+		{job: job{ID: "j3", Title: "Old failed", State: "failed", Updated: at(9 * 24 * time.Hour)}},
+		{job: job{ID: "j4", Title: "New done", State: "done", Updated: at(time.Hour)}},
 	}
 	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
 	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": jobs, "serverNow": now.Format(activityTimeFormat)}))
@@ -700,7 +700,7 @@ func TestAgentsJobRemoveFailures(t *testing.T) {
 		}
 	}
 	old := time.Now().Add(-48 * time.Hour)
-	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job{ID: "j1", Title: "x", State: "done", Updated: old}, jobLive{}}}}))
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job: job{ID: "j1", Title: "x", State: "done", Updated: old}}}}))
 	s.set("DELETE /api/mux/jobs/j1", hangUp)
 	if err := tc.dispatch("agents", []string{"job", "remove", "j1"}); err == nil || !strings.Contains(err.Error(), "may have been made") {
 		t.Errorf("hang up: %v", err)
@@ -730,8 +730,8 @@ func TestAgentsRefuseOwnPane(t *testing.T) {
 	}}}}))
 	j := job{ID: "j1", Title: "x", State: "todo"}
 	s.set("POST /api/mux/jobs", answer(http.StatusCreated, `{"job":{"id":"j1","title":"x","state":"active"}}`))
-	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{}}}}))
-	s.set("PATCH /api/mux/jobs/j1", jsonAnswer(map[string]any{"job": jobView{j, jobLive{}}}))
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job: j}}}))
+	s.set("PATCH /api/mux/jobs/j1", jsonAnswer(map[string]any{"job": jobView{job: j}}))
 	maps.Copy(tc.env, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t1", "HERDR_PANE_ID": "w1:pB1"})
 	const self = "--pane w1:pB1 is the pane this command runs in; a job goes to the agent that does the work"
 	for _, args := range [][]string{{"job", "add", "--title", "x", "--pane", "w1:pB1"}, {"job", "add", "--title", "x", "--pane", "orch"},

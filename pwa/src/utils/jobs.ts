@@ -69,12 +69,25 @@ export function grantLeft(
     : t('jobs.grant.leftHours', { n: Math.floor(min / 60) })
 }
 
-// What a grant lets the orchestrator answer: "Run: pnpm test", "Edit files"
+// What a grant lets the orchestrator answer: "Run: pnpm test", "Edit files",
+// or the server send: "Send failed checks to the agent"
 export function grantLabel(g: JobGrant, t: Translate<MessageKey>): string {
-  return g.kind === 'bash'
-    ? t('jobs.grant.runLabel', { prefix: visibleUnsafe(g.prefix ?? '') })
-    : t('jobs.grant.editLabel')
+  if (g.kind === 'bash')
+    return t('jobs.grant.runLabel', { prefix: visibleUnsafe(g.prefix ?? '') })
+  return g.kind === 'ci' ? t('jobs.grant.ciLabel') : t('jobs.grant.editLabel')
 }
+
+// How much of a grant was used: "used 2 times", or for a ci grant "sent 1
+// of 3 times"
+export function grantUsed(g: JobGrant, t: Translate<MessageKey>): string {
+  const used = g.uses?.length ?? 0
+  return g.kind === 'ci'
+    ? t('jobs.grant.rounds', { used, most: CI_ROUNDS })
+    : t('jobs.grant.uses', { count: used })
+}
+
+// How many times a ci grant sends (server/job_ci_send.go's maxCIRounds)
+export const CI_ROUNDS = 3
 
 // The pane a job's agent runs in, as the card names it
 export function jobPaneRef(job: Job): string {

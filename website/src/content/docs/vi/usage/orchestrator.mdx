@@ -205,6 +205,37 @@ Từ dòng lệnh, lựa chọn khiến hộp thoại không hỏi lại nữa (
 chuyển sang `auto mode`) luôn bị từ chối: chỉ bạn mới chọn được, trên PWA hoặc trong terminal. Mọi câu trả lời
 cho hộp thoại xin quyền đến từ dòng lệnh đều được ghi vào nhật ký kiểm toán.
 
+## Pull request và CI
+
+Agent tự push branch và tự mở pull request; Termote không bao giờ mở, merge hay đóng pull request
+nào. Khi cài native, server theo dõi pull request của mọi việc chưa xong bằng GitHub CLI bạn đã
+đăng nhập trên máy đó (`gh auth login`; Termote không giữ token nào). Đó là các pull request của
+branch của việc (trên remote `upstream` khi branch được push lên một fork), cộng những pull request
+gắn theo số bằng `termote agents job set <id> --pr <number>` hoặc từ phần chi tiết của việc. Pull
+request đã đóng từ trước khi tạo việc, và branch mặc định của repo, được bỏ qua.
+
+Thẻ của mỗi việc có một chip tô màu theo pull request tệ nhất: check lỗi, check đang chạy, check
+đạt, bản nháp, hoặc đã merge hết. Thiết bị chỉ xem thấy chip và các số pull request, không bao giờ
+thấy tên check. Phần chi tiết của việc liệt kê từng pull request kèm các check lỗi và đường dẫn tới
+nó. Khi còn check đang chạy, server đọc lại sau mỗi 20 giây, bình thường mỗi phút một lần, và đọc
+ngay khi bạn bấm Kiểm tra lại. Bạn nhận một thông báo đẩy khi check lỗi trên một lần mới, hoặc khi
+mọi pull request đã merge hay đóng.
+
+**Gửi check lỗi cho agent** dán vào ô nhập của agent một tin ngắn gồm số pull request, tên các check
+lỗi, và hai lệnh `gh pr checks` và `gh run view --log-failed` để đọc chúng. Tin này không bao giờ
+chứa log: agent tự đọc log bằng `gh`. Orchestrator làm việc tương tự bằng `termote agents job ci
+<id> --send`, sau khi hỏi bạn. Muốn server tự gửi, hãy cấp cho việc ủy quyền **Gửi check lỗi**: mỗi
+lượt lỗi mới được gửi một lần, lúc agent đang nghỉ, tối đa ba lần, chỉ gồm số pull request và các
+lệnh để đọc, không kèm tên check vì tên đó có thể do người khác đặt, và không bao giờ gửi cho pull
+request đến từ repo khác. Khi mọi pull request đã merge, phần chi tiết có nút **Đặt là xong**; xoá
+worktree vẫn là việc của bạn.
+
+<Aside type="note">
+  GitHub CLI phải được cài và đăng nhập cho đúng user mà server chạy dưới quyền. Nếu thiếu hoặc
+  chưa đăng nhập, phần chi tiết của việc sẽ báo. Ở [chế độ container](/vi/installation/docker/),
+  server không theo dõi pull request.
+</Aside>
+
 ## Dừng
 
 `stop` dừng lượt mà agent đang làm, như khi bấm Esc trong terminal của nó. Lệnh cần `cursor` lấy từ
@@ -257,6 +288,8 @@ Skill để các quyết định cho bạn:
 - Cho bạn xem hộp thoại xin quyền (chạy lệnh, sửa file) và trả lời bằng lựa chọn của bạn, trừ
   khi một ủy quyền bạn đã cấp bao trùm hộp thoại đó; nó không bao giờ chọn lựa chọn khiến hộp thoại
   thôi hỏi, và không bao giờ đề nghị tự cấp ủy quyền cho mình.
+- Không bao giờ mở, merge hay đóng pull request, chỉ gửi check lỗi cho agent sau khi hỏi bạn, và
+  không bao giờ đặt việc là `done` chỉ vì pull request của nó đã merge.
 - Không bao giờ chạy `termote show-password` hay `termote pair`, và không cần mật khẩu: các lệnh
   tới server qua local socket, thứ chỉ chính user của bạn mở được.
 - Không bao giờ gõ vào pane bằng lệnh tmux, Herdr hay Zellij: Termote kiểm tra rằng mỗi tin nằm

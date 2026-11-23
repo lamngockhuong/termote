@@ -90,4 +90,7 @@ export default {
   'dialogs.notify.settings': 'Agent đề xuất thay đổi cài đặt',
   'dialogs.notify.jobReview': 'Việc chờ bạn xem lại',
   'dialogs.notify.jobFallback': 'Có một việc đang chờ bạn xem lại',
+  'dialogs.notify.jobCIFailed': 'Check bị lỗi',
+  'dialogs.notify.jobMerged': 'Pull request đã merge hết',
+  'dialogs.notify.jobOther': 'Một việc trong kế hoạch cần bạn xem',
 } satisfies Translation<typeof en>

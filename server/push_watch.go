@@ -130,6 +130,24 @@ func (w *pushWatcher) notifyJobReview(id string) {
 	w.enqueue(pushEvent{Kind: "job_review", JobID: id})
 }
 
+// notifyJobCIFailed queues the push saying job id's checks failed anew,
+// its id only, never a check's name.
+func (w *pushWatcher) notifyJobCIFailed(id string) {
+	if !w.store.anySendable() {
+		return
+	}
+	w.enqueue(pushEvent{Kind: "job_ci_failed", JobID: id})
+}
+
+// notifyJobMerged queues the push saying every pull request of job id
+// merged or closed.
+func (w *pushWatcher) notifyJobMerged(id string) {
+	if !w.store.anySendable() {
+		return
+	}
+	w.enqueue(pushEvent{Kind: "job_merged", JobID: id})
+}
+
 // pushStatuses are the statuses that count as an observation; anything
 // else (none, "unknown") keeps the last known one.
 var pushStatuses = map[string]bool{"blocked": true, "working": true, "done": true, "idle": true}

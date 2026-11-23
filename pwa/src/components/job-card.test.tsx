@@ -50,6 +50,22 @@ describe('JobCard', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('shows its pull requests as a chip, to a view-only device too', () => {
+    render(
+      <JobCard
+        job={job({
+          ciSummary: { worst: 'pending', count: 1, numbers: [7] },
+        })}
+        now={NOW}
+      />,
+    )
+    expect(
+      within(card()).getByRole('img', {
+        name: 'Pull requests #7: checks running',
+      }),
+    ).toBeVisible()
+  })
+
   it('names the pane of an agent the job had, and none without an agent', () => {
     const { rerender } = render(
       <JobCard job={job({ live: {}, agent })} now={NOW} />,

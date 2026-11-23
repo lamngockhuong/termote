@@ -62,6 +62,11 @@ type jobLive struct {
 type jobView struct {
 	job
 	Live jobLive `json:"live"`
+	// CISummary: what the job's card shows of its pull requests.
+	CISummary *jobCISummary `json:"ciSummary,omitempty"`
+	// CIChecked: when its pull requests were last read or tried (kept in
+	// memory, not in the ledger).
+	CIChecked string `json:"ciChecked,omitempty"`
 }
 
 // jobBrief is a job as a view-only client sees it: never the prompt, the
@@ -73,6 +78,9 @@ type jobBrief struct {
 	Branch  string    `json:"branch,omitempty"`
 	Live    jobLive   `json:"live"`
 	Updated time.Time `json:"updated"`
+	// CISummary: the colour and numbers of the job's pull requests, never a check
+	// name, a link or an error; none where the branch is hidden.
+	CISummary *jobCISummary `json:"ciSummary,omitempty"`
 }
 
 // jobWorktreeInput names the worktree a start made: the workspace it was
@@ -92,7 +100,10 @@ type jobInput struct {
 	CreatedBy string            `json:"createdBy"`
 	Workspace string            `json:"workspace"`
 	Worktree  *jobWorktreeInput `json:"worktree"`
-	Updated   string            `json:"updated"`
+	// AddPRs, RemovePRs: pull requests attached and detached by number.
+	AddPRs    []int  `json:"addPrs"`
+	RemovePRs []int  `json:"removePrs"`
+	Updated   string `json:"updated"`
 }
 
 // jobEventInput is one history line the CLI adds. read carries the
@@ -115,6 +126,7 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs", a.handleJobs)
 	mux.HandleFunc("/api/mux/jobs/{id}", a.handleJob)
 	mux.HandleFunc("/api/mux/jobs/{id}/event", a.handleJobEvent)
+	mux.HandleFunc("/api/mux/jobs/{id}/ci", a.handleJobCI)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
 }
@@ -221,6 +233,9 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 	base := a.readMark(agent)
 	j, err := a.jobs.update(id, in.Updated, func(j *job) error {
 		if err := applyJobInput(j, in); err != nil {
+			return err
+		}
+		if err := applyPRPins(a.jobs, j, in.AddPRs, in.RemovePRs); err != nil {
 			return err
 		}
 		if in.Note != nil {
@@ -533,6 +548,9 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	all, ws := q.Get("all") == "1", q.Get("workspace")
 	snap, _ := a.activity.lastSnapshot()
 	viewOnly := isViewOnly(r)
+	// A server that does not follow pull requests (a container) shows none
+	// it read before.
+	ciOn := a.ci.available()
 	var full []jobView
 	var brief []jobBrief
 	for _, j := range list {
@@ -550,28 +568,43 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 			if j.Worktree != nil && !live.OutsideWorktree {
 				b.Branch = j.Worktree.Branch
 			}
+			if !live.branchHidden && ciOn {
+				b.CISummary = ciSummary(j.CI)
+			}
 			brief = append(brief, b)
 			continue
 		}
-		full = append(full, jobView{j, live})
+		full = append(full, a.jobViewOf(j, live))
 	}
 	now := time.Now().UTC().Format(activityTimeFormat)
 	if viewOnly {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now})
+		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": ciOn})
 		return
 	}
 	if full == nil {
 		full = []jobView{}
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r)})
+	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r),
+		"ciAvailable": ciOn})
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
 	snap, _ := a.activity.lastSnapshot()
-	return jobView{j, a.jobLiveIn(snap, j)}
+	return a.jobViewOf(j, a.jobLiveIn(snap, j))
+}
+
+func (a *agentAPI) jobViewOf(j job, live jobLive) jobView {
+	v := jobView{job: j, Live: live}
+	if a.ci.available() {
+		v.CISummary = ciSummary(j.CI)
+	}
+	if t := a.ci.checkedAt(j.ID); !t.IsZero() {
+		v.CIChecked = t.UTC().Format(activityTimeFormat)
+	}
+	return v
 }
 
 // jobLiveIn is what j's agent does in snap, the tracker's last snapshot

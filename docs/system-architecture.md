@@ -1605,6 +1605,17 @@ the rules of `server/agent_delegate_rules.go` and chooses the option labelled `Y
 (`server/agent_delegate.go`). The full list of checks is the Dialog delegation entry of
 [`security-invariants/agents.md`](security-invariants/agents.md).
 
+The server also follows each unfinished job's pull requests (`server/job_ci.go`, native only):
+with the `gh` the user signed in on the server's machine (`server/gh_runner.go`, the only place
+`gh` runs, with one `--repo=` the server works out from the job's worktree or agent folder
+through `gitRunner`, never in a repository), it reads the pull requests of the job's branch,
+those of an `upstream` remote for a fork, and any attached by number, every 20 s to 5 minutes,
+and keeps a summary on the job. A new set of failed checks or every pull request merged is
+pushed by the job's id. `POST /api/mux/jobs/{id}/ci` reads them again or sends the failed checks'
+names to the job's agent (`server/job_ci_send.go`); a `ci` grant given in the PWA lets the server
+send them on its own, at most three times, without the checks' names. termote never writes to GitHub. The checks are the Job
+pull requests entry of [`security-invariants/agents.md`](security-invariants/agents.md).
+
 ### Agent tokens and estimated cost (`/agent/usage`, `/agent/usage/summary`, `/usage`)
 
 `server/agent_usage*.go` adds up the tokens of Claude Code transcripts and Codex rollouts, never a

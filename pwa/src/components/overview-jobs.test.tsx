@@ -53,6 +53,7 @@ function loaded(over: Partial<JobsState> = {}): JobsState {
     jobs: JOBS,
     readOnly: false,
     canGrant: true,
+    ciAvailable: true,
     clockOffset: 0,
     loaded: true,
     error: false,

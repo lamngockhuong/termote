@@ -199,6 +199,7 @@ export function OverviewJobs({
       }
       onEdit={setEditing}
       canEndGrants={store.canGrant}
+      ciAvailable={store.ciAvailable}
       onGrants={
         !jobFinished(selected.state) &&
         (selected.agent || selected.grants?.length)
@@ -421,6 +422,7 @@ export function OverviewJobs({
         <JobGrantSheet
           job={granting}
           canGrant={store.canGrant}
+          ciAvailable={store.ciAvailable}
           now={now}
           onClose={() => setGranting(null)}
         />

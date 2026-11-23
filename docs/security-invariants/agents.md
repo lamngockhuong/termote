@@ -793,7 +793,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
   read found, which a view-only client does not get for a home dir (`viewHidden`), as the
-  overview's changes; the route never runs git itself. A job's worktree is its branch and folder
+  overview's changes; the route never runs git itself. A view-only client also gets `ciSummary`
+  (the worst pull request's colour, the count and the numbers, never a check name, link, repo or
+  error), and nothing of it where the branch is hidden; see Job pull requests. A job's worktree is its branch and folder
   (a view-only client's `branch`) only while its agent's pane is in it (`dirInTree`, through
   symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
   and the pane's are shown, the worktree record kept. Writes:
@@ -805,7 +807,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`TestJobDeleteFinishedOnlyOnSocket`). `termote agents job remove` and `jobs prune` refuse an
   unfinished job before sending anything and send the `updated` they read; `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
-  with a cursor that verifies (`decodeCursor`). A browser's job is always `createdBy: "pwa"`; a
+  with a cursor that verifies (`decodeCursor`). `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
+  10^9, 10 attached at most, one change). A browser's job is always `createdBy: "pwa"`; a
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
   (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
@@ -892,3 +895,50 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by)
   once its key is sent, also when the dialog then stays open (`confirmed="false"`,
   `TestDelegatedAnswerNotConfirmed`, `TestCLIAnswerAuditedOnceSent`).
+  A grant of kind `ci` (Job pull requests) answers no dialog: `grantsFor` takes a grant of the
+  dialog's own kind only.
+- **Job pull requests** (`server/gh_runner.go`, `server/job_ci.go`, `server/job_ci_send.go`,
+  `server/job_pr.go`, `POST /api/mux/jobs/{id}/ci`): termote only reads GitHub, with the `gh` of
+  the OS user the server runs as, and keeps no token (the service passes `GH_CONFIG_DIR`, never
+  `GH_TOKEN`). `ghRunner` is the only place `gh` runs: found on the service's `PATH` or in
+  package managers' dirs (a regular executable file, not world-writable on Unix), argv only, no
+  shell, `cmd.Dir` the jobs' state dir and never a repository, a 20 s timeout, 1 MB of output,
+  two calls at once, 1200 an hour for the whole server and none for 15 minutes after GitHub's
+  rate limit, an environment without `GIT_*`, `TERMOTE_*`, `GH_HOST`, `GH_REPO`,
+  `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, with prompts, pager, colour and the update
+  check off. The repository is one `--repo=host/owner/repo` argument the server works out itself:
+  the job's worktree dir (else the job agent's folder the first time, the result kept on the job,
+  refused at or above home by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
+  read with its `gitRunner` (`checkRoot`, hooks and fsmonitor off): the branch's push remote and
+  an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
+  repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias
+  (a host without a dot) mapped to github.com only when github.com is the one host
+  `gh auth status --json hosts` lists with a working login, else `ci_no_repo` (another login may
+  make the alias a GitHub Enterprise, and a same-named repository on github.com would be read), and only a host `gh auth status` says is signed in (github.com not signed
+  in is `ci_gh_auth`, any other host `ci_no_repo`; a login is kept 10 minutes, no login is asked again on the next read). gh's stderr only classifies the failure
+  (`ci_gh_missing`, `ci_gh_auth`, `ci_no_repo`, `ci_failed`, `ci_busy`); it is logged cut to 200
+  bytes, never stored or returned. What is kept of a pull request is checked: its URL only when it
+  is `https://<host>/<owner>/<repo>/pull/<n>` of that repo, a failed run's id only from a link of
+  that repo, check names (written by whoever wrote the workflow, a fork's author for a fork's pull
+  request: a prompt-injection surface) in `[A-Za-z0-9 ._:/()[]#+-]` (anything else `?`), 100
+  runes, 10 per pull request, quoted in a message the user sends and left out of one the server sends under a grant; a pull request whose head is not the
+  job's pushed repo is `foreign`. The poller (`ciPoller`, native only: not in a container, where
+  the list says `ciAvailable: false` and no summary is shown) reads each unfinished job every 20 s
+  to 5 minutes, one read per job at a time, and writes it in one change under `jobs.lock`
+  (`setJobCI`, which never moves `updated`); that change decides whether a set of failures
+  (`<n>@<head>` of each failing pull request) is new against the kept `notified` mark, and only a
+  write that succeeded queues a Web Push (`job_ci_failed`, `job_merged`) with the job id only.
+  The first read of a job only sets the mark; a failed read (an attached number gh says does not exist aside, which is left out) keeps the pull requests read before, and one cut short (the server stopping, a refresh's client gone) writes nothing; a ledger a newer Termote wrote stops the poller.
+  The route: `requireMethod(POST)`, `requireWriteRole`, the global `writeGuard`, a 1 KB body,
+  `action` `refresh` (the read's result, ci codes included; one per job every 10 s, 30 a minute
+  for the server, `ci_busy` beyond) or `send`. A send (the route's, the CLI's over the socket, or
+  the server's own) takes the pane's lock, reads the session and a fresh snapshot, and sends only
+  while the pane still runs the job's agent (`jobAgent.matches`, `job_no_agent` otherwise); it
+  records the set as sent (and a grant's round) in the ledger before the paste and gives both back
+  when the agent refuses it; the message is the fixed English text with the numbers, the check
+  names and the `gh` commands to read them, never a log. The server sends on its own only under a
+  `ci` grant (made in the PWA alone, as every grant), to an agent at rest (idle, no background
+  work), for a set of failures not sent before, with the pull requests' numbers and the `gh` commands but no check name, never a `foreign` pull request, at most 3 times per
+  grant, backing off while the agent refuses (5 tries a set); one `ci` grant per job, a new one
+  ends the last. Every send is logged as `audit: ci_sent` (job, pull requests, by: the user, `cli`
+  or the grant) and noted on the job (`ci_sent`, `ci_failed_send`).

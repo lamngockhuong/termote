@@ -20,6 +20,15 @@ export default {
     'Tên một nhánh khác trùng với một thư mục trong tên nhánh này, hoặc ngược lại (không thể có cùng lúc test và test/x). Hãy chọn tên khác',
   'errors.busy': 'Một thay đổi khác vẫn đang chạy. Hãy thử lại',
   'errors.changed': 'Đã thay đổi từ lúc đọc. Hãy xem lại',
+  'errors.ci_busy': 'Đang đọc GitHub quá nhiều. Thử lại sau một phút',
+  'errors.ci_failed': 'gh trên máy chủ không đọc được các pull request',
+  'errors.ci_gh_auth':
+    'gh trên máy chủ chưa đăng nhập: hãy chạy gh auth login ở đó',
+  'errors.ci_gh_missing': 'Máy chủ chưa cài gh (GitHub CLI)',
+  'errors.ci_no_repo':
+    'Branch của việc không nằm trên repo GitHub nào mà gh đã đăng nhập',
+  'errors.ci_nothing_failed': 'Không có check nào của các pull request bị lỗi',
+  'errors.ci_unavailable': 'Máy chủ này không theo dõi pull request',
   'errors.cli_only': 'Chỉ CLI termote trên máy đó làm được việc này',
   'errors.conflict': 'Đã bị sửa ở nơi khác',
   'errors.create_failed': 'Git không tạo được worktree',
