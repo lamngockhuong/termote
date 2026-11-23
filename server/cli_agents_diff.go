@@ -148,6 +148,10 @@ func (c *cli) agentsDiff(args []string) error {
 			dash(plainText(br.MergeBase)), br.Commits, len(br.Files))
 	}
 	fmt.Fprintf(c.out, "Uncommitted: %d changes\n", len(uncommitted))
+	if stat {
+		c.jobNote(port, p.pane.ID, jobEventInput{Kind: "diff", Text: fmt.Sprintf("%d commits, %d files, %d uncommitted", br.Commits, len(br.Files), len(uncommitted)),
+			Diff: &jobDiff{Commits: br.Commits, Files: len(br.Files) + len(uncommitted), Head: br.Branch}})
+	}
 	if br.Truncated || ch.Truncated {
 		fmt.Fprintln(c.out, "(the lists are cut short: too many files)")
 	}

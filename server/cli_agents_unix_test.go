@@ -166,6 +166,7 @@ func startAgentsServer(t *testing.T, tc *testCLI, dir string, m Mux) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	cfg := testConfig(t)
 	cfg.LocalSocketDir = dir
+	cfg.JobsDir = filepath.Join(dir, "jobs")
 	h, hub, _, _, err := buildServerWith(cfg, m)
 	if err != nil {
 		t.Fatal(err)

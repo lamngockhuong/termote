@@ -163,7 +163,6 @@ func TestJobCreateAndRoles(t *testing.T) {
 		"long title":    {"full", map[string]any{"title": strings.Repeat("é", maxJobTitle+1)}, http.StatusBadRequest, "job_invalid"},
 		"long note":     {"full", map[string]any{"title": "t", "note": strings.Repeat("x", maxJobNote+1)}, http.StatusBadRequest, "job_invalid"},
 		"bad state":     {"full", map[string]any{"title": "t", "state": "doing"}, http.StatusBadRequest, "job_invalid"},
-		"no agent":      {"socket", map[string]any{"title": "t", "pane": "w1:shell"}, http.StatusConflict, "job_no_agent"},
 		"view-only":     {"view", map[string]any{"title": "t"}, http.StatusForbidden, "view_only"},
 		"body too long": {"full", `{"title":"` + strings.Repeat("x", jobBody) + `"}`, http.StatusRequestEntityTooLarge, "too_large"},
 	} {
@@ -171,6 +170,17 @@ func TestJobCreateAndRoles(t *testing.T) {
 			t.Errorf("%s: %d %v", name, code, out)
 		}
 	}
+
+	// A pane whose agent lookup finds none.
+	jt.f.mu.Lock()
+	jt.f.found = false
+	jt.f.mu.Unlock()
+	if code, out := jt.do("socket", http.MethodPost, "/api/mux/jobs", map[string]any{"title": "t", "pane": "w1:pa"}); code != http.StatusConflict || out["code"] != "job_no_agent" {
+		t.Errorf("no agent: %d %v", code, out)
+	}
+	jt.f.mu.Lock()
+	jt.f.found = true
+	jt.f.mu.Unlock()
 
 	// A view-only client sees titles, states, panes: never the prompt, the
 	// note, a directory or the history.

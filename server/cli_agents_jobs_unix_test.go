@@ -1,0 +1,290 @@
+//go:build !windows
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// tsLine is an assistant line of the transcript written at ts.
+func tsLine(i int, ts, text string) string {
+	b, _ := json.Marshal(map[string]any{"type": "assistant", "uuid": fmt.Sprintf("t%d", i), "timestamp": ts,
+		"message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "text", "text": text}}}})
+	return string(b) + "\n"
+}
+
+// jobsCLI runs the real server with its ledger over an agentsFake whose
+// panes %1 (web/api, idle) and %2 (web/ui, working) run one Claude Code.
+func jobsCLI(t *testing.T) (*testCLI, *agentsFake, string) {
+	t.Helper()
+	tc, f := agentsTest(t, tsLine(0, "2026-11-23T09:00:00.000Z", "hello"))
+	path := filepath.Join(f.session.ClaudeDir, "projects", "-home-u-proj", testSessionID+".jsonl")
+	every := agentsWaitEvery
+	agentsWaitEvery = 20 * time.Millisecond
+	t.Cleanup(func() { agentsWaitEvery = every })
+	return tc, f, path
+}
+
+// settle waits out the server's agent and transcript caches.
+func settle() { time.Sleep(agentCacheTTL + 50*time.Millisecond) }
+
+func jobsOf(t *testing.T, tc *testCLI, args ...string) []jobView {
+	t.Helper()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", append([]string{"jobs", "--json"}, args...)); err != nil {
+		t.Fatalf("jobs: %v (%s)", err, tc.stderr)
+	}
+	var out struct {
+		Jobs []jobView `json:"jobs"`
+	}
+	if err := json.Unmarshal(tc.stdout.Bytes(), &out); err != nil {
+		t.Fatalf("%v: %s", err, tc.stdout)
+	}
+	return out.Jobs
+}
+
+func addJob(t *testing.T, tc *testCLI, args ...string) jobView {
+	t.Helper()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", append([]string{"job", "add", "--json"}, args...)); err != nil {
+		t.Fatalf("job add: %v (%s)", err, tc.stderr)
+	}
+	var j jobView
+	if err := json.Unmarshal(tc.stdout.Bytes(), &j); err != nil {
+		t.Fatalf("%v: %s", err, tc.stdout)
+	}
+	return j
+}
+
+func TestAgentsJobCommands(t *testing.T) {
+	tc, _, _ := jobsCLI(t)
+	j := addJob(t, tc, "--title", "Fix the parser\x1b[31m", "--pane", "web/api", "--note", "look at lexer.go")
+	if j.Title != "Fix the parser[31m" || j.State != "active" || j.Agent == nil || j.Agent.PaneID != "%1" || j.Workspace != "$1" ||
+		j.Note != "look at lexer.go" || j.CreatedBy != "cli" {
+		t.Fatalf("job %+v", j)
+	}
+	todo := addJob(t, tc, "--title", "Write docs")
+	if todo.State != "todo" || todo.Agent != nil {
+		t.Errorf("todo %+v", todo)
+	}
+	// The table: filter named, each job's pane and what its agent does.
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"jobs"}); err != nil {
+		t.Fatal(err)
+	}
+	out := tc.stdout.String()
+	for _, want := range []string{"Jobs (unfinished jobs, of every creator): 2", "Fix the parser[31m", "web/api (%1)", "idle", "Write docs", "todo"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("jobs lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Errorf("control characters printed: %q", out)
+	}
+	// show: prompt, note, history.
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"job", "show", j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Agent: claude in web/api (%1): idle") || !strings.Contains(out, "look at lexer.go") ||
+		!strings.Contains(out, "History:") {
+		t.Errorf("show:\n%s", out)
+	}
+	if err := tc.dispatch("agents", []string{"job", "show", "nope"}); err == nil || !strings.Contains(err.Error(), "no job nope") {
+		t.Errorf("unknown: %v", err)
+	}
+	// set: a finished job leaves the default list.
+	tc.in = nil
+	if err := tc.dispatch("agents", []string{"job", "set", todo.ID, "--state", "abandoned", "--title", "Docs later"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := jobsOf(t, tc); len(got) != 1 || got[0].ID != j.ID {
+		t.Errorf("unfinished: %+v", got)
+	}
+	if got := jobsOf(t, tc, "--all"); len(got) != 2 || got[0].Title != "Docs later" {
+		t.Errorf("all: %+v", got)
+	}
+	if got := jobsOf(t, tc, "--workspace", "orchestrator"); len(got) != 0 {
+		t.Errorf("another workspace: %+v", got)
+	}
+	// --mine needs to know this pane: never an empty list in its place.
+	if err := tc.dispatch("agents", []string{"jobs", "--mine"}); err == nil || !strings.Contains(err.Error(), "--mine needs to know this command's pane") {
+		t.Errorf("mine: %v", err)
+	}
+	for _, args := range [][]string{{"job"}, {"job", "nope"}, {"job", "add"}, {"job", "set", j.ID}, {"job", "set", j.ID, "--state", "todo"},
+		{"jobs", "x"}, {"job", "show"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	// Moving a job to another pane ends its grants, and says so.
+	if err := tc.dispatch("agents", []string{"job", "set", j.ID, "--pane", "ui"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := jobsOf(t, tc); got[0].Agent.PaneID != "%2" {
+		t.Errorf("moved: %+v", got[0].Agent)
+	}
+}
+
+// Every agents command notes what it did on the job of its pane; the
+// orchestrator's read marks the turn read, a turn that ended unread is
+// reported by wait --job however long ago it ended.
+func TestAgentsJobHooksAndWait(t *testing.T) {
+	tc, f, path := jobsCLI(t)
+	j := addJob(t, tc, "--title", "Parser", "--pane", "web/api")
+	if err := tc.dispatch("agents", []string{"send", "%1", "fix the lexer please"}); err != nil {
+		t.Fatalf("send: %v (%s)", err, tc.stderr)
+	}
+	// The turn ends before anyone waits for it.
+	appendFile(t, path, tsLine(1, "2026-11-23T09:05:00.000Z", "Fixed."))
+	settle()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "2s"}); err != nil {
+		t.Fatalf("wait: %v (%s)", err, tc.stdout)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Job "+j.ID+" (Parser): web/api (%1) ended a turn; read it: termote agents read %1") {
+		t.Errorf("wait out: %s", out)
+	}
+	// Read: then nothing is left to report.
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitTimeout {
+		t.Errorf("after read: exit %d %s", exitCode(err), tc.stdout)
+	}
+	// A turn that ends between two polls is reported too.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		appendFile(t, path, tsLine(2, "2026-11-23T09:06:00.000Z", "More."))
+	}()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "5s"}); err != nil || !strings.Contains(tc.stdout.String(), "ended a turn") {
+		t.Errorf("between polls: %v %s", err, tc.stdout)
+	}
+	tc.dispatch("agents", []string{"read", "%1"})
+
+	// A dialog the user keeps open is reported once; the other jobs are
+	// still waited for.
+	other := addJob(t, tc, "--title", "UI", "--pane", "ui")
+	f.setStatus("%1", "blocked")
+	f.setScreen(fixtureScreen(t, "2.1.286-permission-bash"))
+	settle()
+	tc.stdout.Reset()
+	err := tc.dispatch("agents", []string{"wait", "--job", j.ID, other.ID, "--timeout", "2s"})
+	if exitCode(err) != agentsExitDialog || !strings.Contains(tc.stdout.String(), "waits on a dialog; see it: termote agents answer %1") ||
+		!strings.Contains(tc.stdout.String(), "next: termote agents wait --job "+other.ID) {
+		t.Errorf("dialog: exit %d %s", exitCode(err), tc.stdout)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout {
+		t.Errorf("same dialog again: exit %d %s", exitCode(err), tc.stdout)
+	}
+	// Its agent gone (tmux restarted, %1 reused by another process).
+	f.setStatus("%1", "idle")
+	f.mu.Lock()
+	f.session.PID = 4242
+	f.mu.Unlock()
+	settle()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "2s"}); exitCode(err) != agentsExitGone ||
+		!strings.Contains(tc.stdout.String(), "its agent no longer runs in") {
+		t.Errorf("gone: exit %d %s", exitCode(err), tc.stdout)
+	}
+	if err := tc.dispatch("agents", []string{"wait", "--job", "nope"}); err == nil || !strings.Contains(err.Error(), "no job nope") {
+		t.Errorf("unknown job: %v", err)
+	}
+	todo := addJob(t, tc, "--title", "later")
+	if err := tc.dispatch("agents", []string{"wait", "--job", todo.ID}); err == nil || !strings.Contains(err.Error(), "has no agent") {
+		t.Errorf("no agent: %v", err)
+	}
+	// The history has what each command did.
+	tc.stdout.Reset()
+	tc.dispatch("agents", []string{"job", "show", j.ID})
+	for _, want := range []string{"sent fix the lexer please", "read"} {
+		if !strings.Contains(tc.stdout.String(), want) {
+			t.Errorf("history lacks %q:\n%s", want, tc.stdout)
+		}
+	}
+}
+
+// The ledger outlives the server: a new one over the same state dir lists
+// the same jobs, and reads what their agents do from the panes again.
+func TestAgentsJobsSurviveRestart(t *testing.T) {
+	tc, dir := socketCLI(t)
+	f := newAgentsFake(t, tsLine(0, "2026-11-23T09:00:00.000Z", "hello"))
+	startAgentsServer(t, tc, dir, f)
+	j := addJob(t, tc, "--title", "Parser", "--pane", "web/api")
+	if _, err := os.Stat(filepath.Join(dir, "jobs", jobsFile)); err != nil {
+		t.Fatal(err)
+	}
+	startAgentsServer(t, tc, dir, f)
+	got := jobsOf(t, tc)
+	if len(got) != 1 || got[0].ID != j.ID || got[0].Live.Status != "idle" {
+		t.Fatalf("after restart: %+v", got)
+	}
+}
+
+// start records a job: its title is never the prompt; --job takes up the
+// user's todo job with its prompt.
+func TestAgentsStartRecordsJob(t *testing.T) {
+	tc, f := agentsTest(t, "")
+	f.promptDir = useStartPromptDir(t, "start-prompts")
+	every := agentsStartEvery
+	agentsStartEvery = 10 * time.Millisecond
+	t.Cleanup(func() { agentsStartEvery = every })
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "secret plan"}); err != nil {
+		t.Fatalf("%v (%s)", err, tc.stderr)
+	}
+	started := tc.stdout.String()
+	got := jobsOf(t, tc)
+	if len(got) != 1 || got[0].Title != "claude in web" || got[0].Prompt != "secret plan" || got[0].Agent == nil || got[0].Agent.PaneID != "%t2" {
+		t.Fatalf("job %+v (%s)", got, tc.stderr)
+	}
+	if !strings.Contains(started, "wait for it: termote agents wait --job "+got[0].ID) {
+		t.Errorf("out %s", started)
+	}
+	todo := addJob(t, tc, "--title", "From the phone")
+	// Its prompt, set in the PWA, is the start's.
+	setJobPrompt(t, tc, todo.ID, "prompt from the phone")
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--job", todo.ID}); err != nil {
+		t.Fatalf("--job: %v (%s)", err, tc.stderr)
+	}
+	if f.promptText[len(f.promptText)-1] != "prompt from the phone" {
+		t.Errorf("prompt %q", f.promptText)
+	}
+	for _, j := range jobsOf(t, tc) {
+		if j.ID == todo.ID && (j.State != "active" || j.Agent == nil) {
+			t.Errorf("taken up: %+v", j)
+		}
+	}
+	// Only a todo job is taken up.
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--job", todo.ID}); err == nil || !strings.Contains(err.Error(), "not a job waiting for an agent") {
+		t.Errorf("again: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--title", "x", "--job", todo.ID}); exitCode(err) != 2 {
+		t.Errorf("--title with --job: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--title", " "}); exitCode(err) != 2 {
+		t.Errorf("blank title: %v", err)
+	}
+}
+
+// setJobPrompt sets a job's prompt, as the PWA's edit does.
+func setJobPrompt(t *testing.T, tc *testCLI, id, prompt string) {
+	t.Helper()
+	port, err := tc.agentsPort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.jobWrite(port, "PATCH", "/api/mux/jobs/"+id, map[string]any{"prompt": prompt}, 200); err != nil {
+		t.Fatal(err)
+	}
+}

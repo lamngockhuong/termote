@@ -400,23 +400,34 @@ func applyJobInput(j *job, in jobInput) error {
 }
 
 // jobAgentFor records the agent pane id runs now, refusing a pane without
+// one. The agent lookup decides: an agent just started may not show in the
+// snapshot yet. The pane comes from the tracker's last snapshot, else a new
 // one.
 func (a *agentAPI) jobAgentFor(paneID string) (jobAgent, error) {
+	noAgent := &codedError{"job_no_agent", "the pane runs no agent", http.StatusConflict}
+	s, err := a.session(paneID)
+	if err != nil || s.Agent == "" {
+		return jobAgent{}, noAgent
+	}
+	find := func(snap Snapshot) (snapPane, bool) {
+		for _, sp := range snapshotPanes(snap) {
+			if sp.pane.ID == paneID {
+				return sp, true
+			}
+		}
+		return snapPane{}, false
+	}
 	snap, _ := a.activity.lastSnapshot()
-	var p snapPane
-	found := false
-	for _, sp := range snapshotPanes(snap) {
-		if sp.pane.ID == paneID {
-			p, found = sp, true
-			break
+	p, ok := find(snap)
+	if !ok {
+		ctx, cancel := context.WithTimeout(context.Background(), muxTimeout)
+		defer cancel()
+		if snap, err = a.m.Snapshot(ctx); err == nil {
+			p, ok = find(snap)
 		}
 	}
-	if !found || p.pane.Agent == nil {
-		return jobAgent{}, &codedError{"job_no_agent", "the pane runs no agent", http.StatusConflict}
-	}
-	s, err := a.session(paneID)
-	if err != nil {
-		return jobAgent{}, &codedError{"job_no_agent", "the pane runs no agent", http.StatusConflict}
+	if !ok {
+		return jobAgent{}, noAgent
 	}
 	return jobAgentOf(p, s), nil
 }

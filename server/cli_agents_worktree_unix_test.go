@@ -31,9 +31,11 @@ type worktreeScript struct {
 	cwd     string // the new pane's directory
 	dir     string // the worktree's directory in the list
 	deletes int
-	// agent: the new pane runs this task's agent; agentOnStart: it does
-	// from the first start request on (one a run before started).
+	// agent: the new pane runs this task's agent (status, default idle);
+	// agentOnStart: it does from the first start request on (one a run
+	// before started).
 	agent, agentOnStart bool
+	status              string
 }
 
 func (ws *worktreeScript) make() {
@@ -52,7 +54,11 @@ func newWorktreeScript(t *testing.T, s *scripted, caps Caps) *worktreeScript {
 		if ws.made {
 			pane := Pane{ID: "%7", Process: &ProcessInfo{Cwd: ws.cwd}}
 			if ws.agent {
-				pane.Agent = &AgentInfo{Name: "claude", Status: "idle"}
+				status := ws.status
+				if status == "" {
+					status = "idle"
+				}
+				pane.Agent = &AgentInfo{Name: "claude", Status: status}
 			}
 			snap.Groups = append(snap.Groups, Group{ID: "w2", Name: "repo-feat", Tabs: []Tab{
 				{ID: "w2:0", Name: "sh", Panes: []Pane{pane}}}})
@@ -104,6 +110,18 @@ func countPosts(s *scripted, prefix string) int {
 	return n
 }
 
+// lastPost is the last POST whose path and body start with prefix.
+func lastPost(s *scripted, prefix string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := len(s.posts) - 1; i >= 0; i-- {
+		if strings.HasPrefix(s.posts[i], prefix) {
+			return s.posts[i]
+		}
+	}
+	return ""
+}
+
 func TestAgentsStartWorktree(t *testing.T) {
 	shortWorktreeWaits(t)
 	tc, s := scriptedCLI(t)
@@ -145,9 +163,7 @@ func TestAgentsStartWorktree(t *testing.T) {
 	}
 	// Its workspace was open already: the pane may hold the user's typing,
 	// so the start clears it first (no newTab).
-	s.mu.Lock()
-	last := s.posts[len(s.posts)-1]
-	s.mu.Unlock()
+	last := lastPost(s, "/api/mux/panes/%7/agent/start")
 	if !strings.Contains(last, `"newTab":false`) {
 		t.Errorf("reused pane: %s", last)
 	}
@@ -156,9 +172,7 @@ func TestAgentsStartWorktree(t *testing.T) {
 	if err := start("--worktree", "feat", "again"); err != nil {
 		t.Fatal(err)
 	}
-	s.mu.Lock()
-	last = s.posts[len(s.posts)-1]
-	s.mu.Unlock()
+	last = lastPost(s, "/api/mux/panes/%7/agent/start")
 	if !strings.Contains(last, `"newTab":true`) {
 		t.Errorf("reopened pane: %s", last)
 	}
@@ -174,17 +188,42 @@ func TestAgentsStartWorktree(t *testing.T) {
 		t.Errorf("open refused: %v", err)
 	}
 	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`))
-	// Run again while the agent of the task still runs in the pane: the
-	// task goes to it, and nothing is started.
+	// Run again while the agent of the task still works in the pane:
+	// nothing is started or sent.
 	ws.mu.Lock()
-	ws.agent = true
+	ws.agent, ws.status = true, "working"
 	ws.mu.Unlock()
 	before := countPosts(s, "/api/mux/panes/%7/agent/start")
 	const stillRuns = "the agent of this task still runs in pane %7 (repo-feat/sh, claude); nothing was started: give it the task there: termote agents send %7 -"
 	if err := start("--worktree", "feat", "again"); err == nil || !strings.Contains(err.Error(), stillRuns) ||
-		!strings.Contains(err.Error(), "(workspace w2, branch feat, in /wt/feat stays)") || countPosts(s, "/api/mux/panes/%7/agent/start") != before {
-		t.Errorf("agent still runs: %v", err)
+		!strings.Contains(err.Error(), "(workspace w2, branch feat, in /wt/feat stays)") || countPosts(s, "/api/mux/panes/%7/agent/start") != before ||
+		countPosts(s, "/api/mux/panes/%7/agent/message") != 0 {
+		t.Errorf("agent still works: %v", err)
 	}
+	// On a dialog: answered first.
+	ws.mu.Lock()
+	ws.status = "blocked"
+	ws.mu.Unlock()
+	if err := start("--worktree", "feat", "again"); err == nil || !strings.Contains(err.Error(), "waits on a dialog in pane %7; nothing was sent: termote agents answer %7") {
+		t.Errorf("agent on a dialog: %v", err)
+	}
+	// Idle: it gets the prompt, as send gives it.
+	ws.mu.Lock()
+	ws.status = "idle"
+	ws.mu.Unlock()
+	s.set("GET /api/mux/panes/%7/agent/transcript", jsonAnswer(transcriptResponse{Cursor: "c7"}))
+	s.set("POST /api/mux/panes/%7/agent/message", answer(http.StatusNoContent, ""))
+	if err := start("--worktree", "feat", "again"); err != nil || !strings.Contains(tc.stdout.String(), "Continued in pane %7 (workspace repo-feat, branch feat): sent the prompt") ||
+		countPosts(s, `/api/mux/panes/%7/agent/message {"cursor":"c7","text":"again"}`) != 1 || countPosts(s, "/api/mux/panes/%7/agent/start") != before {
+		t.Errorf("idle agent: %v %s", err, tc.stdout)
+	}
+	// Idle without a prompt: nothing to give it.
+	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "runs idle in pane %7") {
+		t.Errorf("idle, no prompt: %v", err)
+	}
+	ws.mu.Lock()
+	ws.status = ""
+	ws.mu.Unlock()
 	// It starts between the snapshot read and the start: the refusal says
 	// the same.
 	ws.mu.Lock()

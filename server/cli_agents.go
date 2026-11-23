@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -27,11 +28,16 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents read <pane> [--all] [--json]
        termote agents send <pane> <text | ->
        termote agents wait <pane>[@<seq>]... [--after <seq>] [--timeout <duration>]
+       termote agents wait --job <id>... [--timeout <duration>]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
        termote agents stop <pane> --cursor <cursor>
        termote agents diff <pane> [--stat] [--base <branch>]
        termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>]
-                            [--worktree <new branch> [--base <branch>]] [<prompt> | -]`
+                            [--worktree <new branch> [--base <branch>]] [--title <title> | --job <id>] [<prompt> | -]
+       termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]
+       termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]
+       termote agents job show <id> [--json]
+       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
 // and 2 (usage). With several panes ending at once, the gravest wins. stop
@@ -84,6 +90,9 @@ func (c *cli) cmdAgents(args []string) error {
 	case "send":
 		return c.agentsSend(args[1:])
 	case "wait":
+		if slices.Contains(args[1:], "--job") || slices.Contains(args[1:], "-job") {
+			return c.agentsWaitJobs(args[1:])
+		}
 		return c.agentsWait(args[1:])
 	case "answer":
 		return c.agentsAnswer(args[1:])
@@ -93,6 +102,10 @@ func (c *cli) cmdAgents(args []string) error {
 		return c.agentsDiff(args[1:])
 	case "start":
 		return c.agentsStart(args[1:])
+	case "jobs":
+		return c.agentsJobs(args[1:])
+	case "job":
+		return c.agentsJob(args[1:])
 	}
 	return usageError("unknown agents command: %s\n%s", args[0], agentsUsage)
 }
@@ -592,9 +605,19 @@ func (c *cli) agentsRead(args []string) error {
 	if err != nil {
 		return err
 	}
+	// The job's mark is read first: what the transcript holds by then is
+	// printed below, so the read covers it.
+	jobs, jobsErr := c.jobsGet(port, false)
 	var t transcriptResponse
 	if err := c.agentsGet(port, panePath(p.pane.ID, "/agent/transcript"), &t); err != nil {
 		return err
+	}
+	if jobsErr != nil {
+		c.jobWarn(jobsErr)
+	} else if j, ok := paneJob(jobs, p.pane.ID); ok && t.Cursor != "" {
+		if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "read", LastTS: j.Live.LastTS, Cursor: t.Cursor}); err != nil {
+			c.jobWarn(err)
+		}
 	}
 	entries := t.Entries
 	if !all {
@@ -716,6 +739,7 @@ func (c *cli) agentsSend(args []string) error {
 	} else {
 		c.infof("Sent to %s (%s)%s", plainText(p.ref()), plainText(p.pane.ID), hint)
 	}
+	c.jobNote(port, p.pane.ID, jobEventInput{Kind: "sent", Text: text})
 	return nil
 }
 
@@ -958,9 +982,11 @@ func (c *cli) agentsWait(args []string) error {
 			}
 			from = max(from, page.Latest)
 			if ends := waitVerdict(events, keys, marks, s); len(ends) > 0 {
+				w.jobs = c.paneJobIDs(port)
 				return c.waitEnded(s, w, ends, nil, marks, page.Latest)
 			}
 			if ends, what := c.waitBackgroundOnly(port, s, events, keys, marks); len(ends) > 0 {
+				w.jobs = c.paneJobIDs(port)
 				return c.waitEnded(s, w, ends, what, marks, page.Latest)
 			}
 			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, keys) {
@@ -1050,6 +1076,8 @@ func anyWorking(s Snapshot, keys []string) bool {
 type waitPanes struct {
 	keys []string
 	seen map[string]snapPane
+	// jobs: the active job of each pane id, read once the wait ends
+	jobs map[string]string
 }
 
 // name is how the pane of key is printed: its ref and id in s, the ones
@@ -1060,7 +1088,28 @@ func (w waitPanes) name(s Snapshot, key string) (ref, id string) {
 	if !ok {
 		p = w.seen[key]
 	}
-	return plainText(p.ref()), plainText(p.pane.ID)
+	ref = plainText(p.ref())
+	if j := w.jobs[p.pane.ID]; j != "" {
+		ref += " [job " + plainText(j) + "]"
+	}
+	return ref, plainText(p.pane.ID)
+}
+
+// paneJobIDs maps each pane id to its active job's id; none when the
+// ledger cannot be read.
+func (c *cli) paneJobIDs(port int) map[string]string {
+	list, err := c.jobsGet(port, false)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for i := len(list) - 1; i >= 0; i-- { // newest last, so it wins
+		j := list[i]
+		if j.State == "active" && j.Live.PaneID != "" && j.Live.Status != "gone" {
+			out[j.Live.PaneID] = j.ID
+		}
+	}
+	return out
 }
 
 // waitNext prints the wait that follows, always in one form: each of keys
@@ -1258,6 +1307,7 @@ func (c *cli) agentsAnswer(args []string) error {
 	}
 	if r.status == http.StatusNoContent {
 		c.infof("Answered the dialog of %s (%s)", plainText(p.ref()), plainText(p.pane.ID))
+		c.jobNote(port, p.pane.ID, jobEventInput{Kind: "answered", Text: answerText(*pr.Prompt, choice)})
 		return nil
 	}
 	e := r.failure()
@@ -1267,6 +1317,23 @@ func (c *cli) agentsAnswer(args []string) error {
 		c.printPrompt(now, p.pane.ID)
 	}
 	return agentsRefusal(r)
+}
+
+// answerText is an answer as a job's history keeps it: the option's number
+// and label, cancel, next, or that a text was typed (never the text).
+func answerText(p AgentPrompt, choice any) string {
+	switch v := choice.(type) {
+	case int:
+		for i, o := range p.Options {
+			if i+1 == v {
+				return fmt.Sprintf("%d. %s (%s)", v, o.Label, p.Title)
+			}
+		}
+		return fmt.Sprintf("%d (%s)", v, p.Title)
+	case string:
+		return v + " (" + p.Title + ")"
+	}
+	return "a typed answer (" + p.Title + ")"
 }
 
 // agentsStop ends the turn the agent in a pane is running, as Esc in its
@@ -1300,6 +1367,14 @@ func (c *cli) agentsStop(args []string) error {
 	}
 	id := plainText(p.pane.ID)
 	stopped, background := c.followStop(port, p)
+	result := "stopped"
+	switch {
+	case !stopped:
+		result = "still working after Esc"
+	case background != "":
+		result = "stopped; still waits for background work"
+	}
+	c.jobNote(port, p.pane.ID, jobEventInput{Kind: "stopped", Text: result})
 	switch {
 	case !stopped:
 		c.infof("Esc was sent, but %s (%s) still works; look at it: termote agents read %s", plainText(p.ref()), id, id)
@@ -1380,19 +1455,26 @@ func (c *cli) printPrompt(p AgentPrompt, paneID string) {
 }
 
 func (c *cli) agentsStart(args []string) error {
-	var workspace, kind, name, branch, base string
+	var workspace, kind, name, branch, base, title, jobID string
 	fs := c.newFlagSet("agents start")
 	fs.StringVar(&workspace, "workspace", "", "")
 	fs.StringVar(&kind, "kind", "", "")
 	fs.StringVar(&name, "name", "", "")
 	fs.StringVar(&branch, "worktree", "", "")
 	fs.StringVar(&base, "base", "", "")
+	fs.StringVar(&title, "title", "", "")
+	fs.StringVar(&jobID, "job", "", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
 	}
-	if workspace == "" || kind == "" || len(pos) > 1 || base != "" && branch == "" {
+	if workspace == "" || kind == "" || len(pos) > 1 || base != "" && branch == "" || title != "" && jobID != "" {
 		return usageError(agentsUsage)
+	}
+	if title != "" {
+		if _, err := validJobTitle(title); err != nil {
+			return usageError("--title: %v", err)
+		}
 	}
 	if _, ok := agentStartArgs[kind]; !ok {
 		return usageError("--kind is claude, codex or opencode")
@@ -1428,6 +1510,25 @@ func (c *cli) agentsStart(args []string) error {
 	if err != nil {
 		return err
 	}
+	// A job the user made in the PWA: its prompt, when none is given.
+	var todo *jobView
+	if jobID != "" {
+		list, err := c.jobsGet(port, true)
+		if err != nil {
+			return err
+		}
+		j, ok := findJob(list, jobID)
+		switch {
+		case !ok:
+			return fmt.Errorf("no job %s; see: termote agents jobs", plainText(jobID))
+		case j.State != "todo" || j.Agent != nil:
+			return fmt.Errorf("job %s is %s, not a job waiting for an agent (todo); see: termote agents job show %s", plainText(jobID), plainText(j.State), plainText(jobID))
+		}
+		todo = &j
+		if prompt == "" {
+			prompt = j.Prompt
+		}
+	}
 	// A prompt the server refuses for sure is refused before a worktree or
 	// a tab is made for it: on Windows every shell is refused one
 	// (startShellOK). This command reaches the server over the local socket
@@ -1446,7 +1547,16 @@ func (c *cli) agentsStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	return c.startInPane(port, t, kind, prompt)
+	rec := startRecord{snap: s, group: g, kind: kind, title: title, prompt: prompt, todo: todo, branch: branch, base: base}
+	if t.running != nil {
+		return c.continueInWorktree(port, t, rec)
+	}
+	err = c.startInPane(port, t, kind, prompt)
+	var ee *exitError
+	if err == nil || errors.As(err, &ee) && ee.code == agentsExitDialog {
+		c.recordStart(port, t, rec)
+	}
+	return err
 }
 
 // startTarget is the fresh shell an agent starts in, and how to name it.
@@ -1464,6 +1574,9 @@ type startTarget struct {
 	used bool
 	// worktree: dir is a git worktree the start made or went on in.
 	worktree bool
+	// running: the worktree's first pane, which runs an agent already (a
+	// start run again): the task goes to it, if it can take it.
+	running *snapPane
 }
 
 // fail is err of a start refused for sure, with what it made undone, or
