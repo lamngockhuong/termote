@@ -30,6 +30,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       fontFamily?: string
       theme: unknown
       disableStdin?: boolean
+      scrollback?: number
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
       overviewRuler?: { width?: number }
       macOptionClickForcesSelection?: boolean
@@ -82,6 +83,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       fontSize: number
       fontFamily?: string
       theme: unknown
+      scrollback?: number
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
       overviewRuler?: { width?: number }
       macOptionClickForcesSelection?: boolean
@@ -90,6 +92,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
         fontSize: opts.fontSize,
         fontFamily: opts.fontFamily,
         theme: opts.theme,
+        scrollback: opts.scrollback,
         linkHandler: opts.linkHandler,
         overviewRuler: opts.overviewRuler,
         macOptionClickForcesSelection: opts.macOptionClickForcesSelection,
@@ -755,6 +758,15 @@ describe('TerminalView', () => {
       expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
       expect(socket.send).toHaveBeenLastCalledWith('x')
     })
+  })
+
+  it('serverScroll: keeps no scrollback, which xterm.js would scroll besides the backend', () => {
+    const { term, ref, rerender } = renderView({ paneId: 'w1:p2' })
+    expect(term.options.scrollback).toBe(5000)
+    rerender(<TerminalView ref={ref} paneId="w1:p2" serverScroll />)
+    expect(term.options.scrollback).toBe(0)
+    rerender(<TerminalView ref={ref} paneId="w1:p2" />)
+    expect(term.options.scrollback).toBe(5000)
   })
 
   it('serverScroll: rows pending for a pane are not sent to the next one', async () => {
