@@ -34,6 +34,16 @@ var (
 	agentsJobAgentEvery = 500 * time.Millisecond
 )
 
+// The usage of each job command, as agentsUsage lists it (a test checks),
+// printed with a refusal of that command instead of every agents command.
+const (
+	jobsUsage    = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
+	jobAddUsage  = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
+	jobShowUsage = "usage: termote agents job show <id> [--json]"
+	jobSetUsage  = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]"
+	waitJobUsage = "usage: termote agents wait --job <id>... [--timeout <duration>]"
+)
+
 type jobsListing struct {
 	Jobs      []jobView `json:"jobs"`
 	ReadOnly  bool      `json:"readOnly"`
@@ -207,7 +217,7 @@ func (c *cli) agentsJobs(args []string) error {
 		return flagErr(err)
 	}
 	if len(pos) != 0 {
-		return usageError(agentsUsage)
+		return usageError("jobs takes no arguments\n%s", jobsUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -305,7 +315,7 @@ func (c *cli) tildeDir(dir string) string {
 
 func (c *cli) agentsJob(args []string) error {
 	if len(args) == 0 {
-		return usageError(agentsUsage)
+		return usageError("agents job needs add, show or set\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage)
 	}
 	switch args[0] {
 	case "add":
@@ -315,7 +325,7 @@ func (c *cli) agentsJob(args []string) error {
 	case "set":
 		return c.agentsJobSet(args[1:])
 	}
-	return usageError("unknown agents job command: %s\n%s", args[0], agentsUsage)
+	return usageError("unknown agents job command: %s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage)
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
@@ -330,8 +340,11 @@ func (c *cli) agentsJobAdd(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(pos) != 0 || strings.TrimSpace(title) == "" {
-		return usageError(agentsUsage)
+	switch {
+	case len(pos) != 0:
+		return usageError("job add takes no arguments; the title goes in --title\n%s", jobAddUsage)
+	case strings.TrimSpace(title) == "":
+		return usageError("job add needs --title <title>")
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -379,7 +392,7 @@ func (c *cli) agentsJobShow(args []string) error {
 		return flagErr(err)
 	}
 	if len(pos) != 1 {
-		return usageError(agentsUsage)
+		return usageError("job show takes one job id\n%s", jobShowUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {
@@ -452,8 +465,11 @@ func (c *cli) agentsJobSet(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(pos) != 1 || (state == "" && pane == "" && title == "" && !hasNote) {
-		return usageError(agentsUsage)
+	switch {
+	case len(pos) != 1:
+		return usageError("job set takes one job id\n%s", jobSetUsage)
+	case state == "" && pane == "" && title == "" && !hasNote:
+		return usageError("job set needs --state, --title, --note or --pane\n%s", jobSetUsage)
 	}
 	if state != "" && (!slices.Contains(jobStates, state) || state == "todo") {
 		return usageError("--state is active, review, done, failed or abandoned")
@@ -561,8 +577,11 @@ func (c *cli) agentsWaitJobs(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
-	if len(ids) == 0 || timeout <= 0 {
-		return usageError(agentsUsage)
+	switch {
+	case len(ids) == 0:
+		return usageError("wait --job needs at least one job id\n%s", waitJobUsage)
+	case timeout <= 0:
+		return usageError("--timeout must be more than 0\n%s", waitJobUsage)
 	}
 	port, err := c.agentsPort()
 	if err != nil {

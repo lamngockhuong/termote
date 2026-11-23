@@ -472,3 +472,38 @@ func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
 		t.Errorf("show elsewhere:\n%s", out)
 	}
 }
+
+// A wrong job command says what is wrong and prints its own usage, never
+// every agents command's; each usage is the line agentsUsage has.
+func TestAgentsJobUsage(t *testing.T) {
+	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, waitJobUsage} {
+		if !strings.Contains(agentsUsage, strings.TrimPrefix(u, "usage: ")) {
+			t.Errorf("agentsUsage lacks %q", u)
+		}
+	}
+	tc, _, _ := jobsCLI(t)
+	for _, c := range []struct {
+		args       []string
+		want, line string
+	}{
+		{[]string{"job", "add", "Fix X"}, "job add takes no arguments; the title goes in --title", jobAddUsage},
+		{[]string{"job", "add", "--title", "x", "extra"}, "job add takes no arguments", jobAddUsage},
+		{[]string{"job", "add"}, "job add needs --title <title>", ""},
+		{[]string{"job", "add", "--title", "  "}, "job add needs --title <title>", ""},
+		{[]string{"job"}, "agents job needs add, show or set", jobShowUsage},
+		{[]string{"job", "nope"}, "unknown agents job command: nope", jobSetUsage},
+		{[]string{"job", "show"}, "job show takes one job id", jobShowUsage},
+		{[]string{"job", "show", "a", "b"}, "job show takes one job id", jobShowUsage},
+		{[]string{"job", "set"}, "job set takes one job id", jobSetUsage},
+		{[]string{"job", "set", "a"}, "job set needs --state, --title, --note or --pane", jobSetUsage},
+		{[]string{"jobs", "x"}, "jobs takes no arguments", jobsUsage},
+		{[]string{"wait", "--job"}, "wait --job needs at least one job id", waitJobUsage},
+		{[]string{"wait", "--job", "a", "--timeout", "0s"}, "--timeout must be more than 0", waitJobUsage},
+	} {
+		err := tc.dispatch("agents", c.args)
+		if exitCode(err) != 2 || !strings.Contains(err.Error(), c.want) || (c.line != "" && !strings.Contains(err.Error(), c.line)) ||
+			strings.Contains(err.Error(), "agents list") {
+			t.Errorf("%q: %v", c.args, err)
+		}
+	}
+}
