@@ -626,13 +626,15 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   already let through). In container mode it refuses before sending anything. A pane is named by its
   id or by a name (its own, else its tab's, or `workspace/name`) that exactly one pane has: a name two
   panes share is refused with both ids, there is no pattern, and a command that writes reaches one
-  pane; only `wait` reads several (32 at most, each name resolved before it starts). `wait` follows
-  the activity ring after a mark (`--after`, printed by `send`, `start` and `wait`), reading the
+  pane; only `wait` reads several (32 at most, each name resolved before it starts). `read`,
+  `send`, `answer`, `stop` and `wait` refuse a pane that runs no agent, before any request to it. `wait` follows
+  the activity ring after a mark (`--after`, printed by `send`, `start` and `wait`; the CLI takes
+  only a non-negative integer, the server answers anything else `invalid_after`), reading the
   snapshot first so the changes are recorded with no page open; a status shown before the mark ends
   nothing, a reset ring exits 7 rather than guess. It follows each pane by its activity key
   (`activityKey`, computed from the snapshot's tab `key`), not its id, so a tmux tab that moves
-  (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` sends the cursor `read --json` printed and
-  is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
+  (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` requires `--cursor` (no cursor, no request),
+  sends the cursor `read --json` printed and is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
   is printed by name only; every file's text is printed after a fixed line saying it is data, in a
   fence longer than any run of backticks inside it, through `cleanOut`, 64 KB at most; the `root`
   the change list was read in goes with each later read, so a pane that moved is refused. `start
@@ -640,9 +642,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   that makes something, and refuses a prompt on Windows there (every shell is refused one,
   `startShellOK`; the local socket puts the server on the CLI's OS), before a worktree or a tab is
   made; a pane's shell (pwsh) is known only once its pane is open; a branch with a worktree is opened again (`worktrees/open`), one that
-  exists without one is refused; `busy` is retried for 90 s at most, a create that answered
+  exists without one is refused, and so are the main worktree's branch and a worktree the server
+  says cannot be opened, all before any request that makes something; `busy` is retried for 90 s at most, a create that answered
   `unknown` or not at all is followed in the list for 60 s and never sent again; the agent starts
-  only in the first pane of that workspace, once its directory is the worktree's; nothing it makes
+  only in the first pane of the worktree's own workspace (a workspace of its own, not a tab of the
+  one named by `--workspace`), once its directory is the worktree's (`sameDirPath`, through
+  symlinks); nothing it makes
   is ever removed, and every failure after the worktree exists names it (`worktreeStays`, then
   `startTarget.note`): its branch with its directory, or, before the directory is read again, its
   branch and the PWA's worktrees, whatever failed (an open refused, a 200 it cannot read, the list
@@ -650,8 +655,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
-  `{"text"}`), so the server's dialog checks decide. `start` opens a tab in the workspace (no
-  directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
+  `{"text"}`), so the server's dialog checks decide. `start` without `--worktree` opens a tab in the
+  workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
   not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
   to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab
   too. A prompt goes in `agent/start`'s body for every kind (the server hands it to the agent at its
