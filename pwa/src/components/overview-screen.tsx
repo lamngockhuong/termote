@@ -2,6 +2,7 @@ import { History, ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
+import { useJobs } from '../hooks/use-jobs'
 import { useMediaQuery } from '../hooks/use-media-query'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { NOW_TICK, useNow } from '../hooks/use-now'
@@ -12,6 +13,7 @@ import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { agentCards, type OverviewCard } from '../utils/agent-cards'
 import { stuckFor } from '../utils/agent-stuck'
 import { asksOverviewPlan } from '../utils/deep-link'
+import { groupJobs } from '../utils/jobs'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
 import {
@@ -21,13 +23,22 @@ import {
 } from '../utils/session-filter'
 import { matchesPaneQuery, searchTerms } from '../utils/session-search'
 import { visibleUnsafe } from '../utils/unsafe-chars'
-import { AccountUsageStrip } from './account-usage-strip'
 import { ActivityLog } from './activity-log'
 import { AgentCard, agentCardName } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
 import { type DispatchTarget, OverviewDispatch } from './overview-dispatch'
 import { OverviewJobs } from './overview-jobs'
+import {
+  type OverviewTab,
+  type OverviewTabDef,
+  OverviewTabs,
+  overviewPanelId,
+  overviewTabId,
+  readOverviewTab,
+  writeOverviewTab,
+} from './overview-tabs'
+import { OverviewUsageButton } from './overview-usage-button'
 import { SearchToggle, SessionSearchField } from './session-search-field'
 import {
   type SubagentTarget,
@@ -36,7 +47,6 @@ import {
 import { Toast } from './toast'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
-import { UsageTotalsStrip } from './usage-totals-strip'
 
 // The card's time is a coarse "3 min ago", read again this often
 export const OVERVIEW_TICK = NOW_TICK
@@ -116,10 +126,22 @@ export function OverviewScreen({
     asksOverviewPlan(window.location.hash) ? {} : undefined,
   )
   const askedPlan = useRef(!!planFocus)
+  // The tab shown: the Plan the address asks for, else Agents for a card
+  // asked for, else the one this browser looked at last
+  const [tab, setTab] = useState<OverviewTab>(() =>
+    askedPlan.current ? 'plan' : focusPane ? 'agents' : readOverviewTab(),
+  )
+  // Without a job ledger there is no Plan, and no tabs
+  const jobs = useJobs()
+  const hasPlan = !jobs.unavailable
+  const shownTab = hasPlan ? tab : 'agents'
+  const tabsId = useId()
   useEffect(() => {
     const onHashChange = (e: HashChangeEvent) => {
       const hash = e.newURL ? new URL(e.newURL).hash : window.location.hash
-      if (asksOverviewPlan(hash)) setPlanFocus({})
+      if (!asksOverviewPlan(hash)) return
+      setTab('plan')
+      setPlanFocus({})
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -142,6 +164,16 @@ export function OverviewScreen({
     setSearchOpen(false)
   }
   const now = useNow(clockOffset)
+  // A card asked for while the Plan is shown brings Agents back, and may
+  // take the focus from the Plan
+  const [asked, setAsked] = useState<{ pane?: object; fromPlan: boolean }>({
+    pane: focusPane,
+    fromPlan: false,
+  })
+  if (focusPane !== asked.pane) {
+    setAsked({ pane: focusPane, fromPlan: !!focusPane && shownTab === 'plan' })
+    if (focusPane) setTab('agents')
+  }
 
   const cards = useMemo(() => overviewOrder(agentCards(sessions)), [sessions])
   const summary = useMemo(
@@ -177,18 +209,23 @@ export function OverviewScreen({
   const focused = useRef<object>(undefined)
   const [highlighted, setHighlighted] = useState<string>()
   const target =
-    ready && focusPane && shown.some((c) => c.pane.id === focusPane.paneId)
+    ready &&
+    shownTab === 'agents' &&
+    focusPane &&
+    shown.some((c) => c.pane.id === focusPane.paneId)
       ? focusPane
       : undefined
+  const fromPlan = asked.fromPlan && asked.pane === target
   useEffect(() => {
     if (!target || focused.current === target) return
     focused.current = target
     const at = document.activeElement
-    if (at !== titleRef.current && at !== document.body) return
-    // The target is shown, so its card holds the ref
-    targetRef.current!.focus()
+    if (!fromPlan && at !== titleRef.current && at !== document.body) return
+    const card = targetRef.current
+    if (!card) return
+    card.focus()
     setHighlighted(target.paneId)
-  }, [target])
+  }, [target, fromPlan])
   const showGroups = groups.length > 1
   const placeOf = useCallback(
     (session: Session) => {
@@ -254,6 +291,64 @@ export function OverviewScreen({
     setPicking(false)
     setPicked(new Set())
   }
+  // The user's own choice of tab is remembered; leaving Agents ends picking
+  const chooseTab = (next: OverviewTab) => {
+    setTab(next)
+    writeOverviewTab(next)
+    if (next !== 'agents') stopPicking()
+  }
+  const jobGroups = groupJobs(jobs.jobs)
+  const openJobs =
+    jobGroups.waiting.length +
+    jobGroups.unread.length +
+    jobGroups.running.length +
+    jobGroups.review.length +
+    jobGroups.todo.length
+  const tabDef = (
+    id: OverviewTab,
+    label: string,
+    count: string,
+    countName: string,
+    alert?: string,
+  ): OverviewTabDef => ({
+    id,
+    label,
+    count,
+    alert,
+    name: [label, countName, alert].filter(Boolean).join(', '),
+  })
+  const tabs = [
+    tabDef(
+      'agents',
+      t('tasks.tabs.agents'),
+      String(cards.length),
+      t('tasks.filter.agents', { count: cards.length }),
+      summary.blocked > 0
+        ? t('tasks.tabs.needsYou', { count: summary.blocked })
+        : undefined,
+    ),
+    tabDef(
+      'plan',
+      t('tasks.tabs.plan'),
+      t('tasks.tabs.open', { count: openJobs }),
+      t('tasks.tabs.open', { count: openJobs }),
+      jobGroups.waiting.length > 0
+        ? t('tasks.tabs.waiting', { count: jobGroups.waiting.length })
+        : undefined,
+    ),
+  ]
+  // The panels are both drawn, the one not shown hidden, so what is open in
+  // either (a dialog skipped, a History, a job's editor) outlives a switch.
+  const panel = (id: OverviewTab) =>
+    hasPlan
+      ? {
+          role: 'tabpanel',
+          id: overviewPanelId(tabsId, id),
+          'aria-labelledby': overviewTabId(tabsId, id),
+          hidden: shownTab !== id,
+        }
+      : {}
+
   // Why a card's Stop was refused: one toast for the whole overview, the
   // latest refusal replacing the one before.
   const [stopError, setStopError] = useState<string | null>(null)
@@ -291,7 +386,13 @@ export function OverviewScreen({
         >
           {t('tasks.overview.title')}
         </h2>
-        {cards.length > 0 && (
+        <OverviewUsageButton
+          summary={usage.summary}
+          accounts={overview.accounts}
+          now={now}
+          clockOffset={clockOffset}
+        />
+        {shownTab === 'agents' && cards.length > 0 && (
           <SearchToggle
             controls={searchId}
             noun={t('tasks.overview.searchNoun')}
@@ -299,7 +400,7 @@ export function OverviewScreen({
             onToggle={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
           />
         )}
-        {pickable.length > 0 && (
+        {shownTab === 'agents' && pickable.length > 0 && (
           <IconButton
             onClick={() => (picking ? stopPicking() : setPicking(true))}
             aria-label={t('tasks.dispatch.select')}
@@ -325,6 +426,17 @@ export function OverviewScreen({
           <X size={18} aria-hidden="true" />
         </IconButton>
       </div>
+      {hasPlan && (
+        <div className="shrink-0 border-b border-border px-3">
+          <OverviewTabs
+            label={t('tasks.tabs.label')}
+            tabs={tabs}
+            value={shownTab}
+            onChange={chooseTab}
+            idPrefix={tabsId}
+          />
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {overview.error && (
@@ -332,189 +444,194 @@ export function OverviewScreen({
               {t('tasks.overview.readFailed')}
             </p>
           )}
-          {ready && (
-            <OverviewJobs
-              readOnly={readOnly}
-              agents={jobAgents}
-              onOpenPane={openJobPane}
-              focus={planFocus}
-            />
-          )}
-          {!ready ? null : cards.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
-              <p>{t('tasks.overview.none')}</p>
-              {onStartAgent && (
-                <Button onClick={onStartAgent}>
-                  {t('tasks.overview.start')}
-                </Button>
+          {hasPlan && (
+            <div {...panel('plan')}>
+              {ready && (
+                <OverviewJobs
+                  readOnly={readOnly}
+                  agents={jobAgents}
+                  onOpenPane={openJobPane}
+                  focus={shownTab === 'plan' ? planFocus : undefined}
+                  onFocused={() => setPlanFocus(undefined)}
+                  activityOpen={logOpen}
+                  wide={wide}
+                  onCloseActivity={() => setLogOpen(false)}
+                />
               )}
             </div>
-          ) : (
-            <>
-              <AccountUsageStrip accounts={overview.accounts} now={now} />
-              <UsageTotalsStrip
-                summary={usage.summary}
-                now={now - clockOffset}
-              />
-              <NeedsMeQueue
-                cards={queueCards}
-                readOnly={readOnly}
-                canAnswer={canAnswer}
-                onOpen={onOpen}
-              />
-              <div className="mb-3 flex max-w-md flex-col gap-2">
-                {searchOpen && (
-                  <SessionSearchField
-                    id={searchId}
-                    label={t('tasks.overview.find')}
-                    value={query}
-                    onChange={setQuery}
-                    onClose={closeSearch}
-                    onSubmit={() =>
-                      shown[0] &&
-                      onOpen(
-                        shown[0].session,
-                        shown[0].pane,
-                        opensChat(shown[0].pane) ? 'chat' : 'terminal',
-                      )
-                    }
-                    // A card's first button opens it
-                    onArrowDown={() =>
-                      listRef.current
-                        ?.querySelector<HTMLElement>(
-                          'li:not([data-leaving]) button',
-                        )
-                        ?.focus()
-                    }
-                  />
-                )}
-                <AgentFilterBar
-                  summary={summary}
-                  filter={filter}
-                  onChange={setFilter}
-                  unit="agent"
-                />
-              </div>
-              {shown.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
-                  {t('tasks.overview.noMatch')}
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setFilter('all')
-                      setQuery('')
-                    }}
-                  >
-                    {t('tasks.overview.showAll')}
-                  </Button>
-                </div>
-              ) : (
-                <ul
-                  ref={listRef}
-                  className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
-                >
-                  {entries.map(({ item: { session, pane }, leaving }) => {
-                    const group = session.groupId
-                      ? groupOf.get(session.groupId)
-                      : undefined
-                    const named = showGroups && group
-                    const where = named
-                      ? `${group.name} / ${session.name}`
-                      : session.name
-                    const card = (
-                      <AgentCard
-                        session={session}
-                        pane={pane}
-                        where={where}
-                        groupTitle={
-                          named
-                            ? t('tasks.overview.groupTitle', {
-                                noun: groupNoun,
-                                name: group.name,
-                              })
-                            : undefined
-                        }
-                        worktree={group?.worktree?.linked}
-                        overview={overview.panes.get(pane.id)}
-                        overviewFailed={overview.error}
-                        now={now}
-                        paneKey={sessionPaneKey(session, pane.id)}
-                        events={activity.events}
-                        stuckFor={stuckFor(
-                          pane.agentStatus,
-                          overview.panes.get(pane.id)?.lastTs,
-                          now,
-                          stuckMinutes,
-                        )}
-                        opensChat={opensChat(pane)}
-                        onOpen={onOpen}
-                        openRef={
-                          !leaving && pane.id === target?.paneId
-                            ? targetRef
-                            : undefined
-                        }
-                        highlighted={!leaving && pane.id === highlighted}
-                        canStop={!readOnly && canAnswer(pane)}
-                        onStopFailed={setStopError}
-                        // Only Claude Code's subagents have a conversation
-                        // to read, never on a view-only device
-                        onOpenSubagent={
-                          pane.agentName === 'claude' && !readOnly
-                            ? (node) => setSubagent({ paneId: pane.id, node })
-                            : undefined
-                        }
-                      />
-                    )
-                    const pick = selecting && canAnswer(pane)
-                    return (
-                      <li
-                        key={pane.id}
-                        ref={ref(pane.id)}
-                        inert={leaving}
-                        aria-hidden={leaving || undefined}
-                        data-leaving={leaving || undefined}
-                        className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(pane.id) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
-                        onBlur={(e) => {
-                          if (!e.currentTarget.contains(e.relatedTarget)) {
-                            setHighlighted((h) =>
-                              h === pane.id ? undefined : h,
-                            )
-                          }
-                        }}
-                      >
-                        {/* One shape picking or not, so the card is never
-                          drawn anew (its History stays open) */}
-                        <div className="flex items-start gap-1">
-                          {pick && (
-                            <label className="flex min-h-touch min-w-touch shrink-0 cursor-pointer items-center justify-center">
-                              <input
-                                type="checkbox"
-                                checked={picked.has(pane.id)}
-                                onChange={(e) =>
-                                  togglePick(pane.id, e.target.checked)
-                                }
-                                aria-label={t('tasks.dispatch.pick', {
-                                  name: agentCardName(pane, t),
-                                  place: visibleUnsafe(where),
-                                })}
-                                className={`size-5 accent-accent ${FOCUS_RING}`}
-                              />
-                            </label>
-                          )}
-                          <div className="min-w-0 flex-1">{card}</div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-              {activePaneOnly && (
-                <p className="mt-4 text-[12px] text-fg-subtle">
-                  {t('tasks.overview.activePaneOnly')}
-                </p>
-              )}
-            </>
           )}
+          <div {...panel('agents')}>
+            {!ready ? null : cards.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
+                <p>{t('tasks.overview.none')}</p>
+                {onStartAgent && (
+                  <Button onClick={onStartAgent}>
+                    {t('tasks.overview.start')}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                <NeedsMeQueue
+                  cards={queueCards}
+                  readOnly={readOnly}
+                  canAnswer={canAnswer}
+                  onOpen={onOpen}
+                />
+                <div className="mb-3 flex max-w-md flex-col gap-2">
+                  {searchOpen && (
+                    <SessionSearchField
+                      id={searchId}
+                      label={t('tasks.overview.find')}
+                      value={query}
+                      onChange={setQuery}
+                      onClose={closeSearch}
+                      onSubmit={() =>
+                        shown[0] &&
+                        onOpen(
+                          shown[0].session,
+                          shown[0].pane,
+                          opensChat(shown[0].pane) ? 'chat' : 'terminal',
+                        )
+                      }
+                      // A card's first button opens it
+                      onArrowDown={() =>
+                        listRef.current
+                          ?.querySelector<HTMLElement>(
+                            'li:not([data-leaving]) button',
+                          )
+                          ?.focus()
+                      }
+                    />
+                  )}
+                  <AgentFilterBar
+                    summary={summary}
+                    filter={filter}
+                    onChange={setFilter}
+                    unit="agent"
+                  />
+                </div>
+                {shown.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
+                    {t('tasks.overview.noMatch')}
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setFilter('all')
+                        setQuery('')
+                      }}
+                    >
+                      {t('tasks.overview.showAll')}
+                    </Button>
+                  </div>
+                ) : (
+                  <ul
+                    ref={listRef}
+                    className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+                  >
+                    {entries.map(({ item: { session, pane }, leaving }) => {
+                      const group = session.groupId
+                        ? groupOf.get(session.groupId)
+                        : undefined
+                      const named = showGroups && group
+                      const where = named
+                        ? `${group.name} / ${session.name}`
+                        : session.name
+                      const card = (
+                        <AgentCard
+                          session={session}
+                          pane={pane}
+                          where={where}
+                          groupTitle={
+                            named
+                              ? t('tasks.overview.groupTitle', {
+                                  noun: groupNoun,
+                                  name: group.name,
+                                })
+                              : undefined
+                          }
+                          worktree={group?.worktree?.linked}
+                          overview={overview.panes.get(pane.id)}
+                          overviewFailed={overview.error}
+                          now={now}
+                          paneKey={sessionPaneKey(session, pane.id)}
+                          events={activity.events}
+                          stuckFor={stuckFor(
+                            pane.agentStatus,
+                            overview.panes.get(pane.id)?.lastTs,
+                            now,
+                            stuckMinutes,
+                          )}
+                          opensChat={opensChat(pane)}
+                          onOpen={onOpen}
+                          openRef={
+                            !leaving && pane.id === target?.paneId
+                              ? targetRef
+                              : undefined
+                          }
+                          highlighted={!leaving && pane.id === highlighted}
+                          canStop={!readOnly && canAnswer(pane)}
+                          onStopFailed={setStopError}
+                          // Only Claude Code's subagents have a conversation
+                          // to read, never on a view-only device
+                          onOpenSubagent={
+                            pane.agentName === 'claude' && !readOnly
+                              ? (node) => setSubagent({ paneId: pane.id, node })
+                              : undefined
+                          }
+                        />
+                      )
+                      const pick = selecting && canAnswer(pane)
+                      return (
+                        <li
+                          key={pane.id}
+                          ref={ref(pane.id)}
+                          inert={leaving}
+                          aria-hidden={leaving || undefined}
+                          data-leaving={leaving || undefined}
+                          className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(pane.id) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
+                          onBlur={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget)) {
+                              setHighlighted((h) =>
+                                h === pane.id ? undefined : h,
+                              )
+                            }
+                          }}
+                        >
+                          {/* One shape picking or not, so the card is never
+                          drawn anew (its History stays open) */}
+                          <div className="flex items-start gap-1">
+                            {pick && (
+                              <label className="flex min-h-touch min-w-touch shrink-0 cursor-pointer items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={picked.has(pane.id)}
+                                  onChange={(e) =>
+                                    togglePick(pane.id, e.target.checked)
+                                  }
+                                  aria-label={t('tasks.dispatch.pick', {
+                                    name: agentCardName(pane, t),
+                                    place: visibleUnsafe(where),
+                                  })}
+                                  className={`size-5 accent-accent ${FOCUS_RING}`}
+                                />
+                              </label>
+                            )}
+                            <div className="min-w-0 flex-1">{card}</div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {activePaneOnly && (
+                  <p className="mt-4 text-[12px] text-fg-subtle">
+                    {t('tasks.overview.activePaneOnly')}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
         {logOpen && wide && (
           <aside
@@ -531,7 +648,7 @@ export function OverviewScreen({
           </aside>
         )}
       </div>
-      {selecting && (
+      {selecting && shownTab === 'agents' && (
         <OverviewDispatch
           targets={targets}
           onDelivered={(ids) =>

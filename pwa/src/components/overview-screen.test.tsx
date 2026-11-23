@@ -654,12 +654,15 @@ describe('OverviewScreen, loading and failing', () => {
     renderScreen()
     await act(async () => {})
     expect(mockFetchUsage).toHaveBeenCalledWith(undefined)
+    // Today's tokens on the header, the rest behind it
+    expect(screen.queryByRole('region', { name: 'Agent tokens' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Tokens today: 2.0k' }))
     expect(
       screen.getByRole('region', { name: 'Agent tokens' }),
     ).toHaveTextContent('CodexToday 2.0k tokens · ~$1.507 days 2.0k tokens')
   })
 
-  it('shows the Codex accounts above the cards', async () => {
+  it('shows the Codex accounts behind the header tokens', async () => {
     mockFetchOverview.mockResolvedValue({
       serverNow: 'x',
       panes: [],
@@ -675,6 +678,7 @@ describe('OverviewScreen, loading and failing', () => {
     })
     renderScreen()
     await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Tokens today: 0' }))
     expect(screen.getByRole('region', { name: 'Accounts' })).toHaveTextContent(
       'Codex · team5h12%updated just now',
     )
@@ -1123,20 +1127,25 @@ describe('OverviewScreen, the Plan', () => {
   afterEach(() => {
     window.location.hash = ''
   })
+  const openPlan = () =>
+    fireEvent.click(screen.getByRole('tab', { name: /^Plan/ }))
 
-  it('reads the jobs with the overview, above the cards', async () => {
+  it('reads the jobs with the overview, in their own tab', async () => {
     renderScreen()
     await act(async () => {})
     expect(mockFetchJobs).toHaveBeenCalledTimes(1)
+    // The title keeps the focus, on the agents
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+    expect(screen.queryByRole('region', { name: 'Plan' })).toBeNull()
+    openPlan()
     const plan = screen.getByRole('region', { name: 'Plan' })
     expect(within(plan).getAllByRole('article')).toHaveLength(2)
-    // The title keeps the focus
-    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
   })
 
   it("opens a job's pane as its card does", async () => {
     const { onOpen } = renderScreen()
     await act(async () => {})
+    openPlan()
     fireEvent.click(screen.getByRole('button', { name: 'Open pane web:t3' }))
     expect(onOpen).toHaveBeenLastCalledWith(
       SESSIONS[2],
@@ -1159,6 +1168,7 @@ describe('OverviewScreen, the Plan', () => {
     })
     renderScreen()
     await act(async () => {})
+    openPlan()
     fireEvent.click(screen.getByRole('button', { name: 'Edit job a' }))
     const options = within(
       screen.getByRole('combobox', { name: 'Agent' }),
@@ -1209,5 +1219,210 @@ describe('OverviewScreen, the Plan', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(screen.getByRole('heading', { name: 'Plan' })).toHaveFocus()
+  })
+})
+
+describe('OverviewScreen, the tabs', () => {
+  const job = (id: string, status: string) => ({
+    id,
+    title: `job ${id}`,
+    state: 'active',
+    updated: 'u',
+    live: { status },
+  })
+  const agentsTab = () => screen.getByRole('tab', { name: /^Agents/ })
+  const planTab = () => screen.getByRole('tab', { name: /^Plan/ })
+
+  beforeEach(async () => {
+    // An address the test before set is announced late: let it pass first
+    await act(() => new Promise((r) => setTimeout(r, 50)))
+    resetAgentOverview()
+    resetActivityLog()
+    resetJobs()
+    mockFetchUsage.mockRejectedValue(new Error('no usage'))
+    mockFetchActivity.mockRejectedValue(new Error('no activity'))
+    mockFetchOverview.mockResolvedValue({ serverNow: '', panes: [] })
+    mockFetchJobs.mockResolvedValue({
+      jobs: [job('a', 'blocked'), job('b', 'working'), job('c', 'idle')],
+      readOnly: false,
+      canGrant: true,
+      serverNow: '',
+    })
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+  afterEach(() => {
+    window.location.hash = ''
+    vi.restoreAllMocks()
+  })
+
+  it('counts the agents and the open jobs, and what waits for the user', async () => {
+    renderScreen()
+    await act(async () => {})
+    expect(
+      screen.getByRole('tablist', { name: 'Agent overview sections' }),
+    ).toBeInTheDocument()
+    expect(agentsTab()).toHaveAccessibleName('Agents, 4 agents, 1 needs you')
+    expect(agentsTab()).toHaveTextContent('Agents41 needs you')
+    expect(planTab()).toHaveAccessibleName('Plan, 3 open, 1 waiting')
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    const panel = document.getElementById(
+      agentsTab().getAttribute('aria-controls')!,
+    )!
+    expect(panel).toHaveAttribute('role', 'tabpanel')
+    expect(panel).toHaveAttribute('aria-labelledby', agentsTab().id)
+  })
+
+  it('opens on the tab this browser looked at last', async () => {
+    const { unmount } = renderScreen()
+    await act(async () => {})
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(planTab())
+    expect(localStorage.getItem('termote-overview-tab')).toBe('plan')
+    unmount()
+    renderScreen()
+    await act(async () => {})
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('region', { name: 'Plan' })).toBeInTheDocument()
+  })
+
+  it('opens on Agents for an odd saved tab, or without storage', async () => {
+    localStorage.setItem('termote-overview-tab', 'jobs')
+    const first = renderScreen()
+    await act(async () => {})
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    first.unmount()
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    renderScreen()
+    await act(async () => {})
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    // Choosing still works, only forgotten
+    fireEvent.click(planTab())
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('opens the Plan the address asks for once, the tab keeping the focus after', async () => {
+    window.location.hash = '#/overview?plan=1'
+    renderScreen()
+    await act(async () => {})
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: 'Plan' })).toHaveFocus()
+    act(() => planTab().focus())
+    fireEvent.keyDown(planTab(), { key: 'ArrowLeft' })
+    expect(agentsTab()).toHaveFocus()
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(agentsTab(), { key: 'ArrowRight' })
+    expect(planTab()).toHaveFocus()
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+    // The arrows are the user's choice, saved
+    expect(localStorage.getItem('termote-overview-tab')).toBe('plan')
+  })
+
+  it('moves with Home, End and the arrows wrapping round', async () => {
+    renderScreen()
+    await act(async () => {})
+    act(() => agentsTab().focus())
+    fireEvent.keyDown(agentsTab(), { key: 'End' })
+    expect(planTab()).toHaveFocus()
+    fireEvent.keyDown(planTab(), { key: 'ArrowRight' })
+    expect(agentsTab()).toHaveFocus()
+    fireEvent.keyDown(agentsTab(), { key: 'ArrowLeft' })
+    expect(planTab()).toHaveFocus()
+    fireEvent.keyDown(planTab(), { key: 'Home' })
+    expect(agentsTab()).toHaveFocus()
+    // Another key does nothing
+    fireEvent.keyDown(agentsTab(), { key: 'a' })
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    expect(planTab()).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('has no tabs without a job ledger, even when the address asks for the Plan', async () => {
+    window.location.hash = '#/overview?plan=1'
+    localStorage.setItem('termote-overview-tab', 'plan')
+    mockFetchJobs.mockRejectedValue(
+      new RequestError(404, 'jobs_unavailable', ''),
+    )
+    renderScreen()
+    await act(async () => {})
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    expect(cardNames()).toHaveLength(4)
+    // Not saved over
+    expect(localStorage.getItem('termote-overview-tab')).toBe('plan')
+  })
+
+  it('brings Agents back for a card asked for on the Plan, and focuses it', async () => {
+    const props = {
+      sessions: SESSIONS,
+      groups: GROUPS,
+      groupNoun: 'workspace',
+      ready: true,
+      pollInterval: 5000,
+      clockOffset: 0,
+      activePaneOnly: false,
+      opensChat: (p: SessionPane) => p.agentName === 'claude',
+      canAnswer: (p: SessionPane) => p.agentName === 'claude',
+      readOnly: false,
+      stuckMinutes: 10,
+      onOpen: vi.fn(),
+      onClose: vi.fn(),
+    }
+    const { rerender } = render(<OverviewScreen {...props} />)
+    await act(async () => {})
+    fireEvent.click(planTab())
+    // The focus on the Plan's tab, not the title
+    act(() => planTab().focus())
+    rerender(<OverviewScreen {...props} focusPane={{ paneId: 'p-new' }} />)
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    expect(
+      screen.getByRole('button', { name: /^Open terminal: Codex,/ }),
+    ).toHaveFocus()
+    // Asked again with nothing focused
+    act(() => (document.activeElement as HTMLElement).blur())
+    expect(document.activeElement).toBe(document.body)
+    rerender(<OverviewScreen {...props} focusPane={{ paneId: 'p-old' }} />)
+    expect(
+      screen.getByRole('button', {
+        name: /^Open chat: Claude Code, Working, web \/ t3/,
+      }),
+    ).toHaveFocus()
+  })
+
+  it('keeps an open History and a skipped dialog across a switch', async () => {
+    renderScreen()
+    await act(async () => {})
+    fireEvent.click(screen.getAllByRole('button', { name: 'History' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+    expect(
+      screen.getByText('1 skipped dialog is still waiting.'),
+    ).toBeInTheDocument()
+    fireEvent.click(planTab())
+    expect(screen.queryByRole('button', { name: 'Hide history' })).toBeNull()
+    fireEvent.click(agentsTab())
+    expect(
+      screen.getAllByRole('button', { name: 'Hide history' }),
+    ).toHaveLength(1)
+    expect(
+      screen.getByText('1 skipped dialog is still waiting.'),
+    ).toBeInTheDocument()
+  })
+
+  it('stops picking agents on the Plan, and hides the search there', async () => {
+    renderScreen()
+    await act(async () => {})
+    const select = () =>
+      screen.queryByRole('button', { name: 'Send a message to several agents' })
+    fireEvent.click(select()!)
+    expect(screen.getByText('Pick the agents to send to')).toBeInTheDocument()
+    fireEvent.click(planTab())
+    expect(screen.queryByText('Pick the agents to send to')).toBeNull()
+    expect(select()).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Search agents' })).toBeNull()
+    fireEvent.click(agentsTab())
+    expect(select()).toHaveAttribute('aria-pressed', 'false')
   })
 })

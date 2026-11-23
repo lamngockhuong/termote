@@ -303,6 +303,8 @@ test.describe('agent overview with an agent', () => {
     })
     await page.setViewportSize({ width: 1280, height: 800 })
     await open(page, '#/overview')
+    // Behind the header's tokens
+    await page.getByRole('button', { name: /^Tokens today/ }).click({ timeout: 20000 })
     const strip = page.getByRole('region', { name: 'Accounts' })
     await expect(strip).toContainText('Codex · plus', { timeout: 20000 })
     await expect(strip).toContainText('updated just now')

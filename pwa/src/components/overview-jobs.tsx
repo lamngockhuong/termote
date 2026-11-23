@@ -19,14 +19,28 @@ interface Props {
   // Opens the pane of one of agents, as its card would
   onOpenPane: (paneId: string) => void
   // A new object brings the section into view and focuses its title (a
-  // job's notification was tapped)
+  // job's notification was tapped); onFocused says it was done, so the
+  // same request is not met again
   focus?: object
+  onFocused?: () => void
+  // The overview's Activity is open, and the screen wide enough for it to
+  // be a column (1280px)
+  activityOpen?: boolean
+  wide?: boolean
+  // Closes the Activity column
+  onCloseActivity?: () => void
 }
 
 // The overview's Plan: the jobs an orchestrator agent handed out, kept by
 // the server (use-jobs.ts), grouped by what they need from the user. On a
 // desktop the groups are columns, on a phone one list under another.
-export function OverviewJobs({ readOnly, agents, onOpenPane, focus }: Props) {
+export function OverviewJobs({
+  readOnly,
+  agents,
+  onOpenPane,
+  focus,
+  onFocused,
+}: Props) {
   const { t } = useT()
   const store = useJobs()
   const now = useNow(store.clockOffset)
@@ -46,7 +60,8 @@ export function OverviewJobs({ readOnly, agents, onOpenPane, focus }: Props) {
     const title = titleRef.current!
     title.scrollIntoView({ block: 'start' })
     title.focus()
-  }, [focus, shown])
+    onFocused?.()
+  }, [focus, shown, onFocused])
 
   if (store.unavailable || (!store.loaded && !store.error)) return null
   const groups = groupJobs(store.jobs)

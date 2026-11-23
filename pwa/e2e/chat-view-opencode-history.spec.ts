@@ -210,7 +210,8 @@ test.describe('sessions of an OpenCode pane', () => {
     )
     await expect(card.getByTestId('session-usage')).toContainText('incl. subagents 2.8k tokens')
     // The requests of every OpenCode session, in 7 days and today (unless
-    // they ran before this device's midnight)
+    // they ran before this device's midnight), behind the header's tokens
+    await page.getByRole('button', { name: /^Tokens today/ }).click({ timeout: 30_000 })
     const strip = page.getByRole('region', { name: 'Agent tokens' })
     const row = strip.locator('[data-agent="opencode"]')
     await expect(row).toContainText(/7 days \d+(\.\d)?k tokens · <\$0\.01/, { timeout: 30_000 })

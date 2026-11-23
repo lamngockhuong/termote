@@ -82,6 +82,22 @@ export default {
   'tasks.overview.groupTitle': '{noun} {name}',
   'tasks.overview.activePaneOnly':
     'Only the active pane of each window is tracked.',
+  // The overview's tabs (components/overview-tabs.tsx); {count}: agents
+  // waiting for an answer, open jobs, jobs waiting for an answer
+  'tasks.tabs.label': 'Agent overview sections',
+  'tasks.tabs.agents': 'Agents',
+  'tasks.tabs.plan': 'Plan',
+  'tasks.tabs.needsYou_one': '{count} needs you',
+  'tasks.tabs.needsYou_other': '{count} need you',
+  'tasks.tabs.open_one': '{count} open',
+  'tasks.tabs.open_other': '{count} open',
+  'tasks.tabs.waiting_one': '{count} waiting',
+  'tasks.tabs.waiting_other': '{count} waiting',
+  // The header's tokens (components/overview-usage-button.tsx): {tokens}
+  // "12.3k", every agent's tokens today
+  'tasks.usage.button': 'Today {tokens}',
+  'tasks.usage.buttonName': 'Tokens today: {tokens}',
+  'tasks.usage.panel': 'Tokens and limits',
   // Sending one message to several agents (components/overview-dispatch.tsx)
   'tasks.dispatch.select': 'Send a message to several agents',
   // A card's checkbox: "Pick Claude Code, api / tab"
