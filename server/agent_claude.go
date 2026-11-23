@@ -845,12 +845,15 @@ func (f claudeSessionFile) procStart() string {
 }
 
 // claudeStatus maps a session file status to the badge statuses: busy while
-// a turn runs, waiting while a dialog is open, idle otherwise.
+// a turn runs, waiting while a dialog is open, idle otherwise. shell: the
+// turn is done and background shells it started still run (Claude Code
+// 2.1.330; before, the file said idle then): it takes a message as when
+// idle, and its screen's line names what still runs.
 func claudeStatus(s string) string {
 	switch s {
 	case "busy":
 		return "working"
-	case "idle":
+	case "idle", "shell":
 		return "idle"
 	case "waiting": // a dialog is open (measured on 2.1.286)
 		return "blocked"

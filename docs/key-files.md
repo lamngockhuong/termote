@@ -147,6 +147,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-activity-log.ts`               | Polls `/api/mux/activity` for new events while shown           |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                  |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's dialog and working line, one store per pane     |
+| `pwa/src/hooks/use-agent-stop.ts`                 | A Stop of a pane's agent, held until its status changes        |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file       |
 | `pwa/src/components/places-menu.tsx`              | Files next to its root: the pane's folder or an allowed Place  |
 | `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)   |
@@ -307,7 +308,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |
 | `server/agent_activity_line.go`                   | Claude Code/Codex working line on screen (`agent/prompt`)      |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)   |
-| `server/agent_interrupt.go`                       | `agent/interrupt`: one Escape (OpenCode: its service)          |
+| `server/agent_interrupt.go`                       | `agent/interrupt`: Escape on a working line (OpenCode: API)    |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
 | `server/agent_start.go`                           | `agent/start`: starts an agent in an idle Herdr pane           |
 | `server/agent_start_shell.go`                     | `agent/start` on tmux, Zellij, hc: types the agent's line      |
@@ -415,6 +416,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_agents.go`                            | `agents list/read/send/wait/answer/stop/start` (local socket)  |
 | `server/cli_agents_diff.go`                       | `agents diff`: branch commits and uncommitted changes as data  |
 | `server/cli_agents_worktree.go`                   | `agents start --worktree`: make or reuse a worktree            |
+| `server/cli_agents_self.go`                       | `agents list`: which pane the CLI runs in (tmux/Herdr/Zellij)  |
 | `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
 | `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
 | `scripts/termote-plugins.sh`                      | Writes the termote-plugins marketplace at each stable release  |

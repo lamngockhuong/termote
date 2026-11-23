@@ -259,7 +259,7 @@ func TestAgentsWaitScripted(t *testing.T) {
 	s.set("GET /api/mux/activity", activityOf(3, activityEvent{Seq: 3, Key: "%1", PaneID: "%1", From: "working", To: "idle"}))
 	tc.stdout.Reset()
 	if err := tc.dispatch("agents", []string{"wait", "%1", "api", "--after", "2"}); err != nil ||
-		strings.Count(tc.stdout.String(), "is done") != 1 || !strings.Contains(tc.stdout.String(), "next wait starts after 3") {
+		strings.Count(tc.stdout.String(), "is done") != 1 || !strings.Contains(tc.stdout.String(), "next: no pane left to wait on") {
 		t.Errorf("twice: %v %s", err, tc.stdout)
 	}
 	s.set("GET /api/mux/activity", activityOf(1))

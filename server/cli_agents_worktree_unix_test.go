@@ -4,6 +4,8 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -27,7 +29,11 @@ type worktreeScript struct {
 	mu      sync.Mutex
 	made    bool
 	cwd     string // the new pane's directory
+	dir     string // the worktree's directory in the list
 	deletes int
+	// agent: the new pane runs this task's agent; agentOnStart: it does
+	// from the first start request on (one a run before started).
+	agent, agentOnStart bool
 }
 
 func (ws *worktreeScript) make() {
@@ -38,14 +44,18 @@ func (ws *worktreeScript) make() {
 
 func newWorktreeScript(t *testing.T, s *scripted, caps Caps) *worktreeScript {
 	t.Helper()
-	ws := &worktreeScript{cwd: "/wt/feat"}
+	ws := &worktreeScript{cwd: "/wt/feat", dir: "/wt/feat"}
 	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		snap := Snapshot{Backend: "tmux", Caps: caps, Groups: []Group{{ID: "w", Name: "repo", Tabs: []Tab{
 			{ID: "w:0", Name: "sh", Panes: []Pane{{ID: "%1", Process: &ProcessInfo{Cwd: "/src/repo"}}}}}}}}
 		ws.mu.Lock()
 		if ws.made {
+			pane := Pane{ID: "%7", Process: &ProcessInfo{Cwd: ws.cwd}}
+			if ws.agent {
+				pane.Agent = &AgentInfo{Name: "claude", Status: "idle"}
+			}
 			snap.Groups = append(snap.Groups, Group{ID: "w2", Name: "repo-feat", Tabs: []Tab{
-				{ID: "w2:0", Name: "sh", Panes: []Pane{{ID: "%7", Process: &ProcessInfo{Cwd: ws.cwd}}}}}})
+				{ID: "w2:0", Name: "sh", Panes: []Pane{pane}}}})
 		}
 		ws.mu.Unlock()
 		jsonAnswer(snap)(w, r)
@@ -54,7 +64,7 @@ func newWorktreeScript(t *testing.T, s *scripted, caps Caps) *worktreeScript {
 		l := worktreeListing{RepoName: "repo", Worktrees: []Worktree{{Path: "/src/repo", Branch: "main"}}, Branches: []string{"main", "old"}}
 		ws.mu.Lock()
 		if ws.made {
-			l.Worktrees = append(l.Worktrees, Worktree{Path: "/wt/feat", Branch: "feat", Linked: true, Openable: true, GroupID: "w2"})
+			l.Worktrees = append(l.Worktrees, Worktree{Path: ws.dir, Branch: "feat", Linked: true, Openable: true, GroupID: "w2"})
 			l.Branches = append(l.Branches, "feat")
 		}
 		ws.mu.Unlock()
@@ -65,7 +75,17 @@ func newWorktreeScript(t *testing.T, s *scripted, caps Caps) *worktreeScript {
 		ws.deletes++
 		ws.mu.Unlock()
 	})
-	s.set("POST /api/mux/panes/%7/agent/start", answer(http.StatusOK, `{"ok":true,"state":"starting","prompt":true}`))
+	s.set("POST /api/mux/panes/%7/agent/start", func(w http.ResponseWriter, r *http.Request) {
+		ws.mu.Lock()
+		busy := ws.agentOnStart
+		ws.agent = ws.agent || busy
+		ws.mu.Unlock()
+		if busy {
+			answer(http.StatusConflict, `{"error":"the pane is running something other than its shell","code":"pane_busy"}`)(w, r)
+			return
+		}
+		answer(http.StatusOK, `{"ok":true,"state":"starting","prompt":true}`)(w, r)
+	})
 	s.set("GET /api/mux/panes/%7/agent/start", jsonAnswer(map[string]string{"state": startReady}))
 	return ws
 }
@@ -154,9 +174,33 @@ func TestAgentsStartWorktree(t *testing.T) {
 		t.Errorf("open refused: %v", err)
 	}
 	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`))
-	// A refused start keeps the worktree and names it.
+	// Run again while the agent of the task still runs in the pane: the
+	// task goes to it, and nothing is started.
+	ws.mu.Lock()
+	ws.agent = true
+	ws.mu.Unlock()
+	before := countPosts(s, "/api/mux/panes/%7/agent/start")
+	const stillRuns = "the agent of this task still runs in pane %7 (repo-feat/sh, claude); nothing was started: give it the task there: termote agents send %7 -"
+	if err := start("--worktree", "feat", "again"); err == nil || !strings.Contains(err.Error(), stillRuns) ||
+		!strings.Contains(err.Error(), "(workspace w2, branch feat, in /wt/feat stays)") || countPosts(s, "/api/mux/panes/%7/agent/start") != before {
+		t.Errorf("agent still runs: %v", err)
+	}
+	// It starts between the snapshot read and the start: the refusal says
+	// the same.
+	ws.mu.Lock()
+	ws.agent, ws.agentOnStart = false, true
+	ws.mu.Unlock()
+	if err := start("--worktree", "feat", "again"); err == nil || !strings.Contains(err.Error(), stillRuns) || strings.Contains(err.Error(), "pane_busy") ||
+		!strings.Contains(err.Error(), "(workspace w2, branch feat, in /wt/feat stays)") {
+		t.Errorf("agent started meanwhile: %v", err)
+	}
+	ws.mu.Lock()
+	ws.agent, ws.agentOnStart = false, false
+	ws.mu.Unlock()
+	// A refused start keeps the worktree and names it; a program other
+	// than an agent is named as such.
 	s.set("POST /api/mux/panes/%7/agent/start", answer(http.StatusConflict, `{"error":"the pane runs something else","code":"pane_busy"}`))
-	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "(pane_busy)") ||
+	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "(pane_busy); the pane runs a program, not its bare shell") ||
 		!strings.Contains(err.Error(), "workspace w2, branch feat, in /wt/feat stays") || ws.deletes != 0 {
 		t.Errorf("refused: %v, deletes %d", err, ws.deletes)
 	}
@@ -379,5 +423,64 @@ func TestAgentsStartWorktreeListFailures(t *testing.T) {
 	})
 	if err := start(); err == nil || !strings.Contains(err.Error(), "workspace w2, branch feat, in /wt/feat stays") {
 		t.Errorf("snapshot after: %v", err)
+	}
+}
+
+// A new worktree has no node_modules: start reminds the caller to install
+// the dependencies its lockfile names, since its git hooks are skipped.
+func TestAgentsStartWorktreeDepsHint(t *testing.T) {
+	shortWorktreeWaits(t)
+	tc, s := scriptedCLI(t)
+	ws := newWorktreeScript(t, s, worktreeCaps)
+	dir := t.TempDir()
+	ws.cwd, ws.dir = dir, dir
+	ws.make()
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":false}`))
+	start := func() string {
+		t.Helper()
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", []string{"start", "--workspace", "repo", "--kind", "claude", "--worktree", "feat", "go"}); err != nil {
+			t.Fatalf("%v (%s)", err, tc.stdout)
+		}
+		return tc.stdout.String()
+	}
+	const hint = "The worktree has no node_modules yet"
+	if out := start(); strings.Contains(out, hint) {
+		t.Errorf("no lockfile: %s", out)
+	}
+	writeFile(t, filepath.Join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n")
+	if out := start(); !strings.Contains(out, hint+", so its git hooks and scripts are skipped: install its dependencies there first (pnpm install in "+dir+")") {
+		t.Errorf("pnpm: %s", out)
+	}
+	os.Mkdir(filepath.Join(dir, "node_modules"), 0o755)
+	if out := start(); strings.Contains(out, hint) {
+		t.Errorf("installed: %s", out)
+	}
+	// A start that waits on a dialog says it too.
+	os.Remove(filepath.Join(dir, "node_modules"))
+	s.set("GET /api/mux/panes/%7/agent/start", jsonAnswer(map[string]string{"state": startBlocked}))
+	tc.stdout.Reset()
+	err := tc.dispatch("agents", []string{"start", "--workspace", "repo", "--kind", "claude", "--worktree", "feat", "go"})
+	if exitCode(err) != agentsExitDialog || !strings.Contains(tc.stdout.String(), hint) {
+		t.Errorf("dialog: %v %s", err, tc.stdout)
+	}
+}
+
+func TestWorktreeDepsHint(t *testing.T) {
+	if worktreeDepsHint("") != "" {
+		t.Error("no directory")
+	}
+	for _, l := range worktreeLockfiles {
+		dir := t.TempDir()
+		writeFile(t, filepath.Join(dir, l.file), "x")
+		if got := worktreeDepsHint(dir); !strings.Contains(got, "("+l.install+" in "+dir+")") {
+			t.Errorf("%s: %q", l.file, got)
+		}
+	}
+	// A lockfile that is a directory is not one.
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "yarn.lock"), 0o755)
+	if got := worktreeDepsHint(dir); got != "" {
+		t.Errorf("directory: %q", got)
 	}
 }

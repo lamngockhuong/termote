@@ -632,10 +632,29 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   panes share is refused with both ids, there is no pattern, and a command that writes reaches one
   pane; only `wait` reads several (32 at most, each name resolved before it starts). `read`,
   `send`, `answer`, `stop` and `wait` refuse a pane that runs no agent, before any request to it. `wait` follows
-  the activity ring after a mark (`--after`, printed by `send`, `start` and `wait`; the CLI takes
-  only a non-negative integer, the server answers anything else `invalid_after`), reading the
-  snapshot first so the changes are recorded with no page open; a status shown before the mark ends
-  nothing, a reset ring exits 7 rather than guess. It follows each pane by its activity key
+  the activity ring after a mark of each pane's own (`pane@seq`: `send` and `start` print it for the
+  pane they gave work to, `wait` for each pane it did not report; `--after` is the mark of a pane
+  named without one, the latest seq when neither is given; a pane named twice with marks of its own keeps the older;
+  a mark past the newest seq the server has (one from before a restart) resets as an old one does;
+  the CLI reads a mark only as a non-negative integer after the name's last `@`, anything else stays
+  part of the name, and the server answers a bad `after` `invalid_after`), reading the ring from the
+  oldest mark and counting for each pane only its changes after its own, the snapshot read first so
+  the changes are recorded with no page open; a status shown before a pane's mark ends nothing, a
+  reset ring exits 7 rather than guess. Its `next` line always names each pane left with its own
+  mark, or says none is left; a pane reported on a dialog stays in it with the latest mark, so the
+  wait after an answer reports what follows (the next question, the turn's end). A Claude Code pane that went to working after its mark and is still
+  working, but whose screen (`agent/prompt`'s activity) shows its answer written and only background
+  work left ("Waiting for 1 background agent to finish"), ends the wait once (exit 0) and stays in
+  the `next` line with the latest mark, past that start, so the next wait reports the turn's end
+  rather than the same state again (a turn started before its mark is followed to its end only); `list`
+  shows that state (`background`, read from `agent/prompt` for each Claude Code pane not blocked).
+  `list --json` carries `latest` (read after the snapshot listed; absent when the server cannot say)
+  and `self`, the pane the CLI runs in only when its environment matches the snapshot for sure,
+  never guessed: Herdr's `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID` and `HERDR_PANE_ID` all three the ids
+  of one pane; Zellij's `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` a pane of that session; tmux's
+  `TMUX_PANE` (with `TMUX` set) a pane id of the snapshot whose window id and session name, read
+  from the tmux `TMUX` names with `tmux display-message` (argv only, the pane id checked against
+  `tmuxPaneIDRe` first), are its tab's key and workspace's name; nothing for psmux or herdr-core. It follows each pane by its activity key
   (`activityKey`, computed from the snapshot's tab `key`), not its id, so a tmux tab that moves
   (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` requires `--cursor` (no cursor, no request),
   sends the cursor `read --json` printed and is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
@@ -648,7 +667,14 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   made; a pane's shell (pwsh) is known only once its pane is open; a branch with a worktree is opened again (`worktrees/open`), one that
   exists without one is refused, and so are the main worktree's branch and a worktree the server
   says cannot be opened, all before any request that makes something; `busy` is retried for 90 s at most, a create that answered
-  `unknown` or not at all is followed in the list for 60 s and never sent again; the agent starts
+  `unknown` or not at all is followed in the list for 60 s and never sent again; run again while that first
+  pane already runs an agent (the task's own, from a run before), it is refused before `agent/start`
+  with the pane named and `termote agents send <pane>` as the way on, what stays named too; a
+  `pane_busy` answer to a pane a run before opened reads the snapshot again and says the same when an
+  agent runs there; after a start it names a lockfile (`pnpm-lock.yaml`, `package-lock.json`,
+  `yarn.lock`, `bun.lock`, `bun.lockb`, a regular file by `Lstat`, never read) at the root of the
+  worktree directory the server listed when that directory has no `node_modules`, to say its git
+  hooks are skipped until its dependencies are installed; the agent starts
   only in the first pane of the worktree's own workspace (a workspace of its own, not a tab of the
   one named by `--workspace`), once its directory is the worktree's (`sameDirPath`, through
   symlinks); nothing it makes

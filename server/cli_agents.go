@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,7 +26,7 @@ import (
 const agentsUsage = `usage: termote agents list [--json]
        termote agents read <pane> [--all] [--json]
        termote agents send <pane> <text | ->
-       termote agents wait <pane>... [--after <seq>] [--timeout <duration>]
+       termote agents wait <pane>[@<seq>]... [--after <seq>] [--timeout <duration>]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
        termote agents stop <pane> --cursor <cursor>
        termote agents diff <pane> [--stat] [--base <branch>]
@@ -188,6 +189,8 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; read the dialog again: termote agents answer <pane>"
 	case "agent_not_working":
 		hint = "; nothing to stop"
+	case "agent_no_turn":
+		hint = "; its answer may be written already: read it (termote agents read <pane>)"
 	case "agent_blocked":
 		hint = "; it waits on a dialog: termote agents answer <pane>"
 	case "interrupt_pending":
@@ -196,6 +199,8 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; another worktree change is still running: try again in a moment"
 	case "linked_source":
 		hint = "; run start from the main checkout's workspace, not from a worktree"
+	case "pane_busy":
+		hint = "; the pane runs a program, not its bare shell"
 	case "branch_exists":
 		hint = "; pick a new branch name"
 	case "invalid_name":
@@ -347,6 +352,13 @@ type agentRow struct {
 	ContextPercent *float64 `json:"contextPercent,omitempty"`
 	LastText       string   `json:"lastText,omitempty"`
 	LastTS         string   `json:"lastTs,omitempty"`
+	// Self: the pane this command runs in, when its environment says so
+	// for sure (selfPaneID).
+	Self bool `json:"self,omitempty"`
+	// Background: what Claude Code still runs in the background once its
+	// turn's answer is written ("1 background agent", "2 shells"), as its
+	// screen says; with status working, the turn only waits on it.
+	Background string `json:"background,omitempty"`
 }
 
 // workspaceRow is one workspace: its directory when every pane that reports
@@ -358,8 +370,14 @@ type workspaceRow struct {
 }
 
 type agentsListing struct {
-	Backend    string         `json:"backend"`
-	AgentStart bool           `json:"agentStart"`
+	Backend    string `json:"backend"`
+	AgentStart bool   `json:"agentStart"`
+	// Latest: the mark a first wait on any of these agents starts from,
+	// read after the snapshot listed, so a change it showed is not after it;
+	// absent when the server could not say (one older than the activity).
+	Latest *uint64 `json:"latest,omitempty"`
+	// Self: the pane this command runs in, empty when not known for sure.
+	Self       string         `json:"self,omitempty"`
 	Agents     []agentRow     `json:"agents"`
 	Workspaces []workspaceRow `json:"workspaces"`
 }
@@ -391,7 +409,11 @@ func (c *cli) agentsList(args []string) error {
 	for _, p := range ov.Panes {
 		byPane[p.PaneID] = p
 	}
-	l := agentsListing{Backend: s.Backend, AgentStart: s.Caps.AgentStart, Agents: []agentRow{}, Workspaces: []workspaceRow{}}
+	l := agentsListing{Backend: s.Backend, AgentStart: s.Caps.AgentStart, Self: c.selfPaneID(s),
+		Agents: []agentRow{}, Workspaces: []workspaceRow{}}
+	if latest, err := c.activityLatest(port); err == nil {
+		l.Latest = &latest
+	}
 	for _, g := range s.Groups {
 		l.Workspaces = append(l.Workspaces, workspaceRow{ID: g.ID, Name: g.Name, Cwd: groupCwd(g)})
 	}
@@ -401,7 +423,10 @@ func (c *cli) agentsList(args []string) error {
 		}
 		row := agentRow{Pane: p.pane.ID, Name: p.label(), Workspace: p.group.Name, WorkspaceID: p.group.ID,
 			Tab: p.tab.Name, TabID: p.tab.ID, Agent: p.pane.Agent.Name, Status: p.pane.Agent.Status,
-			Since: p.pane.Agent.Since, Cwd: p.cwd()}
+			Since: p.pane.Agent.Since, Cwd: p.cwd(), Self: l.Self != "" && p.pane.ID == l.Self}
+		if row.Agent == "claude" && row.Status != "blocked" {
+			row.Background = c.paneBackground(port, p.pane.ID)
+		}
 		if o, ok := byPane[p.pane.ID]; ok {
 			row.Branch, row.Changed, row.LastText, row.LastTS = o.Branch, o.Changed, o.LastText, o.LastTS
 			if o.Usage != nil {
@@ -419,16 +444,28 @@ func (c *cli) agentsList(args []string) error {
 		tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "PANE\tWORKSPACE/NAME\tAGENT\tSTATUS\tSINCE\tDIR")
 		for _, r := range l.Agents {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", plainText(r.Pane), plainText(r.Workspace+"/"+r.Name),
-				plainText(r.Agent), dash(plainText(r.Status)), dash(sinceText(r.Since)), dash(plainText(r.Cwd)))
+			name := r.Workspace + "/" + r.Name
+			if r.Self {
+				name += " (this pane)"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", plainText(r.Pane), plainText(name),
+				plainText(r.Agent), dash(plainText(statusText(r))), dash(sinceText(r.Since)), dash(plainText(r.Cwd)))
 		}
 		tw.Flush()
+		for _, r := range l.Agents {
+			if r.Background != "" {
+				fmt.Fprintf(c.out, "%s still runs in the background: %s\n", plainText(r.Workspace+"/"+r.Name), clipLine(r.Background, 80))
+			}
+		}
 		for _, r := range l.Agents {
 			if r.LastText != "" {
 				fmt.Fprintf(c.out, "\n%s: %s", plainText(r.Workspace+"/"+r.Name), clipLine(r.LastText, 200))
 			}
 		}
 		fmt.Fprintln(c.out)
+	}
+	if l.Latest != nil {
+		fmt.Fprintf(c.out, "\nA first wait starts after %d (termote agents wait <pane>@%d).\n", *l.Latest, *l.Latest)
 	}
 	fmt.Fprintln(c.out, "\nWorkspaces:")
 	tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
@@ -437,6 +474,15 @@ func (c *cli) agentsList(args []string) error {
 	}
 	tw.Flush()
 	return nil
+}
+
+// statusText is the status list prints: background for a turn that only
+// waits on background work, its answer written.
+func statusText(r agentRow) string {
+	if r.Status == "working" && r.Background != "" {
+		return "background"
+	}
+	return r.Status
 }
 
 // groupCwd is the directory every pane of g that reports one is in, or ""
@@ -703,6 +749,9 @@ const (
 	waitDone   waitEnd = "done"
 	waitDialog waitEnd = "dialog"
 	waitGone   waitEnd = "gone"
+	// waitBackground: its turn's answer is written and it only waits on
+	// background work, still busy for its session file (Claude Code).
+	waitBackground waitEnd = "background"
 )
 
 // waitExit is the exit status for an end: the gravest one wins (gone over
@@ -717,21 +766,23 @@ func (e waitEnd) exit() int {
 	return 0
 }
 
-// waitVerdict is how each of keys ended in events, the activity after the
-// mark, with s the snapshot read just before them. A pane is followed by
-// its activity key, not its id: a tmux pane whose id is its window's
-// changes id when the tab moves, and keeps its key. A pane ends when its
-// turn ends (working or blocked to idle or done), when it goes to a dialog
-// that it still shows, or when its agent goes. A status it had before the
-// mark (a dialog shown, a turn done) ends nothing: only a change after it
-// does, so a pane that finished while the caller was busy elsewhere is
-// still reported, and one already reported is not reported again.
-func waitVerdict(events []activityEvent, keys []string, s Snapshot) map[string]waitEnd {
+// waitVerdict is how each of keys ended in events, the activity after its
+// mark (marks, by key), with s the snapshot read just before them. A pane is
+// followed by its activity key, not its id: a tmux pane whose id is its
+// window's changes id when the tab moves, and keeps its key. A pane ends when
+// its turn ends (working or blocked to idle or done), when it goes to a
+// dialog that it still shows, or when its agent goes. A status it had before
+// its mark (a dialog shown, a turn done) ends nothing: only a change after it
+// does, so a pane that finished while the caller was busy elsewhere is still
+// reported, and one already reported is not reported again. Each pane has
+// its own mark: a turn of one pane that ended before the mark another pane's
+// send printed is still after its own.
+func waitVerdict(events []activityEvent, keys []string, marks map[string]uint64, s Snapshot) map[string]waitEnd {
 	out := map[string]waitEnd{}
 	for _, key := range keys {
 		ended, blocked, gone := false, false, false
 		for _, e := range events {
-			if e.Key != key {
+			if e.Key != key || e.Seq <= marks[key] {
 				continue
 			}
 			gone = e.To == ""
@@ -767,12 +818,29 @@ func (c *cli) activityLatest(port int) (uint64, error) {
 
 // afterHint is how a command that just gave an agent work says where a wait
 // for it starts, so the turn is counted even when it ends before the wait.
+// The mark is the pane's own (pane@seq): a wait on several panes takes one
+// for each, so a turn another pane ended before this mark is still
+// reported from that pane's mark.
 func (c *cli) afterHint(port int, paneID string) string {
 	latest, err := c.activityLatest(port)
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("; wait for it: termote agents wait %s --after %d", plainText(paneID), latest)
+	return fmt.Sprintf("; wait for it: termote agents wait %s@%d", plainText(paneID), latest)
+}
+
+// splitWaitMark reads a pane named with its own mark, pane@seq; a name
+// without a number after its last "@" has none.
+func splitWaitMark(arg string) (name string, mark uint64, ok bool) {
+	i := strings.LastIndex(arg, "@")
+	if i <= 0 || i == len(arg)-1 {
+		return arg, 0, false
+	}
+	n, err := strconv.ParseUint(arg[i+1:], 10, 64)
+	if err != nil {
+		return arg, 0, false
+	}
+	return arg[:i], n, true
 }
 
 func (c *cli) agentsWait(args []string) error {
@@ -807,11 +875,14 @@ func (c *cli) agentsWait(args []string) error {
 		return err
 	}
 	// Every name is resolved before the wait starts, and a pane named twice
-	// is waited on once. A pane is followed by its key; seen keeps how it
-	// was named then, for a pane no longer in the snapshot.
+	// is waited on once, from the older of its marks. A pane is followed by
+	// its key; seen keeps how it was named then, for a pane no longer in the
+	// snapshot. own: the marks given as pane@seq, by key.
 	var keys []string
 	seen := map[string]snapPane{}
-	for _, name := range pos {
+	own := map[string]uint64{}
+	for _, arg := range pos {
+		name, mark, hasMark := splitWaitMark(arg)
 		p, err := resolvePane(s, name)
 		if err != nil {
 			return err
@@ -819,23 +890,39 @@ func (c *cli) agentsWait(args []string) error {
 		if p.pane.Agent == nil {
 			return fmt.Errorf("pane %s (%s) runs no agent", plainText(p.pane.ID), plainText(p.ref()))
 		}
-		if _, dup := seen[p.key()]; !dup {
-			keys = append(keys, p.key())
-			seen[p.key()] = p
+		key := p.key()
+		if _, dup := seen[key]; !dup {
+			keys = append(keys, key)
+			seen[key] = p
+		}
+		if m, had := own[key]; hasMark && (!had || mark < m) {
+			own[key] = mark
 		}
 	}
 	w := waitPanes{keys: keys, seen: seen}
-	if !hasAfter {
+	// A pane without a mark of its own waits from --after, else from now.
+	if !hasAfter && len(own) < len(keys) {
 		if after, err = c.activityLatest(port); err != nil {
 			return err
 		}
 	}
+	marks := map[string]uint64{}
+	from := uint64(0)
+	for i, key := range keys {
+		m, ok := own[key]
+		if !ok {
+			m = after
+		}
+		marks[key] = m
+		if i == 0 || m < from {
+			from = m
+		}
+	}
 	start := time.Now()
 	deadline := start.Add(timeout)
-	// mark: where this wait started, which a pane that did not end keeps
-	// for the next one; after moves on with each page read, and events
-	// keeps the waited panes' changes since mark.
-	mark := after
+	// marks: where this wait started for each pane, which a pane that did
+	// not end keeps for the next wait; from moves on with each page read,
+	// and events keeps the waited panes' changes since the oldest mark.
 	var events []activityEvent
 	waited := map[string]bool{}
 	for _, key := range keys {
@@ -845,13 +932,16 @@ func (c *cli) agentsWait(args []string) error {
 	actFailures, snapFailures := 0, 0
 	for {
 		var page activityPage
-		if err := c.agentsGet(port, "/api/mux/activity?after="+strconv.FormatUint(after, 10), &page); err != nil {
+		if err := c.agentsGet(port, "/api/mux/activity?after="+strconv.FormatUint(from, 10), &page); err != nil {
 			if actFailures++; actFailures >= agentsWaitFailures {
 				return err
 			}
 		} else {
 			actFailures = 0
-			if page.Reset {
+			// A mark past the newest change is from before the server
+			// restarted (its seqs start again): reset, as for an old one,
+			// rather than skip the pane's changes up to it.
+			if page.Reset || marksPast(marks, page.Latest) {
 				return c.waitReset(s, w, page.Latest)
 			}
 			for _, e := range page.Events {
@@ -859,9 +949,12 @@ func (c *cli) agentsWait(args []string) error {
 					events = append(events, e)
 				}
 			}
-			after = max(after, page.Latest)
-			if ends := waitVerdict(events, keys, s); len(ends) > 0 {
-				return c.waitEnded(s, w, ends, mark, page.Latest)
+			from = max(from, page.Latest)
+			if ends := waitVerdict(events, keys, marks, s); len(ends) > 0 {
+				return c.waitEnded(s, w, ends, nil, marks, page.Latest)
+			}
+			if ends, what := c.waitBackgroundOnly(port, s, events, keys, marks); len(ends) > 0 {
+				return c.waitEnded(s, w, ends, what, marks, page.Latest)
 			}
 			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, keys) {
 				return c.waitNothing(s, w, page.Latest)
@@ -876,7 +969,7 @@ func (c *cli) agentsWait(args []string) error {
 				}
 			}
 			fmt.Fprintf(c.out, "still working after %s: %s\n", timeout, dash(strings.Join(working, ", ")))
-			fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, keys), mark)
+			c.waitNext(s, w, keys, marks)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
@@ -892,6 +985,47 @@ func (c *cli) agentsWait(args []string) error {
 			s, snapFailures = now, 0
 		}
 	}
+}
+
+// waitBackgroundOnly finds the panes among keys whose Claude Code started
+// working after its mark and is still busy in s, but whose screen shows its
+// turn's answer written and only background work left ("Waiting for 1
+// background agent to finish"): a wait would otherwise last until that work
+// ends. Once reported, the next wait's mark is past the start, so the same
+// wait on background work is not reported again; the turn's end is.
+func (c *cli) waitBackgroundOnly(port int, s Snapshot, events []activityEvent, keys []string, marks map[string]uint64) (map[string]waitEnd, map[string]string) {
+	ends, what := map[string]waitEnd{}, map[string]string{}
+	for _, key := range keys {
+		p, ok := findPaneByKey(s, key)
+		if !ok || p.status() != "working" || p.pane.Agent.Name != "claude" || !startedAfter(events, key, marks[key]) {
+			continue
+		}
+		if bg := c.paneBackground(port, p.pane.ID); bg != "" {
+			ends[key], what[key] = waitBackground, bg
+		}
+	}
+	return ends, what
+}
+
+// startedAfter: key went to working after mark in events.
+func startedAfter(events []activityEvent, key string, mark uint64) bool {
+	for _, e := range events {
+		if e.Key == key && e.Seq > mark && e.To == "working" {
+			return true
+		}
+	}
+	return false
+}
+
+// paneBackground is the background work the agent's screen says it still
+// runs once its turn's answer is written ("1 background agent", "2
+// shells"), or "" when it shows none or cannot be read.
+func (c *cli) paneBackground(port int, paneID string) string {
+	var pr promptResponse
+	if err := c.agentsGet(port, panePath(paneID, "/agent/prompt"), &pr); err != nil || pr.Prompt != nil || pr.Activity == nil {
+		return ""
+	}
+	return pr.Activity.Background
 }
 
 // anyWorking: one of keys shows its agent working in s.
@@ -922,31 +1056,70 @@ func (w waitPanes) name(s Snapshot, key string) (ref, id string) {
 	return plainText(p.ref()), plainText(p.pane.ID)
 }
 
-// ids are the current ids of keys, for the next wait to name.
-func (w waitPanes) ids(s Snapshot, keys []string) string {
+// waitNext prints the wait that follows, always in one form: each of keys
+// by its current id with its own mark (pane@seq), or that none is left.
+func (c *cli) waitNext(s Snapshot, w waitPanes, keys []string, marks map[string]uint64) {
+	if len(keys) == 0 {
+		fmt.Fprintln(c.out, "next: no pane left to wait on (send and start print the pane@seq to wait on for the pane they give work to)")
+		return
+	}
 	out := make([]string, len(keys))
 	for i, key := range keys {
-		_, out[i] = w.name(s, key)
+		_, id := w.name(s, key)
+		out[i] = fmt.Sprintf("%s@%d", id, marks[key])
 	}
-	return strings.Join(out, " ")
+	fmt.Fprintf(c.out, "next: termote agents wait %s\n", strings.Join(out, " "))
+}
+
+// marksPast: a mark is after latest, the newest change the server has.
+func marksPast(marks map[string]uint64, latest uint64) bool {
+	for _, m := range marks {
+		if m > latest {
+			return true
+		}
+	}
+	return false
+}
+
+// sameMarks is every key with mark m.
+func sameMarks(keys []string, m uint64) map[string]uint64 {
+	out := make(map[string]uint64, len(keys))
+	for _, key := range keys {
+		out[key] = m
+	}
+	return out
 }
 
 // waitEnded prints every pane that ended, in the order named, and the wait
-// that follows the others: from mark still, so a change of theirs recorded
-// after the snapshot this verdict read is not skipped.
-func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, mark, latest uint64) error {
+// that follows the others: each from its own mark still, so a change of
+// theirs recorded after the snapshot this verdict read is not skipped.
+// what: the background work of each pane that ended with it, which a later
+// wait from latest follows to its turn's end.
+func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, what map[string]string, marks map[string]uint64, latest uint64) error {
 	code := 0
 	var rest []string
+	next := maps.Clone(marks)
 	for _, key := range w.keys {
 		end, ok := ends[key]
 		if !ok {
 			rest = append(rest, key)
 			continue
 		}
+		// A pane on a dialog or only waiting on background work is still
+		// in its turn: the next wait follows it from latest, past what was
+		// reported (after an answer: the dialog's next question, or the
+		// turn's end).
+		if end == waitBackground || end == waitDialog {
+			rest = append(rest, key)
+			next[key] = latest
+		}
 		ref, pid := w.name(s, key)
 		switch end {
 		case waitDone:
 			fmt.Fprintf(c.out, "%s (%s) is done; read it: termote agents read %s\n", ref, pid, pid)
+		case waitBackground:
+			fmt.Fprintf(c.out, "%s (%s) wrote its answer and only waits on background work (%s); read it: termote agents read %s; its turn ends when that work does (next: waits on it)\n",
+				ref, pid, clipLine(what[key], 80), pid)
 		case waitDialog:
 			fmt.Fprintf(c.out, "%s (%s) waits on a dialog; see it: termote agents answer %s\n", ref, pid, pid)
 		case waitGone:
@@ -954,11 +1127,7 @@ func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, mark, 
 		}
 		code = max(code, end.exit())
 	}
-	if len(rest) > 0 {
-		fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, rest), mark)
-	} else {
-		fmt.Fprintf(c.out, "next wait starts after %d (termote agents wait <pane>... --after %d)\n", latest, latest)
-	}
+	c.waitNext(s, w, rest, next)
 	if code != 0 {
 		return &exitError{code: code}
 	}
@@ -982,21 +1151,21 @@ func (c *cli) waitStatus(s Snapshot, w waitPanes) {
 	}
 }
 
-// waitNothing: no pane works and none ended since the mark, so nothing
+// waitNothing: no pane works and none ended since its mark, so nothing
 // would ever end the wait.
 func (c *cli) waitNothing(s Snapshot, w waitPanes, latest uint64) error {
-	fmt.Fprintln(c.out, "Nothing to wait for: no pane is working and none ended a turn since the mark.")
+	fmt.Fprintln(c.out, "Nothing to wait for: no pane is working and none ended a turn since its mark.")
 	c.waitStatus(s, w)
-	fmt.Fprintf(c.out, "next wait starts after %d\n", latest)
+	c.waitNext(s, w, w.keys, sameMarks(w.keys, latest))
 	return &exitError{code: agentsExitIdle}
 }
 
-// waitReset: the server dropped the changes after the mark (too many, or it
+// waitReset: the server dropped the changes after a mark (too many, or it
 // restarted), so each pane is read again rather than guessed.
 func (c *cli) waitReset(s Snapshot, w waitPanes, latest uint64) error {
 	fmt.Fprintln(c.out, "history was reset; check each pane with read")
 	c.waitStatus(s, w)
-	fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, w.keys), latest)
+	c.waitNext(s, w, w.keys, sameMarks(w.keys, latest))
 	return &exitError{code: agentsExitReset}
 }
 
@@ -1254,6 +1423,8 @@ type startTarget struct {
 	// used: the pane was not opened by this command (a worktree workspace
 	// a run before opened), so its shell may hold the user's typing.
 	used bool
+	// worktree: dir is a git worktree the start made or went on in.
+	worktree bool
 }
 
 // fail is err of a start refused for sure, with what it made undone, or
@@ -1341,6 +1512,14 @@ func (c *cli) startInPane(port int, t startTarget, kind, prompt string) error {
 	// typed and follows the start as if it was; starting: one is already
 	// under way there. Both are followed, as the PWA does.
 	if code := r.failure().Code; r.status != http.StatusOK && code != "start_unknown" && code != "starting" {
+		// A pane a run before opened may run this task's agent by now.
+		if code == "pane_busy" && t.used {
+			if s, err := c.agentsSnapshot(port); err == nil {
+				if p, ok := findAgentPane(s, paneID); ok && p.pane.Agent != nil {
+					return t.fail(agentStillRuns(p))
+				}
+			}
+		}
 		return t.fail(agentsRefusal(r))
 	}
 	// Only a 200 says whether the prompt was taken; start_unknown and
@@ -1359,10 +1538,17 @@ func (c *cli) startInPane(port int, t startTarget, kind, prompt string) error {
 	if took {
 		withPrompt = " with the prompt" + hint
 	}
+	deps := ""
+	if t.worktree {
+		deps = worktreeDepsHint(t.dir)
+	}
 	switch state {
 	case startReady:
 	case startBlocked:
 		c.infof("Started %s in pane %s (%s, in %s)%s; it waits on a dialog: termote agents answer %s", kind, plainText(paneID), t.where, dir, withPrompt, plainText(paneID))
+		if deps != "" {
+			c.infof("%s", deps)
+		}
 		return &exitError{code: agentsExitDialog}
 	case startExited:
 		return t.fail(fmt.Errorf("%s did not start in pane %s: its command ended (is it installed?)", kind, plainText(paneID)))
@@ -1370,6 +1556,9 @@ func (c *cli) startInPane(port int, t startTarget, kind, prompt string) error {
 		return t.note(fmt.Errorf("%s did not start in pane %s (%s); see: termote agents list", kind, plainText(paneID), plainText(state)))
 	}
 	c.infof("Started %s in pane %s (%s, in %s)%s", kind, plainText(paneID), t.where, dir, withPrompt)
+	if deps != "" {
+		c.infof("%s", deps)
+	}
 	return nil
 }
 

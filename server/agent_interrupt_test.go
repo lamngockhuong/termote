@@ -27,15 +27,19 @@ func postInterrupt(t *testing.T, mux http.Handler, cursor string) (int, map[stri
 	return postJSON(t, mux, "/api/mux/panes/0/agent/interrupt", map[string]string{"cursor": cursor})
 }
 
-func workingClaude() *fakeWriter {
+// workingClaude is Claude Code in a turn: busy, and its screen shows the
+// working line.
+func workingClaude(t *testing.T) *fakeWriter {
+	t.Helper()
 	f := newFakeWriter()
 	f.session.Status = "working"
+	f.screen = fixtureScreen(t, "2.1.310-working")
 	return f
 }
 
 func TestInterruptSendsOneEscape(t *testing.T) {
 	resetInterrupts(t)
-	f := workingClaude()
+	f := workingClaude(t)
 	mux := agentMux(f)
 	if code, body := postInterrupt(t, mux, cursorFor(testSessionID)); code != http.StatusNoContent {
 		t.Fatalf("interrupt = %d %v", code, body)
@@ -99,10 +103,15 @@ func TestInterruptRefusals(t *testing.T) {
 		"unsigned cursor": {nil, "abc.def", http.StatusConflict, "session_changed"},
 		"no cursor":       {nil, "-", http.StatusBadRequest, "invalid_request"},
 		"agent gone":      {func(t *testing.T, f *fakeWriter) { f.found = false }, "", http.StatusConflict, "target_changed"},
+		// Busy in its session file, its answer written, waiting on a
+		// background agent: Escape would stop nothing.
+		"background agents only": {func(t *testing.T, f *fakeWriter) { f.screen = fixtureScreen(t, "2.1.330-wait-background-agent") }, "", http.StatusConflict, "agent_no_turn"},
+		"no working line":        {func(t *testing.T, f *fakeWriter) { f.screen = fixtureScreen(t, "2.1.286-idle-after-turn") }, "", http.StatusConflict, "agent_no_turn"},
+		"no input box":           {func(t *testing.T, f *fakeWriter) { f.screen = "some other screen\n" }, "", http.StatusConflict, "agent_no_turn"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			resetInterrupts(t)
-			f := workingClaude()
+			f := workingClaude(t)
 			if tc.setup != nil {
 				tc.setup(t, f)
 			}
@@ -126,7 +135,7 @@ func TestInterruptRefusals(t *testing.T) {
 
 func TestInterruptRequest(t *testing.T) {
 	resetInterrupts(t)
-	f := workingClaude()
+	f := workingClaude(t)
 	mux := agentMux(f)
 	for name, body := range map[string]string{"not JSON": "{", "too large": `{"cursor":"` + strings.Repeat("x", agentInterruptBody) + `"}`} {
 		if code, out := postJSON(t, mux, "/api/mux/panes/0/agent/interrupt", body); code != http.StatusBadRequest || out["code"] != "invalid_request" {

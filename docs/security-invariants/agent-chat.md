@@ -194,7 +194,11 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   again bypassing every cache (`sessionNow`); under the pane's lock (`lockPane`), Claude Code and
   Codex get exactly one `Escape`, and only when the pane is not in copy mode, the screen shows no
   dialog (`agent_blocked`: Escape is a dialog's cancel) and the agent works by its status or its
-  screen (`agentWorking`, else 409 `agent_not_working`); the session is read once more right before
+  screen (`agentWorking`, else 409 `agent_not_working`); Claude Code only while its screen also
+  shows the working line (`claudeActivity` without `Background`), else 409 `agent_no_turn`: with its
+  answer written and only background agents left ("Waiting for 1 background agent to finish",
+  Claude Code 2.1.330) its session file stays busy and Escape stops nothing, so nothing is sent and
+  the route never answers 204 for it; the session is read once more right before
   the key (`sameAgent`: same process, start time and session, else `session_changed`). A pane takes
   no second interrupt for 3 s (409 `interrupt_pending`, nothing sent: a second Escape opens Claude
   Code's rewind or Codex's backtrack); a key that failed does not count. OpenCode gets no key: the

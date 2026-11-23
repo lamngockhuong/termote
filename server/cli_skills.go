@@ -285,8 +285,13 @@ type skillStatus struct {
 	Foreign bool   `json:"foreign,omitempty"`
 	Path    string `json:"path"`
 	Version string `json:"version,omitempty"`
-	Current bool   `json:"current"`
-	Plugin  bool   `json:"plugin"`
+	// Current: the installed SKILL.md is this termote's, the same version
+	// and the same text (a checkout's build keeps the version of its last
+	// release while the skill changes).
+	Current bool `json:"current"`
+	// Differs: the version is this termote's but the text is not.
+	Differs bool `json:"differs,omitempty"`
+	Plugin  bool `json:"plugin"`
 }
 
 func (c *cli) skillsStatus(args []string) error {
@@ -301,8 +306,11 @@ func (c *cli) skillsStatus(args []string) error {
 	var rows []skillStatus
 	for _, a := range c.skillAgents() {
 		m, ok, exists := installedSkill(a)
+		sameVersion := ok && m.Version == c.version
+		sameText := ok && skillTextCurrent(a)
 		rows = append(rows, skillStatus{Agent: a.id, Configured: a.configured(), Installed: ok, Foreign: exists && !ok,
-			Path: a.skillDir(), Version: m.Version, Current: ok && m.Version == c.version, Plugin: c.termotePluginInstalled(a)})
+			Path: a.skillDir(), Version: m.Version, Current: sameVersion && sameText, Differs: sameVersion && !sameText,
+			Plugin: c.termotePluginInstalled(a)})
 	}
 	if asJSON {
 		return writeJSON(c.out, map[string]any{"version": c.version, "agents": rows})
@@ -318,6 +326,8 @@ func (c *cli) skillsStatus(args []string) error {
 			fmt.Fprintf(c.out, "%s: not installed (termote skills install --agent %s)\n", label, r.Agent)
 		case r.Current:
 			fmt.Fprintf(c.out, "%s: v%s installed, matches this termote (%s)\n", label, r.Version, r.Path)
+		case r.Differs:
+			fmt.Fprintf(c.out, "%s: v%s installed, but its SKILL.md is not the one this termote carries; update it: termote skills install --agent %s\n", label, r.Version, r.Agent)
 		default:
 			fmt.Fprintf(c.out, "%s: v%s installed, this termote is v%s; update it: termote skills install --agent %s\n", label, r.Version, c.version, r.Agent)
 		}
@@ -326,6 +336,18 @@ func (c *cli) skillsStatus(args []string) error {
 		}
 	}
 	return nil
+}
+
+// skillTextCurrent: a's installed SKILL.md is the one embedded in this
+// binary, read up to a limit (a regular file only, never through a link).
+func skillTextCurrent(a skillAgent) bool {
+	path := filepath.Join(a.skillDir(), "SKILL.md")
+	st, err := os.Lstat(path)
+	if err != nil || !st.Mode().IsRegular() || st.Size() != int64(len(orchestratorSkill)) {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && string(b) == orchestratorSkill
 }
 
 // skillUpdateHint, after an update to version, names each agent whose

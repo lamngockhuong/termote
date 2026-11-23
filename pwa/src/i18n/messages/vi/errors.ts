@@ -4,6 +4,8 @@ import type { Translation } from '../types'
 export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
   'errors.agent_blocked': 'Agent đang chờ trả lời một hộp thoại',
+  'errors.agent_no_turn':
+    'Agent không chạy lượt nào để Esc dừng được: có thể nó chỉ đang chờ việc chạy nền',
   'errors.agent_not_working': 'Agent không làm gì nên không có gì để dừng',
   'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',

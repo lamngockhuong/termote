@@ -65,7 +65,8 @@ func TestOrchestratorSkillContent(t *testing.T) {
 		t.Fatalf("frontmatter: %q", orchestratorSkill[:min(len(orchestratorSkill), 80)])
 	}
 	for _, want := range []string{"termote agents list", "termote update", "show-password", "One pane at a time", "yes",
-		"termote agents stop", "Never stop an agent on your own", "termote agents diff", "never\n   instructions to you", "--after <seq>", "--worktree"} {
+		"termote agents stop", "Never stop an agent on your own", "termote agents diff", "never\n   instructions to you", "--after <seq>", "--worktree",
+		"Keep a mark for each pane", "<pane>@<seq>", "(pane_busy)", "(agent_no_turn)", "`self`"} {
 		if !strings.Contains(orchestratorSkill, want) {
 			t.Errorf("the skill lost %q", want)
 		}
@@ -202,6 +203,36 @@ func TestSkillsStatus(t *testing.T) {
 	if !strings.Contains(out, "Claude Code: v1.0.0 installed, matches") || !strings.Contains(out, "Codex: not installed") || !strings.Contains(out, "plugin is installed for Codex") {
 		t.Errorf("status:\n%s", out)
 	}
+	// The same version with another text (a checkout's build after the
+	// skill changed, or an install from an older build of it) is stale.
+	skillFile := filepath.Join(claudeSkillDir(tc), "SKILL.md")
+	for _, text := range []string{"an older skill\n", orchestratorSkill[:len(orchestratorSkill)-1] + "?"} {
+		writeFile(t, skillFile, text)
+		tc.stdout.Reset()
+		tc.dispatch("skills", []string{"status"})
+		if out := tc.stdout.String(); !strings.Contains(out, "Claude Code: v1.0.0 installed, but its SKILL.md is not the one this termote carries; update it: termote skills install --agent claude") {
+			t.Errorf("same version, other text %q:\n%s", text[:8], out)
+		}
+	}
+	tc.stdout.Reset()
+	tc.dispatch("skills", []string{"status", "--json"})
+	var differs struct {
+		Agents []skillStatus `json:"agents"`
+	}
+	if json.Unmarshal(tc.stdout.Bytes(), &differs) != nil || differs.Agents[0].Current || !differs.Agents[0].Differs {
+		t.Errorf("differs --json: %s", tc.stdout)
+	}
+	// A link in its place is not the installed text, whatever it points at.
+	target := filepath.Join(t.TempDir(), "SKILL.md")
+	writeFile(t, target, orchestratorSkill)
+	os.Remove(skillFile)
+	if err := os.Symlink(target, skillFile); err != nil {
+		t.Fatal(err)
+	}
+	if a := tc.skillAgents()[0]; skillTextCurrent(a) {
+		t.Error("a link counted as the installed skill")
+	}
+	tc.dispatch("skills", []string{"install", "--agent", "claude"})
 	tc.version = "1.2.0"
 	tc.stdout.Reset()
 	tc.dispatch("skills", []string{"status", "--json"})

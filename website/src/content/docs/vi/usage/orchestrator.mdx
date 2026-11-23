@@ -41,7 +41,9 @@ termote skills uninstall
 Lệnh này ghi vào `~/.claude/skills/termote-orchestrator/` (hoặc dưới `CLAUDE_CONFIG_DIR`) và
 `~/.codex/skills/termote-orchestrator/` (hoặc dưới `CODEX_HOME`), và chỉ cho agent đã có thư mục
 trên máy. Thư mục cùng tên do bạn tự tạo thì được giữ nguyên. Sau `termote update`, Termote báo khi
-skill đã cài thuộc phiên bản khác; chạy lại `termote skills install` để cập nhật.
+skill đã cài thuộc phiên bản khác; chạy lại `termote skills install` để cập nhật. `termote skills
+status` còn so file đã cài với bản đi kèm chương trình `termote`, nên skill còn sót lại từ một bản build cũ hơn
+của cùng phiên bản cũng được báo là cần cập nhật.
 
 **Dưới dạng plugin**, từ marketplace nhỏ `termote-plugins` (không tải repo Termote về):
 
@@ -77,7 +79,7 @@ Skill chỉ chạy các lệnh dưới đây. Bạn cũng có thể tự chạy 
 termote agents list [--json]                 # mọi agent: pane id, workspace, tên, trạng thái, thư mục
 termote agents read <pane> [--all] [--json]  # lượt cuối: yêu cầu của bạn và mọi thứ sau đó
 termote agents send <pane> 'Run the tests'   # một tin; agent đang bận thì tin được xếp hàng
-termote agents wait <pane>... --after <seq>  # tới khi một pane kết thúc lượt hoặc cần câu trả lời
+termote agents wait <pane>@<seq>...          # tới khi một pane kết thúc lượt hoặc cần câu trả lời
 termote agents answer <pane>                 # xem hộp thoại agent đang chờ
 termote agents answer <pane> 1               # hoặc: cancel | next | --text 'câu trả lời'
 termote agents diff <pane> [--stat]          # commit của branch kể từ base, rồi phần chưa commit
@@ -95,9 +97,20 @@ hoặc không còn agent (5); mọi pane đã kết thúc đều được in, v�
 `--timeout` (mặc định 30 phút), 6 là không pane nào đang làm và cũng không pane nào vừa xong (không
 còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read` từng pane).
 
-`send`, `start` và `wait` in ra một mốc, `--after <seq>`, lấy từ nhật ký hoạt động của server. Truyền
-mốc đó cho lần `wait` sau thì lượt nào kết thúc trong lúc orchestrator đang đọc pane khác vẫn được
-báo, còn lượt đã báo rồi thì không báo lại.
+Agent Claude Code đã viết xong câu trả lời và chỉ còn chờ việc chạy nền do nó mở (một subagent chạy
+nền) cũng được báo một lần, và vẫn nằm trong dòng `next:` để lần `wait` sau báo khi phần chạy nền đó
+xong; `list` ghi trạng thái của nó là `background`.
+
+Mỗi pane được chờ từ mốc riêng của nó, lấy từ nhật ký hoạt động của server: `send` và `start` in ra
+pane kèm mốc (`termote agents wait %3@41`), còn `wait` in một dòng `next:` gồm từng pane chưa được
+báo cùng mốc của pane đó (`next: termote agents wait %3@41 %5@48`), hoặc báo rằng không còn pane nào. Pane đang chờ hộp thoại vẫn nằm trong dòng đó, nên lần chờ sau khi
+trả lời vẫn theo dõi nó.
+Muốn chờ nhiều agent, hãy gom `<pane>@<seq>` mới nhất của từng agent. Nhờ vậy, lượt nào kết thúc
+trong lúc orchestrator đang đọc pane khác vẫn được báo, kể cả khi lượt đó kết thúc trước mốc in ra
+cho một pane khác, còn lượt đã báo rồi thì không báo lại. `--after <seq>` là mốc cho mọi pane được
+nêu mà không kèm mốc riêng; `list --json` có mốc mới nhất (`latest`) cho lần chờ đầu tiên, và nêu
+pane mà chính lệnh đang chạy trong đó (`self`) khi biến môi trường của tmux, Herdr hoặc Zellij cho
+biết chắc chắn.
 
 `diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
 base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
@@ -107,19 +120,26 @@ agent viết ra, không phải chỉ dẫn; file nhạy cảm như `.env` chỉ 
 
 `stop` dừng lượt mà agent đang làm, như khi bấm Esc trong terminal của nó. Lệnh cần `cursor` lấy từ
 `read --json`, nên không bao giờ dừng nhầm một cuộc trò chuyện khác mà pane đã chuyển sang; agent không
-làm gì, hoặc đang chờ hộp thoại, sẽ không bị dừng. Bạn cũng dừng được agent từ
+làm gì, hoặc đang chờ hộp thoại, sẽ không bị dừng. Agent Claude Code mà màn hình không cho thấy lượt
+nào đang chạy cũng không bị dừng, chẳng hạn khi nó đã viết xong câu trả lời và chỉ còn chờ một
+subagent chạy nền: Esc không dừng được phần chạy nền ấy, nên `stop` báo lại điều này (`agent_no_turn`). Bạn cũng dừng được agent từ
 [Chat view](/vi/usage/agent-chat/) hoặc từ thẻ của nó trong [Tổng quan](/vi/usage/overview/).
 
-`start` mở một tab mới trong workspace rồi chạy agent ở đó, prompt là tin nhắn đầu tiên của nó.
+Khi không có `--worktree`, `start` mở một tab mới trong workspace (`--name` đặt tên tab) rồi chạy
+agent ở đó, prompt là tin nhắn đầu tiên của nó.
 `list` hiện thư mục của từng workspace, hoặc `-` khi các pane của nó nằm ở những thư mục khác nhau. Khi tab mới sẽ
 mở ở một thư mục khác thư mục đó (tab tmux mở ở thư mục lúc tạo session), `start` đóng tab và không
 chạy gì; lệnh in ra thư mục mà agent được mở.
 
 Với `--worktree <branch mới>`, `start` tạo một git worktree của repo trong workspace trên một branch
-mới (từ `--base`, nếu không có thì từ commit hiện tại), rồi chạy agent trong pane đầu tiên của
-workspace mới đó, nên các agent làm song song không bao giờ dùng chung một checkout. Chạy lại đúng
-lệnh đó sau một lần thất bại thì lệnh làm tiếp trong worktree đã tạo; branch đã có mà chưa có
-worktree thì bị từ chối, để agent không bao giờ sửa vào một branch bạn còn làm dở. Termote không bao
+mới (từ `--base`, nếu không có thì từ commit hiện tại), rồi chạy agent trong pane đầu tiên của một
+workspace mới dành riêng cho nó, nên các agent làm song song không bao giờ dùng chung một checkout.
+Workspace bạn nêu chỉ cho biết repo nào: agent không chạy ở đó, và `--name` đặt tên cho workspace
+mới. Với Herdr, worktree nằm dưới `~/.herdr/worktrees/<repo>/`, không nằm cạnh repo. Worktree mới
+chưa có `node_modules`, nên git hook (`lefthook`, `husky`) bị bỏ qua cho tới khi cài phụ thuộc trong
+đó; khi repo có file khóa phụ thuộc như `pnpm-lock.yaml`, `start` nhắc bạn kèm lệnh cần chạy. Chạy lại đúng lệnh đó sau một lần thất
+bại thì lệnh làm tiếp trong worktree đã tạo; nếu agent của worktree đó vẫn còn chạy, lệnh nêu pane
+của nó để bạn giao việc bằng `termote agents send`. Branch đã có mà chưa có worktree thì bị từ chối, để agent không bao giờ sửa vào một branch bạn còn làm dở. Termote không bao
 giờ xóa worktree nó đã tạo: hãy xóa từ menu của workspace (Remove worktree) hoặc bằng git.
 
 Claude Code, Codex và OpenCode đều nhận prompt ngay khi khởi chạy, nên agent mới có việc để làm
