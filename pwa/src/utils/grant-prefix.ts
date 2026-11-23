@@ -63,13 +63,17 @@ const INTERPRETERS = new Set([
   'watch',
   'make',
   'git',
+  // sed and ed run a program from their script (sed's e command, ed's !)
+  'sed',
+  'ed',
 ])
 
 // A versioned name of an interpreter: python3.12 (interpreterVersionRe)
 const VERSIONED = /^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
 
-// Package managers whose second word runs any package: pnpm dlx x, npm exec
-// x (delegateRunners)
+// Package managers with a word that runs any package: pnpm dlx x, npm exec
+// x, also after options (pnpm -s exec x, pnpm --filter a exec x), so it is
+// refused at any position after the program's name (delegateRunners)
 const RUNNERS: Record<string, string[]> = {
   npm: ['exec', 'x'],
   pnpm: ['dlx', 'exec', 'x'],
@@ -83,7 +87,9 @@ const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 
 // empty: nothing typed; length: longer than the server takes; chars: a
 // character or a spacing it refuses; interpreter: a first word (or a
-// package manager's second) that runs any code at all
+// package manager's runner word, at any position) that runs any code at
+// all. The server also refuses a command whose words after the prefix
+// start with -, which a prefix alone cannot show.
 export type PrefixProblem = 'empty' | 'length' | 'chars' | 'interpreter'
 
 // What is wrong with prefix, or null when the server would take it. The
@@ -102,8 +108,10 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   if (words.includes('')) return 'chars'
   const first = commandName(words[0])
   if (INTERPRETERS.has(first) || VERSIONED.test(first)) return 'interpreter'
-  if (Object.hasOwn(RUNNERS, first) && words.length > 1) {
-    if (RUNNERS[first].includes(words[1].toLowerCase())) return 'interpreter'
+  if (Object.hasOwn(RUNNERS, first)) {
+    const runs = RUNNERS[first]
+    if (words.slice(1).some((w) => runs.includes(w.toLowerCase())))
+      return 'interpreter'
   }
   return null
 }

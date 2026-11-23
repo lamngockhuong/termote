@@ -149,6 +149,10 @@ type agentFailure struct {
 	images []string // upload ids that resolve to no image, for invalid_request
 	// reason: why a delegated answer was refused (delegation_out_of_scope)
 	reason string
+	// keySent: the key that answers the dialog was sent, but the dialog
+	// did not close in time (answer_not_confirmed): the answer may still
+	// take effect.
+	keySent bool
 }
 
 func (f *agentFailure) Error() string { return f.msg }
@@ -1175,20 +1179,29 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		choice = json.RawMessage(strconv.Itoa(d.yes))
 	}
 	var rec *promptRecord
-	if err := a.answer(ctx, wr, paneID, body.PromptID, choice, cli, &rec); err != nil {
+	err = a.answer(ctx, wr, paneID, body.PromptID, choice, cli, &rec)
+	// Once the key is sent the answer may take effect even when the dialog
+	// was not seen to close: the use and the audit line are written then
+	// too, with whether it closed.
+	var f *agentFailure
+	if err == nil || (errors.As(err, &f) && f.keySent) {
+		confirmed := err == nil
+		if body.Delegated {
+			a.recordDelegation(paneID, d, confirmed)
+		}
+		if cli && rec != nil && rec.prompt.Kind == "permission" {
+			via := "socket"
+			if !socket {
+				via = auditBy(auth)
+			}
+			auditf("dialog_answer", "pane", paneID, "agent", rec.session.Agent, "dialog", rec.prompt.Title,
+				"option", optionLabel(rec.prompt, choice), "delegated", body.Delegated, "grant", d.grantID,
+				"confirmed", confirmed, "by", via)
+		}
+	}
+	if err != nil {
 		a.writeFailure(w, err)
 		return
-	}
-	if body.Delegated {
-		a.recordDelegation(paneID, d)
-	}
-	if cli && rec != nil && rec.prompt.Kind == "permission" {
-		via := "socket"
-		if !socket {
-			via = auditBy(auth)
-		}
-		auditf("dialog_answer", "pane", paneID, "agent", rec.session.Agent, "dialog", rec.prompt.Title,
-			"option", optionLabel(rec.prompt, choice), "delegated", body.Delegated, "grant", d.grantID, "by", via)
 	}
 	// The screen moved on from the dialog answered: whatever shows blocked
 	// next (the next question, a new dialog) is a new dialog for a wait.
@@ -1342,7 +1355,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	}
 	closed := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.sig != closeFrom })
 	if !closed {
-		return fail(http.StatusBadGateway, "answer_not_confirmed", "the key was sent but the dialog is still open")
+		f := fail(http.StatusBadGateway, "answer_not_confirmed", "the key was sent but the dialog is still open")
+		f.keySent = true
+		return f
 	}
 	return nil
 }
@@ -1618,7 +1633,9 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 		return err
 	}
 	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.sig != typedSig }) {
-		return fail(http.StatusBadGateway, "answer_not_confirmed", "Enter was sent but the dialog is still open")
+		f := fail(http.StatusBadGateway, "answer_not_confirmed", "Enter was sent but the dialog is still open")
+		f.keySent = true
+		return f
 	}
 	return nil
 }

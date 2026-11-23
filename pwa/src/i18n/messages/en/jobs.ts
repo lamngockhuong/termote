@@ -142,7 +142,9 @@ export default {
   'jobs.grant.kindEdit': 'Edit files',
   'jobs.grant.prefix': 'Command prefix',
   'jobs.grant.prefixHint':
-    'A command the agent asks to run is answered when it is this prefix, or starts with it and a space. Type it yourself, and mind what it runs: pnpm test runs whatever package.json declares for test',
+    'A command the agent asks to run is answered when it is this prefix, or starts with it and a space followed by words that are no option (none starts with -). Type it yourself, with the options it needs',
+  'jobs.grant.runsCode':
+    'A test, build or script command runs code the agent can edit: pnpm test runs its test files and whatever package.json declares for test, go test the tests of the package. Grant one only when you would let the agent run that code',
   'jobs.grant.problem.empty': 'Type the command prefix',
   'jobs.grant.problem.length': 'The prefix is longer than 200 characters',
   'jobs.grant.problem.chars':

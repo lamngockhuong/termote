@@ -258,6 +258,9 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
                 >
                   {t('jobs.grant.prefixHint')}
                 </p>
+                <p className="m-0 text-[12px] text-warning">
+                  {t('jobs.grant.runsCode')}
+                </p>
                 {showCheck && (
                   <p role="alert" className="m-0 text-[12px] text-danger">
                     {check === 'empty'

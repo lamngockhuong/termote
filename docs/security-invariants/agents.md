@@ -854,10 +854,16 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
   no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
-  `--upload-pack`, `-x`, `difftool`, `bisect run`), and a package manager's second word is no
-  runner (`pnpm dlx`, `npm exec`) (`interpreter`); the words between the two dashed rules under the header (a wrapped row's leading `│`
+  `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
+  runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
+  exec`, also after options: `pnpm -s exec`, `pnpm --filter a exec`) (`interpreter`; the same two
+  checks hold a grant's prefix when it is made); the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
-  the prefix and a space (`no_grant`). Edit: the file path is absolute, inside the grant's directory,
+  the prefix and a space (`no_grant`), and no word after the prefix starts with `-` (`option`: a
+  granted program runs another through its own options, `rg --pre=x`, `tar --to-command=x`, `go
+  test -exec=x`, so only the options the user typed into the prefix are covered). A grant for a
+  test, build or script command still runs code the agent can edit (its test files, a script it
+  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every
   component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
   short name or stream, nothing case folding or Windows maps onto another name), not a
@@ -871,7 +877,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
   (the dialog's signature checked again before the key). The use is kept on the grant and as a
   `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
-  the grant, job, pane, path and the command's SHA-256, never the command. Over the local socket and
+  the grant, job, pane, path, the command's SHA-256, never the command, and `confirmed`: once the key
+  that answers is sent the use is recorded even when the dialog is not seen to close
+  (`answer_not_confirmed`, `keySent`), with `confirmed="false"`, since the answer may still take
+  effect; a refusal before the key records nothing. Over the local socket and
   the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
   before any key) every option of a permission dialog of any agent, also when another
   termote forwards its own CLI's answer over the bridge (an origin other than `password`, `device`
@@ -880,4 +889,6 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
   or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
   and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
-  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, by).
+  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by)
+  once its key is sent, also when the dialog then stays open (`confirmed="false"`,
+  `TestDelegatedAnswerNotConfirmed`, `TestCLIAnswerAuditedOnceSent`).

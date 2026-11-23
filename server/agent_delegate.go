@@ -261,13 +261,19 @@ func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, s
 		if !ok || !slices.Equal(words, strings.Fields(cmd)) {
 			return delegation{}, refuseDelegation("mismatch")
 		}
+		why := "no_grant"
 		for _, g := range grants {
-			if checkDelegateCommand(cmd, g.grant.Prefix) == "" {
+			switch code := checkDelegateCommand(cmd, g.grant.Prefix); code {
+			case "":
 				d.jobID, d.grantID, d.command = g.job, g.grant.ID, cmd
 				return d, nil
+			case "no_grant":
+			default:
+				// The prefix matched but a word after it is an option.
+				why = code
 			}
 		}
-		return delegation{}, refuseDelegation("no_grant")
+		return delegation{}, refuseDelegation(why)
 	}
 	file, _ := call.Input["file_path"].(string)
 	shown, ok := dialogPath(screen, pr.Title)
@@ -381,10 +387,10 @@ func (a *agentAPI) paneNow(paneID string) (snapPane, bool) {
 
 // recordDelegation keeps the answer on its grant and job, and in the log:
 // the command's hash only, never the command.
-func (a *agentAPI) recordDelegation(paneID string, d delegation) {
+func (a *agentAPI) recordDelegation(paneID string, d delegation, confirmed bool) {
 	sum := sha256.Sum256([]byte(d.command + d.path))
 	auditf("dialog_delegated", "grant", d.grantID, "job", d.jobID, "pane", paneID, "path", d.path,
-		"command_sha256", hex.EncodeToString(sum[:]))
+		"command_sha256", hex.EncodeToString(sum[:]), "confirmed", confirmed)
 	if a.jobs == nil {
 		return
 	}
