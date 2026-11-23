@@ -1,5 +1,13 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 
 const {
@@ -8,12 +16,14 @@ const {
   mockFetchUsage,
   mockTranscript,
   mockSendMessage,
+  mockInterrupt,
 } = vi.hoisted(() => ({
   mockFetchOverview: vi.fn(),
   mockFetchActivity: vi.fn(),
   mockFetchUsage: vi.fn(),
   mockTranscript: vi.fn(),
   mockSendMessage: vi.fn(),
+  mockInterrupt: vi.fn(),
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
@@ -23,11 +33,12 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchTranscript: (pane: string) => mockTranscript(pane),
   sendAgentMessage: (pane: string, text: string, cursor: string) =>
     mockSendMessage(pane, text, cursor),
+  interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
 }))
 
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
-import { RequestError } from '../hooks/use-mux-api'
+import { AgentRequestError, RequestError } from '../hooks/use-mux-api'
 import { agentCards } from '../utils/agent-cards'
 import { OVERVIEW_TICK, OverviewScreen } from './overview-screen'
 
@@ -544,6 +555,58 @@ describe('OverviewScreen, loading and failing', () => {
     expect(screen.getByRole('region', { name: 'Accounts' })).toHaveTextContent(
       'Codex · team5h12%updated just now',
     )
+  })
+
+  it('shows one Stop refusal at a time, the latest replacing the one before', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const working = (id: string): SessionPane => ({
+      id,
+      label: 'claude',
+      hasAgent: true,
+      agentName: 'claude',
+      agentStatus: 'working',
+      agentSince: '2026-10-13T09:01:00Z',
+    })
+    mockFetchOverview.mockResolvedValue({
+      serverNow: '2026-10-13T09:10:00Z',
+      panes: [
+        { paneId: 'p-a', key: 'p-a', cursor: 'ca' },
+        { paneId: 'p-b', key: 'p-b', cursor: 'cb' },
+      ],
+    })
+    mockInterrupt
+      .mockRejectedValueOnce(new AgentRequestError(409, 'agent_blocked', 'no'))
+      .mockRejectedValueOnce(new TypeError('offline'))
+    renderScreen({
+      sessions: [
+        tab('ta', 'g1', [working('p-a')]),
+        tab('tb', 'g1', [working('p-b')]),
+      ],
+    })
+    await act(async () => {})
+    const stops = screen.getAllByRole('button', { name: /^Stop Claude Code, / })
+    expect(stops).toHaveLength(2)
+    await act(async () => {
+      fireEvent.click(stops[0])
+    })
+    expect(
+      screen.getByText(
+        'Claude Code was not stopped: The agent waits for an answer to a dialog',
+      ),
+    ).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(stops[1])
+    })
+    expect(screen.getAllByText(/was not stopped/)).toHaveLength(1)
+    expect(screen.queryByText(/waits for an answer to a dialog/)).toBeNull()
+    // It goes away by itself.
+    await act(async () => {
+      vi.advanceTimersByTime(10_000)
+    })
+    expect(screen.queryByText(/was not stopped/)).toBeNull()
   })
 
   it('says nothing about agents before the first snapshot', () => {

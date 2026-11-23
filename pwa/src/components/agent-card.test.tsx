@@ -473,59 +473,46 @@ describe('AgentCard Stop', () => {
     expect(stop()).toBeNull()
   })
 
-  it('says why it was not stopped', async () => {
+  it('says why it was not stopped, to the overview', async () => {
     const working = pane({ agentStatus: 'working' })
     mockInterrupt.mockRejectedValueOnce(
       new AgentRequestError(409, 'agent_blocked', 'no'),
     )
+    const onStopFailed = vi.fn()
     const { unmount } = renderCard({
       pane: working,
       overview: ov,
       canStop: true,
       opensChat: false,
+      onStopFailed,
     })
     expect(stop()).toHaveClass('top-2')
     await act(async () => {
       fireEvent.click(stop() as HTMLElement)
     })
-    expect(
-      screen.getByText(
-        'Claude Code was not stopped: The agent waits for an answer to a dialog',
-      ),
-    ).toBeInTheDocument()
+    expect(onStopFailed).toHaveBeenCalledWith(
+      'Claude Code was not stopped: The agent waits for an answer to a dialog',
+    )
     expect(stop()).not.toBeDisabled()
     unmount()
     mockInterrupt.mockRejectedValueOnce(new TypeError('offline'))
-    renderCard({ pane: working, overview: ov, canStop: true })
+    renderCard({ pane: working, overview: ov, canStop: true, onStopFailed })
     await act(async () => {
       fireEvent.click(stop() as HTMLElement)
     })
-    expect(
-      screen.getByText(/^Claude Code was not stopped: /),
-    ).toBeInTheDocument()
-  })
-
-  it('the refusal goes away by itself', async () => {
-    vi.useFakeTimers()
-    try {
-      mockInterrupt.mockRejectedValueOnce(
-        new AgentRequestError(409, 'interrupt_pending', 'no'),
+    expect(onStopFailed).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^Claude Code was not stopped: /),
+    )
+    // Without anyone to tell, a refusal is dropped.
+    mockInterrupt.mockRejectedValueOnce(new TypeError('offline'))
+    renderCard({ pane: working, overview: ov, canStop: true })
+    await act(async () => {
+      fireEvent.click(
+        screen.getAllByRole('button', {
+          name: 'Stop Claude Code, api / build',
+        })[1],
       )
-      renderCard({
-        pane: pane({ agentStatus: 'working' }),
-        overview: ov,
-        canStop: true,
-      })
-      await act(async () => {
-        fireEvent.click(stop() as HTMLElement)
-      })
-      expect(screen.getByText(/was not stopped/)).toBeInTheDocument()
-      await act(async () => {
-        vi.advanceTimersByTime(10_000)
-      })
-      expect(screen.queryByText(/was not stopped/)).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
+    })
+    expect(onStopFailed).toHaveBeenCalledTimes(2)
   })
 })

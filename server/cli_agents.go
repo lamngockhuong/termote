@@ -232,6 +232,12 @@ func (p snapPane) ref() string {
 	return p.group.Name + "/" + p.label()
 }
 
+// key names the pane as the server's activity does (activityKey): its
+// tab's key when the pane's id is the tab's, else the pane's id.
+func (p snapPane) key() string {
+	return activityKey(p.tab, p.pane)
+}
+
 func (p snapPane) status() string {
 	if p.pane.Agent == nil {
 		return ""
@@ -711,19 +717,21 @@ func (e waitEnd) exit() int {
 	return 0
 }
 
-// waitVerdict is how each of ids ended in events, the activity after the
-// mark, with s the snapshot read just before them. A pane ends when its
+// waitVerdict is how each of keys ended in events, the activity after the
+// mark, with s the snapshot read just before them. A pane is followed by
+// its activity key, not its id: a tmux pane whose id is its window's
+// changes id when the tab moves, and keeps its key. A pane ends when its
 // turn ends (working or blocked to idle or done), when it goes to a dialog
 // that it still shows, or when its agent goes. A status it had before the
 // mark (a dialog shown, a turn done) ends nothing: only a change after it
 // does, so a pane that finished while the caller was busy elsewhere is
 // still reported, and one already reported is not reported again.
-func waitVerdict(events []activityEvent, ids []string, s Snapshot) map[string]waitEnd {
+func waitVerdict(events []activityEvent, keys []string, s Snapshot) map[string]waitEnd {
 	out := map[string]waitEnd{}
-	for _, id := range ids {
+	for _, key := range keys {
 		ended, blocked, gone := false, false, false
 		for _, e := range events {
-			if e.PaneID != id {
+			if e.Key != key {
 				continue
 			}
 			gone = e.To == ""
@@ -734,14 +742,14 @@ func waitVerdict(events []activityEvent, ids []string, s Snapshot) map[string]wa
 				ended = true
 			}
 		}
-		now, ok := findAgentPane(s, id)
+		now, ok := findPaneByKey(s, key)
 		switch {
 		case gone || !ok || now.pane.Agent == nil:
-			out[id] = waitGone
+			out[key] = waitGone
 		case blocked && now.status() == "blocked":
-			out[id] = waitDialog
+			out[key] = waitDialog
 		case ended:
-			out[id] = waitDone
+			out[key] = waitDone
 		}
 	}
 	return out
@@ -799,9 +807,10 @@ func (c *cli) agentsWait(args []string) error {
 		return err
 	}
 	// Every name is resolved before the wait starts, and a pane named twice
-	// is waited on once.
-	var ids []string
-	refs := map[string]string{}
+	// is waited on once. A pane is followed by its key; seen keeps how it
+	// was named then, for a pane no longer in the snapshot.
+	var keys []string
+	seen := map[string]snapPane{}
 	for _, name := range pos {
 		p, err := resolvePane(s, name)
 		if err != nil {
@@ -810,11 +819,12 @@ func (c *cli) agentsWait(args []string) error {
 		if p.pane.Agent == nil {
 			return fmt.Errorf("pane %s (%s) runs no agent", plainText(p.pane.ID), plainText(p.ref()))
 		}
-		if _, dup := refs[p.pane.ID]; !dup {
-			ids = append(ids, p.pane.ID)
-			refs[p.pane.ID] = plainText(p.ref())
+		if _, dup := seen[p.key()]; !dup {
+			keys = append(keys, p.key())
+			seen[p.key()] = p
 		}
 	}
+	w := waitPanes{keys: keys, seen: seen}
 	if !hasAfter {
 		if after, err = c.activityLatest(port); err != nil {
 			return err
@@ -828,8 +838,8 @@ func (c *cli) agentsWait(args []string) error {
 	mark := after
 	var events []activityEvent
 	waited := map[string]bool{}
-	for _, id := range ids {
-		waited[id] = true
+	for _, key := range keys {
+		waited[key] = true
 	}
 	// Failed reads in a row, of the activity and of the snapshot.
 	actFailures, snapFailures := 0, 0
@@ -842,30 +852,31 @@ func (c *cli) agentsWait(args []string) error {
 		} else {
 			actFailures = 0
 			if page.Reset {
-				return c.waitReset(s, ids, refs, page.Latest)
+				return c.waitReset(s, w, page.Latest)
 			}
 			for _, e := range page.Events {
-				if waited[e.PaneID] {
+				if waited[e.Key] {
 					events = append(events, e)
 				}
 			}
 			after = max(after, page.Latest)
-			if ends := waitVerdict(events, ids, s); len(ends) > 0 {
-				return c.waitEnded(ids, refs, ends, mark, page.Latest)
+			if ends := waitVerdict(events, keys, s); len(ends) > 0 {
+				return c.waitEnded(s, w, ends, mark, page.Latest)
 			}
-			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, ids) {
-				return c.waitNothing(s, ids, refs, page.Latest)
+			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, keys) {
+				return c.waitNothing(s, w, page.Latest)
 			}
 		}
 		if time.Now().After(deadline) {
 			var working []string
-			for _, id := range ids {
-				if p, ok := findAgentPane(s, id); ok && p.status() == "working" {
-					working = append(working, fmt.Sprintf("%s (%s)", refs[id], plainText(id)))
+			for _, key := range keys {
+				if p, ok := findPaneByKey(s, key); ok && p.status() == "working" {
+					ref, pid := w.name(s, key)
+					working = append(working, fmt.Sprintf("%s (%s)", ref, pid))
 				}
 			}
 			fmt.Fprintf(c.out, "still working after %s: %s\n", timeout, dash(strings.Join(working, ", ")))
-			fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(ids), mark)
+			fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, keys), mark)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
@@ -883,20 +894,39 @@ func (c *cli) agentsWait(args []string) error {
 	}
 }
 
-// anyWorking: one of ids shows its agent working in s.
-func anyWorking(s Snapshot, ids []string) bool {
-	for _, id := range ids {
-		if p, ok := findAgentPane(s, id); ok && p.status() == "working" {
+// anyWorking: one of keys shows its agent working in s.
+func anyWorking(s Snapshot, keys []string) bool {
+	for _, key := range keys {
+		if p, ok := findPaneByKey(s, key); ok && p.status() == "working" {
 			return true
 		}
 	}
 	return false
 }
 
-func waitIDs(ids []string) string {
-	out := make([]string, len(ids))
-	for i, id := range ids {
-		out[i] = plainText(id)
+// waitPanes are the panes a wait follows, by key in the order named, and
+// each as it was named when the wait started.
+type waitPanes struct {
+	keys []string
+	seen map[string]snapPane
+}
+
+// name is how the pane of key is printed: its ref and id in s, the ones
+// they have now (a tmux tab that moved has another id), else the ones it
+// had when the wait started.
+func (w waitPanes) name(s Snapshot, key string) (ref, id string) {
+	p, ok := findPaneByKey(s, key)
+	if !ok {
+		p = w.seen[key]
+	}
+	return plainText(p.ref()), plainText(p.pane.ID)
+}
+
+// ids are the current ids of keys, for the next wait to name.
+func (w waitPanes) ids(s Snapshot, keys []string) string {
+	out := make([]string, len(keys))
+	for i, key := range keys {
+		_, out[i] = w.name(s, key)
 	}
 	return strings.Join(out, " ")
 }
@@ -904,16 +934,16 @@ func waitIDs(ids []string) string {
 // waitEnded prints every pane that ended, in the order named, and the wait
 // that follows the others: from mark still, so a change of theirs recorded
 // after the snapshot this verdict read is not skipped.
-func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]waitEnd, mark, latest uint64) error {
+func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, mark, latest uint64) error {
 	code := 0
 	var rest []string
-	for _, id := range ids {
-		end, ok := ends[id]
+	for _, key := range w.keys {
+		end, ok := ends[key]
 		if !ok {
-			rest = append(rest, id)
+			rest = append(rest, key)
 			continue
 		}
-		ref, pid := refs[id], plainText(id)
+		ref, pid := w.name(s, key)
 		switch end {
 		case waitDone:
 			fmt.Fprintf(c.out, "%s (%s) is done; read it: termote agents read %s\n", ref, pid, pid)
@@ -925,7 +955,7 @@ func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]wa
 		code = max(code, end.exit())
 	}
 	if len(rest) > 0 {
-		fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(rest), mark)
+		fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, rest), mark)
 	} else {
 		fmt.Fprintf(c.out, "next wait starts after %d (termote agents wait <pane>... --after %d)\n", latest, latest)
 	}
@@ -937,10 +967,10 @@ func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]wa
 
 // waitStatus prints what each pane shows now, for a wait that cannot tell
 // what ended.
-func (c *cli) waitStatus(s Snapshot, ids []string, refs map[string]string) {
-	for _, id := range ids {
-		ref, pid := refs[id], plainText(id)
-		p, ok := findAgentPane(s, id)
+func (c *cli) waitStatus(s Snapshot, w waitPanes) {
+	for _, key := range w.keys {
+		ref, pid := w.name(s, key)
+		p, ok := findPaneByKey(s, key)
 		switch {
 		case !ok || p.pane.Agent == nil:
 			fmt.Fprintf(c.out, "%s (%s) no longer runs an agent\n", ref, pid)
@@ -954,20 +984,30 @@ func (c *cli) waitStatus(s Snapshot, ids []string, refs map[string]string) {
 
 // waitNothing: no pane works and none ended since the mark, so nothing
 // would ever end the wait.
-func (c *cli) waitNothing(s Snapshot, ids []string, refs map[string]string, latest uint64) error {
+func (c *cli) waitNothing(s Snapshot, w waitPanes, latest uint64) error {
 	fmt.Fprintln(c.out, "Nothing to wait for: no pane is working and none ended a turn since the mark.")
-	c.waitStatus(s, ids, refs)
+	c.waitStatus(s, w)
 	fmt.Fprintf(c.out, "next wait starts after %d\n", latest)
 	return &exitError{code: agentsExitIdle}
 }
 
 // waitReset: the server dropped the changes after the mark (too many, or it
 // restarted), so each pane is read again rather than guessed.
-func (c *cli) waitReset(s Snapshot, ids []string, refs map[string]string, latest uint64) error {
+func (c *cli) waitReset(s Snapshot, w waitPanes, latest uint64) error {
 	fmt.Fprintln(c.out, "history was reset; check each pane with read")
-	c.waitStatus(s, ids, refs)
-	fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(ids), latest)
+	c.waitStatus(s, w)
+	fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", w.ids(s, w.keys), latest)
 	return &exitError{code: agentsExitReset}
+}
+
+// findPaneByKey finds the pane whose activity key is key in s.
+func findPaneByKey(s Snapshot, key string) (snapPane, bool) {
+	for _, p := range snapshotPanes(s) {
+		if p.key() == key {
+			return p, true
+		}
+	}
+	return snapPane{}, false
 }
 
 // findAgentPane finds pane id in s.
@@ -1179,6 +1219,15 @@ func (c *cli) agentsStart(args []string) error {
 	g, err := resolveGroup(s, workspace)
 	if err != nil {
 		return err
+	}
+	// A prompt the server refuses for sure is refused before a worktree or
+	// a tab is made for it: on Windows every shell is refused one
+	// (startShellOK). This command reaches the server over the local socket
+	// only, so the server runs on this OS. A pane's shell (pwsh) is known
+	// only once its pane is open, and that refusal names what stays.
+	if prompt != "" && startPromptGOOS == "windows" {
+		return fmt.Errorf("a prompt cannot be handed to an agent at its start on Windows; start it without one, " +
+			"then give it the task (Claude Code: termote agents send <pane> -)")
 	}
 	var t startTarget
 	if branch != "" {

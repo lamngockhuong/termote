@@ -27,6 +27,7 @@ import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
 import { type DispatchTarget, OverviewDispatch } from './overview-dispatch'
 import { SearchToggle, SessionSearchField } from './session-search-field'
+import { Toast } from './toast'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 import { UsageTotalsStrip } from './usage-totals-strip'
@@ -215,6 +216,9 @@ export function OverviewScreen({
     setPicking(false)
     setPicked(new Set())
   }
+  // Why a card's Stop was refused: one toast for the whole overview, the
+  // latest refusal replacing the one before.
+  const [stopError, setStopError] = useState<string | null>(null)
 
   // Opening a pane from the log leaves the overview, as a card does.
   const log = (
@@ -402,6 +406,7 @@ export function OverviewScreen({
                         }
                         highlighted={!leaving && pane.id === highlighted}
                         canStop={!readOnly && canAnswer(pane)}
+                        onStopFailed={setStopError}
                       />
                     )
                     const pick = selecting && canAnswer(pane)
@@ -488,6 +493,13 @@ export function OverviewScreen({
       >
         <div className="overflow-y-auto px-4 pb-4">{log}</div>
       </Sheet>
+      {stopError && (
+        <Toast
+          variant="warning"
+          message={stopError}
+          onClose={() => setStopError(null)}
+        />
+      )}
     </section>
   )
 }

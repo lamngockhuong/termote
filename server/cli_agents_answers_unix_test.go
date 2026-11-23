@@ -256,7 +256,7 @@ func TestAgentsWaitScripted(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"wait", "%1", "%2"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
 		t.Errorf("shell pane: %v", err)
 	}
-	s.set("GET /api/mux/activity", activityOf(3, activityEvent{Seq: 3, PaneID: "%1", From: "working", To: "idle"}))
+	s.set("GET /api/mux/activity", activityOf(3, activityEvent{Seq: 3, Key: "%1", PaneID: "%1", From: "working", To: "idle"}))
 	tc.stdout.Reset()
 	if err := tc.dispatch("agents", []string{"wait", "%1", "api", "--after", "2"}); err != nil ||
 		strings.Count(tc.stdout.String(), "is done") != 1 || !strings.Contains(tc.stdout.String(), "next wait starts after 3") {
@@ -592,7 +592,7 @@ func TestAgentsWaitToleratesHiccups(t *testing.T) {
 			activityOf(1)(w, r)
 			return
 		}
-		activityOf(2, activityEvent{Seq: 2, PaneID: "%1", From: "working", To: "done"})(w, r)
+		activityOf(2, activityEvent{Seq: 2, Key: "%1", PaneID: "%1", From: "working", To: "done"})(w, r)
 	})
 	if err := tc.dispatch("agents", []string{"wait", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "is done") {
 		t.Errorf("hiccups: %v %s", err, tc.stdout)

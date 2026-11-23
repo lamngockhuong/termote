@@ -166,7 +166,7 @@ func TestWaitVerdict(t *testing.T) {
 		}
 		return Snapshot{Groups: []Group{{ID: "w", Tabs: []Tab{{ID: "w:0", Panes: panes}}}}}
 	}
-	ev := func(id, from, to string) activityEvent { return activityEvent{PaneID: id, From: from, To: to} }
+	ev := func(id, from, to string) activityEvent { return activityEvent{Key: id, PaneID: id, From: from, To: to} }
 	ids := []string{"%1", "%2", "%3"}
 	for _, tc := range []struct {
 		name   string
@@ -195,6 +195,16 @@ func TestWaitVerdict(t *testing.T) {
 		if !maps.Equal(got, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
 		}
+	}
+	// A pane whose id is its tab's (tmux without pane ids) is followed by
+	// its tab's key: after a move its id is another tab's old one.
+	moved := Snapshot{Groups: []Group{{ID: "w", Tabs: []Tab{
+		{ID: "w:0", Key: "@13", Panes: []Pane{{ID: "w:0", Agent: &AgentInfo{Name: "claude", Status: "working"}}}},
+		{ID: "w:1", Key: "@12", Panes: []Pane{{ID: "w:1", Agent: &AgentInfo{Name: "claude", Status: "done"}}}},
+	}}}}
+	events := []activityEvent{{Key: "@12", PaneID: "w:0", From: "working", To: "done"}}
+	if got := waitVerdict(events, []string{"@12", "@13"}, moved); !maps.Equal(got, map[string]waitEnd{"@12": waitDone}) {
+		t.Errorf("moved tab: %v", got)
 	}
 	for end, code := range map[waitEnd]int{waitDone: 0, waitDialog: agentsExitDialog, waitGone: agentsExitGone} {
 		if end.exit() != code {
