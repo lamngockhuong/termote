@@ -469,3 +469,24 @@ func httptestRequest(method, path string, body []byte) *http.Request {
 	r.Header.Set("Content-Type", "application/json")
 	return r
 }
+
+// A grant to edit files covers the job's worktree: none is given while the
+// job's agent works in another folder (the job was moved), a command grant
+// still is.
+func TestGrantEditOutsideWorktree(t *testing.T) {
+	dt := newDelegateTest(t, delegateScreen(t, "edit"), "")
+	path := "/api/mux/jobs/" + dt.job + "/grants"
+	at := func(cwd string) {
+		dt.f.mu.Lock()
+		dt.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Name: "claude", Cwd: cwd}
+		dt.f.mu.Unlock()
+		dt.snapshot()
+	}
+	at(dt.wt)
+	dt.grant("edit", "", 30)
+	at(t.TempDir())
+	if code, out := dt.do("full", http.MethodPost, path, map[string]any{"kind": "edit"}); code != http.StatusConflict || out["code"] != "grant_outside_worktree" {
+		t.Errorf("edit outside = %d %v", code, out)
+	}
+	dt.grant("bash", "pnpm test", 30)
+}

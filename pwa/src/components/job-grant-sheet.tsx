@@ -74,7 +74,10 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
   const canGive = canGrant && !jobFinished(job.state) && !!job.agent
   const check = kind === 'bash' ? grantPrefixProblem(prefix) : null
   const showCheck = check && (check !== 'empty' || tried)
-  const editBlocked = kind === 'edit' && !dir
+  // An edit grant covers the worktree; the server refuses one while the
+  // job's agent works in another folder
+  const outside = !!dir && !!job.live.outsideWorktree
+  const editBlocked = kind === 'edit' && (!dir || outside)
 
   const left = (expires: string) => {
     const min = Math.max(1, Math.ceil((Date.parse(expires) - now) / 60_000))
@@ -277,9 +280,11 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
             ) : (
               <>
                 <p className="m-0 text-[12px] text-fg-muted">
-                  {dir
-                    ? t('jobs.grant.editHint')
-                    : t('jobs.grant.editNeedsWorktree')}
+                  {outside
+                    ? t('jobs.grant.editOutsideWorktree')
+                    : dir
+                      ? t('jobs.grant.editHint')
+                      : t('jobs.grant.editNeedsWorktree')}
                 </p>
                 <p className="m-0 text-[12px] text-fg-muted">
                   {t('jobs.grant.editDenied')}

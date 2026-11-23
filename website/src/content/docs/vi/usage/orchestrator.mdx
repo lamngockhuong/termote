@@ -150,7 +150,7 @@ việc để orchestrator nhận (`start --job <id>`), sửa việc và cấp �
 Hộp thoại xin quyền (chạy lệnh, sửa file) là việc của bạn. Để một việc dài vẫn chạy tiếp khi bạn
 vắng mặt, bạn có thể cấp cho agent của một việc một ủy quyền trên PWA, khi đăng nhập bằng mật khẩu
 hoặc bằng thiết bị đã ghép: chạy các lệnh bắt đầu bằng một tiền tố do bạn gõ (`pnpm test`), hoặc
-sửa file trong worktree của việc, tối đa một ngày. Chỉ bạn mới cấp được ủy quyền: orchestrator,
+sửa file trong worktree của việc khi agent đang làm trong đó, tối đa một ngày. Chỉ bạn mới cấp được ủy quyền: orchestrator,
 dòng lệnh, một Termote khác và server không bật đăng nhập đều không cấp được.
 
 Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ

@@ -50,6 +50,8 @@ export default {
     'Only a password sign-in or the CLI can do this',
   'errors.grant_invalid': 'This command prefix cannot be granted',
   'errors.grant_not_found': 'This grant no longer exists',
+  'errors.grant_outside_worktree':
+    "The job's agent works outside the job's worktree, so no grant to edit files can be given",
   'errors.grant_pwa_only':
     'Only a browser signed in with the password, or a fully paired device, gives grants',
   'errors.hardlink': 'The file has several hard links',

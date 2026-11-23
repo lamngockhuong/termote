@@ -807,7 +807,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   Basic auth and a server without sign-in get 403 `grant_pwa_only`, and there is no CLI command that
   makes one. This is the user's say given where the user reads the job, not a wall against a process
   of the same OS user (which can read the password). A grant is pinned when made to the job's agent
-  as recorded (`jobAgent`) and, to edit, to the job's worktree directory; it is a bash prefix the
+  as recorded (`jobAgent`) and, to edit, to the job's worktree directory, refused with 409
+  `grant_outside_worktree` while the agent's pane is outside it (`live.outsideWorktree`, a job
+  moved to a pane elsewhere); it is a bash prefix the
   command rules accept or "edit", lasts 1 minute to 24 hours, and ends when revoked, expired, the job
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
   each. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);

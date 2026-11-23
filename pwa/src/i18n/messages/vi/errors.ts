@@ -45,6 +45,8 @@ export default {
     'Chỉ làm được khi đăng nhập bằng mật khẩu hoặc dùng CLI',
   'errors.grant_invalid': 'Không thể ủy quyền cho tiền tố lệnh này',
   'errors.grant_not_found': 'Ủy quyền này không còn tồn tại',
+  'errors.grant_outside_worktree':
+    'Agent của việc này đang làm ở ngoài worktree của việc, nên không cấp được ủy quyền sửa file',
   'errors.grant_pwa_only':
     'Chỉ trình duyệt đăng nhập bằng mật khẩu hoặc thiết bị ghép nối toàn quyền mới cấp được ủy quyền',
   'errors.hardlink': 'File có nhiều liên kết cứng',

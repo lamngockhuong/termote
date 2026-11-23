@@ -115,6 +115,8 @@ export default {
     'Một từ bao gồm mọi lệnh của {word}. Tiền tố dài hơn thì an toàn hơn',
   'jobs.grant.editHint':
     'Việc sửa một file trong worktree của việc này sẽ được trả lời, trừ những file không ủy quyền nào bao gồm',
+  'jobs.grant.editOutsideWorktree':
+    'Agent của việc này hiện làm ở ngoài worktree của việc, mà ủy quyền sửa file chỉ bao gồm worktree',
   'jobs.grant.editNeedsWorktree':
     'Việc này không có worktree, mà ủy quyền sửa file thì cần có',
   'jobs.grant.editDenied':
