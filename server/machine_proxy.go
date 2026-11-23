@@ -214,7 +214,7 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 		if isWriteMethod(r.Method) && !requireWriteRole(w, r) {
 			return
 		}
-		a, _ := authFrom(r.Context())
+		a, signedIn := authFrom(r.Context())
 		if rest == "stream-token" {
 			max := machineTokenMax
 			if isViewOnly(r) {
@@ -254,7 +254,7 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 				pr.Out.Host = localSocketHost
 				stripMachineHeaders(pr.Out.Header, proxyHeader)
 				pr.Out.Header.Set(bridgeRoleHeader, string(requestRole(r.Context())))
-				if origin := originAuth(a); origin != "" {
+				if origin := originAuth(a, signedIn, isLocalSocket(r.Context())); origin != "" {
 					pr.Out.Header.Set(bridgeOriginAuthHeader, origin)
 				}
 			},
@@ -452,13 +452,27 @@ func (b *machineTrailerDrop) Close() error {
 	return err
 }
 
-// originAuth names how a request signed in here, for the machine's audit.
-func originAuth(a authInfo) string {
+// originAuth names how a request signed in here, for the machine's audit
+// and for what it lets a browser do there (a permission dialog's options,
+// cliMayChoose): a browser signed in with the password or a paired device,
+// or any client of a server without sign-in ("none"), apart from the CLI
+// (the local socket, or Basic auth).
+func originAuth(a authInfo, signedIn, socket bool) string {
+	switch {
+	case socket:
+		return "socket"
+	case !signedIn:
+		return "none"
+	}
 	switch a.Kind {
 	case authDevice:
 		return "device"
-	case authSession, authBasic:
+	case authSession:
 		return "password"
+	case authBasic:
+		return "basic"
+	case authLocal:
+		return "socket"
 	}
 	return ""
 }

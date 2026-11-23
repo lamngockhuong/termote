@@ -453,3 +453,37 @@ func TestPushWatcherStopsWithContext(t *testing.T) {
 		t.Fatal("watcher kept running after cancel")
 	}
 }
+
+// A job moved to review is pushed by its id alone, never its title or
+// prompt, and only while some device can be sent one.
+func TestPushJobReview(t *testing.T) {
+	w, f, _ := newTestWatcher(t, nil)
+	store, _ := newTestJobStore(t)
+	store.setOnReview(w.notifyJobReview)
+	j, err := store.create(job{Title: "Secret title", Prompt: "secret prompt", State: "active"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.update(j.ID, "", func(j *job) error { j.State = "review"; return nil })
+	if len(w.queue) != 0 {
+		t.Fatal("queued with no subscription")
+	}
+	if err := w.store.add(fcmSub(t, 1)); err != nil {
+		t.Fatal(err)
+	}
+	store.update(j.ID, "", func(j *job) error { j.State = "active"; return nil })
+	store.update(j.ID, "", func(j *job) error { j.State = "review"; return nil })
+	// Still in review: no second push.
+	store.update(j.ID, "", func(j *job) error { j.Note = "n"; return nil })
+	if len(w.queue) != 1 {
+		t.Fatalf("queued %d", len(w.queue))
+	}
+	// A job made in review is pushed too.
+	if _, err := store.create(job{Title: "t", State: "review"}); err != nil || len(w.queue) != 2 {
+		t.Fatalf("made in review: queued %d %v", len(w.queue), err)
+	}
+	w.deliverEvent(context.Background(), <-w.queue)
+	if f.count() != 1 || !strings.HasSuffix(f.sent[0], `{"kind":"job_review","jobId":"`+j.ID+`"}`) || strings.Contains(f.sent[0], "ecret") {
+		t.Errorf("sent %v", f.sent)
+	}
+}

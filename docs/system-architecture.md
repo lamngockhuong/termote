@@ -357,8 +357,15 @@ GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sess
 GET    /api/mux/panes/{id}/agent/image?src=<part.image>          → the image bytes (PNG/JPEG/GIF/WebP) | 404 not_found | 429 busy
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?, at?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
-POST   /api/mux/panes/{id}/agent/interrupt body: {cursor} → 204 | 409 agent_not_working | agent_blocked | interrupt_pending | session_changed
-POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
+POST   /api/mux/panes/{id}/agent/interrupt body: {cursor} → 204 | 409 agent_not_working | agent_blocked | agent_no_turn | interrupt_pending | session_changed
+GET    /api/mux/jobs?all=1&workspace=                            → {jobs, readOnly, serverNow, canGrant}   (view-only: id, title, state, branch, live, updated)
+POST   /api/mux/jobs                       body: {title, prompt?, note?, state?, pane?, createdBy? (socket), workspace?, worktree? (socket)} → 201 {job}
+PATCH  /api/mux/jobs/{id}                  body: {title?, prompt?, note?, state?, pane?, worktree? (socket), updated (browser)} → {job} | 409 job_conflict {job}
+DELETE /api/mux/jobs/{id}?updated=                               → {ok}
+POST   /api/mux/jobs/{id}/event            body: {kind, text?, lastTs?, cursor?, sig?, diff?} (socket only) → {job}
+POST   /api/mux/jobs/{id}/grants           body: {kind: bash|edit, prefix?, minutes?} (signed-in browser only) → 201 {job, grant}
+DELETE /api/mux/jobs/{id}/grants/{gid}     (signed-in browser only)  → {job}
+POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} | {promptId, delegated: true} (socket) → 204 | 403 answer_always_refused | 409 delegation_out_of_scope {reason}
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 POST   /api/mux/panes/{id}/agent/start    body: {kind, prompt?} → {ok, state: "starting", prompt} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
@@ -1567,6 +1574,34 @@ When a Claude session has running subagents, `lastTs` is the newest of the trans
 and those subagents' files, so an agent waiting on its subagents is not taken as stuck. That read
 only takes the transcript's new rows and the directory listing (shared for 2 s), never a meta or
 subagent file.
+
+For a pane the snapshot shows running Claude Code `working`, the read also captures its screen
+through the prompt route's cache and sends `background`, what its working line says it only waits
+for (a background agent, shells): the card hides Stop for it, as the Chat composer does.
+
+### Job ledger (`/api/mux/jobs*`)
+
+`server/job_store.go` keeps the work an orchestrator agent hands out, in
+`<stateDir>/jobs/jobs.json` (the tasks file's pattern: a lock file, read again before every
+change, a corrupt or newer file never written). `termote agents start` records a job, the other
+`agents` commands add to its history (`/event`, socket only), and the PWA's Plan section lists,
+adds and edits jobs. A job's agent is the one the pane's agent lookup found when it was given the
+job (`server/job_identity.go`): its activity key with the process id and start time, or, without
+a process (Herdr's own agents), its session id, so an agent at a tmux `%N` reused after a restart
+is not the job's. Nothing the ledger stores is about what the agent does now: each `GET` reads it
+from the tracker's last snapshot, the cached agent lookup, the overview's background read and the
+agent's newest transcript entry (never a message of the user's), and calls a turn `unread` when that
+entry is later than the read mark the CLI's `read` moved, or belongs to another conversation. `wait --job` polls this, so a turn that
+ended before the wait or while the server was down is still reported. A job moved to `review`
+pushes `job_review` with its id.
+
+A user signed in to the PWA gives a job's agent grants (`server/job_grants.go`): run commands that
+start with a prefix, or edit files in the job's worktree, for up to a day. `termote agents answer
+<pane> --delegated` asks the server to answer the open permission dialog under one; the server
+compares the dialog on screen with the single tool call the main transcript has waiting, applies
+the rules of `server/agent_delegate_rules.go` and chooses the option labelled `Yes`
+(`server/agent_delegate.go`). The full list of checks is the Dialog delegation entry of
+[`security-invariants/agents.md`](security-invariants/agents.md).
 
 ### Agent tokens and estimated cost (`/agent/usage`, `/agent/usage/summary`, `/usage`)
 

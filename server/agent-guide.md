@@ -165,8 +165,20 @@ termote agents answer <pane>                   # show the dialog; then: answer <
 termote agents diff <pane> --stat              # its commits since the base, then what is not committed
 termote agents stop <pane> --cursor <cursor>   # end its turn, as Esc (cursor from read --json)
 termote agents start --workspace <id> --kind claude 'Write the tests'
-termote agents start --workspace <id> --kind claude --worktree fix-tests 'Fix the tests'
+termote agents start --workspace <id> --kind claude --worktree fix-tests --title 'Fix the tests' 'Fix the failing tests'
+termote agents jobs                            # the job ledger: each job's pane, status, unread turn, branch, dir
+termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 5: gone
+termote agents job set <id> --state review --note 'What was done'
+termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
 ```
+
+termote keeps a job ledger for you: every `start` records a job (`--title`, never the prompt:
+view-only devices see titles; `--job <id>` takes up a job the user added in the PWA), and `send`,
+`read`, `answer`, `stop` and `diff --stat` note what they did on the job of their pane. Begin with
+`termote agents jobs`; it outlives a compacted conversation and a server restart. `wait --job`
+reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
+is gone (`job set <id> --pane <pane>` or `--state abandoned`). Set `review` with a note when an
+agent is done; leave `done` to the user.
 
 Keep a mark for each pane you wait on: `send` and `start` print the pane with its own
 (`<pane>@<seq>`), `wait` prints a `next:` line with each pane it did not report and its mark, and
@@ -182,8 +194,8 @@ default the workspace's HEAD) and starts the agent in a new workspace of its own
 `--workspace` names, and `--name` names that workspace; Herdr puts the worktree under
 `~/.herdr/worktrees/<repo>/`. A new worktree has no `node_modules`, so its git hooks are skipped
 until its dependencies are installed (`start` says so when there is a lockfile). Run again, it
-goes on in the worktree it made, or, while that worktree's agent still runs, it names its pane to
-`send` to instead; a branch that exists without a worktree is refused. Nothing it makes is removed
+goes on in the worktree it made and with its job: an idle agent there gets the prompt, one that
+works or waits on a dialog is named instead; a branch that exists without a worktree is refused. Nothing it makes is removed
 for you. After an `answer`, `wait` returns 3 again while the
 dialog goes on (its next question, another tab, a box just ticked): show it again with `answer
 <pane>`. A pane on a dialog stays in the `next:` line, so the wait after an answer follows it.
@@ -195,9 +207,13 @@ directory for the workspace, ask which workspace to use. The prompt of `start` i
 first message, for every kind (`-` reads it from stdin); a pane whose shell is PowerShell, or any
 pane on Windows, refuses one (`prompt_unsupported_shell`). Keep secrets out of a prompt: it is the
 agent's command-line argument, which other local users can see. A dialog asking to run a command or change a file is the user's decision:
-show it to them before answering. Stop an agent only when the user asks for it; a stop refused
-with `session_changed` is never tried again, and one refused with `agent_no_turn` means no turn runs
-that Esc would end (it may only wait for background work): read it instead.
+try `answer <pane> --delegated` first (it answers only what a grant the user gave in the PWA
+covers, checked by termote), else show the dialog to the user before answering. termote refuses
+any option that stops a permission dialog asking again (`answer_always_refused`), and only the
+user gives a grant. Stop an agent only when the user asks for it; a stop refused
+with `session_changed` is never tried again, one refused with `agent_no_turn` means no turn runs
+that Esc would end (it may only wait for background work): read it instead, and exit 8 means Esc
+went but the agent still works.
 
 ## Never
 

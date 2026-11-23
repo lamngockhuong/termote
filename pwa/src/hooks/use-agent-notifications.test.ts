@@ -204,6 +204,9 @@ describe('useAgentNotifications', () => {
     send({ type: 'other', hash: '#/s/g/t-p1' })
     send(null)
     expect(window.location.hash).toBe('#/s/g/t-p2/p2')
+    // A job's notification opens the overview's Plan
+    send({ type: 'termote-open', hash: '#/overview?plan=1' })
+    expect(window.location.hash).toBe('#/overview?plan=1')
   })
 
   describe('a link the worker kept (iOS drops its message)', () => {

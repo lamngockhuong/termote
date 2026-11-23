@@ -1,0 +1,50 @@
+
+
+  [38;5;246mRead [1m1[0m[38;5;246m file [39m
+
+[38;5;114m●[39m [1mUpdate[0m(]8;id=1fg4xy0;file:///home/user/proj/notes.txt\notes.txt]8;;\)
+[38;5;246m  ⎿  [39mAdded [1m1[0m line, removed [1m1[0m line
+     [2m 1 [0m hello
+     [38;5;167m[48;5;52m 2 -[38;5;231mworld                                                                                                                                                                                   [39m[49m
+     [38;5;77m[48;5;22m 2 +[38;5;231mthere                                                                                                                                                                                   [39m[49m
+
+[38;5;231m●[39m Tôi đã sửa xong [38;5;153mnotes.txt[39m: dòng 2 giờ là [38;5;153mthere[39m thay cho [38;5;153mworld[39m, phần còn lại không đổi. Trước khi sửa, tôi phải đọc tệp một lần vì công cụ Edit bắt buộc như vậy.
+
+  Hai tệp [38;5;153mPAR1.txt[39m và [38;5;153mPAR2.txt[39m từ yêu cầu trước chưa được tạo, vì bạn đã từ chối cả hai lệnh.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 10s · done 4:33 AM[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mUse the Write tool to create new.txt with content "abc". Nothing else.[39m
+[49m
+[38;5;114m●[39m [1mWrite[0m(]8;id=q5qqgn;file:///home/user/proj/new.txt\new.txt]8;;\)
+[38;5;246m  ⎿  [39mWrote [1m1[0m line to [1m]8;id=q5qqgn;file:///home/user/proj/new.txt\new.txt[0m]8;;\
+     [2m 1 [0mabc
+
+[38;5;231m●[39m Tôi đã tạo tệp [38;5;153mnew.txt[39m trong thư mục làm việc với nội dung [38;5;153mabc[39m.
+
+[38;5;246m✻[39m [38;5;246mSautéed for 4s · done 4:34 AM[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mRun exactly this single command with the Bash tool, verbatim: [38;5;153mpnpm test --run --flag01 --flag02 --flag03 --flag04 --flag05 --flag06 --flag07 --flag08 --flag09 --flag10 --flag11 --flag12 --flag13 [39m
+  [38;5;153m--flag14 --flag15 --flag16 --flag17 --flag18 --flag19 --flag20 --flag21 --flag22 --flag23 --flag24 --flag25 --flag26 --flag27 --flag28 --flag29 --flag30 --end[39m
+
+[38;5;246m[49m●[39m Running the test script with many extra arguments
+[38;5;246m  ⎿  $ pnpm test --run --flag01 --flag02 --flag03 --flag04 --flag05 --flag06 --flag07 --flag08 --flag09 --flag10 --flag11 --flag12 --flag13 --flag14 --flag15 --flag16 --flag17 --flag18 --flag19 [39m
+     [38;5;246m--flag20 --flag21 --flag22 --flag23 --flag24 --flag25 --flag26 --flag27 --flag28 --flag29 --flag30 --end[39m
+
+[38;5;153m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m [1m[38;5;153mBash command[0m
+ [1mTip: auto mode handles these prompts for you — choose "switch to auto mode" below[0m
+ [38;5;246mRun the test script with many extra arguments[39m
+[38;5;239m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[39m [2m│[0m pnpm test --run --flag01 --flag02 --flag03 --flag04 --flag05 --flag06 --flag07 --flag08 --flag09 --flag10 --flag11 --flag12 --flag13 --flag14 --flag15 --flag16 --flag17 --flag18 --flag19 --flag20
+ [2m│[0m --flag21 --flag22 --flag23 --flag24 --flag25 --flag26 --flag27 --flag28 --flag29 --flag30 --end
+[38;5;239m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[39m This command requires approval
+
+ Do you want to proceed?
+ [38;5;153m❯[39m [38;5;246m1. [38;5;153mYes[39m
+   [38;5;246m2. [39mYes, and don’t ask again for: pnpm test *
+   [38;5;246m3. [39mYes, and switch to auto mode[38;5;246m · auto mode handles these prompts for you[39m
+   [38;5;246m4. [39mNo
+
+ [38;5;246mEsc to cancel · Tab to amend[39m

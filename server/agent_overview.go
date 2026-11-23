@@ -89,6 +89,13 @@ type overviewPane struct {
 	// Cursor: the signed cursor of the conversation the card sums up, which
 	// its Stop button names so it never reaches another session.
 	Cursor string `json:"cursor,omitempty"`
+	// Background: what a working Claude Code pane only waits for, as its
+	// working line names it ("1 background agent"); its turn is done, so
+	// the card shows no Stop button.
+	Background string `json:"background,omitempty"`
+	// working: a Claude Code pane the snapshot shows working, whose screen
+	// is read for Background.
+	working bool
 	// change: the pane's directory as last read, for the role check of
 	// each request (a view-only client never sees a home dir's changes).
 	change *overviewChange
@@ -179,7 +186,8 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 		for _, t := range g.Tabs {
 			for _, p := range t.Panes {
 				if p.Agent != nil && len(panes) < overviewMaxPanes && (only == "" || p.ID == only) {
-					panes = append(panes, overviewPane{PaneID: p.ID, Key: activityKey(t, p)})
+					panes = append(panes, overviewPane{PaneID: p.ID, Key: activityKey(t, p),
+						working: p.Agent.Name == "claude" && p.Agent.Status == "working"})
 				}
 			}
 		}
@@ -213,6 +221,7 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 		err         error
 		usage       *overviewSessionUsage
 		usageFailed bool
+		background  string
 	}
 	results := make(chan result, len(panes))
 	sem := make(chan struct{}, overviewParallel)
@@ -224,6 +233,9 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 			res := result{i: i, sum: sum, err: err}
 			if err == nil {
 				res.usage, res.usageFailed = a.paneSessionUsage(panes[i].PaneID)
+			}
+			if panes[i].working {
+				res.background = a.paneBackground(panes[i].PaneID)
 			}
 			results <- res
 		}()
@@ -238,6 +250,7 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 		case r := <-results:
 			done[r.i] = true
 			p := &panes[r.i]
+			p.Background = r.background
 			switch {
 			case r.err == nil:
 				p.LastText, p.LastTS, p.Usage, p.Cursor = r.sum.lastText, r.sum.lastTS, r.sum.usage, r.sum.cursor
@@ -305,6 +318,33 @@ func gatherAccounts(limits []paneLimits) []overviewAccount {
 	return out
 }
 
+// paneBackground is what a working Claude Code pane only waits for, read
+// off its screen through the capture cache the prompt route uses: empty when
+// a turn runs, a dialog is open, or the screen cannot be read.
+func (a *agentAPI) paneBackground(paneID string) string {
+	wr, ok := a.m.(agentWriter)
+	if !ok || a.loc == nil {
+		return ""
+	}
+	s, err := a.session(paneID)
+	if err != nil || s.Agent != "claude" || s.Status != "working" {
+		return ""
+	}
+	screen, err := a.input.captures.do(paneID+"\x00"+s.Target, func() (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), muxTimeout)
+		defer cancel()
+		return wr.Capture(ctx, s.Target)
+	})
+	if err != nil {
+		return ""
+	}
+	sc := readAgentScreen(s.Agent, screen)
+	if sc.prompt != nil || sc.activity == nil {
+		return ""
+	}
+	return sc.activity.Background
+}
+
 // summarizePane reads the end of the pane's transcript through the cache
 // the Chat view's first read uses.
 func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
@@ -336,6 +376,9 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 		if last, err := time.Parse(time.RFC3339Nano, sum.lastTS); err != nil || w.After(last) {
 			sum.lastTS = w.UTC().Format(activityTimeFormat)
 		}
+		if last, err := time.Parse(time.RFC3339Nano, sum.agentTS); err != nil || w.After(last) {
+			sum.agentTS = w.UTC().Format(activityTimeFormat)
+		}
 	}
 	return sum, nil
 }
@@ -366,7 +409,13 @@ type transcriptSummary struct {
 	cursor   string // the conversation read (transcriptResponse.Cursor)
 	lastText string
 	lastTS   string
-	usage    *overviewUsage
+	// agentTS: the time of the agent's newest entry (assistant), or of a
+	// later write of one of its subagents: what the job ledger counts as
+	// a turn to read (a message of the user's is not one)
+	agentTS string
+	// entryTS: agentTS from the transcript alone, never a subagent's write
+	entryTS string
+	usage   *overviewUsage
 	// provider: the provider of an OpenCode answer's model
 	provider  string
 	limits    *codexLimits
@@ -385,6 +434,9 @@ func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSu
 		e := entries[i]
 		if sum.lastTS == "" && e.TS != "" {
 			sum.lastTS = e.TS
+		}
+		if sum.agentTS == "" && e.TS != "" && e.Role == "assistant" {
+			sum.agentTS, sum.entryTS = e.TS, e.TS
 		}
 		if e.Role != "assistant" {
 			continue

@@ -417,6 +417,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_agents_diff.go`                       | `agents diff`: branch commits and uncommitted changes as data  |
 | `server/cli_agents_worktree.go`                   | `agents start --worktree`: make or reuse a worktree            |
 | `server/cli_agents_self.go`                       | `agents list`: which pane the CLI runs in (tmux/Herdr/Zellij)  |
+| `server/cli_agents_jobs.go`                       | `agents jobs`, `job add/show/set`, `wait --job`, start's job   |
 | `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
 | `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
 | `scripts/termote-plugins.sh`                      | Writes the termote-plugins marketplace at each stable release  |
@@ -451,6 +452,12 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/tasks_shell.go`                           | `taskMux`, shells, quoting, the run's markers                  |
 | `server/mux_{tmux,herdr,zellij}_tasks.go`         | Each backend's task tab, idle shell, typing, text              |
 | `server/task_store.go`                            | User tasks (`<stateDir>/tasks`), limits, lock                  |
+| `server/job_store.go`                             | Job ledger (`<stateDir>/jobs`), limits, lock, review hook      |
+| `server/job_routes.go`                            | `/api/mux/jobs*`: roles, live status, unread from transcript   |
+| `server/job_identity.go`                          | A job's agent: activity key + pid and start time, or session   |
+| `server/job_grants.go`                            | Grants to answer dialogs: made only from a signed-in browser   |
+| `server/agent_delegate.go`                        | `answer --delegated`: dialog vs waiting tool call, grant check |
+| `server/agent_delegate_rules.go`                  | Command chars, interpreters, denied paths, links               |
 | `server/task_routes.go`                           | `/api/mux/tasks*`: list, save, delete                          |
 | `pwa/src/components/tasks-view.tsx`               | Tasks view: list, Run, Send to agent                           |
 | `pwa/src/components/task-row.tsx`                 | One task: command, hooks, last run, buttons                    |

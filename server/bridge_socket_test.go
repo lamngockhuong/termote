@@ -177,7 +177,7 @@ func TestBridgeOriginAuthHeader(t *testing.T) {
 	h := bridgeAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ = authFrom(r.Context())
 	}), http.NotFoundHandler())
-	for v, want := range map[string]string{"password": "password", "device": "device", "cli": "", "": ""} {
+	for v, want := range map[string]string{"password": "password", "device": "device", "none": "none", "basic": "basic", "socket": "socket", "cli": "", "": ""} {
 		req := onBridge(apiRequest("GET", "/api/mux/snapshot", ""))
 		req.Header.Set(bridgeOriginAuthHeader, v)
 		serve(h, req)

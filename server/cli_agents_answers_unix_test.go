@@ -610,16 +610,40 @@ func TestAgentsStopScripted(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
 		t.Errorf("shell pane: %v", err)
 	}
-	s.set("POST /api/mux/panes/%1/agent/interrupt", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	every, wait := agentsStopEvery, agentsStopWait
+	agentsStopEvery, agentsStopWait = 10*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { agentsStopEvery, agentsStopWait = every, wait })
+	s.set("POST /api/mux/panes/%1/agent/interrupt", func(w http.ResponseWriter, r *http.Request) {
+		// The turn ends as the key arrives.
+		s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
+		w.WriteHeader(http.StatusNoContent)
+	})
 	if err := tc.dispatch("agents", []string{"stop", "api", "--cursor", "c1"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.posts) != 1 || s.posts[0] != `/api/mux/panes/%1/agent/interrupt {"cursor":"c1"}` {
 		t.Errorf("posts %v", s.posts)
 	}
-	if out := tc.stdout.String(); !strings.Contains(out, "Stopped the turn of w/api (%1)") || !strings.Contains(out, "input_has_draft") {
+	if out := tc.stdout.String(); !strings.Contains(out, "Stopped the turn of w/api (%1)\n") || !strings.Contains(out, "input_has_draft") {
 		t.Errorf("out: %s", out)
 	}
+	// Still working once Esc went: said so, with its own exit status; only
+	// background work left: stopped, and said what still runs.
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
+	s.set("POST /api/mux/panes/%1/agent/interrupt", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	s.set("GET /api/mux/panes/%1/agent/prompt", jsonAnswer(promptResponse{Activity: &AgentActivity{Label: "Pondering"}}))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); exitCode(err) != agentsExitStillWorking ||
+		!strings.Contains(tc.stdout.String(), "Esc was sent, but w/api (%1) still works; look at it: termote agents read %1") {
+		t.Errorf("still working: exit %d: %s", exitCode(err), tc.stdout)
+	}
+	s.set("GET /api/mux/panes/%1/agent/prompt", jsonAnswer(promptResponse{Activity: &AgentActivity{Label: "Waiting", Background: "1 background agent"}}))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); err != nil ||
+		!strings.Contains(tc.stdout.String(), "Stopped the turn of w/api (%1); it still waits for background work (1 background agent)") {
+		t.Errorf("background left: %v: %s", err, tc.stdout)
+	}
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
 	for code, hint := range map[string]string{"agent_not_working": "nothing to stop", "agent_blocked": "agents answer", "interrupt_pending": "just stopped",
 		"session_changed": "termote agents list"} {
 		s.posts = nil

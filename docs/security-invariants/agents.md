@@ -91,6 +91,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   strip, the Chat view's header and the close-pane confirmation, a pane's name (pane strip, a
   one-pane tab's row, the Chat view's header), the Herdr metadata chips (pane strip, tab rows,
   group headers), and a branch name in a worktree group's header and the Changes header
+  For a pane whose snapshot shows Claude Code `working`, the overview also reads its screen through
+  the prompt route's capture cache (`paneBackground`, inside the same bounded parallel reads) and
+  sends `background`, the work its working line says it only waits for, never any other screen text;
+  the card then shows no Stop.
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude Code or OpenCode session (`AgentSession`, as the transcript): another
@@ -680,8 +684,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   exists without one is refused, and so are the main worktree's branch and a worktree the server
   says cannot be opened, all before any request that makes something; `busy` is retried for 90 s at most, a create that answered
   `unknown` or not at all is followed in the list for 60 s and never sent again; run again while that first
-  pane already runs an agent (the task's own, from a run before), it is refused before `agent/start`
-  with the pane named and `termote agents send <pane>` as the way on, what stays named too; a
+  pane already runs an agent (the task's own, from a run before), nothing is started: an idle agent
+  of the same kind gets the prompt through `agent/message` as `send` sends it (with its checks:
+  `input_has_draft`, readiness), and the worktree's unfinished job is made active again on that
+  agent; one that works or waits on a dialog, or is another kind, is refused before any request with
+  the pane and its job named, what stays named too; a
   `pane_busy` answer to a pane a run before opened reads the snapshot again and says the same when an
   agent runs there; after a start it names a lockfile (`pnpm-lock.yaml`, `package-lock.json`,
   `yarn.lock`, `bun.lock`, `bun.lockb`, a regular file by `Lstat`, never read) at the root of the
@@ -697,7 +704,27 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
-  `{"text"}`), so the server's dialog checks decide. `start` without `--worktree` opens a tab in the
+  `{"text"}`), so the server's dialog checks decide; over the socket the server refuses a permission
+  dialog's option that stops it asking (see Dialog delegation), and `answer --delegated` sends the
+  `promptId` and `delegated: true` only, never an option (exit 9 when no grant covers the dialog).
+  `stop` follows the pane after its 204 (snapshot and `agent/prompt` each second, 8 s at most) and
+  exits 8 when the agent still works; it never sends a second Escape. Every command that reaches a
+  pane notes what it did on the active job of that pane (`POST /api/mux/jobs/{id}/event`, see Job
+  ledger): the first 200 characters of a message, an answer's option and label (never typed text),
+  a stop's result, `diff --stat`'s counts, and for `read` the transcript's last entry time read
+  before the transcript and the cursor read with it; a ledger that cannot be read or written is a
+  warning on stderr, never the command's failure, and `--json` output stays clean. A job a start gives
+  to its new agent is written again every 0.5 s for 10 s while the server answers `job_no_agent`
+  (Herdr reports a new Claude Code session late, Codex has none before its first message), then
+  without the pane and its state, with `job set <id> --pane <pane> --state active` printed; the agent
+  is never recorded from anything but the server's own lookup. `wait --job`
+  reads `GET /api/mux/jobs?all=1` on every poll (no mark), reports a job whose `live.unread` is set,
+  a blocked pane whose dialog signature (`reportedSig`: kind, title, body, option labels, or
+  `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's
+  `reported` (then sends it as `reported`, so the same command asked twice is reported twice and a
+  dialog kept open once), only background work once, and a job whose agent is gone; `jobs
+  --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
+  nothing. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
   not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
   to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab
@@ -705,3 +732,95 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   start, see Starting an agent), never through `agent/message`; an answer without `prompt: true`
   (an older server) is reported as a start without it. Text from the server
   is printed without control, hidden or bidi characters (`cleanOut`, `plainText`)
+- **Job ledger** (`/api/mux/jobs*`, `server/job_store.go`, `server/job_routes.go`,
+  `server/job_identity.go`): `<stateDir>/jobs/jobs.json` (dir 0700 checked by `checkPrivateDir`,
+  a symlink refused), written as the tasks file is (`jobs.lock`, read again before each change,
+  `writeStateFile`; a corrupt file is never overwritten, a newer format is read only). Lock order:
+  `jobs.lock`, then the store's mutex; the store calls nothing outside it, and the routes read the
+  tracker and agent sessions before or after a store call, never inside one. 200 jobs, a finished one
+  not changed for 30 days dropped at the next write (finished ones make room first); title one line,
+  200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
+  hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
+  `codedError` codes (`job_not_found`, `job_conflict` with the job as it is, `too_many_jobs`,
+  `job_invalid`, `job_no_agent`), anything else a logged 500. `GET` is same-site
+  (`crossSiteRejection`) for every role; a view-only client gets `id, title, state, branch, live,
+  updated` only (never the prompt, note, directory, agent record, grants or history); `live`
+  carries the pane's folder now to a full client only, and the branch the overview's background
+  read found, which a view-only client does not get for a home dir (`viewHidden`), as the
+  overview's changes; the route never runs git itself. Writes:
+  `requireWriteRole` first; a browser's `PATCH` and `DELETE` need `updated` (a stale one is 409
+  `job_conflict`); `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
+  kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
+  with a cursor that verifies (`decodeCursor`). A browser's job is always `createdBy: "pwa"`; a
+  `worktree` in a request is ignored unless it comes over the socket, and then only names the source
+  workspace and branch: the directory is the one the server's own worktree list
+  (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
+  at or above the home dir (`jobDirTooWide`). A job's agent is recorded by the server from the
+  pane's agent lookup (`jobAgentOf`: activity key, kind, pid and process start time, session id);
+  it is the same agent only while the key, kind, pid and start time all match, or, where the backend
+  finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
+  after a restart reads `gone`. What the agent does (`live`) is computed per request from the
+  tracker's last snapshot (the CLI reads the snapshot before each ledger read, so it is fresh with
+  no page open), the cached agent lookup, the overview's screen read for background work and the
+  agent's newest transcript entry or subagent write (`summarizePane`'s `agentTS`; a message of the
+  user's is not one), so `unread` (a later one, or another conversation, than the read mark, only
+  while the agent is idle: one that only waits on background work is reported as that, once) survives a restart and needs no hook into the tracker; a `read` from the PWA's Chat
+  view does not move it. Giving the job another agent (`pane`) or finishing it
+  ends every grant it has. Moving a job to `review` queues a Web Push of kind `job_review` with the
+  job id only (never its title or prompt), only while a device can be sent one
+  (`notifyJobReview`), whether the job moved there or was made in it. Zellij renames move the
+  ledger's ids as the tracker's (`renameGroup`). In container mode the ledger exists but only the
+  PWA writes it (`termote agents` does not run there).
+- **Dialog delegation** (`server/job_grants.go`, `server/agent_delegate*.go`, `handleAnswer`):
+  a grant is made and revoked (`POST /api/mux/jobs/{id}/grants`, `DELETE .../grants/{gid}`) only by
+  a browser signed in with the password or as a full paired device (`canGrant`: `authSession` or
+  `authDevice` with role full, not the local socket); the CLI, the bridge (`machineForbiddenPath`),
+  Basic auth and a server without sign-in get 403 `grant_pwa_only`, and there is no CLI command that
+  makes one. This is the user's say given where the user reads the job, not a wall against a process
+  of the same OS user (which can read the password). A grant is pinned when made to the job's agent
+  as recorded (`jobAgent`) and, to edit, to the job's worktree directory; it is a bash prefix the
+  command rules accept or "edit", lasts 1 minute to 24 hours, and ends when revoked, expired, the job
+  finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
+  each. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
+  under the pane's lock it reads the session again (`sessionNow`) and the screen, requires the
+  `promptId` to be the dialog on screen now (`promptIs`), then refuses with 409
+  `delegation_out_of_scope` and a `reason`, sending no key, unless all hold: the agent is Claude
+  Code; the dialog is a permission dialog with its header (a dialog cut above it is `unparsed`) and
+  exactly one option labelled `Yes`; no subagent of the session runs (`subagentTree`); the main
+  transcript's last 4 MB hold exactly one tool call without a result (sidechain rows left out;
+  Claude Code 2.1.330 writes a call 50 to 110 ms before it draws its dialog, and two calls of one
+  message only once both are done, so their dialogs find none and are refused); the header names the
+  call's tool (`Bash command`/`Run command`: `Bash`; `Edit file`: `Edit`, `MultiEdit`; `Write
+  file`, `Create file`, `Overwrite file`: `Write`). Bash: the input has only `command`,
+  `description`, `timeout` (`run_in_background` and anything else: `input_keys`); the command is
+  printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
+  (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
+  no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
+  `delegateInterpreters`, which holds `git` too (its options and config run any program:
+  `--upload-pack`, `-x`, `difftool`, `bisect run`), and a package manager's second word is no
+  runner (`pnpm dlx`, `npm exec`) (`interpreter`); the words between the two dashed rules under the header (a wrapped row's leading `│`
+  dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
+  the prefix and a space (`no_grant`). Edit: the file path is absolute, inside the grant's directory,
+  shown on the row under the header as its path relative to that directory (`mismatch`), every
+  component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
+  short name or stream, nothing case folding or Windows maps onto another name), not a
+  denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
+  `.opencode`, `.agents`, `.husky`, `.githooks`, `.lefthook`, `.vscode`, `.idea`, `.cargo`,
+  `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
+  `AGENTS.md`, `.envrc`, `.env*`, `package.json`, lockfiles, `Makefile`, hook configs, sensitive
+  names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
+  symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
+  between this check and Claude Code's write a link can still appear, which an agent that can run
+  commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
+  (the dialog's signature checked again before the key). The use is kept on the grant and as a
+  `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
+  the grant, job, pane, path and the command's SHA-256, never the command. Over the local socket and
+  the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
+  before any key) every option of a permission dialog of any agent, also when another
+  termote forwards its own CLI's answer over the bridge (an origin other than `password`, `device`
+  or `none`, `browserOrigin`), except cancel, one whose label
+  is `No` or starts with `No` and a comma or a space, and the first option when it reads exactly `Yes`, `Yes, proceed` or
+  `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
+  or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
+  and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
+  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, by).

@@ -42,10 +42,15 @@ func TestMachineProxyHelpers(t *testing.T) {
 	if machineBodyLimit("/api/mux/panes/x/files/upload") != maxUploadFileSize || machineBodyLimit("/api/mux/tabs") < int64(fileWriteBody) {
 		t.Error("machineBodyLimit")
 	}
-	for a, want := range map[authKind]string{authDevice: "device", authSession: "password", authBasic: "password", authLocal: ""} {
-		if got := originAuth(authInfo{Kind: a}); got != want {
+	for a, want := range map[authKind]string{authDevice: "device", authSession: "password", authBasic: "basic", authLocal: "socket", authMachine: ""} {
+		if got := originAuth(authInfo{Kind: a}, true, false); got != want {
 			t.Errorf("originAuth(%d) = %q", a, got)
 		}
+	}
+	// No sign-in: a browser of a server without it, unless on the socket.
+	if originAuth(authInfo{}, false, false) != "none" || originAuth(authInfo{}, false, true) != "socket" ||
+		originAuth(authInfo{Kind: authSession}, true, true) != "socket" {
+		t.Error("originAuth without sign-in or on the socket")
 	}
 	if machinePathClass("panes/%1/files") != "panes" || machinePathClass("snapshot") != "snapshot" {
 		t.Error("machinePathClass")

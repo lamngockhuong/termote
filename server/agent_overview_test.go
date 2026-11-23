@@ -502,3 +502,54 @@ func TestPaneLimitsOfKeepsPaneOrder(t *testing.T) {
 		t.Errorf("paneLimitsOf = %+v", got)
 	}
 }
+
+// A working Claude Code pane that only waits for background work carries
+// what it waits for, so the card shows no Stop button; one running a turn,
+// on a dialog, or not working does not.
+func TestOverviewBackground(t *testing.T) {
+	f := workingClaude(t)
+	f.snap = agentPanes(1)
+	mux := http.NewServeMux()
+	agent := registerMuxRoutes(mux, f, newStreamTokenStore(), nil, nil)
+	agent.overview = newTTLCache[overviewRead](0)
+	agent.sessions = newTTLCache[agentLookup](0)
+	agent.input.captures = newTTLCache[string](0)
+	serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/snapshot", nil))
+	background := func() string {
+		t.Helper()
+		res := getOverview(t, mux, false)
+		if len(res.Panes) != 1 {
+			t.Fatalf("panes = %+v", res.Panes)
+		}
+		return res.Panes[0].Background
+	}
+	if got := background(); got != "" {
+		t.Errorf("running a turn: background = %q", got)
+	}
+	f.mu.Lock()
+	f.screen = fixtureScreen(t, "2.1.330-wait-background-agent")
+	f.mu.Unlock()
+	if got := background(); got != "1 background agent" {
+		t.Errorf("waiting on a background agent: background = %q", got)
+	}
+	f.mu.Lock()
+	f.screen = fixtureScreen(t, "2.1.286-permission-bash")
+	f.mu.Unlock()
+	if got := background(); got != "" {
+		t.Errorf("dialog: background = %q", got)
+	}
+	// Idle in the snapshot: its screen is not read at all.
+	f.mu.Lock()
+	f.screen = fixtureScreen(t, "2.1.330-wait-background-agent")
+	f.session.Status = "idle"
+	f.mu.Unlock()
+	if got := background(); got != "" {
+		t.Errorf("idle session: background = %q", got)
+	}
+	f.snap.Groups[0].Tabs[0].Panes[0].Agent.Status = "idle"
+	serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/snapshot", nil))
+	agent.input.captures = nil // a capture would panic
+	if got := background(); got != "" {
+		t.Errorf("idle pane: background = %q", got)
+	}
+}

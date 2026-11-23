@@ -100,4 +100,6 @@ export default {
   'dialogs.notify.agent': 'Agent',
   'dialogs.notify.fallback': 'An agent may need you',
   'dialogs.notify.settings': 'An agent proposes settings changes',
+  'dialogs.notify.jobReview': 'Ready for review',
+  'dialogs.notify.jobFallback': 'A job is ready for you to review',
 } as const

@@ -1,0 +1,193 @@
+import type { Job, JobGrant, JobLive } from '../hooks/use-mux-api'
+import { grantPrefixProblem } from '../utils/grant-prefix'
+import { jobFinished } from '../utils/jobs'
+import type { DemoJob } from './fixtures/jobs'
+import { type DemoRequest, fail, type Handler, json } from './http'
+import { type DemoState, findPane, iso, newId } from './state'
+
+// The plan's routes (/api/mux/jobs*), as server/job_routes.go and
+// server/job_grants.go answer a full client signed in with the password:
+// a change or a delete names the version it read, a grant is pinned to the
+// job's agent and ends with it.
+
+const STATES = ['todo', 'active', 'review', 'done', 'failed', 'abandoned']
+const MAX_JOBS = 200
+const MOST_MINUTES = 1440
+
+const conflict = (job: DemoJob) =>
+  fail(409, 'job_conflict', 'the job was changed elsewhere', { job })
+const invalid = (msg: string) => fail(400, 'job_invalid', msg)
+const notFound = () => fail(404, 'job_not_found', 'no such job')
+
+// What the job's agent does now, from the demo's panes
+function liveOf(state: DemoState, j: DemoJob): JobLive {
+  if (!j.agent) return {}
+  const ref = findPane(state, j.agent.paneId)
+  const status = ref?.pane.agent?.status
+  if (!status)
+    return { status: 'gone', paneId: j.agent.paneId, ref: j.agent.ref }
+  const live: JobLive = { paneId: j.agent.paneId, ref: j.agent.ref }
+  live.status = status === 'working' || status === 'blocked' ? status : 'idle'
+  if (live.status === 'idle' && j.unread) live.unread = true
+  return live
+}
+
+function view(state: DemoState, j: DemoJob): Job {
+  const { unread: _, ...job } = j
+  return { ...job, live: liveOf(state, j) }
+}
+
+const find = (req: DemoRequest) =>
+  req.state.jobs.find((j) => j.id === req.params.id)
+
+function event(req: DemoRequest, j: DemoJob, kind: string, text?: string) {
+  j.events = [...(j.events ?? []), { at: iso(req.state), kind, text }].slice(
+    -50,
+  )
+}
+
+const revokeAll = (req: DemoRequest, j: DemoJob) => {
+  for (const g of j.grants ?? []) g.revoked ??= iso(req.state)
+}
+
+function text(v: unknown, max: number): string | null {
+  if (typeof v !== 'string') return null
+  return v.length > max ? null : v
+}
+
+const list: Handler = (req) => {
+  const all = req.query.get('all') === '1'
+  const jobs = req.state.jobs
+    .filter((j) => all || !jobFinished(j.state))
+    .map((j) => view(req.state, j))
+  return json({
+    jobs,
+    readOnly: false,
+    serverNow: iso(req.state),
+    canGrant: true,
+  })
+}
+
+const create: Handler = (req) => {
+  const title = text(req.body?.title, 200)?.trim()
+  if (!title) return invalid('the title is empty')
+  if (req.state.jobs.length >= MAX_JOBS)
+    return fail(409, 'too_many_jobs', 'too many jobs')
+  const at = iso(req.state)
+  const j: DemoJob = {
+    id: newId(req.state),
+    title,
+    prompt: text(req.body?.prompt, 16384) ?? undefined,
+    note: text(req.body?.note, 4096) ?? undefined,
+    state: 'todo',
+    createdBy: 'pwa',
+    created: at,
+    updated: at,
+  }
+  event(req, j, 'created')
+  req.state.jobs.push(j)
+  return json({ job: view(req.state, j) }, 201)
+}
+
+const update: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  if (req.body?.updated !== j.updated) return conflict(j)
+  const b = req.body
+  if (b.state !== undefined && !STATES.includes(b.state))
+    return invalid('unknown state')
+  if (b.title !== undefined && !text(b.title, 200)?.trim())
+    return invalid('the title is empty')
+  if (b.pane !== undefined) {
+    const ref = findPane(req.state, String(b.pane))
+    if (!ref?.pane.agent)
+      return fail(409, 'job_no_agent', 'the pane runs no agent')
+    if (j.agent?.paneId !== ref.pane.id) {
+      revokeAll(req, j)
+      j.agent = {
+        key: ref.pane.id,
+        paneId: ref.pane.id,
+        kind: ref.pane.agent.name,
+        groupId: ref.group.id,
+        ref: `${ref.group.name}:${ref.tab.name}`,
+      }
+      j.unread = false
+      event(req, j, 'agent', j.agent.ref)
+    }
+  }
+  if (b.title !== undefined) j.title = b.title.trim()
+  if (typeof b.prompt === 'string') j.prompt = b.prompt
+  if (typeof b.note === 'string') {
+    j.note = b.note
+    event(req, j, 'note')
+  }
+  if (b.state !== undefined) {
+    j.state = b.state
+    event(req, j, 'state', b.state)
+  }
+  if (jobFinished(j.state)) revokeAll(req, j)
+  j.updated = iso(req.state, 1)
+  return json({ job: view(req.state, j) })
+}
+
+const remove: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  if (req.query.get('updated') !== j.updated) return conflict(j)
+  req.state.jobs.splice(req.state.jobs.indexOf(j), 1)
+  return json({ ok: true })
+}
+
+const grant: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  const kind = req.body?.kind
+  if (kind !== 'bash' && kind !== 'edit')
+    return invalid('a grant is to run a command (bash) or edit files (edit)')
+  const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : ''
+  const problem = kind === 'bash' ? grantPrefixProblem(prefix) : null
+  if (problem || (kind === 'edit' && prefix))
+    return fail(400, 'grant_invalid', 'the command prefix is refused')
+  const minutes = req.body?.minutes ?? MOST_MINUTES
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > MOST_MINUTES)
+    return invalid('a grant lasts 1 minute to 24 hours')
+  const live = liveOf(req.state, j)
+  if (!j.agent || jobFinished(j.state) || live.status === 'gone')
+    return invalid("the job's agent does not run: a grant needs it")
+  if (kind === 'edit' && !j.worktree)
+    return invalid("a grant to edit files needs the job's worktree")
+  const g: JobGrant = {
+    id: newId(req.state),
+    job: j.id,
+    agent: j.agent,
+    kind,
+    prefix: kind === 'bash' ? prefix.trim() : undefined,
+    dir: kind === 'edit' ? j.worktree?.dir : undefined,
+    created: iso(req.state),
+    expires: iso(req.state, minutes * 60_000),
+  }
+  j.grants = [...(j.grants ?? []), g]
+  event(req, j, 'grant', kind === 'bash' ? `run ${g.prefix}` : 'edit files')
+  return json({ job: view(req.state, j), grant: g.id }, 201)
+}
+
+const revoke: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  const g = j.grants?.find((x) => x.id === req.params.gid)
+  if (!g) return fail(404, 'grant_not_found', 'no such grant')
+  if (!g.revoked) {
+    g.revoked = iso(req.state)
+    event(req, j, 'revoked')
+  }
+  return json({ job: view(req.state, j) })
+}
+
+export const JOB_ROUTES: Record<string, Handler> = {
+  'GET /jobs': list,
+  'POST /jobs': create,
+  'PATCH /jobs/{id}': update,
+  'DELETE /jobs/{id}': remove,
+  'POST /jobs/{id}/grants': grant,
+  'DELETE /jobs/{id}/grants/{gid}': revoke,
+}

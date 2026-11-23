@@ -412,6 +412,9 @@ export interface OverviewPane {
   // The signed cursor of the conversation the card sums up, which its Stop
   // names
   cursor?: string
+  // What a working Claude Code pane only waits for ("1 background agent"):
+  // its turn is done, so the card shows no Stop
+  background?: string
 }
 
 // A session's tokens and estimated cost (USD, absent when no model of it
@@ -1085,6 +1088,8 @@ export interface RequestErrorDetails {
   size?: number
   // tasks 409 conflict: the task as another device saved it
   task?: UserTask
+  // jobs 409 job_conflict: the job as it is now (without its live state)
+  job?: Job
   // tasks/run 409 task_running: the run still running, and its tab
   runId?: string
   tabId?: string
@@ -1111,6 +1116,7 @@ export class RequestError extends Error implements RequestErrorDetails {
   readonly field?: 'name' | 'text' | 'command'
   readonly size?: number
   readonly task?: UserTask
+  readonly job?: Job
   readonly runId?: string
   readonly tabId?: string
   readonly paneId?: string
@@ -1159,6 +1165,7 @@ async function requestError(
       size: typeof body.size === 'number' ? body.size : undefined,
       field: body.field,
       task: body.task,
+      job: body.job && typeof body.job === 'object' ? body.job : undefined,
       runId: body.runId,
       tabId: body.tabId,
       paneId: typeof body.paneId === 'string' ? body.paneId : undefined,
@@ -3017,4 +3024,237 @@ export async function deleteUserTask(
     `${userTasksPath}/${encodeURIComponent(id)}?${q}`,
     'DELETE',
   )
+}
+
+// The job ledger (/api/mux/jobs*): the work an orchestrator agent handed to
+// the agents in other panes. Shapes match server/job_store.go,
+// server/job_grants.go and server/job_routes.go.
+
+// active: an agent works on it; review: the agent is done, for the user to
+// look at; the last three are finished.
+export const JOB_STATES = [
+  'todo',
+  'active',
+  'review',
+  'done',
+  'failed',
+  'abandoned',
+] as const
+export type JobState = (typeof JOB_STATES)[number]
+
+// What the job's agent does now. gone: the pane no longer runs it;
+// unknown: it could not be read; absent for a job without an agent.
+export type JobLiveStatus =
+  | 'working'
+  | 'blocked'
+  | 'background'
+  | 'idle'
+  | 'gone'
+  | 'unknown'
+
+export interface JobLive {
+  status?: JobLiveStatus
+  paneId?: string
+  ref?: string
+  // A turn ended that the orchestrator has not read
+  unread?: boolean
+  // What a working agent only waits for ("1 background agent")
+  background?: string
+  lastTs?: string
+  // The pane's folder now (full clients only) and its git branch as the
+  // overview last read it
+  dir?: string
+  branch?: string
+}
+
+// The agent a job was given to, pinned by its process
+export interface JobAgent {
+  key: string
+  paneId: string
+  kind: string
+  groupId?: string
+  ref?: string
+  pid?: number
+  start?: string
+  session?: string
+}
+
+// The git worktree made for the job, as the server's own list named it
+export interface JobWorktree {
+  branch: string
+  base?: string
+  dir: string
+  groupId?: string
+}
+
+// What the last termote agents diff --stat of the job's pane counted
+export interface JobDiff {
+  commits: number
+  files: number
+  head?: string
+  at: string
+}
+
+// One dialog the orchestrator answered under a grant
+export interface GrantUse {
+  at: string
+  command?: string
+  path?: string
+}
+
+export type GrantKind = 'bash' | 'edit'
+
+// The user's leave for the orchestrator to answer one narrow kind of
+// permission dialog of the job's agent: a command that starts with prefix
+// (bash), or a file edit under dir (edit). expires is RFC 3339.
+export interface JobGrant {
+  id: string
+  job?: string
+  agent: JobAgent
+  dir?: string
+  kind: GrantKind
+  prefix?: string
+  created: string
+  expires: string
+  revoked?: string
+  uses?: GrantUse[]
+}
+
+// One line of a job's history: created, started, sent, read, answered,
+// delegated, state, agent, note, grant, revoked...
+export interface JobEvent {
+  at: string
+  kind: string
+  text?: string
+}
+
+// A job as the server lists it. A view-only client gets id, title, state,
+// branch, live and updated only. updated is sent back as read with a change
+// or a delete.
+export interface Job {
+  id: string
+  title: string
+  state: JobState
+  updated: string
+  live: JobLive
+  // The worktree's branch (view-only clients)
+  branch?: string
+  prompt?: string
+  note?: string
+  createdBy?: string
+  workspace?: string
+  agent?: JobAgent
+  worktree?: JobWorktree
+  readTs?: string
+  readConv?: string
+  reported?: string
+  diff?: JobDiff
+  grants?: JobGrant[]
+  events?: JobEvent[]
+  created?: string
+}
+
+export interface JobList {
+  jobs: Job[]
+  // A newer Termote saved them, or this device is view-only: nothing can
+  // change them here
+  readOnly: boolean
+  serverNow: string
+  // This browser may give and end grants: signed in with the password or a
+  // full paired device (never without sign-in, nor with Basic auth)
+  canGrant: boolean
+}
+
+async function jobRequest(
+  url: string,
+  method: string,
+  body?: unknown,
+): Promise<{ job: Job }> {
+  return (await templateRequest(url, method, body)).json()
+}
+
+// Every job, finished ones too. Throws RequestError (jobs_unavailable).
+export async function fetchJobs(): Promise<JobList> {
+  const res = await fetch(`${apiBase()}/jobs?all=1`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  const body = await res.json()
+  return {
+    jobs: Array.isArray(body.jobs) ? body.jobs : [],
+    readOnly: body.readOnly === true,
+    serverNow: typeof body.serverNow === 'string' ? body.serverNow : '',
+    canGrant: body.canGrant === true,
+  }
+}
+
+// Adds a todo job, for the orchestrator to take up (termote agents start
+// --job). Throws RequestError (job_invalid, too_many_jobs, newer_format,
+// busy).
+export async function createJob(j: {
+  title: string
+  prompt?: string
+  note?: string
+}): Promise<Job> {
+  return (await jobRequest(`${apiBase()}/jobs`, 'POST', j)).job
+}
+
+// Changes the job as it was when updated was read. pane: the pane whose
+// agent takes it over (job_no_agent when none runs there), which ends every
+// grant of the job. Throws RequestError: job_conflict carries the job as it
+// is now, job_not_found when it was removed.
+export async function updateJob(
+  id: string,
+  change: {
+    title?: string
+    prompt?: string
+    note?: string
+    state?: JobState
+    pane?: string
+    updated: string
+  },
+): Promise<Job> {
+  return (
+    await jobRequest(
+      `${apiBase()}/jobs/${encodeURIComponent(id)}`,
+      'PATCH',
+      change,
+    )
+  ).job
+}
+
+// Removes the job as it was when updated was read (job_conflict otherwise).
+export async function deleteJob(id: string, updated: string): Promise<void> {
+  const q = new URLSearchParams({ updated })
+  await templateRequest(
+    `${apiBase()}/jobs/${encodeURIComponent(id)}?${q}`,
+    'DELETE',
+  )
+}
+
+// Gives the job's running agent leave to have one kind of dialog answered
+// for it, for minutes (1 to 1440, a day when absent). Throws RequestError
+// (grant_invalid, job_invalid, grant_pwa_only).
+export async function createGrant(
+  id: string,
+  g: { kind: GrantKind; prefix?: string; minutes?: number },
+): Promise<Job> {
+  return (
+    await jobRequest(
+      `${apiBase()}/jobs/${encodeURIComponent(id)}/grants`,
+      'POST',
+      g,
+    )
+  ).job
+}
+
+// Ends a grant at once. Throws RequestError (grant_not_found,
+// grant_pwa_only).
+export async function revokeGrant(id: string, grantId: string): Promise<Job> {
+  return (
+    await jobRequest(
+      `${apiBase()}/jobs/${encodeURIComponent(id)}/grants/${encodeURIComponent(grantId)}`,
+      'DELETE',
+    )
+  ).job
 }

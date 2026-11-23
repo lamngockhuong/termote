@@ -596,10 +596,20 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              next: names each pane left with its mark. 4: the timeout passed
                              (default 30m); 6: nothing works, nothing to wait for; 7: the
                              history was reset (read each pane)
-  answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
+  wait --job <id>... [--timeout <duration>]  Until one of the jobs' agents ended a turn the
+                             orchestrator has not read (0, however long ago), shows a dialog not
+                             reported yet (3), only waits on background work (0) or is gone (5);
+                             next: names the jobs left. 4: the timeout passed (default 20m)
+  answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it; an option
+                             of a permission dialog that stops it asking (always, don't ask again,
+                             a mode for the session) is refused: only the user picks one
+    --delegated              Answer Yes, this once, under a grant the user gave in the PWA for the
+                             pane's job (Claude Code only); 9 when no grant covers the dialog:
+                             nothing was answered, ask the user
   stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
                              refused for another session, an agent not working, one on a
-                             dialog or one whose screen shows no turn; never sent twice within 3s)
+                             dialog or one whose screen shows no turn; never sent twice within 3s),
+                             then follow it up to 8s: 8 when it still works after Esc
   diff <pane> [--stat] [--base <branch>]  What it changed: the branch's commits since it left
                              the base (default: the main worktree's branch), then what is not
                              committed; sensitive files by name only, 64 KB of diff at most
@@ -610,8 +620,21 @@ Options of agents (a <pane> is its id or a name only one pane has):
     --worktree <new branch> [--base <branch>]  Instead, make a git worktree of the workspace's
                              repository on a new branch (from --base, default its HEAD) and start
                              the agent in its new workspace (--name labels it); run again, it goes
-                             on in the worktree it made (refused while its agent still runs there:
-                             send to that pane); a branch with no worktree is refused
+                             on in the worktree it made: an idle agent there gets the prompt and
+                             its job goes on (refused while it works or waits on a dialog); a
+                             branch with no worktree is refused
+    --title <title>          The job's title (default: "<kind> in <branch or workspace>", never
+                             the prompt); every start records a job: termote agents jobs
+    --job <id>               Take up a job the user added in the PWA (todo); its prompt is used
+                             when none is given
+  jobs [--workspace <id|name>] [--mine] [--all] [--json]  The job ledger: each job's pane, what its
+                             agent does, a turn not read yet, branch and directory; unfinished jobs
+                             of every creator by default (--mine: made from this pane, not on
+                             herdr-core, psmux or Windows; --all: finished ones too)
+  job add --title <title> [--pane <pane>] [--note <text | ->] [--json]  Add a job
+  job show <id> [--json]     A job with its prompt, note, grants and history
+  job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->]
+                             [--pane <pane>]  Change a job; another pane ends every grant it has
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

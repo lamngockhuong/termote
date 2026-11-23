@@ -33,8 +33,15 @@ const promptStore = {
   refresh: vi.fn(),
   show: vi.fn(),
   status: undefined as unknown,
+  background: undefined as string | undefined,
 }
 vi.mock('../hooks/use-agent-prompt', () => ({
+  useAgentActivity: () => ({
+    activity: promptStore.background
+      ? { label: 'Waiting', background: promptStore.background }
+      : null,
+    dialog: false,
+  }),
   useAgentPrompt: (_pane: string, status: unknown) => {
     promptStore.status = status
     return {
@@ -148,6 +155,7 @@ beforeEach(() => {
   transcript.status = 'idle'
   promptStore.prompt = null
   promptStore.loaded = true
+  promptStore.background = undefined
   mockAnswerPrompt.mockResolvedValue(undefined)
   mockSend.mockResolvedValue({ queued: false })
   mockInterrupt.mockResolvedValue(undefined)
@@ -2038,6 +2046,23 @@ describe('ChatComposer Stop', () => {
     transcript.cursor = undefined
     rerender(<ChatComposer {...working()} />)
     expect(stopButton()).toBeNull()
+  })
+
+  it('none while only background work is left, kept while stopping', async () => {
+    promptStore.background = '1 background agent'
+    const p = working()
+    const { rerender } = render(<ChatComposer {...p} />)
+    expect(stopButton()).toBeNull()
+    promptStore.background = undefined
+    rerender(<ChatComposer {...p} />)
+    await act(async () => {
+      fireEvent.click(stopButton() as HTMLElement)
+    })
+    promptStore.background = '1 shell'
+    rerender(<ChatComposer {...p} />)
+    expect(
+      screen.getByRole('button', { name: 'Stopping Claude Code…' }),
+    ).toBeDisabled()
   })
 
   it('stops the conversation shown, then waits for the status to change', async () => {

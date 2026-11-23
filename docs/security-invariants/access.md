@@ -305,7 +305,8 @@ Part of the [security invariants](README.md): who gets in and as what: config, s
   container with `lxc-user-nic`, for one) connects as another machine would, with no owner lookup,
   and meets only the password (accepted, written in `docs/security-model.md`). Rootless podman
   connects from the host's namespace and is checked
-- **CLI local socket** (`server/local_socket*.go`): the native server also serves on
+- **CLI local socket** (`server/local_socket*.go`; what it may not do: a job grant, an option of a
+  permission dialog that stops it asking, see Dialog delegation): the native server also serves on
   `<stateDir>/run/<port>.sock` (dir 0700 owned, not a symlink; socket 0600) or the pipe
   `\\.\pipe\termote-<SID>-<port>` (owner the user, named in its SDDL; ACL user + SYSTEM, remote
   refused, first instance exclusive).

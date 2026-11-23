@@ -34,7 +34,7 @@ var (
 	// errAgentNoTurn: Claude Code's session says busy, but its screen
 	// shows no working line, only an answer written and a turn waiting on
 	// background agents, which Esc does not stop.
-	errAgentNoTurn       = fail(http.StatusConflict, "agent_no_turn", "the agent runs no turn that Esc would stop; it may only wait for background work")
+	errAgentNoTurn       = fail(http.StatusConflict, "agent_no_turn", "no working line on its screen: it may only wait for background work, or this Claude Code version draws it differently; look at the pane")
 	errInterruptPending  = fail(http.StatusConflict, "interrupt_pending", "the agent was just interrupted")
 	agentInterruptWork   = muxTimeout + agentConfirmWait
 	agentInterruptLastMu sync.Mutex

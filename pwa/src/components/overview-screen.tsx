@@ -11,6 +11,7 @@ import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { agentCards, type OverviewCard } from '../utils/agent-cards'
 import { stuckFor } from '../utils/agent-stuck'
+import { asksOverviewPlan } from '../utils/deep-link'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
 import {
@@ -26,6 +27,7 @@ import { AgentCard, agentCardName } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
 import { type DispatchTarget, OverviewDispatch } from './overview-dispatch'
+import { OverviewJobs } from './overview-jobs'
 import { SearchToggle, SessionSearchField } from './session-search-field'
 import { Toast } from './toast'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -101,9 +103,23 @@ export function OverviewScreen({
   const wide = useMediaQuery('(min-width: 1280px)')
   // Focus moves into the overview and back to where it was when it closes.
   const titleRef = useRef<HTMLHeadingElement>(null)
+  // The Plan asked for by the address (a job's notification), now or once
+  // open: it takes focus over the title
+  const [planFocus, setPlanFocus] = useState<object | undefined>(() =>
+    asksOverviewPlan(window.location.hash) ? {} : undefined,
+  )
+  const askedPlan = useRef(!!planFocus)
+  useEffect(() => {
+    const onHashChange = (e: HashChangeEvent) => {
+      const hash = e.newURL ? new URL(e.newURL).hash : window.location.hash
+      if (asksOverviewPlan(hash)) setPlanFocus({})
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null
-    titleRef.current?.focus()
+    if (!askedPlan.current) titleRef.current?.focus()
     return () => {
       if (before?.isConnected) before.focus()
     }
@@ -176,6 +192,21 @@ export function OverviewScreen({
     },
     [groupOf, showGroups],
   )
+  // The agents a job can be given to, and whose pane a job's card opens
+  const jobAgents = useMemo(
+    () =>
+      cards.map((c) => ({
+        paneId: c.pane.id,
+        name: agentCardName(c.pane, t),
+        place: visibleUnsafe(placeOf(c.session)),
+      })),
+    [cards, placeOf, t],
+  )
+  const openJobPane = (paneId: string) => {
+    // Only the panes of jobAgents are offered
+    const c = cards.find((card) => card.pane.id === paneId)!
+    onOpen(c.session, c.pane, opensChat(c.pane) ? 'chat' : 'terminal')
+  }
   const queueCards = useMemo(
     () => cards.map((c) => ({ ...c, where: placeOf(c.session) })),
     [cards, placeOf],
@@ -290,6 +321,14 @@ export function OverviewScreen({
             <p role="status" className="mb-3 text-[12px] text-fg-muted">
               {t('tasks.overview.readFailed')}
             </p>
+          )}
+          {ready && (
+            <OverviewJobs
+              readOnly={readOnly}
+              agents={jobAgents}
+              onOpenPane={openJobPane}
+              focus={planFocus}
+            />
           )}
           {!ready ? null : cards.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">

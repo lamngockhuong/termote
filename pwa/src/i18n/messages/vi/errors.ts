@@ -5,10 +5,12 @@ export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
   'errors.agent_blocked': 'Agent đang chờ trả lời một hộp thoại',
   'errors.agent_no_turn':
-    'Agent không chạy lượt nào để Esc dừng được: có thể nó chỉ đang chờ việc chạy nền',
+    'Màn hình không có dòng đang làm: có thể agent chỉ đang chờ việc chạy nền, hoặc bản Claude Code này vẽ dòng đó khác đi. Hãy xem pane',
   'errors.agent_not_working': 'Agent không làm gì nên không có gì để dừng',
   'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',
+  'errors.answer_always_refused':
+    'Chỉ bạn mới chọn được câu trả lời luôn cho phép, ngay trong hộp thoại',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
   'errors.base_not_found': 'Nhánh gốc không trỏ tới commit nào',
   'errors.base_required': 'Hãy chọn nhánh gốc: đây là worktree chính',
@@ -22,6 +24,8 @@ export default {
   'errors.creator_gone': 'Mã này không còn dùng được',
   'errors.cross_device': 'Chỗ mới nằm trên một hệ thống file khác',
   'errors.default_session': 'Không đổi tên được phiên mặc định',
+  'errors.delegation_out_of_scope':
+    'Không ủy quyền nào bao gồm hộp thoại này. Hãy tự trả lời',
   'errors.delivered_not_submitted':
     'Chữ đã nằm trong ô nhập nhưng chưa được gửi',
   'errors.devices_not_revoked':
@@ -37,6 +41,10 @@ export default {
     'Thư mục chứa, hoặc nằm cạnh, liên kết có thể dẫn Windows sang máy khác. Hãy mở trực tiếp từ Windows',
   'errors.full_needs_password':
     'Chỉ làm được khi đăng nhập bằng mật khẩu hoặc dùng CLI',
+  'errors.grant_invalid': 'Không thể ủy quyền cho tiền tố lệnh này',
+  'errors.grant_not_found': 'Ủy quyền này không còn tồn tại',
+  'errors.grant_pwa_only':
+    'Chỉ trình duyệt đăng nhập bằng mật khẩu hoặc thiết bị ghép nối toàn quyền mới cấp được ủy quyền',
   'errors.hardlink': 'File có nhiều liên kết cứng',
   'errors.has_worktrees': 'Workspace này có worktree liên kết',
   'errors.head_moved': 'HEAD đã đổi từ lúc đọc',
@@ -79,6 +87,11 @@ export default {
   'errors.invalid_template': 'Mẫu không hợp lệ',
   'errors.invalid_text': 'Chữ đang trống hoặc có ký tự điều khiển',
   'errors.invalid_validity': 'Thời hạn không hợp lệ',
+  'errors.job_conflict': 'Việc này vừa được thay đổi ở nơi khác',
+  'errors.job_invalid': 'Việc này không nhận thay đổi đó',
+  'errors.job_no_agent': 'Không có agent nào chạy trong pane đó',
+  'errors.job_not_found': 'Việc này không còn tồn tại',
+  'errors.jobs_unavailable': 'Máy chủ này không có kế hoạch việc',
   'errors.last_pane': 'Muốn đóng pane cuối cùng của tab thì hãy đóng tab',
   'errors.layout_busy': 'herdr-app vừa thay đổi bố cục. Hãy thử lại',
   'errors.lfs_pointer': 'File là một con trỏ Git LFS',
@@ -151,6 +164,7 @@ export default {
   'errors.session_not_found': 'Phiên này không còn trong thư mục này',
   'errors.shell_busy': 'Shell của tab đang bận',
   'errors.signed_out': 'Phiên đăng nhập này đã kết thúc. Hãy đăng nhập lại',
+  'errors.socket_only': 'Chỉ termote agents trên máy này mới làm được việc này',
   'errors.stale_hunk': 'Thay đổi không còn khớp với file',
   'errors.start_failed': 'Không khởi động được agent',
   'errors.start_pending':
@@ -176,6 +190,8 @@ export default {
     'Có quá nhiều mã ghép đang chờ. Hãy dùng một mã hoặc chờ 5 phút',
   'errors.too_many_devices':
     'Có quá nhiều thiết bị đã ghép. Hãy thu hồi một thiết bị trước',
+  'errors.too_many_jobs':
+    'Kế hoạch đã có quá nhiều việc. Hãy xóa bớt một việc trước',
   'errors.too_many_pixels': 'Ảnh lớn hơn 40 triệu điểm ảnh',
   'errors.trash_unavailable': 'Server này không có thùng rác',
   'errors.unavailable': 'herdr-core không chạy. Hãy thử lại sau giây lát',

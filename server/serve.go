@@ -108,6 +108,9 @@ type serveConfig struct {
 	// TasksDir holds the tasks the user defined, shared by every device;
 	// empty disables them.
 	TasksDir string
+	// JobsDir holds the job ledger of termote agents (job_store.go); empty
+	// disables it.
+	JobsDir string
 	// InstanceDir keeps the server's instance id (the snapshot's
 	// instanceId); empty gives one that lasts until the server stops.
 	InstanceDir string
@@ -621,12 +624,25 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	}
 	agent.userTasks = userTasks != nil
 	registerUserTaskRoutes(mux, userTasks, allowed)
+	if cfg.JobsDir != "" {
+		jobs, err := newJobStore(cfg.JobsDir)
+		if err != nil {
+			log.Printf("job ledger disabled: %v", err)
+		} else {
+			agent.jobs = jobs
+		}
+	}
 	agent.system = newSystemSampler(systemScope(), collectSystem)
 	registerSystemRoute(mux, agent.system, allowed)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub, agent.activity)
 	if z, ok := m.(*zellijMux); ok {
 		// A Zellij group's ids change with its session's name.
-		z.onRename = agent.activity.renameGroup
+		z.onRename = func(from, to string) {
+			agent.activity.renameGroup(from, to)
+			if agent.jobs != nil {
+				agent.jobs.renameGroup(from, to)
+			}
+		}
 	}
 	// The upload store and the trash are never read through the Files view
 	// either: with a pane in the home dir, a deleted .env would otherwise
@@ -673,7 +689,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	if hc, ok := m.(*hcMux); ok {
 		hc.nester = nester
 	}
-	registerWorktreeRoutes(mux, m, worktreeMuxFor(m, files, nester), files.git, allowed)
+	agent.wm = worktreeMuxFor(m, files, nester)
+	registerWorktreeRoutes(mux, m, agent.wm, files.git, allowed)
 	// Streams forwarded to machines have a hub of their own (they never push
 	// this server's out), closed with the main one and asking the same
 	// device and session stores.
@@ -837,6 +854,9 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	}
 	if w := startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll); w != nil {
 		agent.settings.setNotify(w.notifySettings)
+		if agent.jobs != nil {
+			agent.jobs.setOnReview(w.notifyJobReview)
+		}
 	}
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()

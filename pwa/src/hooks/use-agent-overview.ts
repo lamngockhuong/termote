@@ -59,11 +59,27 @@ async function read() {
     }
   } catch {
     state = { ...state, error: true }
-  } finally {
-    reading = false
   }
+  // The reads that ride on this one (the job ledger): one timer for all
+  await Promise.all([...followers].map((fn) => fn()))
+  reading = false
   emit()
   schedule()
+}
+
+// Reads run right after each overview read, while it polls. Each handles
+// its own failure: it never rejects.
+const followers = new Set<() => Promise<void>>()
+
+// Runs read after every overview read until the returned function is
+// called; at once too when the overview polls and no read is under way
+// (the next one would be a period away).
+export function followOverview(read: () => Promise<void>): () => void {
+  followers.add(read)
+  if (listeners.size > 0 && !reading) void read()
+  return () => {
+    followers.delete(read)
+  }
 }
 
 function onVisibility() {
@@ -100,4 +116,5 @@ export function resetAgentOverview() {
   state = INITIAL
   reading = false
   period = OVERVIEW_POLL
+  followers.clear()
 }

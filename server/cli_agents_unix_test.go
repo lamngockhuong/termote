@@ -166,6 +166,7 @@ func startAgentsServer(t *testing.T, tc *testCLI, dir string, m Mux) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	cfg := testConfig(t)
 	cfg.LocalSocketDir = dir
+	cfg.JobsDir = filepath.Join(dir, "jobs")
 	h, hub, _, _, err := buildServerWith(cfg, m)
 	if err != nil {
 		t.Fatal(err)
@@ -322,13 +323,32 @@ func TestAgentsStopOverLocalSocket(t *testing.T) {
 		t.Errorf("background only: %v, keys %v", err, f.keys)
 	}
 	f.setScreen(fixtureScreen(t, "2.1.310-working"))
+	// Esc ends the turn: the CLI sees it end.
+	f.mu.Lock()
+	f.onKeys = func(w *fakeWriter, _ []string) {
+		w.mu.Lock()
+		w.session.Status = "idle"
+		w.screen = fixtureScreen(t, "2.1.312-done")
+		w.mu.Unlock()
+		f.setStatus("%2", "idle")
+	}
+	f.mu.Unlock()
 	time.Sleep(agentCacheTTL) // the screen read last
-	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err != nil {
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err != nil ||
+		!strings.Contains(tc.stdout.String(), "Stopped the turn of") {
 		t.Fatalf("%v (%s)", err, tc.stdout)
 	}
 	if len(f.keys) != 1 || f.keys[0][0] != "Escape" {
 		t.Errorf("keys %v", f.keys)
 	}
+	// Working again at once: a second Esc within the gap is refused.
+	f.mu.Lock()
+	f.onKeys = nil
+	f.session.Status = "working"
+	f.screen = fixtureScreen(t, "2.1.310-working")
+	f.mu.Unlock()
+	f.setStatus("%2", "working")
+	time.Sleep(agentCacheTTL)
 	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err == nil || !strings.Contains(err.Error(), "(interrupt_pending)") {
 		t.Errorf("again: %v", err)
 	}

@@ -113,13 +113,13 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	if err != nil {
 		return startTarget{}, t.note(err)
 	}
+	t.paneID = p.pane.ID
+	t.where = fmt.Sprintf("workspace %s, branch %s", plainText(p.group.Name), b)
 	// Run again while the agent a run before started there still runs:
 	// the task goes to that agent, not to a second one.
 	if !fresh && p.pane.Agent != nil {
-		return startTarget{}, t.note(agentStillRuns(p))
+		t.running = &p
 	}
-	t.paneID = p.pane.ID
-	t.where = fmt.Sprintf("workspace %s, branch %s", plainText(p.group.Name), b)
 	return t, nil
 }
 

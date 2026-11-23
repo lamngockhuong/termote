@@ -22,7 +22,7 @@ import {
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { useAgentCommands } from '../hooks/use-agent-commands'
-import { useAgentPrompt } from '../hooks/use-agent-prompt'
+import { useAgentActivity, useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentStop } from '../hooks/use-agent-stop'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useChatAttachments } from '../hooks/use-chat-attachments'
@@ -199,6 +199,9 @@ export function ChatComposer({
   // when it began, changes
   const since = session.panes?.find((p) => p.id === paneId)?.agentSince
   const halt = useAgentStop(paneId, t.status, since)
+  // Only background work left (the turn is done): Esc would stop nothing
+  const { activity } = useAgentActivity(session.paneId, status)
+  const background = status === 'working' && !!activity?.background
   // Blocked with no dialog the server can read. Only once a dialog read came
   // back: before it, or as an answer settles, this would flash.
   const waiting = status === 'blocked' && p.loaded && !p.prompt
@@ -766,7 +769,9 @@ export function ChatComposer({
   // asked, as Esc in the terminal asks none. A conversation that changed is
   // reloaded, never stopped again by itself.
   const stopShown =
-    !readOnly && !!t.cursor && (status === 'working' || halt.stopping)
+    !readOnly &&
+    !!t.cursor &&
+    ((status === 'working' && !background) || halt.stopping)
   const stop = async () => {
     setNotice(null)
     // Shown only with a cursor, and disabled while stopping

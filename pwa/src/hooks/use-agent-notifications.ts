@@ -7,7 +7,7 @@ import {
   shouldNotify,
 } from '../utils/agent-notify'
 import { currentMachine, isMachineId, switchMachine } from '../utils/api-base'
-import { parseDeepLink } from '../utils/deep-link'
+import { parseDeepLink, parseScreenLink } from '../utils/deep-link'
 import { notificationSupport } from '../utils/notify-permission'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 
@@ -132,10 +132,15 @@ export const PENDING_LINK_MAX_AGE_MS = 60_000
 // When the page looks for a kept link after it shows (ms)
 export const PENDING_LINK_READS_MS = [0, 300, 1000, 2500]
 
-// Opens hash on machine ('' or anything not an id: this server). A pane of
+// Opens hash (a pane's link, or a screen's: a job's notification opens the
+// overview) on machine ('' or anything not an id: this server). A pane of
 // another machine than the one open loads the app on that one.
 function openLink(hash: unknown, machine?: unknown) {
-  if (typeof hash !== 'string' || !parseDeepLink(hash)) return
+  if (
+    typeof hash !== 'string' ||
+    (!parseDeepLink(hash) && !parseScreenLink(hash))
+  )
+    return
   const target = isMachineId(machine) ? machine : ''
   if (target !== currentMachine()) {
     switchMachine(target, hash)

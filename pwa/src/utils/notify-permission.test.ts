@@ -47,7 +47,7 @@ describe('notify permission', () => {
   })
 
   it('is ready when the active worker answers the ping', async () => {
-    const worker = stubWorker({ version: 3 })
+    const worker = stubWorker({ version: 4 })
     await expect(notifyWorkerReady()).resolves.toBe(true)
     expect(worker.postMessage).toHaveBeenCalledWith(
       { type: 'termote-notify-ping' },

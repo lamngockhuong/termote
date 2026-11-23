@@ -8,11 +8,13 @@ export default {
   'errors.unknown': 'The server could not finish this. Try again',
   'errors.agent_blocked': 'The agent waits for an answer to a dialog',
   'errors.agent_no_turn':
-    'The agent runs no turn that Esc would stop: it may only wait for background work',
+    'No working line on its screen: the agent may only wait for background work, or this Claude Code version draws it differently. Look at the pane',
   'errors.agent_not_working':
     'The agent is not working, so there is nothing to stop',
   'errors.agent_unavailable': "The agent's service did not answer. Try again",
   'errors.ambiguous': 'More than one worktree uses this branch',
+  'errors.answer_always_refused':
+    'Only you choose an answer that always allows something, in the dialog itself',
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',
   'errors.base_not_found': 'The base names no commit',
@@ -27,6 +29,8 @@ export default {
   'errors.creator_gone': 'This code is no longer valid',
   'errors.cross_device': 'The new place is on another file system',
   'errors.default_session': 'The default session cannot be renamed',
+  'errors.delegation_out_of_scope':
+    'No grant covers this dialog. Answer it yourself',
   'errors.delivered_not_submitted':
     'The text is in the input box but was not submitted',
   'errors.devices_not_revoked':
@@ -42,6 +46,10 @@ export default {
     'The folder holds or sits beside entries Windows may follow to another computer. Open it from Windows',
   'errors.full_needs_password':
     'Only a password sign-in or the CLI can do this',
+  'errors.grant_invalid': 'This command prefix cannot be granted',
+  'errors.grant_not_found': 'This grant no longer exists',
+  'errors.grant_pwa_only':
+    'Only a browser signed in with the password, or a fully paired device, gives grants',
   'errors.hardlink': 'The file has several hard links',
   'errors.has_worktrees': 'This workspace has linked worktrees',
   'errors.head_moved': 'HEAD moved since it was read',
@@ -84,6 +92,11 @@ export default {
   'errors.invalid_template': 'The template is not valid',
   'errors.invalid_text': 'The text is empty or holds a control character',
   'errors.invalid_validity': 'The time limit is not valid',
+  'errors.job_conflict': 'The job was changed elsewhere meanwhile',
+  'errors.job_invalid': 'The job cannot take this change',
+  'errors.job_no_agent': 'No agent runs in that pane',
+  'errors.job_not_found': 'This job no longer exists',
+  'errors.jobs_unavailable': 'The plan is not available on this server',
   'errors.last_pane': "A tab's last pane is closed by closing the tab",
   'errors.layout_busy': 'herdr-app changed the layout meanwhile. Try again',
   'errors.lfs_pointer': 'The file is a Git LFS pointer',
@@ -156,6 +169,7 @@ export default {
   'errors.session_not_found': 'This session is no longer in this folder',
   'errors.shell_busy': "The tab's shell is busy",
   'errors.signed_out': 'This sign-in has ended. Sign in again',
+  'errors.socket_only': 'Only termote agents on this machine can do this',
   'errors.stale_hunk': 'The change no longer matches the file',
   'errors.start_failed': 'Could not start the agent',
   'errors.start_pending': 'Herdr still holds the last start in this pane',
@@ -180,6 +194,7 @@ export default {
   'errors.too_many_codes':
     'Too many pairing codes are waiting. Use one or wait 5 minutes',
   'errors.too_many_devices': 'Too many paired devices. Revoke one first',
+  'errors.too_many_jobs': 'The plan holds too many jobs. Remove one first',
   'errors.too_many_pixels': 'The image has more than 40 megapixels',
   'errors.trash_unavailable': 'The trash is not available on this server',
   'errors.unavailable': 'herdr-core is not running. Try again in a moment',
