@@ -111,15 +111,21 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)         |
 | `pwa/src/components/prompt-card.tsx`              | Agent dialog as a card (answer buttons or read-only)           |
 | `pwa/src/components/prompt-form.tsx`              | OpenCode form on that card: its fields, checked, sent at once  |
-| `pwa/src/components/overview-screen.tsx`          | Agent overview: every agent's card, own filter, by status      |
-| `pwa/src/components/agent-card.tsx`               | One agent: status age, last text, branch, changes, tokens      |
+| `pwa/src/components/overview-screen.tsx`          | Agent overview: Agents and Plan tabs, sections by status       |
+| `pwa/src/components/overview-tabs.tsx`            | Overview tabs with counts; the last tab kept on the device     |
+| `pwa/src/components/overview-usage-button.tsx`    | Overview header: today's tokens, opening totals and limits     |
+| `pwa/src/components/overview-jobs.tsx`            | Plan tab: job columns, Finished table, details aside or sheet  |
+| `pwa/src/components/job-card.tsx`                 | One job's compact card; a full client's opens its details      |
+| `pwa/src/components/job-detail.tsx`               | A job's details: pane, Grants, Edit, every field it has        |
+| `pwa/src/utils/job-of-pane.ts`                    | The active job each pane works on, for the agent cards         |
+| `pwa/src/components/agent-card.tsx`               | One agent: status age, job, last text, Branch/Context/Session  |
 | `pwa/src/components/needs-me-queue.tsx`           | Overview: dialogs waiting on the user, answered one at a time  |
 | `pwa/src/components/overview-dispatch.tsx`        | Overview: one message to the agents picked, with each outcome  |
 | `pwa/src/utils/needs-me-queue.ts`                 | The queue's rules: card on top pinned, answers never move on   |
 | `pwa/src/utils/agent-stuck.ts`                    | A working agent quiet past the setting (stuck hint)            |
 | `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows             |
 | `pwa/src/hooks/use-pane-overview.ts`              | Header chip: polls `/api/mux/overview?pane=` for one pane      |
-| `pwa/src/components/account-usage-strip.tsx`      | Overview: each Codex account's rate limit windows              |
+| `pwa/src/components/account-usage-strip.tsx`      | Overview token panel: each Codex account's rate limits         |
 | `pwa/src/components/usage-totals-strip.tsx`       | Overview, history: tokens and cost today and in 7 days         |
 | `pwa/src/components/session-usage-line.tsx`       | A session's tokens, cost and subagents' share                  |
 | `pwa/src/hooks/use-usage-summary.ts`              | Polls the machine's or a folder's usage by 15 minutes          |

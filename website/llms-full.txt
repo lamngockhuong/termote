@@ -3143,7 +3143,7 @@ Termote keeps a ledger of the work the orchestrator hands out, so neither of you
 
 `wait --job <id>...` reports a turn the orchestrator has not read however long ago it ended (even before the wait started, or while the server was down), a dialog once even if you keep it open, and a job whose agent is gone (tmux restarted, the pane closed). When every job’s agent is idle, its last turn was read and no shell it started still runs, it says there is nothing to wait for instead of waiting out the timeout. Termote tells a job’s agent from another one at the same pane address by its process, so an agent that took over a reused tmux pane id is never taken for it. When an agent is done the orchestrator sets the job to `review` with a note, and you get a push; it never marks a job `done` for you.
 
-You see the same ledger in the [Overview](/usage/overview/)’s Plan section, where you can also add a job for the orchestrator to take up (`start --job <id>`), edit one, and give grants.
+You see the same ledger in the [Overview](/usage/overview/#plan)’s Plan tab, where you can also add a job for the orchestrator to take up (`start --job <id>`), and open a job’s details to edit it or give grants. The card of an agent working on a job names the job.
 
 ## Grants for permission dialogs
 
@@ -3215,19 +3215,27 @@ The agent overview shows every pane running a coding agent (Claude Code, Codex, 
 
 It covers the panes without closing them: leave with its close button, `Esc`, the browser’s Back button, or by picking a session. Back and Forward move between the overview and the pane you came from.
 
+## Agents and Plan
+
+[Section titled “Agents and Plan”](#agents-and-plan)
+
+The overview has two tabs. **Agents** holds the agents’ cards; its label counts them and, in red, those waiting on you. **Plan** holds the jobs of an [orchestrator](/usage/orchestrator/); its label counts the open jobs and, in red, those whose agent waits on you. Without a job ledger on the server there is only Agents, and no tabs. The overview opens on the tab you looked at last on this device; a job’s notification opens the Plan, and the header’s usage chip opens Agents on its pane’s card. What is open in one tab (a dialog skipped, a History, a job’s details) stays open while you look at the other.
+
 ## The cards
 
 [Section titled “The cards”](#the-cards)
 
-One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one state, the agent that entered it most recently comes first, so the ones you just used stay on top; blocked agents are the exception: the one waiting on you longest comes first. Each card shows:
+One card per agent, in sections: **Needs you** (the dialogs waiting on you, then the cards of those agents), **Working**, **Done** and **Idle**, each named with how many it holds. Within one section, the agent that entered its state most recently comes first, so the ones you just used stay on top; in Needs you the one waiting on you longest comes first. A card that changes state moves to its new section as it is, its History still open. Each card shows:
 
 * the agent’s state and how long it has been in it. “≥ 5 min ago” means the server found the agent already in that state when it started watching (after a restart, for example);
 * the session and tab it runs in, and **worktree** for a linked git worktree;
+* **Job** and its title, when the agent works on an orchestrator’s job;
 * its last message;
-* the branch and the number of changed files of its directory;
-* how full its context is: a bar, the share of the context window and the tokens, for example `72% 144k/200k`, and the model for Claude Code. Bars turn yellow from 70% and red from 90%.
+* under **Branch**, the branch and the number of changed files of its directory;
+* under **Context**, how full its context is: a bar, the share of the context window and the tokens, for example `72% 144k/200k`, and the model for Claude Code. Bars turn yellow from 70% and red from 90%;
+* under **Session**, the tokens the session has used (see [Tokens and cost](#tokens-and-cost)).
 
-Tap a card to open the agent: its [Chat view](/usage/agent-chat/) for Claude Code and Codex, else its terminal. A Chat card also has a terminal button. The filter above the cards counts agents and is the overview’s own: it does not change the sidebar’s.
+Tap a card to open the agent: its [Chat view](/usage/agent-chat/) for Claude Code and Codex, else its terminal. A Chat card also has a terminal button. The filter above the cards (**All**, **Needs you**, **Working**, each with its count) is the overview’s own: it does not change the sidebar’s. The dialogs of Needs you show whatever the filter or the search hides.
 
 The magnifier in the overview’s header opens a search box over the cards: it keeps the agents whose tab, group, pane, agent or process matches, together with the filter. **Enter** opens the first one, **↓** moves to it, and **Esc** clears the box without leaving the overview. The **Needs you** queue and the activity log are not searched.
 
@@ -3239,7 +3247,7 @@ With tmux and psmux, only the active pane of each window is watched: an agent in
 
 [Section titled “One message to several agents”](#one-message-to-several-agents)
 
-The checklist button in the overview’s header turns on picking: a checkbox appears on the card of each agent that takes a message from Termote (Claude Code, Codex and OpenCode, the agents whose Chat view has a composer), and a bar opens at the bottom of the screen. Pick the agents, type the message and press **Send** (or `Ctrl+Enter`, `⌘+Enter` on a Mac). Each agent gets it as if it had been typed in its own Chat view.
+The checklist button in the overview’s header (on a phone, in its **More** menu) turns on picking: a checkbox appears on the card of each agent that takes a message from Termote (Claude Code, Codex and OpenCode, the agents whose Chat view has a composer), and a bar opens at the bottom of the screen. Pick the agents, type the message and press **Send** (or `Ctrl+Enter`, `⌘+Enter` on a Mac). Each agent gets it as if it had been typed in its own Chat view.
 
 Beside each agent the bar then says **Sent**, **Queued** (the agent was working and reads it when it is done) or **Not sent** with the reason. The agents that got the message are unpicked; when one failed, the message stays in the box and only that agent stays picked, so **Send** again reaches only it, never twice the others. An agent whose pane closes is unpicked. Press the checklist button again to stop picking. A [view-only device](/usage/devices/#view-only) has no checklist button.
 
@@ -3247,19 +3255,21 @@ Beside each agent the bar then says **Sent**, **Queued** (the agent was working 
 
 [Section titled “Plan”](#plan)
 
-When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** section above the cards shows its job ledger, grouped by what needs you: waiting for you (the agent is on a dialog), done and not read yet, running, to review, to do, and the finished jobs folded away. Columns on a wide screen, a list on a phone. A job shows its title, what its agent does, the pane (tap it to open that pane), the branch and the last diff counts; **Details** shows the prompt, the note, the worktree folder, the history and every dialog answered under a grant.
+When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then done and not read yet, running, to review and to do. The line above the columns counts the open jobs and names the groups with no job. On a phone the columns stack. A job’s card shows its title and state, what its agent does, its pane and branch, and its last diff and grants in force. **Finished** unfolds the finished jobs as a table: job, state, worktree, changes and when it last changed.
+
+Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They hold a button that opens the job’s pane, **Grants** and **Edit**, then the job’s state, agent, branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a grant and its history. Each grant in force says when it ends and how often it was used, and **End** revokes it after you confirm (only where you can give grants, see below).
 
 * **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with `termote agents start --job <id>` when you ask it to.
 * **Edit** changes the title, prompt, note, state or the agent the job is given to. Giving it to another agent ends its grants. When the orchestrator changed the job meanwhile, the form loads the job as it is now and tells you.
 * **Grants** lets the job’s agent have one kind of permission dialog answered by the orchestrator without asking you: run commands that start with a prefix you type, or edit files in the job’s worktree (while its agent works there), for 30 minutes up to a day. Each grant shows the pane and folder it is pinned to, and **End** revokes it. The form checks the prefix as Termote does and says what a grant never covers; see [Grants for permission dialogs](/usage/orchestrator/#grants-for-permission-dialogs). Grants are given only when you signed in with your password or a paired device, never with `--no-auth`.
 
-When the orchestrator moves a job to review, a device with notifications on gets a push; tapping it opens this section. A [view-only device](/usage/devices/#view-only) sees each job’s title, state, pane and branch only, with no button.
+When the orchestrator moves a job to review, a device with notifications on gets a push; tapping it opens the Plan. A [view-only device](/usage/devices/#view-only) sees each job’s title, state, pane and branch only, and a job opens nothing.
 
 ## Stopping an agent
 
 [Section titled “Stopping an agent”](#stopping-an-agent)
 
-The card of a working agent that takes messages from Termote (Claude Code, Codex and OpenCode) has a **Stop** button under its terminal button. It ends the turn the agent is running, as Esc in its terminal, for the conversation the card sums up; see [Stopping the Agent](/usage/agent-chat/#stopping-the-agent) for what is refused. A refusal shows for a moment at the top of the screen. A Claude Code agent that has written its answer and only waits on background work has no Stop button: its card says what it waits for instead. A [view-only device](/usage/devices/#view-only) has no Stop button.
+The card of a working agent that takes messages from Termote (Claude Code, Codex and OpenCode) has a **Stop** button at the top of the card, beside its terminal button. It ends the turn the agent is running, as Esc in its terminal, for the conversation the card sums up; see [Stopping the Agent](/usage/agent-chat/#stopping-the-agent) for what is refused. A refusal shows for a moment at the top of the screen. A Claude Code agent that has written its answer and only waits on background work has no Stop button: its card says what it waits for instead. A [view-only device](/usage/devices/#view-only) has no Stop button.
 
 ## Context and limits
 
@@ -3267,7 +3277,7 @@ The card of a working agent that takes messages from Termote (Claude Code, Codex
 
 For Claude Code the window follows the model it runs, as its transcript records it at start and on each `/model` switch: 1M for the models that have it of their own (every model from Claude 5 on, Opus from 4.7) and for a `[1m]` model, 200k for any other. When no model can be read, the window is assumed to be 200k and the share is marked `~`, until the context grows past 200k. For Codex the share is the one Codex reports itself (“% context left”, turned into the share used). For OpenCode the context is the tokens of its last answer, and the window the one OpenCode’s own list of models gives that model; a model the list does not have shows its tokens without a share.
 
-With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the cards shows that account’s limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last recorded them. Numbers older than 30 minutes are dimmed, since the account may have been used elsewhere since. There is no such line for Claude Code: its limits are not written anywhere Termote reads.
+With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip behind the header’s token button (see [Tokens and cost](#tokens-and-cost)) shows that account’s limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last recorded them. Numbers older than 30 minutes are dimmed, since the account may have been used elsewhere since. There is no such line for Claude Code: its limits are not written anywhere Termote reads.
 
 The header also shows a small chip for the pane you have open, such as `ctx 72% · 7d 95%` (the limit only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview on that pane’s card. Turn it off in **Settings > Sessions > Agent usage in the header**.
 
@@ -3275,7 +3285,7 @@ The header also shows a small chip for the pane you have open, such as `ctx 72% 
 
 [Section titled “Tokens and cost”](#tokens-and-cost)
 
-Each card of a Claude Code, Codex or OpenCode session shows how many tokens the session has used so far and what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents’ share on a line of its own. Above the cards, a strip adds up every session of the server’s user, today and over the last 7 days, one line per agent; the days are your device’s own. The same strip at the top of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane’s folder, and an old session shows its own total under its title.
+Each card of a Claude Code, Codex or OpenCode session shows how many tokens the session has used so far and what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents’ share on a line of its own. The overview’s header shows today’s tokens of every agent together, never a cost; tap them for a strip that adds up every session of the server’s user, today and over the last 7 days, one line per agent with its cost, and the Codex accounts’ limits. The days are your device’s own; `Esc` closes the strip and leaves the overview open. The same strip at the top of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane’s folder, and an old session shows its own total under its title.
 
 The numbers come from the agents’ own files (Claude Code transcripts, Codex rollouts), never from the terminal. Each request counts once, subagents included. The cost is an estimate from the list prices built into Termote, dated in the tooltip: a subscription (Claude Pro or Max, a ChatGPT plan) is not billed by the token, and fast, batch or regional pricing is not counted. A model Termote has no price for shows its tokens only (`no price`), and a total that leaves some out is marked `+`. Turn the cost off in **Settings > Sessions > Estimated cost**; the tokens stay.
 
@@ -3287,7 +3297,7 @@ Limits: the strip counts the files written in the last 8 days, at most 5000 per 
 
 [Section titled “Needs you”](#needs-you)
 
-When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at a time, with the same buttons as the Chat view. The dialog on top stays until you answer it or press **Skip**: an agent that starts waiting later joins the end, never in front of it. After an answer the card says **Answered**, and only **Next** shows the next dialog, so a second tap never answers another agent. **Show again** brings back the dialogs you skipped.
+When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at a time, with the same buttons as the Chat view. The dialog on top stays until you answer it or press **Skip**: an agent that starts waiting later joins the end, never in front of it. After an answer the card says **Answered**, and only **Next** shows the next dialog, so a second tap never answers another agent. **Show again** brings back the dialogs you skipped. The dialog’s header says how long the agent has waited and the job it works on, if any; on a wide screen the answers sit beside the question.
 
 A [view-only device](/usage/devices/#view-only) sees the dialogs without buttons. An agent whose dialogs Termote cannot read or answer gets an **Open terminal** button instead. With Zellij, if the answer cannot reach the pane at that moment, the card says so and you can try again.
 
@@ -3297,7 +3307,7 @@ A [view-only device](/usage/devices/#view-only) sees the dialogs without buttons
 
 **History** at the bottom of a card opens its last hour as a strip, one colour and mark per state (blocked is striped, idle hollow), with the minutes of each underneath. The part before the first change the server recorded stays blank: it is unknown, not idle. For Claude Code it also lists the session’s subagents: each one’s type, description, state, the last tool it called, how long it ran or has been running and the tokens of its last request (for OpenCode too, its subagents being sessions of their own). One started by another is indented under it. “(guessed)” marks a subagent taken as done because its file has not changed for 10 minutes, when the transcript cannot tell. Closed, the button still says “2 subagents, 1 running”.
 
-**Activity** in the overview’s header lists every change of state of every agent since the server started (the last 500), newest first. Filter it by the state changed to. A row opens that agent’s pane, even after its tmux window moved; a row of a pane that has closed cannot be opened.
+**Activity** in the overview’s header (on a phone, in its **More** menu) lists every change of state of every agent since the server started (the last 500), newest first. Filter it by the state changed to. A row opens that agent’s pane, even after its tmux window moved; a row of a pane that has closed cannot be opened.
 
 ## Stuck agents
 
@@ -4073,7 +4083,7 @@ The compact [sidebar layout](#sidebar-layout-desktop-only) lists no sessions to 
 
 [Section titled “Estimated Cost”](#estimated-cost)
 
-Shows what an agent’s tokens would cost at API list prices beside the token counts: on the [overview](/usage/overview/#tokens-and-cost)’s cards and strip, and in the session history. A subscription is not billed by the token, so the cost is only an estimate. For OpenCode it is the cost OpenCode recorded at your provider’s prices. Off, every place shows the tokens alone.
+Shows what an agent’s tokens would cost at API list prices beside the token counts: on the [overview](/usage/overview/#tokens-and-cost)’s cards and the strip behind its token button, and in the session history (the token button itself never shows a cost). A subscription is not billed by the token, so the cost is only an estimate. For OpenCode it is the cost OpenCode recorded at your provider’s prices. Off, every place shows the tokens alone.
 
 | Option | Behavior                  | Default |
 | ------ | ------------------------- | ------- |

@@ -72,6 +72,8 @@ export default {
   'tasks.overview.searchNoun': 'agents',
   'tasks.overview.close': 'Close the agent overview',
   'tasks.overview.closeEsc': 'Close (Esc)',
+  // A phone's menu of the header's other buttons
+  'tasks.overview.more': 'More overview actions',
   'tasks.overview.readFailed': "Could not read the agents' details; retrying.",
   'tasks.overview.none': 'No agent is running in any session.',
   'tasks.overview.start': 'Start an agent in this pane',
@@ -82,6 +84,34 @@ export default {
   'tasks.overview.groupTitle': '{noun} {name}',
   'tasks.overview.activePaneOnly':
     'Only the active pane of each window is tracked.',
+  // The overview's tabs (components/overview-tabs.tsx); {count}: agents
+  // waiting for an answer, open jobs, jobs waiting for an answer
+  'tasks.tabs.label': 'Agent overview sections',
+  'tasks.tabs.agents': 'Agents',
+  'tasks.tabs.plan': 'Plan',
+  'tasks.tabs.counted': '{name} · {count}',
+  'tasks.tabs.needsYou_one': '{count} needs you',
+  'tasks.tabs.needsYou_other': '{count} need you',
+  'tasks.tabs.open_one': '{count} open',
+  'tasks.tabs.open_other': '{count} open',
+  'tasks.tabs.waiting_one': '{count} waiting',
+  'tasks.tabs.waiting_other': '{count} waiting',
+  // The header's tokens (components/overview-usage-button.tsx): {tokens}
+  // "12.3k", every agent's tokens today
+  'tasks.usage.button': 'Today {tokens}',
+  'tasks.usage.buttonName': 'Tokens today: {tokens}',
+  'tasks.usage.panel': 'Tokens and limits',
+  'tasks.usage.panelTitle': 'Token usage · every session',
+  'tasks.usage.panelHint': "Each agent's own session total stays on its card",
+  // The row of the tokens under each agent's cost
+  'tasks.usage.tokensRow': 'tokens',
+  // The Agents tab's sections; {count}: the agents in it
+  'tasks.overview.section.blocked': 'Needs you · {count}',
+  'tasks.overview.section.working': 'Working · {count}',
+  'tasks.overview.section.done': 'Done · {count}',
+  'tasks.overview.section.idle': 'Idle · {count}',
+  // A filter segment with its words: "Needs you · 1"
+  'tasks.filter.labelled': '{name} · {count}',
   // Sending one message to several agents (components/overview-dispatch.tsx)
   'tasks.dispatch.select': 'Send a message to several agents',
   // A card's checkbox: "Pick Claude Code, api / tab"
@@ -120,6 +150,12 @@ export default {
   'tasks.card.noStatus': 'status unknown',
   'tasks.card.firstSeen': 'Already in this state when the server first saw it',
   'tasks.card.worktree': 'worktree',
+  // The card's figures, each under its name
+  'tasks.card.metric.branch': 'Branch',
+  'tasks.card.metric.context': 'Context',
+  'tasks.card.metric.session': 'Session',
+  // The job the agent works on: "Job · Fix the login"
+  'tasks.card.job': 'Job · {title}',
   'tasks.card.stuck': 'May be stuck: no new activity for {n} min',
   // {n} files changed, "12" or "500+"
   'tasks.card.changed': '{n} changed',

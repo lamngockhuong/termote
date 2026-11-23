@@ -29,7 +29,7 @@ const job = (over: Partial<Job> = {}): Job => ({
 const card = () => screen.getByRole('article', { name: 'Fix login' })
 
 describe('JobCard', () => {
-  it('shows the brief data a view-only device gets, nothing to change', () => {
+  it('shows the brief data a view-only device gets, nothing to press', () => {
     render(
       <JobCard
         job={{
@@ -45,23 +45,12 @@ describe('JobCard', () => {
     )
     expect(within(card()).getByText('Review')).toBeInTheDocument()
     expect(within(card()).getByText('Agent no longer running')).toBeVisible()
-    // No way to open a pane the overview does not show
     expect(within(card()).getByText('web:claude')).toBeVisible()
-    expect(screen.queryByRole('button')).toBeNull()
     expect(within(card()).getByText('feat/x')).toBeVisible()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('opens the pane of its agent', () => {
-    const onOpenPane = vi.fn()
-    render(<JobCard job={job()} now={NOW} onOpenPane={onOpenPane} />)
-    expect(within(card()).getByText('Working')).toBeVisible()
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Open pane web:claude' }),
-    )
-    expect(onOpenPane).toHaveBeenCalledWith('%1')
-  })
-
-  it('names a pane it cannot open, and none for a job without an agent', () => {
+  it('names the pane of an agent the job had, and none without an agent', () => {
     const { rerender } = render(
       <JobCard job={job({ live: {}, agent })} now={NOW} />,
     )
@@ -72,6 +61,7 @@ describe('JobCard', () => {
   })
 
   it.each([
+    ['working', false, 'Working'],
     ['blocked', false, 'Waiting for an answer'],
     ['background', false, 'Waiting for background work'],
     ['idle', false, 'Idle'],
@@ -82,114 +72,47 @@ describe('JobCard', () => {
     expect(within(card()).getByText(words)).toBeVisible()
   })
 
-  it('shows the last diff and the grants in force', () => {
-    render(
-      <JobCard
-        job={job({
-          diff: { commits: 1, files: 3, at: ago(2) },
-          grants: [
-            grant(),
-            grant({ id: 'g2', kind: 'edit', prefix: undefined }),
-            grant({ id: 'g3', revoked: ago(1) }),
-          ],
-        })}
-        now={NOW}
-      />,
+  it("is one button opening a full client's details, with its counts", () => {
+    const onSelect = vi.fn()
+    const j = job({
+      diff: { commits: 1, files: 3, at: ago(2) },
+      grants: [grant(), grant({ id: 'g2', revoked: ago(1) })],
+      worktree: { branch: 'feat/x', dir: '/w/x' },
+    })
+    const { rerender } = render(
+      <JobCard job={j} now={NOW} onSelect={onSelect} />,
     )
-    expect(within(card()).getByText(/1 commit · 3 files changed/)).toBeVisible()
-    const grants = within(card()).getByRole('list', { name: 'Grants in force' })
-    expect(
-      within(grants)
-        .getAllByRole('listitem')
-        .map((l) => l.textContent),
-    ).toEqual(['Run: pnpm test', 'Edit files in the worktree'])
+    const open = within(card()).getByRole('button', { name: 'Fix login' })
+    expect(within(card()).getAllByRole('button')).toHaveLength(1)
+    expect(open).toHaveAttribute('aria-pressed', 'false')
+    expect(open).toHaveAccessibleDescription(
+      /Working.*web:claude.*feat\/x.*1 commit · 3 files · 1 grant/,
+    )
+    fireEvent.click(open)
+    expect(onSelect).toHaveBeenCalledWith(j)
+    rerender(<JobCard job={j} now={NOW} onSelect={onSelect} selected />)
+    expect(open).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('opens the details of a full client: prompt, note, folder, answers, history', () => {
-    render(
-      <JobCard
-        job={job({
-          prompt: 'Do it\nwell',
-          note: 'careful',
-          worktree: { branch: 'feat/x', dir: '/w/x' },
-          grants: [
-            grant({
-              uses: [
-                { at: ago(10), command: 'pnpm test a' },
-                { at: ago(2), path: 'src/a.ts' },
-                { at: ago(5) },
-              ],
-            }),
-            grant({ id: 'g2' }),
-          ],
-          events: [
-            { at: ago(30), kind: 'created' },
-            { at: ago(20), kind: 'state', text: 'review' },
-            { at: ago(15), kind: 'state', text: 'weird' },
-            { at: ago(12), kind: 'agent', text: 'w:t' },
-            { at: ago(3), kind: 'future_kind' },
-            { at: ago(-5), kind: 'constructor' },
-          ],
-        })}
-        now={NOW}
-      />,
-    )
-    const toggle = screen.getByRole('button', { name: 'Details' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/Do it/)).toHaveTextContent('Do it well')
-    expect(screen.getByText('careful')).toBeVisible()
-    expect(screen.getByText('/w/x')).toBeVisible()
-    const answers = screen.getByText('Answered under a grant').parentElement!
-    expect(
-      within(answers)
-        .getAllByRole('listitem')
-        .map((l) => l.textContent),
-    ).toEqual(['2 min agosrc/a.ts', '5 min ago', '10 min agopnpm test a'])
-    const history = screen.getByText('History').parentElement!
-    expect(
-      within(history)
-        .getAllByRole('listitem')
-        .map((l) => l.textContent),
-    ).toEqual([
-      'just nowconstructor',
-      '3 min agofuture_kind',
-      '12 min agoGiven to an agent: w:t',
-      '15 min agoState changed: weird',
-      '20 min agoState changed: Review',
-      '30 min agoAdded',
-    ])
-    fireEvent.click(toggle)
-    expect(screen.queryByText('careful')).toBeNull()
-  })
-
-  it("shows a job's pane folder and branch when it has no worktree", () => {
-    render(
-      <JobCard
-        job={job({
-          worktree: undefined,
-          live: {
-            status: 'idle',
-            paneId: '%1',
-            dir: '/src/web',
-            branch: 'main',
-          },
-        })}
-        now={NOW}
-      />,
-    )
-    expect(screen.getByText('main')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
-    expect(screen.getByText('/src/web')).toBeInTheDocument()
+  it('counts nothing a job has not, nor for a view-only device', () => {
+    const j = job({
+      diff: { commits: 2, files: 1, at: ago(2) },
+      grants: [grant()],
+    })
+    const { rerender } = render(<JobCard job={j} now={NOW} />)
+    expect(card()).not.toHaveTextContent('commit')
+    expect(card()).not.toHaveTextContent('grant')
+    rerender(<JobCard job={job()} now={NOW} onSelect={vi.fn()} />)
+    expect(card()).not.toHaveTextContent('commit')
+    expect(card()).not.toHaveTextContent('grant')
   })
 
   it.each([
-    [false, 'job-ledger-case', '/wt/job-ledger-case'],
-    [true, 'main', '/src/termote'],
+    [false, 'job-ledger-case'],
+    [true, 'main'],
   ])(
-    'shows the worktree only while its agent works in it (outside %s)',
-    (outsideWorktree, branch, dir) => {
+    'shows the worktree branch only while its agent works in it (outside %s)',
+    (outsideWorktree, branch) => {
       render(
         <JobCard
           job={job({
@@ -197,7 +120,6 @@ describe('JobCard', () => {
             live: {
               status: 'idle',
               paneId: '%1',
-              dir: outsideWorktree ? '/src/termote' : '/wt/job-ledger-case',
               branch: outsideWorktree ? 'main' : 'job-ledger-case',
               outsideWorktree,
             },
@@ -205,25 +127,21 @@ describe('JobCard', () => {
           now={NOW}
         />,
       )
-      expect(screen.getByText(branch)).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: 'Details' }))
-      expect(screen.getByText(dir)).toBeInTheDocument()
+      expect(within(card()).getByText(branch)).toBeInTheDocument()
     },
   )
 
-  it('has no details without any', () => {
-    render(<JobCard job={job({ worktree: undefined })} now={NOW} />)
-    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull()
-  })
-
-  it('offers Edit and Grants to a full client', () => {
-    const onEdit = vi.fn()
-    const onGrants = vi.fn()
-    const j = job()
-    render(<JobCard job={j} now={NOW} onEdit={onEdit} onGrants={onGrants} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Fix login' }))
-    expect(onEdit).toHaveBeenCalledWith(j)
-    fireEvent.click(screen.getByRole('button', { name: 'Grants of Fix login' }))
-    expect(onGrants).toHaveBeenCalledWith(j)
+  it('shows the hidden characters of the title and the branch', () => {
+    render(
+      <JobCard
+        job={job({ title: 'Fix\u202elogin', branch: 'feat/\u200bx', live: {} })}
+        now={NOW}
+        onSelect={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Fix⟨U+202E⟩login' }),
+    ).toHaveTextContent('Fix⟨U+202E⟩login')
+    expect(screen.getByText('feat/⟨U+200B⟩x')).toBeInTheDocument()
   })
 })

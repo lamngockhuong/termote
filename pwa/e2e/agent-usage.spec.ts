@@ -137,11 +137,15 @@ test.describe('agent tokens and cost', () => {
     await expect(line).toHaveText('Tokens used by this session: 208k tokens · ~$0.05', {
       timeout: 40_000,
     })
+    // Behind the header's tokens, which show once a session counted any
+    const tokens = page.getByRole('button', { name: /^Tokens today/ })
+    await tokens.click({ timeout: 70_000 })
     const strip = page.getByRole('region', { name: 'Agent tokens' })
-    await expect(strip.locator('[data-agent="claude"]')).toContainText('Today', {
+    // Its cost today and in 7 days, its tokens under them
+    await expect(strip.locator('[data-agent="claude"]')).toContainText('~$', {
       timeout: 70_000,
     })
-    await expect(strip.locator('[data-agent="claude"]')).toContainText('tokens · ~$')
+    await expect(strip.locator('[data-agent="claude"]')).toContainText('tokens')
 
     await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('menuitem', { name: 'Settings' }).click()
@@ -157,6 +161,11 @@ test.describe('agent tokens and cost', () => {
     await page.keyboard.press('Escape')
     await expect(settings).toBeHidden()
     await expect(line).toHaveText('Tokens used by this session: 208k tokens')
+    // Settings closed the panel: open it again to read it, and the button
+    // never shows a cost
+    await expect(tokens).not.toContainText('$')
+    await tokens.click()
+    await expect(strip).toBeVisible()
     await expect(strip).not.toContainText('$')
   })
 
