@@ -70,6 +70,23 @@ vi.mock('../hooks/use-subagents', () => ({
   },
 }))
 
+// The sheet itself is SubagentTranscriptSheet's own test: here a stand-in
+// that names what it shows and closes.
+vi.mock('./subagent-transcript-sheet', () => ({
+  SubagentTranscriptSheet: (p: {
+    target?: { paneId: string; node: { id: string } }
+    onClose: () => void
+  }) =>
+    p.target ? (
+      <div role="dialog" aria-label="subagent sheet">
+        {p.target.paneId}/{p.target.node.id}
+        <button type="button" onClick={p.onClose}>
+          close sheet
+        </button>
+      </div>
+    ) : null,
+}))
+
 const mockFollowPath = vi.fn()
 const mockOpenOutside = vi.fn()
 vi.mock('../hooks/use-files', async (orig) => ({
@@ -942,6 +959,74 @@ describe('ChatView agent state', () => {
     )
     expect(subagents.panes).toEqual([])
     expect(screen.queryByText('seo-technical')).toBeNull()
+  })
+
+  it("opens a Claude subagent's conversation, kept open when the strip goes", () => {
+    set({ entries: entries(1) })
+    const running = {
+      id: 'r1',
+      type: 'seo-technical',
+      status: 'running' as const,
+      depth: 1,
+      children: [],
+    }
+    subagents.tree = { nodes: [running] }
+    const { rerender } = render(<ChatView {...props} />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open the conversation of seo-technical',
+      }),
+    )
+    expect(
+      screen.getByRole('dialog', { name: 'subagent sheet' }),
+    ).toHaveTextContent('0/r1')
+    // The last running one ends: the strip goes, the sheet stays
+    subagents.tree = { nodes: [{ ...running, status: 'done' }] }
+    rerender(<ChatView {...props} />)
+    expect(
+      screen.queryByRole('button', { name: '1 subagent running' }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('dialog', { name: 'subagent sheet' }),
+    ).toBeInTheDocument()
+    // Another pane's Chat does not show it
+    rerender(
+      <ChatView {...props} session={{ ...props.session, paneId: '1' }} />,
+    )
+    expect(screen.queryByRole('dialog', { name: 'subagent sheet' })).toBeNull()
+    rerender(<ChatView {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'close sheet' }))
+    expect(screen.queryByRole('dialog', { name: 'subagent sheet' })).toBeNull()
+  })
+
+  it('has no subagent row to open for OpenCode or a view-only device', () => {
+    set({ entries: entries(1) })
+    subagents.tree = {
+      nodes: [
+        {
+          id: 'r1',
+          type: 'explore',
+          status: 'running',
+          depth: 1,
+          children: [],
+        },
+      ],
+    }
+    const { rerender } = render(
+      <ChatView
+        {...props}
+        session={{ ...props.session, agentName: 'opencode' }}
+      />,
+    )
+    expect(screen.getByText('explore')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
+    rerender(<ChatView {...props} readOnly />)
+    expect(screen.getByText('explore')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
   })
 
   it('view-only does not read the dialog of an agent without input', () => {

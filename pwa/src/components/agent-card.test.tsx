@@ -369,12 +369,37 @@ describe('AgentCard history', () => {
     ).toBeInTheDocument()
     expect(mockFetchSubagents).toHaveBeenCalledWith('w1:p1')
     expect(screen.getByRole('list', { name: 'Subagents' })).toBeInTheDocument()
+    // No row to open unless the overview offers it
+    expect(
+      screen.queryByRole('button', { name: /^Open the conversation/ }),
+    ).toBeNull()
     // Closed again, it still counts the subagents it read.
     await act(async () => fireEvent.click(toggle))
     expect(
       screen.getByRole('button', { name: 'History · 1 subagent, 1 running' }),
     ).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('list', { name: 'Subagents' })).toBeNull()
+  })
+
+  it("opens a subagent's conversation through the overview", async () => {
+    const sub = {
+      id: 'a1',
+      type: 'Explore',
+      status: 'done',
+      depth: 1,
+      children: [],
+    }
+    mockFetchSubagents.mockResolvedValue({ nodes: [sub] })
+    const onOpenSubagent = vi.fn()
+    // A pane of its own: the tree read for w1:p1 stays counted
+    renderCard({ pane: pane({ id: 'w1:p7' }), onOpenSubagent })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'History' })),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open the conversation of Explore' }),
+    )
+    expect(onOpenSubagent).toHaveBeenCalledWith(sub)
   })
 
   it("reads an OpenCode session's subagent tree", async () => {

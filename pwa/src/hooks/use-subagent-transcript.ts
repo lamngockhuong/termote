@@ -43,19 +43,22 @@ interface Store {
   setLive: (live: boolean) => void
   setListed: (listed: boolean) => void
   loadOlder: () => void
+}
+
+interface OwnedStore extends Store {
   // Stops it for good (its pane id names another pane now)
   drop: () => void
 }
 
 const keyOf = (paneId: string, agentId: string) => `${paneId}\0${agentId}`
 
-const stores = new Map<string, Store>()
+const stores = new Map<string, OwnedStore>()
 
 function createStore(
   paneId: string,
   agentId: string,
   startLive: boolean,
-): Store {
+): OwnedStore {
   let live = startLive
   const key = keyOf(paneId, agentId)
   let state = INITIAL
@@ -177,7 +180,7 @@ function createStore(
     if (stores.get(key) === store) stores.delete(key)
   }
 
-  const store: Store = {
+  const store: OwnedStore = {
     get: () => state,
     subscribe(fn) {
       listeners.add(fn)
@@ -250,7 +253,6 @@ const EMPTY_STORE: Store = {
   setLive: () => {},
   setListed: () => {},
   loadOlder: () => {},
-  drop: () => {},
 }
 
 // The conversation of paneId's subagent agentId while a component shows it.
