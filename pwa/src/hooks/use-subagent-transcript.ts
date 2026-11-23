@@ -152,7 +152,8 @@ function createStore(
       if (ep !== epoch) return
       fail(err)
     } finally {
-      inFlight = false
+      // A read dropped with its store leaves a new one's flag alone
+      if (ep === epoch) inFlight = false
     }
     if (again) {
       again = false

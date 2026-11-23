@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -94,6 +95,12 @@ func (a *agentAPI) handleSubagentTranscript(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s, err := a.session(r.PathValue("id"))
+	if errors.Is(err, errNoAgentSession) || errors.Is(err, errAgentUnsupported) {
+		// The agent left the pane: its subagents went with it. A 404 without
+		// a code is a server too old for this route (a machine).
+		writeCoded(w, errSessionNotFound)
+		return
+	}
 	if err != nil {
 		a.agentError(w, "agent session", err)
 		return
@@ -131,7 +138,9 @@ func (a *agentAPI) readSubagent(s AgentSession, id, cursor, before string) (tran
 		return transcriptResponse{}, err
 	}
 	defer f.Close()
-	key := strings.Join([]string{"subagent", s.ID, s.ClaudeDir, s.Transcript, id, fileID, cursor, before}, "\x00")
+	// The size is in the key: the read made when the subagent ends must not
+	// be a page cached before its last lines were written.
+	key := strings.Join([]string{"subagent", s.ID, s.ClaudeDir, s.Transcript, id, fileID, strconv.FormatInt(size, 10), cursor, before}, "\x00")
 	return a.reads.do(key, func() (transcriptResponse, error) {
 		transcriptReads <- struct{}{}
 		defer func() { <-transcriptReads }()

@@ -187,6 +187,10 @@ describe('SubagentTree rows that open', () => {
     // A native button: Enter and Space press it
     expect(rows[0].tagName).toBe('BUTTON')
     expect(rows[0]).toHaveAttribute('type', 'button')
+    // A hover a card's background shows, and no margin past its row (a
+    // scrollbar for a single subagent)
+    expect(rows[0].className).toContain('hover:bg-surface-raised')
+    expect(rows[0].className).not.toMatch(/-my-/)
     // Named by type and description, or the type alone
     expect(rows[0]).toHaveAccessibleName(
       'Open the conversation of code-reviewer: Review parser',

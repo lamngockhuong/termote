@@ -4,6 +4,7 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { FOCUS_RING } from './ui/button'
 import { Skeleton } from './ui/skeleton'
 
 // At most this many subagents are drawn; the rest are counted.
@@ -188,7 +189,7 @@ export function SubagentTree({ tree, error, now, onOpen }: Props) {
                           type: visibleUnsafe(n.type),
                         })
                   }
-                  className="-my-0.5 flex w-full min-w-0 items-start gap-1.5 rounded-sm py-0.5 pr-1 text-left hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent"
+                  className={`flex w-full min-w-0 cursor-pointer items-start gap-1.5 rounded-sm pr-1 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
                 >
                   {row}
                 </button>

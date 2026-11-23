@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -182,7 +183,30 @@ func TestSubagentTranscriptRefusals(t *testing.T) {
 	}
 	none := http.NewServeMux()
 	registerMuxRoutes(none, &fakeLocator{}, newStreamTokenStore(), nil, nil)
-	wantSubagentCode(t, "no agent", serveSubagent(none, "aaa1", nil, nil), http.StatusNotFound, "")
+	// The agent left the pane: gone, not a server without the route
+	wantSubagentCode(t, "no agent", serveSubagent(none, "aaa1", nil, nil), http.StatusNotFound, "session_not_found")
+	plain := http.NewServeMux()
+	registerAgentRoutes(plain, &fakeMux{}, nil)
+	wantSubagentCode(t, "no locator", serveSubagent(plain, "aaa1", nil, nil), http.StatusNotFound, "session_not_found")
+	failing := http.NewServeMux()
+	registerMuxRoutes(failing, &fakeLocator{err: errors.New("tmux exploded")}, newStreamTokenStore(), nil, nil)
+	wantSubagentCode(t, "lookup failed", serveSubagent(failing, "aaa1", nil, nil), http.StatusInternalServerError, "")
+}
+
+// The read made when a subagent ends is not a page cached before its last
+// lines: the file's size is in the cache key.
+func TestSubagentTranscriptCacheSeesNewLines(t *testing.T) {
+	dir, subs := subagentsFixture(t)
+	mux, _ := subagentsServer(t, claudeSession(dir)) // reads cached agentCacheTTL
+	first := getSubagentTranscript(t, mux, "aaa1", nil)
+	q := url.Values{"cursor": {first.Cursor}}
+	if r := getSubagentTranscript(t, mux, "aaa1", q); len(r.Entries) != 0 {
+		t.Fatalf("nothing new yet: %+v", r.Entries)
+	}
+	appendFile(t, filepath.Join(subs, "agent-aaa1.jsonl"), sidechainLine("last", "THE REPORT"))
+	if r := getSubagentTranscript(t, mux, "aaa1", q); strings.Join(entryTexts(r), ",") != "THE REPORT" {
+		t.Errorf("a cached page hid the new line: %+v", r.Entries)
+	}
 }
 
 // An id with no file is answered without waiting for a read slot.
