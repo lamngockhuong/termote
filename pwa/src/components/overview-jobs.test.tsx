@@ -111,12 +111,12 @@ describe('OverviewJobs', () => {
   it('groups the jobs by what they need from the user', () => {
     show()
     expect(plan()).toBeVisible()
-    expect(titles('Waiting for you (1)')).toEqual(['job w'])
-    expect(titles('Done, not read (1)')).toEqual(['job u'])
-    expect(titles('Running (1)')).toEqual(['job r'])
-    expect(titles('To review (1)')).toEqual(['job v'])
-    expect(titles('To do (1)')).toEqual(['job t'])
-    expect(screen.queryByText(/^Empty:/)).toBeNull()
+    expect(titles('Waiting for you · 1')).toEqual(['job w'])
+    expect(titles('Done, not read · 1')).toEqual(['job u'])
+    expect(titles('Running · 1')).toEqual(['job r'])
+    expect(titles('To review · 1')).toEqual(['job v'])
+    expect(titles('To do · 1')).toEqual(['job t'])
+    expect(screen.getByText('5 open jobs')).toBeVisible()
     // Finished jobs are folded away, in a table
     expect(screen.queryByRole('table')).toBeNull()
     fireEvent.click(finished())
@@ -133,11 +133,14 @@ describe('OverviewJobs', () => {
 
   it('always shows Waiting for you, and names the empty groups in one line', () => {
     show({ jobs: [job('t'), job('v', { state: 'review' })] })
-    expect(column('Waiting for you (0)')).toHaveTextContent(
-      'Nothing waits for you',
+    expect(column('Waiting for you · 0')).toHaveTextContent(
+      'No job waits for you',
     )
     expect(screen.queryByRole('heading', { name: /^Running/ })).toBeNull()
-    expect(screen.getByText('Empty: Done, not read, Running')).toBeVisible()
+    // Above the columns, with the groups that have no job
+    expect(screen.getByText('2 open jobs', { exact: false })).toHaveTextContent(
+      '2 open jobs · Done, not read 0 · Running 0',
+    )
   })
 
   it('leaves out the finished columns no job has a value for', () => {
@@ -217,7 +220,7 @@ describe('OverviewJobs', () => {
       ],
     })
     rerender(<OverviewJobs {...props} />)
-    expect(titles('Running (2)')).toEqual(['job r', 'job r2'])
+    expect(titles('Running · 2')).toEqual(['job r', 'job r2'])
     expect(button).toHaveFocus()
   })
 

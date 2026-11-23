@@ -214,8 +214,9 @@ test.describe('sessions of an OpenCode pane', () => {
     await page.getByRole('button', { name: /^Tokens today/ }).click({ timeout: 30_000 })
     const strip = page.getByRole('region', { name: 'Agent tokens' })
     const row = strip.locator('[data-agent="opencode"]')
-    await expect(row).toContainText(/7 days \d+(\.\d)?k tokens · <\$0\.01/, { timeout: 30_000 })
-    if (sameDay) await expect(row).toContainText(/Today \d+(\.\d)?k tokens · <\$0\.01/)
+    // Its cost (OpenCode's own) for today and the 7 days, then its tokens
+    await expect(row).toContainText(/<\$0\.01tokens/, { timeout: 30_000 })
+    if (sameDay) await expect(row).toContainText(/OpenCode<\$0\.01<\$0\.01tokens\d+(\.\d)?k\d+(\.\d)?k/)
   })
 
   test('lists the folder sessions and resumes an old one in a new tab', async ({ page }) => {

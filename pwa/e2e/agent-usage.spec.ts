@@ -141,10 +141,11 @@ test.describe('agent tokens and cost', () => {
     const tokens = page.getByRole('button', { name: /^Tokens today/ })
     await tokens.click({ timeout: 70_000 })
     const strip = page.getByRole('region', { name: 'Agent tokens' })
-    await expect(strip.locator('[data-agent="claude"]')).toContainText('Today', {
+    // Its cost today and in 7 days, its tokens under them
+    await expect(strip.locator('[data-agent="claude"]')).toContainText('~$', {
       timeout: 70_000,
     })
-    await expect(strip.locator('[data-agent="claude"]')).toContainText('tokens · ~$')
+    await expect(strip.locator('[data-agent="claude"]')).toContainText('tokens')
 
     await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('menuitem', { name: 'Settings' }).click()

@@ -57,6 +57,18 @@ export function activeGrants(job: Job, now: number): JobGrant[] {
   )
 }
 
+// How long a grant has left at now (server time, ms): "Ends in 12 min"
+export function grantLeft(
+  expires: string,
+  now: number,
+  t: Translate<MessageKey>,
+): string {
+  const min = Math.max(1, Math.ceil((Date.parse(expires) - now) / 60_000))
+  return min < 60
+    ? t('jobs.grant.leftMinutes', { n: min })
+    : t('jobs.grant.leftHours', { n: Math.floor(min / 60) })
+}
+
 // What a grant lets the orchestrator answer: "Run: pnpm test", "Edit files"
 export function grantLabel(g: JobGrant, t: Translate<MessageKey>): string {
   return g.kind === 'bash'

@@ -5,9 +5,8 @@ export type OverviewTab = 'agents' | 'plan'
 
 export interface OverviewTabDef {
   id: OverviewTab
+  // The label with its count: "Agents · 5", "Plan · 2 open"
   label: string
-  // A count shown beside the label ("4", "3 open")
-  count: string
   // A count in red, only when there is something to answer ("1 needs you")
   alert?: string
   // What a screen reader calls the tab, the counts included
@@ -83,7 +82,12 @@ export function OverviewTabs({
     refs.current.get(tab)?.focus()
   }
   return (
-    <div role="tablist" aria-label={label} className="flex min-w-0 gap-1">
+    // A segmented track: on a phone the two tabs share the row's width
+    <div
+      role="tablist"
+      aria-label={label}
+      className="grid min-w-0 grid-cols-2 gap-0.5 rounded-control bg-surface-raised p-0.5 sm:inline-flex ui-terminal:bg-bg"
+    >
       {tabs.map((tab, i) => {
         const selected = tab.id === value
         return (
@@ -102,16 +106,13 @@ export function OverviewTabs({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => move(e, i)}
-            className={`flex min-h-touch min-w-0 items-center gap-1.5 border-b-2 px-2 text-[13px] transition-colors duration-(--duration-fast) ease-standard ${
+            className={`flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-[13px] tabular-nums transition-colors duration-(--duration-fast) ease-standard pointer-coarse:h-9 ${
               selected
-                ? 'border-accent font-semibold text-fg'
-                : 'border-transparent text-fg-muted hover:text-fg'
+                ? 'bg-surface font-semibold text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                : 'font-medium text-fg-muted hover:text-fg'
             } ${FOCUS_RING}`}
           >
             <span className="truncate">{tab.label}</span>
-            <span className="shrink-0 rounded-full bg-surface-raised px-1.5 text-[11px] tabular-nums text-fg-muted">
-              {tab.count}
-            </span>
             {tab.alert && (
               <span className="shrink-0 rounded-full bg-danger/15 px-1.5 text-[11px] font-medium tabular-nums text-danger">
                 {tab.alert}

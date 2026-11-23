@@ -340,18 +340,19 @@ export function OverviewScreen({
     jobGroups.running.length +
     jobGroups.review.length +
     jobGroups.todo.length
+  // A tab's label carries its count ("Agents · 5", "Plan · 2 open"); its
+  // name says what is counted
   const tabDef = (
     id: OverviewTab,
-    label: string,
+    name: string,
     count: string,
     countName: string,
     alert?: string,
   ): OverviewTabDef => ({
     id,
-    label,
-    count,
+    label: t('tasks.tabs.counted', { name, count }),
     alert,
-    name: [label, countName, alert].filter(Boolean).join(', '),
+    name: [name, countName, alert].filter(Boolean).join(', '),
   })
   const tabs = [
     tabDef(
@@ -413,66 +414,72 @@ export function OverviewScreen({
       aria-labelledby="overview-title"
       className="flex h-full flex-col bg-bg"
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2">
         <h2
           id="overview-title"
           ref={titleRef}
           tabIndex={-1}
-          className="flex-1 text-[15px] font-semibold outline-none"
+          className="text-[15px] font-semibold outline-none"
         >
           {t('tasks.overview.title')}
         </h2>
-        <OverviewUsageButton
-          summary={usage.summary}
-          accounts={overview.accounts}
-          now={now}
-          clockOffset={clockOffset}
-        />
-        {shownTab === 'agents' && cards.length > 0 && (
-          <SearchToggle
-            controls={searchId}
-            noun={t('tasks.overview.searchNoun')}
-            open={searchOpen}
-            onToggle={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
-          />
+        {/* The tabs beside the title; on a phone a row of their own */}
+        {hasPlan && (
+          <div className="order-last w-full sm:order-none sm:w-auto">
+            <OverviewTabs
+              label={t('tasks.tabs.label')}
+              tabs={tabs}
+              value={shownTab}
+              onChange={chooseTab}
+              idPrefix={tabsId}
+            />
+          </div>
         )}
-        {shownTab === 'agents' && pickable.length > 0 && (
+        <span className="flex-1" />
+        <div className="flex items-center gap-0.5">
+          <OverviewUsageButton
+            summary={usage.summary}
+            accounts={overview.accounts}
+            now={now}
+            clockOffset={clockOffset}
+          />
+          {shownTab === 'agents' && cards.length > 0 && (
+            <SearchToggle
+              controls={searchId}
+              noun={t('tasks.overview.searchNoun')}
+              open={searchOpen}
+              onToggle={() =>
+                searchOpen ? closeSearch() : setSearchOpen(true)
+              }
+            />
+          )}
+          {shownTab === 'agents' && pickable.length > 0 && (
+            <IconButton
+              onClick={() => (picking ? stopPicking() : setPicking(true))}
+              aria-label={t('tasks.dispatch.select')}
+              aria-pressed={picking}
+              title={t('tasks.dispatch.select')}
+            >
+              <ListChecks size={18} aria-hidden="true" />
+            </IconButton>
+          )}
           <IconButton
-            onClick={() => (picking ? stopPicking() : setPicking(true))}
-            aria-label={t('tasks.dispatch.select')}
-            aria-pressed={picking}
-            title={t('tasks.dispatch.select')}
+            onClick={() => setLogOpen((v) => !v)}
+            aria-label={t('tasks.activity.title')}
+            aria-pressed={logOpen}
+            title={t('tasks.activity.hint')}
           >
-            <ListChecks size={18} aria-hidden="true" />
+            <History size={18} aria-hidden="true" />
           </IconButton>
-        )}
-        <IconButton
-          onClick={() => setLogOpen((v) => !v)}
-          aria-label={t('tasks.activity.title')}
-          aria-pressed={logOpen}
-          title={t('tasks.activity.hint')}
-        >
-          <History size={18} aria-hidden="true" />
-        </IconButton>
-        <IconButton
-          onClick={onClose}
-          aria-label={t('tasks.overview.close')}
-          title={t('tasks.overview.closeEsc')}
-        >
-          <X size={18} aria-hidden="true" />
-        </IconButton>
-      </div>
-      {hasPlan && (
-        <div className="shrink-0 border-b border-border px-3">
-          <OverviewTabs
-            label={t('tasks.tabs.label')}
-            tabs={tabs}
-            value={shownTab}
-            onChange={chooseTab}
-            idPrefix={tabsId}
-          />
+          <IconButton
+            onClick={onClose}
+            aria-label={t('tasks.overview.close')}
+            title={t('tasks.overview.closeEsc')}
+          >
+            <X size={18} aria-hidden="true" />
+          </IconButton>
         </div>
-      )}
+      </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {overview.error && (
@@ -508,7 +515,7 @@ export function OverviewScreen({
               </div>
             ) : (
               <>
-                <div className="mb-3 flex max-w-xl flex-col gap-2">
+                <div className="mb-4 flex max-w-xl flex-col gap-2">
                   {searchOpen && (
                     <SessionSearchField
                       id={searchId}
@@ -546,7 +553,7 @@ export function OverviewScreen({
                   shows, then the cards of those agents */}
                 {summary.blocked > 0 && (
                   <>
-                    <h3 className="mb-2 text-[13px] font-semibold text-fg">
+                    <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
                       {t('tasks.overview.section.blocked', {
                         count: summary.blocked,
                       })}
@@ -575,7 +582,7 @@ export function OverviewScreen({
                 ) : (
                   <ul
                     ref={listRef}
-                    className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+                    className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,21rem),1fr))] gap-3"
                   >
                     {rows.map((row) => {
                       if ('head' in row) {
@@ -584,9 +591,9 @@ export function OverviewScreen({
                             key={`section-${row.head}`}
                             // A heading, not one of the cards the list counts
                             role="presentation"
-                            className="col-span-full pt-1"
+                            className="col-span-full pt-3"
                           >
-                            <h3 className="text-[13px] font-semibold text-fg">
+                            <h3 className="text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
                               {t(SECTION_WORDS[row.head], {
                                 count: sectionCount(row.head),
                               })}

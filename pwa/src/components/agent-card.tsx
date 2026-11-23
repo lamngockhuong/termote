@@ -1,11 +1,4 @@
-import {
-  ChevronDown,
-  GitBranch,
-  Hourglass,
-  ListTodo,
-  Square,
-  SquareTerminal,
-} from 'lucide-react'
+import { ChevronDown, Hourglass, Square, SquareTerminal } from 'lucide-react'
 import { memo, type ReactNode, type Ref, useId, useState } from 'react'
 import { agentLabel, reportedCostAgent, subagentAgent } from '../chat-agents'
 import { useAgentStop } from '../hooks/use-agent-stop'
@@ -25,7 +18,6 @@ import { formatAgo } from '../utils/format-ago'
 import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { percentLabel, usageLevel } from '../utils/usage-format'
-import { AgentStatusBadge } from './agent-status-badge'
 import { SessionUsageLine } from './session-usage-line'
 import { StatusTimeline } from './status-timeline'
 import { formatTokens, SubagentTree, subagentSummary } from './subagent-tree'
@@ -38,6 +30,14 @@ const STATUS_WORDS: Record<AgentStatus, MessageKey> = {
   working: 'tasks.status.working',
   done: 'tasks.status.done',
   idle: 'tasks.status.idle',
+}
+
+// The status as a dot beside its word
+const STATUS_DOT: Record<AgentStatus, string> = {
+  blocked: 'bg-danger',
+  working: 'bg-warning',
+  done: 'bg-success',
+  idle: 'bg-fg-subtle',
 }
 
 const LEVEL_TEXT = {
@@ -65,7 +65,7 @@ function ContextUsage({ usage }: { usage: OverviewUsage }) {
               used: formatTokens(contextTokens),
               size: formatTokens(contextWindow),
             })}
-            className="w-12 shrink-0"
+            className="w-14 shrink-0"
           />
           <span
             className={`shrink-0 tabular-nums ${LEVEL_TEXT[usageLevel(contextPercent)]}`}
@@ -206,6 +206,8 @@ export const AgentCard = memo(function AgentCard({
   const { t } = useT()
   const halt = useAgentStop(pane.id, pane.agentStatus, pane.agentSince)
   const detailsId = useId()
+  const jobId = useId()
+  const metricsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
   // Only Claude Code's and OpenCode's sessions have a subagent tree to read.
@@ -233,6 +235,12 @@ export const AgentCard = memo(function AgentCard({
     !!canStop &&
     !!cursor &&
     ((status === 'working' && !background) || halt.stopping)
+  const actions = (stopShown ? 1 : 0) + (opensChat ? 1 : 0)
+  const metrics =
+    showChanges ||
+    !!overview?.usage ||
+    !!overview?.sessionUsage?.tokens ||
+    !!pending('sessionUsage')
   const stop = async (c: string) => {
     const err = await halt.stop(c)
     if (!err) return
@@ -257,24 +265,31 @@ export const AgentCard = memo(function AgentCard({
               : 'border-border'
       }`}
     >
-      {/* Hovering the open button lights the whole first part of the card,
-        its Stop and terminal buttons included, as one surface */}
-      <div className="flex items-start rounded-t-panel transition-colors duration-(--duration-fast) ease-standard has-[>button:hover]:bg-surface-raised">
-        <button
-          ref={openRef}
-          type="button"
-          onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
-          aria-label={t('tasks.card.label', {
-            open: openLabel,
-            name,
-            status: status ? t(STATUS_WORDS[status]) : t('tasks.card.noStatus'),
-            place,
-          })}
-          aria-describedby={detailsId}
-          className={`flex min-h-touch min-w-0 flex-1 flex-col gap-1.5 rounded-panel p-3 text-left ${FOCUS_RING}`}
-        >
-          <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
-            <AgentStatusBadge status={status} />
+      <button
+        ref={openRef}
+        type="button"
+        onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
+        aria-label={t('tasks.card.label', {
+          open: openLabel,
+          name,
+          status: status ? t(STATUS_WORDS[status]) : t('tasks.card.noStatus'),
+          place,
+        })}
+        aria-describedby={[job && jobId, detailsId, metrics && metricsId]
+          .filter(Boolean)
+          .join(' ')}
+        className={`flex w-full min-h-touch flex-col rounded-t-panel text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
+      >
+        <span className="flex w-full flex-col gap-1.5 p-3">
+          {/* Room on the first line for the Stop and terminal buttons */}
+          <span
+            className={`flex min-w-0 items-center gap-2 text-[13px] ${actions === 2 ? 'pr-20' : actions === 1 ? 'pr-10' : ''}`}
+          >
+            <span
+              aria-hidden="true"
+              data-dot={status}
+              className={`size-2 shrink-0 rounded-full ${status ? STATUS_DOT[status] : 'bg-fg-subtle'}`}
+            />
             <span className="truncate font-semibold text-fg">{name}</span>
             {status && (
               <span className="shrink-0 text-fg-muted">
@@ -294,7 +309,7 @@ export const AgentCard = memo(function AgentCard({
               </span>
             )}
           </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-fg-muted">
             <span
               className="truncate"
               title={groupTitle && visibleUnsafe(groupTitle)}
@@ -306,17 +321,17 @@ export const AgentCard = memo(function AgentCard({
                 {t('tasks.card.worktree')}
               </span>
             )}
+            {job && (
+              <span
+                id={jobId}
+                className="min-w-0 max-w-full truncate rounded-full bg-accent/10 px-2 text-[11px] text-accent"
+              >
+                {t('tasks.card.job', { title: visibleUnsafe(job) })}
+              </span>
+            )}
           </span>
           {/* What a screen reader reads after the card's name */}
           <span id={detailsId} className="contents">
-            {job && (
-              <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-accent">
-                <ListTodo size={13} aria-hidden="true" className="shrink-0" />
-                <span className="truncate">
-                  {t('tasks.card.job', { title: visibleUnsafe(job) })}
-                </span>
-              </span>
-            )}
             {stuckFor !== undefined && (
               <span className="flex items-center gap-1.5 text-[12px] text-warning">
                 <Hourglass size={13} aria-hidden="true" className="shrink-0" />
@@ -334,7 +349,7 @@ export const AgentCard = memo(function AgentCard({
               </span>
             )}
             {overview?.lastText ? (
-              <span className="line-clamp-2 text-[13px] text-fg">
+              <span className="line-clamp-2 text-[13px] leading-normal text-fg">
                 {visibleUnsafe(overview.lastText)}
               </span>
             ) : (
@@ -342,85 +357,82 @@ export const AgentCard = memo(function AgentCard({
                 <Skeleton className="h-4 w-3/4" />
               )
             )}
-            {(showChanges ||
-              overview?.usage ||
-              !!overview?.sessionUsage?.tokens ||
-              pending('sessionUsage')) && (
-              <span className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 text-[12px] text-fg-muted">
-                {showChanges && (
-                  <Metric label={t('tasks.card.metric.branch')}>
-                    <span className="flex min-w-0 items-center gap-1">
-                      <GitBranch
-                        size={13}
-                        aria-hidden="true"
-                        className="shrink-0 self-center"
-                      />
-                      {overview.branch && (
-                        <span className="truncate font-mono">
-                          {visibleUnsafe(overview.branch)}
-                        </span>
-                      )}
-                      <span className="shrink-0">
-                        ·{' '}
-                        {t('tasks.card.changed', {
-                          n: `${overview.changed}${overview.changedTruncated ? '+' : ''}`,
-                        })}
-                      </span>
-                    </span>
-                  </Metric>
-                )}
-                {overview?.usage && (
-                  <Metric label={t('tasks.card.metric.context')}>
-                    <ContextUsage usage={overview.usage} />
-                  </Metric>
-                )}
-                {overview?.sessionUsage?.tokens ? (
-                  <Metric label={t('tasks.card.metric.session')}>
-                    <SessionUsageLine
-                      {...overview.sessionUsage}
-                      reported={reportedCostAgent(pane.agentName)}
-                    />
-                  </Metric>
-                ) : (
-                  pending('sessionUsage') && (
-                    <Metric label={t('tasks.card.metric.session')}>
-                      <Skeleton className="h-4 w-1/3" />
-                    </Metric>
-                  )
-                )}
-              </span>
-            )}
           </span>
-        </button>
-        {(stopShown || opensChat) && (
-          <span className="flex shrink-0 items-center gap-0.5 p-1">
-            {stopShown && (
-              <IconButton
-                onClick={() => void stop(cursor)}
-                disabled={halt.stopping}
-                aria-busy={halt.stopping}
-                aria-label={
-                  halt.stopping
-                    ? t('tasks.card.stopping', { name })
-                    : t('tasks.card.stop', { name, place })
-                }
-                title={t('tasks.card.stop', { name, place })}
-              >
-                <Square size={14} aria-hidden="true" fill="currentColor" />
-              </IconButton>
+        </span>
+        {metrics && (
+          <span
+            id={metricsId}
+            className="grid w-full grid-cols-[4rem_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 border-t border-border px-3 pb-2.5 pt-2 text-[12px] tabular-nums text-fg-muted"
+          >
+            {showChanges && (
+              <Metric label={t('tasks.card.metric.branch')}>
+                <span className="flex min-w-0 items-center gap-1">
+                  {overview.branch && (
+                    <span className="truncate font-term text-[11px] text-fg">
+                      {visibleUnsafe(overview.branch)}
+                    </span>
+                  )}
+                  <span className="shrink-0">
+                    ·{' '}
+                    {t('tasks.card.changed', {
+                      n: `${overview.changed}${overview.changedTruncated ? '+' : ''}`,
+                    })}
+                  </span>
+                </span>
+              </Metric>
             )}
-            {opensChat && (
-              <IconButton
-                onClick={() => onOpen(session, pane, 'terminal')}
-                aria-label={t('tasks.card.openTerminalOf', { name, place })}
-                title={t('tasks.card.openTerminal')}
-              >
-                <SquareTerminal size={16} aria-hidden="true" />
-              </IconButton>
+            {overview?.usage && (
+              <Metric label={t('tasks.card.metric.context')}>
+                <ContextUsage usage={overview.usage} />
+              </Metric>
+            )}
+            {overview?.sessionUsage?.tokens ? (
+              <Metric label={t('tasks.card.metric.session')}>
+                <SessionUsageLine
+                  {...overview.sessionUsage}
+                  reported={reportedCostAgent(pane.agentName)}
+                />
+              </Metric>
+            ) : (
+              pending('sessionUsage') && (
+                <Metric label={t('tasks.card.metric.session')}>
+                  <Skeleton className="h-4 w-1/3" />
+                </Metric>
+              )
             )}
           </span>
         )}
-      </div>
+      </button>
+      {actions > 0 && (
+        <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          {stopShown && (
+            <IconButton
+              size="sm"
+              onClick={() => void stop(cursor)}
+              disabled={halt.stopping}
+              aria-busy={halt.stopping}
+              aria-label={
+                halt.stopping
+                  ? t('tasks.card.stopping', { name })
+                  : t('tasks.card.stop', { name, place })
+              }
+              title={t('tasks.card.stop', { name, place })}
+            >
+              <Square size={13} aria-hidden="true" fill="currentColor" />
+            </IconButton>
+          )}
+          {opensChat && (
+            <IconButton
+              size="sm"
+              onClick={() => onOpen(session, pane, 'terminal')}
+              aria-label={t('tasks.card.openTerminalOf', { name, place })}
+              title={t('tasks.card.openTerminal')}
+            >
+              <SquareTerminal size={16} aria-hidden="true" />
+            </IconButton>
+          )}
+        </span>
+      )}
       <div className="border-t border-border px-3 py-1">
         <button
           type="button"

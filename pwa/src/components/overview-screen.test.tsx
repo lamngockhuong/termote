@@ -663,7 +663,7 @@ describe('OverviewScreen, loading and failing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tokens today: 2.0k' }))
     expect(
       screen.getByRole('region', { name: 'Agent tokens' }),
-    ).toHaveTextContent('CodexToday 2.0k tokens · ~$1.507 days 2.0k tokens')
+    ).toHaveTextContent('Today7 daysCodex~$1.50~$1.50tokens2.0k2.0k')
   })
 
   it('shows the Codex accounts behind the header tokens', async () => {
@@ -1312,7 +1312,7 @@ describe('OverviewScreen, the tabs', () => {
       screen.getByRole('tablist', { name: 'Agent overview sections' }),
     ).toBeInTheDocument()
     expect(agentsTab()).toHaveAccessibleName('Agents, 4 agents, 1 needs you')
-    expect(agentsTab()).toHaveTextContent('Agents41 needs you')
+    expect(agentsTab()).toHaveTextContent('Agents · 41 needs you')
     expect(planTab()).toHaveAccessibleName('Plan, 3 open, 1 waiting')
     expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
     const panel = document.getElementById(

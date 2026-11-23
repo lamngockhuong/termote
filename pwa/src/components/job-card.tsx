@@ -1,4 +1,3 @@
-import { GitBranch, SquareTerminal } from 'lucide-react'
 import { useId } from 'react'
 import type { Job, JobLiveStatus, JobState } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
@@ -74,50 +73,37 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
   const branch = jobBranch(job)
   const live = jobLiveWords(job, t)
   const grants = onSelect ? activeGrants(job, now).length : 0
+  // The figures, as one line: "2 commits · 3 files · 1 grant"
   const counts = [
     onSelect &&
       job.diff &&
-      `${t('jobs.card.commits', { count: job.diff.commits })} · ${t('jobs.card.files', { count: job.diff.files })}`,
+      `${t('jobs.card.commits', { count: job.diff.commits })} · ${t('jobs.card.filesShort', { count: job.diff.files })}`,
     grants > 0 && t('jobs.card.grantCount', { count: grants }),
-  ].filter(Boolean)
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const body = (
     <>
-      <span className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 break-words text-[14px] font-medium text-fg">
+      <span className="flex w-full items-center gap-2">
+        <span className="min-w-0 flex-1 break-words font-semibold text-fg">
           {title}
         </span>
-        <span className="shrink-0 rounded-full border border-border px-1.5 text-[11px] text-fg-muted">
+        <span className="shrink-0 rounded-full border border-border px-2 text-[11px] text-fg-muted">
           {t(JOB_STATE_WORDS[job.state])}
         </span>
       </span>
       <span id={detailsId} className="contents">
-        {(live || ref) && (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {status && live && (
-              <span className={LIVE_TONE[status]}>{live}</span>
-            )}
-            {ref && (
-              <span className="inline-flex min-w-0 items-center gap-1 font-term text-[12px] text-fg-muted">
-                <SquareTerminal size={13} aria-hidden="true" />
-                <span className="truncate">{ref}</span>
-              </span>
-            )}
-          </span>
-        )}
-        {(branch || counts.length > 0) && (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-fg-muted">
+        {status && live && <span className={LIVE_TONE[status]}>{live}</span>}
+        {(ref || branch) && (
+          <span className="flex min-w-0 flex-wrap gap-x-2.5 font-term text-[11px] text-fg-muted">
+            {ref && <span className="truncate">{ref}</span>}
             {branch && (
-              <span className="inline-flex min-w-0 items-center gap-1 font-term">
-                <GitBranch size={13} aria-hidden="true" />
-                <span className="truncate">{visibleUnsafe(branch)}</span>
-              </span>
+              <span className="truncate">{visibleUnsafe(branch)}</span>
             )}
-            {counts.map((c) => (
-              <span key={c as string}>{c}</span>
-            ))}
           </span>
         )}
+        {counts && <span className="text-[12px] text-fg-subtle">{counts}</span>}
       </span>
     </>
   )
@@ -127,7 +113,7 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
       aria-label={title}
       data-testid="job-card"
       className={`rounded-panel border bg-surface text-[13px] ui-terminal:bg-bg ${
-        selected ? 'border-accent ring-1 ring-accent' : 'border-border'
+        selected ? 'border-accent ring-[3px] ring-accent/15' : 'border-border'
       }`}
     >
       {onSelect ? (
@@ -137,12 +123,12 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
           aria-label={title}
           aria-describedby={detailsId}
           aria-pressed={!!selected}
-          className={`flex min-h-touch w-full flex-col gap-1.5 rounded-panel p-2.5 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
+          className={`flex min-h-touch w-full flex-col items-start gap-1.5 rounded-panel p-3 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
         >
           {body}
         </button>
       ) : (
-        <div className="flex flex-col gap-1.5 p-2.5">{body}</div>
+        <div className="flex flex-col items-start gap-1.5 p-3">{body}</div>
       )}
     </article>
   )

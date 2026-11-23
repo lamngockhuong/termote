@@ -1,11 +1,10 @@
-import { KeyRound, Pencil, SquareTerminal } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { agentLabel } from '../chat-agents'
 import type { Job, JobState } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { formatAgo } from '../utils/format-ago'
-import { activeGrants, grantLabel, jobPaneRef } from '../utils/jobs'
+import { activeGrants, grantLabel, grantLeft, jobPaneRef } from '../utils/jobs'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { Button } from './ui/button'
@@ -79,135 +78,140 @@ export function JobDetail({ job, now, onOpenPane, onEdit, onGrants }: Props) {
     : undefined
 
   return (
-    <div className="flex flex-col gap-3 text-[13px]">
+    <div className="flex flex-col gap-4 text-[13px]">
       {(live || changed) && (
-        <p className="m-0 flex flex-wrap gap-x-2">
+        <p className="m-0 -mt-2">
           {status && live && <span className={LIVE_TONE[status]}>{live}</span>}
-          {changed && (
-            <span className="text-fg-muted">
-              {t('jobs.detail.changed', { ago: changed })}
-            </span>
-          )}
+          {live && changed && <span className="text-fg-muted"> · </span>}
+          {changed && <span className="text-fg-muted">{changed}</span>}
         </p>
       )}
       {((ref && paneId && onOpenPane) || onGrants || onEdit) && (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-2">
           {ref && paneId && onOpenPane && (
             <Button
-              size="sm"
+              variant="primary"
               onClick={() => onOpenPane(paneId)}
               aria-label={t('jobs.card.openPane', { ref })}
             >
-              <SquareTerminal size={14} aria-hidden="true" />
-              <span className="truncate font-term">{ref}</span>
+              <span className="truncate">
+                {t('jobs.card.openPane', { ref })}
+              </span>
             </Button>
           )}
           {onGrants && (
             <Button
-              size="sm"
-              variant="ghost"
               onClick={() => onGrants(job)}
               aria-label={t('jobs.card.grantsFor', { title })}
             >
-              <KeyRound size={14} aria-hidden="true" />
-              {t('jobs.card.grantsButton')}
+              {grants.length > 0
+                ? t('jobs.detail.grantsCount', { count: grants.length })
+                : t('jobs.card.grantsButton')}
             </Button>
           )}
           {onEdit && (
             <Button
-              size="sm"
-              variant="ghost"
               onClick={() => onEdit(job)}
               aria-label={t('jobs.card.editFor', { title })}
             >
-              <Pencil size={14} aria-hidden="true" />
               {t('jobs.card.edit')}
             </Button>
           )}
         </div>
       )}
-      <Field label={t('jobs.detail.state')}>
-        {t(JOB_STATE_WORDS[job.state])}
-      </Field>
-      {agent && <Field label={t('jobs.detail.agent')}>{agent}</Field>}
-      {branch && (
-        <Field label={t('jobs.detail.branch')}>
-          <span className="break-all font-term text-[12px]">
-            {visibleUnsafe(branch)}
-          </span>
-        </Field>
-      )}
-      {dir && (
-        <Field label={t('jobs.card.dir')}>
-          <span className="break-all font-term text-[12px]">
-            {visibleUnsafe(dir)}
-          </span>
-        </Field>
-      )}
-      {job.diff && (
-        <Field label={t('jobs.detail.changes')}>
-          {t('jobs.card.commits', { count: job.diff.commits })}
-          {' · '}
-          {t('jobs.card.files', { count: job.diff.files })}
-        </Field>
-      )}
+      <dl className="m-0 grid grid-cols-[6rem_minmax(0,1fr)] gap-y-2 text-[12px]">
+        <Row label={t('jobs.detail.state')}>
+          {t(JOB_STATE_WORDS[job.state])}
+        </Row>
+        {agent && <Row label={t('jobs.detail.agent')}>{agent}</Row>}
+        {branch && (
+          <Row label={t('jobs.detail.branch')}>
+            <span className="break-all font-term text-[11px]">
+              {visibleUnsafe(branch)}
+            </span>
+          </Row>
+        )}
+        {dir && (
+          <Row label={t('jobs.detail.folder')}>
+            <span className="break-all font-term text-[11px]">
+              {visibleUnsafe(dir)}
+            </span>
+          </Row>
+        )}
+        {job.diff && (
+          <Row label={t('jobs.detail.changes')}>
+            {t('jobs.card.commits', { count: job.diff.commits })}
+            {' · '}
+            {t('jobs.card.files', { count: job.diff.files })}
+          </Row>
+        )}
+      </dl>
       {job.prompt && (
-        <Field label={t('jobs.card.prompt')}>
-          <p className="m-0 max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
+        <Section label={t('jobs.card.prompt')}>
+          <p className="m-0 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-control bg-surface-raised px-3 py-2.5 leading-normal ui-terminal:bg-bg">
             {visibleUnsafe(job.prompt, true)}
           </p>
-        </Field>
+        </Section>
       )}
       {job.note && (
-        <Field label={t('jobs.card.note')}>
-          <p className="m-0 whitespace-pre-wrap break-words">
+        <Section label={t('jobs.card.note')}>
+          <p className="m-0 whitespace-pre-wrap break-words rounded-control bg-surface-raised px-3 py-2.5 leading-normal ui-terminal:bg-bg">
             {visibleUnsafe(job.note, true)}
           </p>
-        </Field>
+        </Section>
       )}
       {grants.length > 0 && (
-        <Field label={t('jobs.card.grants')}>
-          <ul className="m-0 flex list-none flex-wrap gap-1 p-0">
+        <Section label={t('jobs.card.grants')}>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {grants.map((g) => (
               <li
                 key={g.id}
-                className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[12px] text-accent"
+                className="flex flex-col gap-0.5 rounded-control border border-border px-3 py-2.5"
               >
-                <KeyRound size={12} aria-hidden="true" />
-                <span className="truncate">{grantLabel(g, t)}</span>
-              </li>
-            ))}
-          </ul>
-        </Field>
-      )}
-      {uses.length > 0 && (
-        <Field label={t('jobs.card.delegated')}>
-          <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-            {uses.map((u, i) => (
-              <li
-                // biome-ignore lint/suspicious/noArrayIndexKey: answers have no id and never move
-                key={i}
-                className="flex gap-2 text-[12px]"
-              >
-                <span className="shrink-0 text-fg-subtle">{ago(u.at)}</span>
-                <span className="min-w-0 break-all font-term">
-                  {visibleUnsafe(u.command ?? u.path ?? '')}
+                <span className="break-all font-term text-[12px]">
+                  {grantLabel(g, t)}
+                </span>
+                <span className="text-[11px] text-fg-muted">
+                  {grantLeft(g.expires, now, t)}
+                  {' · '}
+                  {t('jobs.grant.uses', { count: g.uses?.length ?? 0 })}
                 </span>
               </li>
             ))}
           </ul>
-        </Field>
+        </Section>
+      )}
+      {uses.length > 0 && (
+        <Section label={t('jobs.card.delegated')}>
+          <ol className="m-0 flex list-none flex-col gap-1.5 p-0 text-[12px]">
+            {uses.map((u, i) => (
+              <li
+                // biome-ignore lint/suspicious/noArrayIndexKey: answers have no id and never move
+                key={i}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2"
+              >
+                <span className="min-w-0 break-all font-term">
+                  {visibleUnsafe(u.command ?? u.path ?? '')}
+                </span>
+                <span className="shrink-0 text-fg-muted">{ago(u.at)}</span>
+              </li>
+            ))}
+          </ol>
+        </Section>
       )}
       {events.length > 0 && (
-        <Field label={t('jobs.card.history')}>
-          <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+        <Section label={t('jobs.card.history')}>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0 text-[12px]">
             {events.map((e, i) => (
               <li
                 // biome-ignore lint/suspicious/noArrayIndexKey: the history only grows at its end
                 key={i}
-                className="flex gap-2 text-[12px]"
+                className="grid grid-cols-[0.75rem_minmax(0,1fr)_auto] items-baseline gap-2"
               >
-                <span className="shrink-0 text-fg-subtle">{ago(e.at)}</span>
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-border-strong"
+                />
                 <span className="min-w-0 break-words">
                   {Object.hasOwn(EVENT_WORDS, e.kind)
                     ? t(EVENT_WORDS[e.kind])
@@ -222,22 +226,34 @@ export function JobDetail({ job, now, onOpenPane, onEdit, onGrants }: Props) {
                     </span>
                   )}
                 </span>
+                <span className="shrink-0 tabular-nums text-fg-muted">
+                  {ago(e.at)}
+                </span>
               </li>
             ))}
-          </ul>
-        </Field>
+          </ol>
+        </Section>
       )}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+// One field of the job: its name in a narrow column, then its value
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <h4 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
-        {label}
-      </h4>
-      <div className="text-fg">{children}</div>
-    </div>
+    <>
+      <dt className="text-fg-muted">{label}</dt>
+      <dd className="m-0 min-w-0">{children}</dd>
+    </>
+  )
+}
+
+// A longer part of the job under its own heading
+function Section({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h4 className="m-0 text-[12px] font-semibold text-fg-muted">{label}</h4>
+      {children}
+    </section>
   )
 }

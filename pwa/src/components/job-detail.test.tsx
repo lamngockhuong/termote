@@ -26,6 +26,10 @@ const job = (over: Partial<Job> = {}): Job => ({
   ...over,
 })
 
+// A field's value, beside its name
+const value = (label: string) =>
+  screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement
+
 describe('JobDetail', () => {
   it('shows every field a full client gets: prompt, note, folder, answers, history', () => {
     render(
@@ -62,36 +66,40 @@ describe('JobDetail', () => {
     )
     const field = (label: string) =>
       screen.getByRole('heading', { name: label }).parentElement!
-    expect(screen.getByText('Working')).toBeVisible()
-    expect(screen.getByText('changed 4 min ago')).toBeVisible()
-    expect(field('State')).toHaveTextContent('Active')
-    expect(field('Agent')).toHaveTextContent('Claude Code · w:old')
-    expect(field('Branch')).toHaveTextContent('feat/x')
-    expect(field('Worktree folder')).toHaveTextContent('/w/x')
-    expect(field('Changes')).toHaveTextContent('2 commits · 1 file changed')
+    expect(screen.getByText('Working').parentElement).toHaveTextContent(
+      'Working · 4 min ago',
+    )
+    expect(value('State')).toHaveTextContent('Active')
+    expect(value('Agent')).toHaveTextContent('Claude Code · w:old')
+    expect(value('Branch')).toHaveTextContent('feat/x')
+    expect(value('Folder')).toHaveTextContent('/w/x')
+    expect(value('Changes')).toHaveTextContent('2 commits · 1 file changed')
     expect(field('Prompt')).toHaveTextContent('Do it well')
     expect(field('Note')).toHaveTextContent('careful')
     expect(
       within(field('Grants in force'))
         .getAllByRole('listitem')
         .map((l) => l.textContent),
-    ).toEqual(['Run: pnpm test', 'Edit files in the worktree'])
+    ).toEqual([
+      'Run: pnpm testEnds in 1 h · used 3 times',
+      'Edit files in the worktreeEnds in 1 h · used 0 times',
+    ])
     expect(
       within(field('Answered under a grant'))
         .getAllByRole('listitem')
         .map((l) => l.textContent),
-    ).toEqual(['2 min agosrc/a.ts', '5 min ago', '10 min agopnpm test a'])
+    ).toEqual(['src/a.ts2 min ago', '5 min ago', 'pnpm test a10 min ago'])
     expect(
       within(field('History'))
         .getAllByRole('listitem')
         .map((l) => l.textContent),
     ).toEqual([
-      'just nowconstructor',
-      '3 min agofuture_kind',
-      '12 min agoGiven to an agent: w:t',
-      '15 min agoState changed: weird',
-      '20 min agoState changed: Review',
-      '30 min agoAdded',
+      'constructorjust now',
+      'future_kind3 min ago',
+      'Given to an agent: w:t12 min ago',
+      'State changed: weird15 min ago',
+      'State changed: Review20 min ago',
+      'Added30 min ago',
     ])
   })
 
@@ -102,9 +110,10 @@ describe('JobDetail', () => {
         now={NOW}
       />,
     )
-    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
-      'State',
-    ])
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(
+      [...document.querySelectorAll('dt')].map((d) => d.textContent),
+    ).toEqual(['State'])
     expect(screen.queryByRole('button')).toBeNull()
   })
 
@@ -115,9 +124,7 @@ describe('JobDetail', () => {
         now={NOW}
       />,
     )
-    expect(
-      screen.getByRole('heading', { name: 'Agent' }).parentElement,
-    ).toHaveTextContent('ai⟨U+202E⟩der · %3')
+    expect(value('Agent')).toHaveTextContent('ai⟨U+202E⟩der · %3')
   })
 
   it("shows a job's pane folder and branch when it has no worktree", () => {
@@ -159,6 +166,19 @@ describe('JobDetail', () => {
     expect(screen.queryByText('/wt/job-x')).toBeNull()
   })
 
+  it('counts the grants in force on its Grants button', () => {
+    render(
+      <JobDetail
+        job={job({ grants: [grant(), grant({ id: 'g2' })] })}
+        now={NOW}
+        onGrants={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Grants of Fix login' }),
+    ).toHaveTextContent('Grants · 2')
+  })
+
   it('opens the pane, the grants and the editor', () => {
     const onOpenPane = vi.fn()
     const onEdit = vi.fn()
@@ -179,6 +199,10 @@ describe('JobDetail', () => {
     expect(onOpenPane).toHaveBeenCalledWith('%1')
     fireEvent.click(screen.getByRole('button', { name: 'Grants of Fix login' }))
     expect(onGrants).toHaveBeenCalledWith(j)
+    // No grant in force: the button says Grants alone
+    expect(
+      screen.getByRole('button', { name: 'Grants of Fix login' }),
+    ).toHaveTextContent(/^Grants$/)
     fireEvent.click(screen.getByRole('button', { name: 'Edit Fix login' }))
     expect(onEdit).toHaveBeenCalledWith(j)
   })

@@ -87,6 +87,7 @@ export default {
   'tasks.tabs.label': 'Agent overview sections',
   'tasks.tabs.agents': 'Agents',
   'tasks.tabs.plan': 'Plan',
+  'tasks.tabs.counted': '{name} · {count}',
   'tasks.tabs.needsYou_one': '{count} needs you',
   'tasks.tabs.needsYou_other': '{count} need you',
   'tasks.tabs.open_one': '{count} open',
@@ -98,6 +99,10 @@ export default {
   'tasks.usage.button': 'Today {tokens}',
   'tasks.usage.buttonName': 'Tokens today: {tokens}',
   'tasks.usage.panel': 'Tokens and limits',
+  'tasks.usage.panelTitle': 'Token usage · every session',
+  'tasks.usage.panelHint': "Each agent's own session total stays on its card",
+  // The row of the tokens under each agent's cost
+  'tasks.usage.tokensRow': 'tokens',
   // The Agents tab's sections; {count}: the agents in it
   'tasks.overview.section.blocked': 'Needs you · {count}',
   'tasks.overview.section.working': 'Working · {count}',

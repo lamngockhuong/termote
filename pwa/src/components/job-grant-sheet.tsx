@@ -18,6 +18,7 @@ import {
 import {
   activeGrants,
   grantLabel,
+  grantLeft,
   jobFinished,
   jobPaneRef,
 } from '../utils/jobs'
@@ -79,12 +80,7 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
   const outside = !!dir && !!job.live.outsideWorktree
   const editBlocked = kind === 'edit' && (!dir || outside)
 
-  const left = (expires: string) => {
-    const min = Math.max(1, Math.ceil((Date.parse(expires) - now) / 60_000))
-    return min < 60
-      ? t('jobs.grant.leftMinutes', { n: min })
-      : t('jobs.grant.leftHours', { n: Math.floor(min / 60) })
-  }
+  const left = (expires: string) => grantLeft(expires, now, t)
 
   const refused = (err: unknown) =>
     setProblem(

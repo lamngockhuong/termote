@@ -86,7 +86,7 @@ describe('JobCard', () => {
     expect(within(card()).getAllByRole('button')).toHaveLength(1)
     expect(open).toHaveAttribute('aria-pressed', 'false')
     expect(open).toHaveAccessibleDescription(
-      /Working.*web:claude.*feat\/x.*1 commit · 3 files changed.*1 grant/,
+      /Working.*web:claude.*feat\/x.*1 commit · 3 files · 1 grant/,
     )
     fireEvent.click(open)
     expect(onSelect).toHaveBeenCalledWith(j)

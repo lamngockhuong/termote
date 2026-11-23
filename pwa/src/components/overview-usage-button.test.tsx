@@ -46,7 +46,8 @@ describe('OverviewUsageButton', () => {
       />,
     )
     expect(button()).toHaveAccessibleName('Tokens today: 1.5M')
-    expect(button()).toHaveTextContent('Today 1.5M')
+    expect(button()).toHaveTextContent('Today')
+    expect(button()).toHaveTextContent('1.5M tokens')
     expect(button().textContent).not.toMatch(/\$/)
     expect(button()).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -66,9 +67,12 @@ describe('OverviewUsageButton', () => {
     expect(panel).toHaveFocus()
     expect(button()).toHaveAttribute('aria-expanded', 'true')
     expect(button()).toHaveAttribute('aria-controls', panel.id)
-    expect(
-      screen.getByRole('region', { name: 'Agent tokens' }),
-    ).toHaveTextContent('Claude CodeToday 1.2M tokens · ~$3.40')
+    expect(panel).toHaveTextContent('Token usage · every session')
+    const totals = screen.getByRole('region', { name: 'Agent tokens' })
+    // Each agent's cost today and in 7 days, its tokens under them
+    expect(totals.querySelector('[data-agent="claude"]')).toHaveTextContent(
+      'Claude Code~$3.40~$4.40tokens1.2M2.0M',
+    )
     expect(screen.getByRole('region', { name: 'Accounts' })).toHaveTextContent(
       'Codex · team',
     )
@@ -151,5 +155,83 @@ describe('OverviewUsageButton', () => {
       />,
     )
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('shows the tokens alone without a cost, and what has no price', () => {
+    const summary = {
+      ...SUMMARY,
+      truncated: true,
+      buckets: [
+        // Only before today: no cost today, a dash in its place
+        {
+          t: at(3 * DAY),
+          agent: 'claude' as const,
+          tokens: 800_000,
+          costUsd: 1,
+        },
+        { t: at(0), agent: 'claude' as const, tokens: 1000 },
+        // No price for its model
+        { t: at(0), agent: 'codex' as const, tokens: 500, unpricedTokens: 500 },
+        // OpenCode records its own cost: none recorded, its tokens alone
+        { t: at(0), agent: 'opencode' as const, tokens: 2000 },
+      ],
+    }
+    const { rerender } = render(
+      <OverviewUsageButton
+        summary={summary}
+        accounts={[]}
+        now={NOW}
+        clockOffset={0}
+      />,
+    )
+    fireEvent.click(button())
+    const totals = screen.getByRole('region', { name: 'Agent tokens' })
+    const row = (a: string) => totals.querySelector(`[data-agent="${a}"]`)
+    expect(row('codex')).toHaveTextContent('Codexno priceno pricetokens500500')
+    expect(row('opencode')).toHaveTextContent('OpenCode2.0k2.0k')
+    expect(totals).toHaveTextContent(
+      'Only the newest 5000 files (OpenCode: sessions) of each agent are counted',
+    )
+    expect(totals.getAttribute('title')).toMatch(/Estimated at API list prices/)
+    expect(totals.getAttribute('title')).toMatch(/Some models have no price/)
+    writeSettingsPatch({ showCost: false })
+    rerender(
+      <OverviewUsageButton
+        summary={summary}
+        accounts={[]}
+        now={NOW}
+        clockOffset={0}
+      />,
+    )
+    expect(row('claude')).toHaveTextContent('Claude Code1.0k801k')
+    expect(totals).not.toHaveAttribute('title')
+  })
+
+  it('shows a dash for a day with tokens but no cost beside one with', () => {
+    render(
+      <OverviewUsageButton
+        summary={{
+          ...SUMMARY,
+          buckets: [
+            {
+              t: at(3 * DAY),
+              agent: 'claude' as const,
+              tokens: 800_000,
+              costUsd: 1,
+            },
+            { t: at(0), agent: 'codex' as const, tokens: 10, costUsd: 0.01 },
+          ],
+        }}
+        accounts={[]}
+        now={NOW}
+        clockOffset={0}
+      />,
+    )
+    fireEvent.click(button())
+    expect(
+      screen
+        .getByRole('region', { name: 'Agent tokens' })
+        .querySelector('[data-agent="claude"]'),
+    ).toHaveTextContent('Claude Code—~$1.00tokens0800k')
   })
 })

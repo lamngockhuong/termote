@@ -58,7 +58,16 @@ const GROUP_NAMES: Record<OpenGroup, MessageKey> = {
   todo: 'jobs.groupName.todo',
 }
 
-const TH = 'px-2.5 py-1.5 font-semibold'
+// Each group's colour, beside its heading
+const GROUP_DOT = {
+  waiting: 'bg-danger',
+  unread: 'bg-success',
+  running: 'bg-warning',
+  review: 'bg-accent',
+  todo: 'bg-fg-subtle',
+} as const
+
+const TH = 'px-3 py-2 font-medium'
 
 // The overview's Plan: the jobs an orchestrator agent handed out, kept by
 // the server (use-jobs.ts), in columns by what they need from the user
@@ -136,19 +145,25 @@ export function OverviewJobs({
   // Keyed by group, not by its heading: a count changing keeps the column,
   // and the focus on its cards
   const column = (
-    group: string,
+    group: keyof typeof GROUP_DOT,
     heading: string,
     jobs: Job[],
     empty?: string,
   ) => (
-    <div key={group} className="flex min-w-0 flex-col gap-1.5">
-      <h4 className="m-0 text-[12px] font-semibold text-fg-muted">{heading}</h4>
+    <div key={group} className="flex min-w-0 flex-col gap-2">
+      <h4 className="m-0 flex items-center gap-1.5 text-[12px] font-semibold text-fg-muted">
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${GROUP_DOT[group]}`}
+        />
+        {heading}
+      </h4>
       {jobs.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {jobs.map(card)}
         </ul>
       ) : (
-        <p className="m-0 rounded-panel border border-dashed border-border px-2.5 py-3 text-[12px] text-fg-subtle">
+        <p className="m-0 rounded-panel border border-dashed border-border-strong px-3 py-4 text-center text-[12px] text-fg-subtle">
           {empty}
         </p>
       )}
@@ -194,19 +209,32 @@ export function OverviewJobs({
   const selectedTitle = selected ? visibleUnsafe(selected.title) : ''
 
   return (
-    <section aria-labelledby={titleId} className="mb-4 flex gap-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <h3
-            id={titleId}
-            ref={titleRef}
-            tabIndex={-1}
-            className="m-0 flex-1 text-[13px] font-semibold outline-none"
-          >
+    <section aria-labelledby={titleId} className="flex gap-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* The tab says Plan: its name is for a screen reader, and where a
+            job's notification puts the focus */}
+          <h3 id={titleId} ref={titleRef} tabIndex={-1} className="sr-only">
             {t('jobs.title')}
           </h3>
+          {open > 0 && (
+            <p className="m-0 text-fg-muted">
+              {t('jobs.openCount', { count: open })}
+              {emptyGroups.length > 0 && (
+                <span className="text-fg-subtle">
+                  {' · '}
+                  {emptyGroups
+                    .map((g) =>
+                      t('jobs.groupEmpty', { name: t(GROUP_NAMES[g]) }),
+                    )
+                    .join(' · ')}
+                </span>
+              )}
+            </p>
+          )}
+          <span className="flex-1" />
           {canWrite && (
-            <Button size="sm" onClick={() => setEditing(null)}>
+            <Button variant="primary" onClick={() => setEditing(null)}>
               <Plus size={14} aria-hidden="true" />
               {t('jobs.new')}
             </Button>
@@ -224,7 +252,7 @@ export function OverviewJobs({
         )}
         {open > 0 && (
           <>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] items-start gap-3.5">
               {column(
                 'waiting',
                 t('jobs.group.waiting', { count: groups.waiting.length }),
@@ -241,13 +269,6 @@ export function OverviewJobs({
                   ),
               )}
             </div>
-            {emptyGroups.length > 0 && (
-              <p className="m-0 text-[12px] text-fg-subtle">
-                {t('jobs.emptyGroups', {
-                  groups: emptyGroups.map((g) => t(GROUP_NAMES[g])).join(', '),
-                })}
-              </p>
-            )}
           </>
         )}
         {groups.finished.length > 0 && (
@@ -270,11 +291,11 @@ export function OverviewJobs({
             {showFinished && (
               <div
                 id={finishedId}
-                className="overflow-x-auto rounded-panel border border-border"
+                className="overflow-x-auto rounded-panel border border-border bg-surface ui-terminal:bg-bg"
               >
                 <table className="w-full border-collapse text-left text-[12px]">
                   <caption className="sr-only">{t('jobs.table.label')}</caption>
-                  <thead className="text-fg-muted">
+                  <thead className="text-fg-subtle">
                     <tr className="border-b border-border">
                       <th scope="col" className={TH}>
                         {t('jobs.table.job')}
@@ -293,7 +314,7 @@ export function OverviewJobs({
                         </th>
                       )}
                       {finishedCols.updated && (
-                        <th scope="col" className={TH}>
+                        <th scope="col" className={`${TH} text-right`}>
                           {t('jobs.table.updated')}
                         </th>
                       )}
@@ -338,7 +359,7 @@ export function OverviewJobs({
                             </td>
                           )}
                           {finishedCols.updated && (
-                            <td className="whitespace-nowrap px-2.5 py-1 text-fg-muted">
+                            <td className="whitespace-nowrap px-3 py-1 text-right text-fg-muted">
                               {ago(job.updated)}
                             </td>
                           )}
@@ -355,12 +376,12 @@ export function OverviewJobs({
       {wide && detail && (
         <aside
           aria-labelledby={detailTitleId}
-          className="flex w-80 shrink-0 flex-col gap-2 self-start rounded-panel border border-border bg-surface p-3 ui-terminal:bg-bg"
+          className="-my-3 -mr-3 flex w-[min(27.5rem,40%)] shrink-0 flex-col gap-4 self-stretch border-l border-border bg-surface px-5 py-4 ui-terminal:bg-bg"
         >
           <div className="flex items-start gap-2">
             <h3
               id={detailTitleId}
-              className="m-0 min-w-0 flex-1 break-words text-[14px] font-semibold"
+              className="m-0 min-w-0 flex-1 break-words text-[17px] font-semibold"
             >
               {selectedTitle}
             </h3>

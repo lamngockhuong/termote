@@ -3,11 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { type OverviewTabDef, OverviewTabs } from './overview-tabs'
 
 const TABS: OverviewTabDef[] = [
-  { id: 'agents', label: 'Agents', count: '2', name: 'Agents, 2 agents' },
+  { id: 'agents', label: 'Agents · 2', name: 'Agents, 2 agents' },
   {
     id: 'plan',
-    label: 'Plan',
-    count: '1 open',
+    label: 'Plan · 1 open',
     alert: '1 waiting',
     name: 'Plan, 1 open, 1 waiting',
   },
@@ -35,8 +34,8 @@ describe('OverviewTabs', () => {
     expect(plan).toHaveAttribute('aria-selected', 'true')
     expect(plan).toHaveAttribute('tabindex', '0')
     // The words show, not only to a screen reader
-    expect(agents).toHaveTextContent('Agents2')
-    expect(plan).toHaveTextContent('Plan1 open1 waiting')
+    expect(agents).toHaveTextContent('Agents · 2')
+    expect(plan).toHaveTextContent('Plan · 1 open1 waiting')
     fireEvent.click(agents)
     expect(onChange).toHaveBeenCalledWith('agents')
   })
