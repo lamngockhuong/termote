@@ -13,6 +13,7 @@ import {
 } from '../types/session'
 import { currentMachine } from '../utils/api-base'
 import { adoptChatDrafts, remapChatDrafts } from '../utils/chat-draft'
+import { setChatSelectionServer } from '../utils/chat-selection'
 import {
   adoptPersisted,
   regroupPersisted,
@@ -453,6 +454,7 @@ export function useLocalSessions(pollInterval = 5) {
       setTemplatesServer(snap.instanceId ?? null, !!snap.caps.templates)
       setUserTasksServer(snap.instanceId ?? null, !!snap.caps.userTasks)
       setSelectionServer(snap.instanceId ?? null)
+      setChatSelectionServer(snap.instanceId ?? null)
       if (shift.stale.size) {
         remapPanes(shift)
         remapChatDrafts(shift)

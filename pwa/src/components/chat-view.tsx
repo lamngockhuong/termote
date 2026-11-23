@@ -24,6 +24,8 @@ import type { StartRecord } from '../hooks/use-start-agent'
 import { useT } from '../i18n/i18n-context'
 import { toAgentStatus } from '../types/session'
 import { canResumeHere, canStartAgent } from '../utils/agent-start'
+import { selectionText } from '../utils/chat-quote'
+import { setChatSelection } from '../utils/chat-selection'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -218,8 +220,23 @@ function AgentChat({
   )
   const agent = agentLabel(session.agentName)
   const listRef = useRef<HTMLDivElement>(null)
-  // Text selected in the conversation, for a template's {{selection}}
-  useDomSelection(listRef, session.paneId, 'chat.fill.from.chat')
+  // Text selected in the conversation, for a template's {{selection}} and
+  // the composer's Quote button (kept as shown, until quoted or touched
+  // again)
+  // (called only with a pane, inside the list)
+  useDomSelection(listRef, session.paneId, 'chat.fill.from.chat', (range) =>
+    setChatSelection(
+      session.paneId as string,
+      selectionText(range, listRef.current as HTMLElement),
+    ),
+  )
+  // The pane left (another one, the view closed) forgets its selection
+  useEffect(() => {
+    const id = session.paneId
+    return () => {
+      if (id) setChatSelection(id, null)
+    }
+  }, [session.paneId])
   const contentRef = useRef<HTMLDivElement>(null)
   // The first entry on screen while reading above the bottom, and how far
   // below the list's top it was
@@ -492,6 +509,10 @@ function AgentChat({
       <section
         ref={listRef}
         onScroll={onScroll}
+        // A new selection, or a touch elsewhere: the one kept is not quoted
+        onPointerDown={() => {
+          if (session.paneId) setChatSelection(session.paneId, null)
+        }}
         aria-label={translate('chat.view.conversation')}
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
         data-native-menu

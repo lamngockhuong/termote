@@ -135,7 +135,12 @@ function Capped({
   const capped = lines > limit || tall
   return (
     <>
-      <div ref={ref} className={`${className} ${open ? '' : maxClass}`}>
+      <div
+        ref={ref}
+        className={`${className} ${open ? '' : maxClass}`}
+        // Folded, a quote takes only the lines shown (chat-quote.ts)
+        data-quote-clip={capped && !open ? limit : undefined}
+      >
         {children}
       </div>
       {capped && (
