@@ -90,7 +90,10 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   down), a dialog not reported yet (the user may keep one open: it is reported once), only
   background work left, or a job whose agent is gone (tmux restarted, the pane closed): then ask
   the user and give the job another pane (`job set <id> --pane <pane>`) or end it (`--state
-  abandoned`). `read` the pane after each report: that marks the turn read.
+  abandoned`). `read` the pane after each report: that marks the turn read. Exit 6: every job's
+  agent is idle and its last turn was read, so nothing would end the wait: give one work or set
+  its state; 4: the timeout passed while one still works, or still waits on a dialog or background
+  work reported before (each job's line says which).
 - When an agent finished, review its work (`diff --stat`), then `job set <id> --state review
   --note '<what was done>'`; the user gets a push. Never set `done` yourself unless the user
   looked at it and said so.

@@ -135,7 +135,8 @@ thúc mà orchestrator chưa đọc không, branch và thư mục.
 
 `wait --job <id>...` báo một lượt orchestrator chưa đọc, dù lượt đó kết thúc từ lúc nào (kể cả trước
 khi bắt đầu chờ, hay trong lúc server tắt), báo một hộp thoại đúng một lần dù bạn để nó mở, và báo
-việc nào mà agent đã mất (tmux khởi động lại, pane bị đóng). Termote nhận ra agent của một việc qua
+việc nào mà agent đã mất (tmux khởi động lại, pane bị đóng). Khi agent của mọi việc đều rảnh và lượt
+cuối đã được đọc, lệnh báo không còn gì để chờ thay vì chờ tới hết giờ. Termote nhận ra agent của một việc qua
 tiến trình của nó, nên một agent khác chiếm lại id pane tmux cũ không bao giờ bị nhầm là agent của
 việc. Khi agent làm xong, orchestrator chuyển việc sang `review` kèm ghi chú và bạn nhận được một
 thông báo đẩy; nó không bao giờ tự đánh dấu việc là `done` thay bạn.

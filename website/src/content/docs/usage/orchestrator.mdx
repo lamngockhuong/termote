@@ -135,7 +135,8 @@ whether a turn ended that the orchestrator has not read, the branch and folder.
 
 `wait --job <id>...` reports a turn the orchestrator has not read however long ago it ended (even
 before the wait started, or while the server was down), a dialog once even if you keep it open, and
-a job whose agent is gone (tmux restarted, the pane closed). Termote tells a job's agent from another
+a job whose agent is gone (tmux restarted, the pane closed). When every job's agent is idle and its
+last turn was read, it says there is nothing to wait for instead of waiting out the timeout. Termote tells a job's agent from another
 one at the same pane address by its process, so an agent that took over a reused tmux pane id is
 never taken for it. When an agent is done the orchestrator sets the job to `review` with a note, and
 you get a push; it never marks a job `done` for you.

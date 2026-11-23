@@ -157,9 +157,34 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitTimeout {
+	// Read and idle: nothing to wait for, said as such at the timeout (here
+	// shorter than the grace), never "still working".
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitIdle ||
+		!strings.Contains(tc.stdout.String(), "Nothing to wait for") ||
+		!strings.Contains(tc.stdout.String(), "Job "+j.ID+" (Parser): web/api (%1) is idle and its last turn was read") ||
+		strings.Contains(tc.stdout.String(), "Still working") {
 		t.Errorf("after read: exit %d %s", exitCode(err), tc.stdout)
 	}
+	// Within a longer timeout, it ends after the grace rather than at it.
+	grace := agentsWaitGrace
+	agentsWaitGrace = 100 * time.Millisecond
+	start := time.Now()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "30s"}); exitCode(err) != agentsExitIdle || time.Since(start) > 10*time.Second {
+		t.Errorf("after the grace: exit %d after %v", exitCode(err), time.Since(start))
+	}
+	agentsWaitGrace = grace
+	// A job whose agent works is still waited for: the timeout says so.
+	busy := addJob(t, tc, "--title", "Busy", "--pane", "ui")
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", busy.ID, j.ID, "--timeout", "200ms"}); exitCode(err) != agentsExitTimeout ||
+		!strings.Contains(tc.stdout.String(), "Still waiting after 200ms:") ||
+		!strings.Contains(tc.stdout.String(), "Job "+busy.ID+" (Busy): web/ui (%2) is working") ||
+		!strings.Contains(tc.stdout.String(), "Job "+j.ID+" (Parser): web/api (%1) is idle and its last turn was read") ||
+		!strings.Contains(tc.stdout.String(), "wait again: termote agents wait --job "+busy.ID+" "+j.ID) {
+		t.Errorf("working: exit %d %s", exitCode(err), tc.stdout)
+	}
+	tc.dispatch("agents", []string{"job", "set", busy.ID, "--state", "abandoned"})
 	// A turn that ends between two polls is reported too.
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -184,7 +209,8 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 		t.Errorf("dialog: exit %d %s", exitCode(err), tc.stdout)
 	}
 	tc.stdout.Reset()
-	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout {
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout ||
+		!strings.Contains(tc.stdout.String(), "still waits on the dialog reported before; see it: termote agents answer %1") {
 		t.Errorf("same dialog again: exit %d %s", exitCode(err), tc.stdout)
 	}
 	// Blocked with no dialog the server can read (Claude Code after a

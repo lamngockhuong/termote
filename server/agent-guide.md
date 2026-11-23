@@ -167,7 +167,7 @@ termote agents stop <pane> --cursor <cursor>   # end its turn, as Esc (cursor fr
 termote agents start --workspace <id> --kind claude 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-tests --title 'Fix the tests' 'Fix the failing tests'
 termote agents jobs                            # the job ledger: each job's pane, status, unread turn, branch, dir
-termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 5: gone
+termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 4: timeout, 5: gone, 6: all idle and read
 termote agents job set <id> --state review --note 'What was done'
 termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
 ```
@@ -177,7 +177,8 @@ view-only devices see titles; `--job <id>` takes up a job the user added in the 
 `read`, `answer`, `stop` and `diff --stat` note what they did on the job of their pane. Begin with
 `termote agents jobs`; it outlives a compacted conversation and a server restart. `wait --job`
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
-is gone (`job set <id> --pane <pane>` or `--state abandoned`). Set `review` with a note when an
+is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle and
+its last turn was read, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
 agent is done; leave `done` to the user.
 
 Keep a mark for each pane you wait on: `send` and `start` print the pane with its own

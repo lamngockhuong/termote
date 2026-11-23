@@ -562,8 +562,11 @@ func (c *cli) agentsWaitJobs(args []string) error {
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(timeout)
+	start := time.Now()
+	deadline := start.Add(timeout)
 	failures := 0
+	// last: the ledger as the last poll that could read it saw it.
+	var last []jobView
 	for {
 		list, err := c.jobsGet(port, true)
 		if err != nil {
@@ -579,13 +582,72 @@ func (c *cli) agentsWaitJobs(args []string) error {
 			if len(ends) > 0 {
 				return c.jobsEnded(list, ids, ends, rest)
 			}
+			last = list
+			// An agent given work a moment ago may not have started yet:
+			// as wait does for panes, idle ends the wait only after the
+			// grace, or at the timeout.
+			if jobsAllIdle(list, ids) && (time.Since(start) >= agentsWaitGrace || !time.Now().Before(deadline)) {
+				return c.jobsNothing(list, ids)
+			}
 		}
 		if !time.Now().Before(deadline) {
-			fmt.Fprintf(c.out, "Still working after %s; wait again: termote agents wait --job %s\n", timeout, strings.Join(ids, " "))
+			c.jobsStill(last, ids, timeout)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
 	}
+}
+
+// jobsAllIdle: the agent of every one of ids is idle with its last turn
+// read, so nothing would ever end a wait on them.
+func jobsAllIdle(list []jobView, ids []string) bool {
+	for _, id := range ids {
+		j, ok := findJob(list, id)
+		if !ok || j.Live.Status != "idle" || j.Live.Unread {
+			return false
+		}
+	}
+	return true
+}
+
+// jobsNothing: every job's agent is idle and its last turn was read.
+func (c *cli) jobsNothing(list []jobView, ids []string) error {
+	fmt.Fprintln(c.out, "Nothing to wait for: no job's agent is working and none ended a turn you have not read.")
+	for _, id := range ids {
+		j, _ := findJob(list, id)
+		pid := plainText(j.Live.PaneID)
+		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) is idle and its last turn was read; give it work (termote agents send %s -) or record what it did (termote agents job set %s --state review)\n",
+			plainText(j.ID), plainText(j.Title), plainText(j.Live.Ref), pid, pid, plainText(j.ID))
+	}
+	return &exitError{code: agentsExitIdle}
+}
+
+// jobsStill says, at the timeout, what each job's agent does: none of them
+// needs the orchestrator yet.
+func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration) {
+	fmt.Fprintf(c.out, "Still waiting after %s:\n", timeout)
+	for _, id := range ids {
+		j, ok := findJob(list, id)
+		if !ok {
+			// No poll could read the ledger.
+			fmt.Fprintf(c.out, "Job %s: the ledger could not be read\n", plainText(id))
+			continue
+		}
+		l := j.Live
+		what := "is " + c.liveText(l)
+		switch l.Status {
+		case "blocked":
+			what = "still waits on the dialog reported before; see it: termote agents answer " + plainText(l.PaneID)
+		case "background":
+			what = "still waits on the background work reported before (" + plainText(clipLine(l.Background, 80)) + ")"
+		case "idle":
+			what = "is idle and its last turn was read"
+		case "unknown":
+			what = "could not be read"
+		}
+		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) %s\n", plainText(j.ID), plainText(j.Title), plainText(l.Ref), plainText(l.PaneID), what)
+	}
+	fmt.Fprintf(c.out, "wait again: termote agents wait --job %s\n", strings.Join(ids, " "))
 }
 
 // jobEnds is what each of ids reports now, and the ids left to wait for.
