@@ -1,9 +1,9 @@
-import { History, ListChecks, X } from 'lucide-react'
+import { History, ListChecks, MoreHorizontal, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
 import { useJobs } from '../hooks/use-jobs'
-import { useMediaQuery } from '../hooks/use-media-query'
+import { useIsMobile, useMediaQuery } from '../hooks/use-media-query'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { NOW_TICK, useNow } from '../hooks/use-now'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
@@ -53,6 +53,7 @@ import {
 } from './subagent-transcript-sheet'
 import { Toast } from './toast'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
+import { Menu, MenuItemCheckbox } from './ui/menu'
 import { Sheet } from './ui/sheet'
 
 // The card's time is a coarse "3 min ago", read again this often
@@ -125,6 +126,7 @@ export function OverviewScreen({
   // anywhere else.
   const [logOpen, setLogOpen] = useState(false)
   const wide = useMediaQuery('(min-width: 1280px)')
+  const isMobile = useIsMobile()
   // Focus moves into the overview and back to where it was when it closes.
   const titleRef = useRef<HTMLHeadingElement>(null)
   // The Plan asked for by the address (a job's notification), now or once
@@ -457,24 +459,51 @@ export function OverviewScreen({
               }
             />
           )}
-          {shownTab === 'agents' && pickable.length > 0 && (
-            <IconButton
-              onClick={() => (picking ? stopPicking() : setPicking(true))}
-              aria-label={t('tasks.dispatch.select')}
-              aria-pressed={picking}
-              title={t('tasks.dispatch.select')}
+          {/* On a phone, picking and the activity log share a More menu */}
+          {isMobile ? (
+            <Menu
+              label={t('tasks.overview.more')}
+              trigger={<MoreHorizontal size={18} aria-hidden="true" />}
             >
-              <ListChecks size={18} aria-hidden="true" />
-            </IconButton>
+              {shownTab === 'agents' && pickable.length > 0 && (
+                <MenuItemCheckbox
+                  checked={picking}
+                  icon={<ListChecks size={16} aria-hidden="true" />}
+                  onSelect={() => (picking ? stopPicking() : setPicking(true))}
+                >
+                  {t('tasks.dispatch.select')}
+                </MenuItemCheckbox>
+              )}
+              <MenuItemCheckbox
+                checked={logOpen}
+                icon={<History size={16} aria-hidden="true" />}
+                onSelect={() => setLogOpen((v) => !v)}
+              >
+                {t('tasks.activity.title')}
+              </MenuItemCheckbox>
+            </Menu>
+          ) : (
+            <>
+              {shownTab === 'agents' && pickable.length > 0 && (
+                <IconButton
+                  onClick={() => (picking ? stopPicking() : setPicking(true))}
+                  aria-label={t('tasks.dispatch.select')}
+                  aria-pressed={picking}
+                  title={t('tasks.dispatch.select')}
+                >
+                  <ListChecks size={18} aria-hidden="true" />
+                </IconButton>
+              )}
+              <IconButton
+                onClick={() => setLogOpen((v) => !v)}
+                aria-label={t('tasks.activity.title')}
+                aria-pressed={logOpen}
+                title={t('tasks.activity.hint')}
+              >
+                <History size={18} aria-hidden="true" />
+              </IconButton>
+            </>
           )}
-          <IconButton
-            onClick={() => setLogOpen((v) => !v)}
-            aria-label={t('tasks.activity.title')}
-            aria-pressed={logOpen}
-            title={t('tasks.activity.hint')}
-          >
-            <History size={18} aria-hidden="true" />
-          </IconButton>
           <IconButton
             onClick={onClose}
             aria-label={t('tasks.overview.close')}

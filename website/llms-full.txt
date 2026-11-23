@@ -3245,7 +3245,7 @@ With tmux and psmux, only the active pane of each window is watched: an agent in
 
 [Section titled “One message to several agents”](#one-message-to-several-agents)
 
-The checklist button in the overview’s header turns on picking: a checkbox appears on the card of each agent that takes a message from Termote (Claude Code, Codex and OpenCode, the agents whose Chat view has a composer), and a bar opens at the bottom of the screen. Pick the agents, type the message and press **Send** (or `Ctrl+Enter`, `⌘+Enter` on a Mac). Each agent gets it as if it had been typed in its own Chat view.
+The checklist button in the overview’s header (on a phone, in its **More** menu) turns on picking: a checkbox appears on the card of each agent that takes a message from Termote (Claude Code, Codex and OpenCode, the agents whose Chat view has a composer), and a bar opens at the bottom of the screen. Pick the agents, type the message and press **Send** (or `Ctrl+Enter`, `⌘+Enter` on a Mac). Each agent gets it as if it had been typed in its own Chat view.
 
 Beside each agent the bar then says **Sent**, **Queued** (the agent was working and reads it when it is done) or **Not sent** with the reason. The agents that got the message are unpicked; when one failed, the message stays in the box and only that agent stays picked, so **Send** again reaches only it, never twice the others. An agent whose pane closes is unpicked. Press the checklist button again to stop picking. A [view-only device](/usage/devices/#view-only) has no checklist button.
 
@@ -3305,7 +3305,7 @@ A [view-only device](/usage/devices/#view-only) sees the dialogs without buttons
 
 **History** at the bottom of a card opens its last hour as a strip, one colour and mark per state (blocked is striped, idle hollow), with the minutes of each underneath. The part before the first change the server recorded stays blank: it is unknown, not idle. For Claude Code it also lists the session’s subagents: each one’s type, description, state, the last tool it called, how long it ran or has been running and the tokens of its last request (for OpenCode too, its subagents being sessions of their own). One started by another is indented under it. “(guessed)” marks a subagent taken as done because its file has not changed for 10 minutes, when the transcript cannot tell. Closed, the button still says “2 subagents, 1 running”.
 
-**Activity** in the overview’s header lists every change of state of every agent since the server started (the last 500), newest first. Filter it by the state changed to. A row opens that agent’s pane, even after its tmux window moved; a row of a pane that has closed cannot be opened.
+**Activity** in the overview’s header (on a phone, in its **More** menu) lists every change of state of every agent since the server started (the last 500), newest first. Filter it by the state changed to. A row opens that agent’s pane, even after its tmux window moved; a row of a pane that has closed cannot be opened.
 
 ## Stuck agents
 

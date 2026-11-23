@@ -1711,4 +1711,82 @@ describe('OverviewScreen, the Agents sections', () => {
       screen.getByRole('button', { name: /^Open chat: Claude Code, Working/ }),
     ).not.toHaveAccessibleDescription(/Job/)
   })
+
+  describe('OverviewScreen on a phone', () => {
+    beforeEach(() => {
+      resetAgentOverview()
+      resetActivityLog()
+      resetJobs()
+      mockFetchUsage.mockRejectedValue(new Error('no usage'))
+      mockFetchActivity.mockRejectedValue(new Error('no activity'))
+      mockFetchOverview.mockResolvedValue({ serverNow: '', panes: [] })
+      mockFetchJobs.mockResolvedValue({
+        jobs: [],
+        readOnly: false,
+        canGrant: false,
+        serverNow: '',
+      })
+      HTMLDialogElement.prototype.showModal = vi.fn(function (
+        this: HTMLDialogElement,
+      ) {
+        this.setAttribute('open', '')
+      })
+      HTMLDialogElement.prototype.close = vi.fn()
+    })
+
+    it('puts picking and the activity log in a More menu', async () => {
+      const orig = window.matchMedia
+      window.matchMedia = ((query: string) => ({
+        ...orig(query),
+        matches: query === '(max-width: 767px)',
+      })) as typeof window.matchMedia
+      try {
+        renderScreen()
+        await act(async () => {})
+        expect(
+          screen.queryByRole('button', {
+            name: 'Send a message to several agents',
+          }),
+        ).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Activity' })).toBeNull()
+        const more = screen.getByRole('button', { name: 'More' })
+        fireEvent.click(more)
+        const pick = screen.getByRole('menuitemcheckbox', {
+          name: 'Send a message to several agents',
+        })
+        expect(pick).toHaveAttribute('aria-checked', 'false')
+        fireEvent.click(pick)
+        expect(
+          screen.getByText('Pick the agents to send to'),
+        ).toBeInTheDocument()
+        fireEvent.click(more)
+        expect(
+          screen.getByRole('menuitemcheckbox', {
+            name: 'Send a message to several agents',
+          }),
+        ).toHaveAttribute('aria-checked', 'true')
+        fireEvent.click(
+          screen.getByRole('menuitemcheckbox', {
+            name: 'Send a message to several agents',
+          }),
+        )
+        expect(screen.queryByText('Pick the agents to send to')).toBeNull()
+        // The activity log opens as a sheet
+        fireEvent.click(more)
+        fireEvent.click(
+          screen.getByRole('menuitemcheckbox', { name: 'Activity' }),
+        )
+        expect(screen.getByRole('dialog', { name: 'Activity' })).toBeVisible()
+        // On the Plan the menu holds the activity log alone
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Close the activity' }),
+        )
+        fireEvent.click(screen.getByRole('tab', { name: /^Plan/ }))
+        fireEvent.click(more)
+        expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1)
+      } finally {
+        window.matchMedia = orig
+      }
+    })
+  })
 })
