@@ -5,7 +5,9 @@
 // pane became blocked). One skipped stays out while it lasts; one answered
 // stays out for ANSWER_GRACE, the time the snapshot may still show the pane
 // blocked: still blocked after that, it waits on a new dialog (one asked
-// within the same snapshot poll keeps the old since) and comes back.
+// within the same snapshot poll keeps the old since) and comes back. The
+// card on top, once a choice was sent from it, follows its pane through a
+// new since: a wizard's next tab is a new wait for the server.
 
 // Two snapshot polls (5 s each)
 export const ANSWER_GRACE = 10_000
@@ -68,7 +70,15 @@ export function updateQueue(
   let { current, sent, answered } = state
   let answeredWaits = recent
   if (current !== null && !answered && !now.has(current)) {
-    if (sent) {
+    const pane = paneOf(current)
+    const again = sent ? blocked.find((b) => b.paneId === pane) : undefined
+    if (again) {
+      // Blocked again since a choice sent from here: the next tab of the
+      // same dialog (the server starts a new wait at each step answered),
+      // or a dialog asked right after it. The card follows its pane; the
+      // dialog it reads closing is the answer.
+      current = waitKey(again)
+    } else if (sent) {
       // It stopped waiting after a choice sent from here: answered, even
       // when the snapshot says so before the dialog's own poll
       answered = true

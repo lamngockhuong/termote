@@ -19,7 +19,11 @@ const {
   mockInterrupt,
   mockFetchJobs,
   mockFetchSubagents,
+  mockFetchPrompt,
+  mockAnswer,
 } = vi.hoisted(() => ({
+  mockFetchPrompt: vi.fn(),
+  mockAnswer: vi.fn(),
   mockFetchJobs: vi.fn(),
   mockFetchOverview: vi.fn(),
   mockFetchActivity: vi.fn(),
@@ -40,6 +44,11 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
   fetchJobs: () => mockFetchJobs(),
   fetchSubagents: (pane: string) => mockFetchSubagents(pane),
+  fetchAgentPrompt: async (pane: string) => ({
+    prompt: await mockFetchPrompt(pane),
+    activity: null,
+  }),
+  answerAgentPrompt: (...a: unknown[]) => mockAnswer(...a),
 }))
 // The sheet itself is SubagentTranscriptSheet's own test: here a stand-in
 // that names what it shows and closes.
@@ -65,6 +74,7 @@ vi.mock('./subagent-transcript-sheet', () => ({
 
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
+import { resetAgentPromptStores } from '../hooks/use-agent-prompt'
 import { resetJobs } from '../hooks/use-jobs'
 import { AgentRequestError, RequestError } from '../hooks/use-mux-api'
 import { agentCards } from '../utils/agent-cards'
@@ -174,6 +184,9 @@ describe('OverviewScreen', () => {
     resetAgentOverview()
     resetActivityLog()
     resetJobs()
+    resetAgentPromptStores()
+    // No dialog read: the queue's card offers the terminal
+    mockFetchPrompt.mockRejectedValue(new Error('no dialog'))
     mockFetchJobs.mockResolvedValue({
       jobs: [],
       readOnly: false,
@@ -284,6 +297,63 @@ describe('OverviewScreen', () => {
     } finally {
       window.matchMedia = orig
     }
+  })
+
+  it('the answered card stays once no agent waits any more, until Done', async () => {
+    let open = true
+    mockFetchPrompt.mockImplementation(async () =>
+      open
+        ? {
+            kind: 'permission',
+            promptId: 'id-1',
+            title: 'Run the migration?',
+            options: [
+              { index: 1, label: 'Yes' },
+              { index: 2, label: 'No' },
+            ],
+          }
+        : null,
+    )
+    mockAnswer.mockImplementation(async () => {
+      open = false
+    })
+    const { rerender } = renderScreen()
+    const queue = await screen.findByRole('region', {
+      name: /^Needs you: Claude Code, web \/ t3/,
+    })
+    await within(queue).findByText('Run the migration?')
+    await act(async () =>
+      fireEvent.click(within(queue).getByRole('button', { name: /1\.\s*Yes/ })),
+    )
+    await within(queue).findByText('Answered.')
+    // The next snapshot: the agent works, nothing waits on the user
+    const working = SESSIONS.map((s) => ({
+      ...s,
+      panes: s.panes?.map((p) =>
+        p.id === 'p-blocked' ? { ...p, agentStatus: 'working' as const } : p,
+      ),
+    }))
+    rerender(
+      <OverviewScreen
+        sessions={working}
+        groups={GROUPS}
+        groupNoun="workspace"
+        ready
+        pollInterval={5000}
+        clockOffset={0}
+        activePaneOnly={false}
+        opensChat={(p) => p.agentName === 'claude'}
+        canAnswer={(p) => p.agentName === 'claude'}
+        readOnly={false}
+        stuckMinutes={10}
+        onOpen={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(within(queue).getByText('Answered.')).toBeInTheDocument()
+    await act(async () => vi.advanceTimersByTimeAsync(500))
+    fireEvent.click(within(queue).getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('region', { name: /^Needs you: / })).toBeNull()
   })
 
   it('lists every agent, the ones waiting on the user first', async () => {

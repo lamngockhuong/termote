@@ -176,7 +176,9 @@ export function NeedsMeQueue({
         <Answered left={left} onNext={() => move(advance(queue, blocked))} />
       ) : (
         <QueueDialog
-          key={queue.current}
+          // By pane: the card that follows its pane to the next tab of a
+          // dialog keeps what it sent (its wait has a new since)
+          key={currentPane}
           card={card}
           readOnly={readOnly}
           answerable={canAnswer(card.pane)}

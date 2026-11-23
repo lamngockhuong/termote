@@ -393,11 +393,14 @@ test.describe('agent overview with an agent', () => {
     const size = queue.getByRole('alertdialog', { name: 'What size do you want?' })
     await expect(size).toBeVisible({ timeout: 20000 })
     await size.getByRole('button', { name: /^1\.\s*Small/ }).click()
+    // Each tab is read by the card's own poll after the fake agent redraws:
+    // as long a wait as the first one on a loaded runner
     const drink = queue.getByRole('alertdialog', { name: 'Which drink do you prefer?' })
-    await expect(drink).toBeVisible()
+    await expect(drink).toBeVisible({ timeout: 20000 })
     await expect(queue.getByText('Answered.')).toHaveCount(0)
     await drink.getByRole('button', { name: /^2\.\s*Coffee/ }).click()
     const review = queue.getByRole('alertdialog', { name: 'Review your answers' })
+    await expect(review).toBeVisible({ timeout: 20000 })
     await review.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
     await expect(queue.getByText('Answered.')).toBeVisible({ timeout: 20000 })
     await queue.getByRole('button', { name: 'Done' }).click()

@@ -84,6 +84,24 @@ describe('needs-me queue', () => {
     expect(pane(q.current)).toBe('c')
   })
 
+  it('the next tab of a dialog sent from here keeps the card on top', () => {
+    let q = markSent(updateQueue(EMPTY_QUEUE, [b('a', 1), b('c', 2)]))
+    // Each step answered is a new wait for the server: a new since
+    q = updateQueue(q, [b('a', 3), b('c', 2)])
+    expect(q).toMatchObject({ current: waitKey(b('a', 3)), sent: true })
+    expect(q).toMatchObject({ answered: false, waiting: [waitKey(b('c', 2))] })
+    // The last tab answered, the agent works: answered
+    q = updateQueue(q, [b('c', 2)])
+    expect(q).toMatchObject({ current: waitKey(b('a', 3)), answered: true })
+  })
+
+  it('a pane blocked again with no choice sent from here waits its turn', () => {
+    let q = updateQueue(EMPTY_QUEUE, [b('a', 1), b('c', 2)])
+    q = updateQueue(q, [b('a', 3), b('c', 2)])
+    expect(pane(q.current)).toBe('c')
+    expect(q.waiting.map(paneOf)).toEqual(['a'])
+  })
+
   it('a card whose agent stopped waiting leaves the top', () => {
     let q = updateQueue(EMPTY_QUEUE, [b('a', 1), b('c', 2)])
     q = updateQueue(q, [b('c', 2)])
