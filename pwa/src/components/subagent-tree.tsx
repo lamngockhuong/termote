@@ -76,6 +76,26 @@ export function subagentDuration(
   return t('chat.subagent.hours', { n: Math.floor(s / 3600) })
 }
 
+// What a row says of a subagent after its type: "running · 3 min · 12k
+// tokens".
+export function subagentFacts(
+  n: SubagentNode,
+  now: number,
+  t: Translate<MessageKey>,
+): string {
+  const { word } = NODE_STYLE[n.status]
+  const took = subagentDuration(n, now, t)
+  const tokens =
+    n.tokens && t('chat.activity.tokens', { tokens: formatTokens(n.tokens) })
+  return [
+    n.statusGuessed ? `${t(word)} ${t('chat.subagent.guessed')}` : t(word),
+    took,
+    tokens,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 // A token count the way a card has room for it: 950, 12.3k, 184k, 1.2M.
 export function formatTokens(n: number): string {
   if (n < 1000) return String(n)
@@ -89,10 +109,12 @@ interface Props {
   error: boolean
   // Server time (ms)
   now: number
+  // Opens a subagent's conversation: each row is then a button
+  onOpen?: (node: SubagentNode) => void
 }
 
 // The subagents of a Claude session, indented by depth.
-export function SubagentTree({ tree, error, now }: Props) {
+export function SubagentTree({ tree, error, now, onOpen }: Props) {
   const { t } = useT()
   if (!tree) {
     return error ? (
@@ -115,18 +137,9 @@ export function SubagentTree({ tree, error, now }: Props) {
     <div className="flex flex-col gap-1">
       <ul aria-label={t('chat.subagent.list')} className="flex flex-col gap-1">
         {shown.map((n) => {
-          const { Icon, className, word } = NODE_STYLE[n.status]
-          const took = subagentDuration(n, now, t)
-          const tokens =
-            n.tokens &&
-            t('chat.activity.tokens', { tokens: formatTokens(n.tokens) })
-          return (
-            <li
-              key={n.id}
-              data-status={n.status}
-              className="flex min-w-0 items-start gap-1.5 border-l border-border pl-2 text-[12px]"
-              style={{ marginLeft: `${(n.depth - 1) * 12}px` }}
-            >
+          const { Icon, className } = NODE_STYLE[n.status]
+          const row = (
+            <>
               <Icon
                 size={13}
                 aria-hidden="true"
@@ -138,10 +151,7 @@ export function SubagentTree({ tree, error, now }: Props) {
                     {visibleUnsafe(n.type)}
                   </span>
                   <span className="shrink-0 text-fg-muted">
-                    · {t(word)}
-                    {n.statusGuessed && ` ${t('chat.subagent.guessed')}`}
-                    {took && ` · ${took}`}
-                    {tokens && ` · ${tokens}`}
+                    · {subagentFacts(n, now, t)}
                   </span>
                 </span>
                 {n.description && (
@@ -155,6 +165,36 @@ export function SubagentTree({ tree, error, now }: Props) {
                   </span>
                 )}
               </span>
+            </>
+          )
+          return (
+            <li
+              key={n.id}
+              data-status={n.status}
+              className="flex min-w-0 items-start gap-1.5 border-l border-border pl-2 text-[12px]"
+              style={{ marginLeft: `${(n.depth - 1) * 12}px` }}
+            >
+              {onOpen ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen(n)}
+                  aria-label={
+                    n.description
+                      ? t('chat.subagent.open', {
+                          type: visibleUnsafe(n.type),
+                          description: visibleUnsafe(n.description),
+                        })
+                      : t('chat.subagent.openNoDesc', {
+                          type: visibleUnsafe(n.type),
+                        })
+                  }
+                  className="-my-0.5 flex w-full min-w-0 items-start gap-1.5 rounded-sm py-0.5 pr-1 text-left hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  {row}
+                </button>
+              ) : (
+                row
+              )}
             </li>
           )
         })}

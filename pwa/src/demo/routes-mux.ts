@@ -1,5 +1,6 @@
 import { MUX_API_VERSION } from '../hooks/use-mux-api'
 import { APP_INFO } from '../utils/app-info'
+import { ACME_SUBAGENT, ACME_SUBAGENT_TRANSCRIPT } from './fixtures/agent'
 import { demoHostStats } from './fixtures/system'
 import { DEMO_CAPS, DEMO_HOME } from './fixtures/workspace'
 import { fail, type Handler, json } from './http'
@@ -281,7 +282,21 @@ const paneText: Handler = ({ state, params }) => {
   })
 }
 
-const subagents: Handler = () => json({ nodes: [] })
+// Only the acme-api agent has a subagent, done
+const subagents: Handler = ({ params }) =>
+  json({ nodes: params.id === 'w1:p1' ? [ACME_SUBAGENT] : [] })
+
+const subagentTranscript: Handler = ({ params }) =>
+  params.id === 'w1:p1' && params.agentId === ACME_SUBAGENT.id
+    ? json({
+        agent: 'claude',
+        sessionId: 'demo',
+        status: 'unknown',
+        entries: ACME_SUBAGENT_TRANSCRIPT,
+        cursor: 'demo-sub',
+        reset: true,
+      })
+    : fail(404, 'session_not_found', 'no such session')
 
 const worktrees: Handler = ({ state, query }) => {
   const group = state.groups.find((g) => g.id === query.get('groupId'))
@@ -337,4 +352,5 @@ export const MUX_ROUTES: Record<string, Handler> = {
   'POST /panes/{id}/scroll': paneWrite,
   'GET /panes/{id}/text': paneText,
   'GET /panes/{id}/agent/subagents': subagents,
+  'GET /panes/{id}/agent/subagents/{agentId}/transcript': subagentTranscript,
 }

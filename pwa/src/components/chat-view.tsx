@@ -1,6 +1,7 @@
 import { ArrowDown, History } from 'lucide-react'
 import {
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,7 +18,7 @@ import {
   followPathInFiles,
   openOutsideInFiles,
 } from '../hooks/use-files'
-import type { ResumeWhere } from '../hooks/use-mux-api'
+import type { ResumeWhere, SubagentNode } from '../hooks/use-mux-api'
 import { useNewKeys } from '../hooks/use-new-keys'
 import { useResumeSession } from '../hooks/use-resume-session'
 import type { StartRecord } from '../hooks/use-start-agent'
@@ -40,6 +41,10 @@ import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
 import { RecentSessions } from './recent-sessions'
 import { StartAgentPanel } from './start-agent-panel'
+import {
+  type SubagentTarget,
+  SubagentTranscriptSheet,
+} from './subagent-transcript-sheet'
 import { Button, IconButton } from './ui/button'
 
 // Entries rendered at once; scrolling to the top shows more.
@@ -242,8 +247,15 @@ function AgentChat({
   // below the list's top it was
   const readingRef = useRef<{ entry: Element; top: number } | null>(null)
   const markdown = useChatMarkdown(listRef, notify)
-  // A path the agent wrote, opened in the Files view; none without one
   const paneId = session.paneId ?? ''
+  // The subagent whose conversation is open: held here, so it stays open
+  // when the last running one ends and the strip it was opened from goes
+  const [subagent, setSubagent] = useState<SubagentTarget>()
+  const openSubagent = useCallback(
+    (node: SubagentNode) => setSubagent({ paneId, node }),
+    [paneId],
+  )
+  // A path the agent wrote, opened in the Files view; none without one
   const openFile = useMemo(
     () =>
       mux.caps.files && paneId
@@ -575,8 +587,25 @@ function AgentChat({
       </section>
       {/* Only Claude Code's and OpenCode's sessions have a subagent tree */}
       {subagentAgent(session.agentName) && paneId && (
-        <ChatSubagents paneId={paneId} clockOffset={clockOffset} />
+        <ChatSubagents
+          paneId={paneId}
+          clockOffset={clockOffset}
+          // Only Claude Code's subagents have a conversation to read, and a
+          // view-only device does not read it (their task and report are
+          // plain text there)
+          onOpen={
+            session.agentName === 'claude' && !readOnly
+              ? openSubagent
+              : undefined
+          }
+        />
       )}
+      <SubagentTranscriptSheet
+        target={subagent?.paneId === paneId ? subagent : undefined}
+        onClose={() => setSubagent(undefined)}
+        notify={notify}
+        clockOffset={clockOffset}
+      />
       {readOnly && p.prompt && (
         <PromptCard
           readOnly

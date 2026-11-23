@@ -29,6 +29,10 @@ import { NeedsMeQueue } from './needs-me-queue'
 import { type DispatchTarget, OverviewDispatch } from './overview-dispatch'
 import { OverviewJobs } from './overview-jobs'
 import { SearchToggle, SessionSearchField } from './session-search-field'
+import {
+  type SubagentTarget,
+  SubagentTranscriptSheet,
+} from './subagent-transcript-sheet'
 import { Toast } from './toast'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -70,6 +74,8 @@ interface Props {
   // The pane whose card takes focus (the header's usage chip); a new
   // object asks again
   focusPane?: { paneId: string }
+  // A short message (a code block copied in a subagent's conversation)
+  notify?: (message: string) => void
 }
 
 // Every agent the server sees, in every group: those waiting on the user
@@ -91,6 +97,7 @@ export function OverviewScreen({
   onClose,
   onStartAgent,
   focusPane,
+  notify = noNotify,
 }: Props) {
   const { t } = useT()
   const overview = useAgentOverview(pollInterval)
@@ -250,6 +257,9 @@ export function OverviewScreen({
   // Why a card's Stop was refused: one toast for the whole overview, the
   // latest refusal replacing the one before.
   const [stopError, setStopError] = useState<string | null>(null)
+  // The subagent whose conversation is open: held here, so it stays open
+  // when its card leaves the list (a filter, the agent going)
+  const [subagent, setSubagent] = useState<SubagentTarget>()
 
   // Opening a pane from the log leaves the overview, as a card does.
   const log = (
@@ -446,6 +456,13 @@ export function OverviewScreen({
                         highlighted={!leaving && pane.id === highlighted}
                         canStop={!readOnly && canAnswer(pane)}
                         onStopFailed={setStopError}
+                        // Only Claude Code's subagents have a conversation
+                        // to read, never on a view-only device
+                        onOpenSubagent={
+                          pane.agentName === 'claude' && !readOnly
+                            ? (node) => setSubagent({ paneId: pane.id, node })
+                            : undefined
+                        }
                       />
                     )
                     const pick = selecting && canAnswer(pane)
@@ -532,6 +549,12 @@ export function OverviewScreen({
       >
         <div className="overflow-y-auto px-4 pb-4">{log}</div>
       </Sheet>
+      <SubagentTranscriptSheet
+        target={subagent}
+        onClose={() => setSubagent(undefined)}
+        notify={notify}
+        clockOffset={clockOffset}
+      />
       {stopError && (
         <Toast
           variant="warning"
@@ -544,3 +567,5 @@ export function OverviewScreen({
 }
 
 const cardKey = (c: OverviewCard) => c.pane.id
+
+const noNotify = () => {}

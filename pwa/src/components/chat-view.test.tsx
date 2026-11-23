@@ -63,8 +63,9 @@ const subagents = {
   panes: [] as string[],
 }
 vi.mock('../hooks/use-subagents', () => ({
-  useSubagents: (pane: string) => {
-    subagents.panes.push(pane)
+  // The panes whose tree is read (a closed reader reads none)
+  useSubagents: (pane: string, open: boolean) => {
+    if (open) subagents.panes.push(pane)
     return { tree: subagents.tree, error: false }
   },
 }))

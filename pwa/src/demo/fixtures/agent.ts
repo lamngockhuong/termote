@@ -199,3 +199,58 @@ export const WEB_ACTIVITY: AgentActivity = {
   detail: 'thinking',
   tokens: '3.1k',
 }
+
+// The one subagent of the acme-api session (pane w1:p1), done, and its own
+// conversation
+export const ACME_SUBAGENT = {
+  id: 'a1d2e3f4',
+  type: 'code-reviewer',
+  // i18n-ignore: what Claude Code wrote, as the server reads it
+  description: 'Review the rate limiter',
+  status: 'done' as const,
+  startTs: '2026-10-11T09:00:20Z',
+  endTs: '2026-10-11T09:01:05Z',
+  lastTool: 'Read',
+  tokens: 18400,
+  depth: 1,
+  children: [],
+}
+
+export const ACME_SUBAGENT_TRANSCRIPT: TranscriptEntry[] = [
+  {
+    id: 'demo-sub-0001',
+    ts: '2026-10-11T09:00:20Z',
+    role: 'user',
+    parts: [
+      {
+        kind: 'text',
+        text: 'Review auth/ratelimit.go: is the window per IP, and is it safe under concurrent logins?',
+      },
+    ],
+  },
+  {
+    id: 'demo-sub-0002',
+    ts: '2026-10-11T09:00:24Z',
+    role: 'assistant',
+    parts: [
+      {
+        kind: 'tool',
+        tool: 'Read',
+        toolId: 'st1',
+        input: '/home/dev/acme-api/auth/ratelimit.go',
+        result: '41 lines',
+      },
+    ],
+  },
+  {
+    id: 'demo-sub-0003',
+    ts: '2026-10-11T09:01:05Z',
+    role: 'assistant',
+    parts: [
+      {
+        kind: 'text',
+        text: 'The window is per IP and the map is guarded by a mutex, so concurrent logins are safe. One gap: entries are never evicted, so the map grows with every new IP.',
+      },
+    ],
+  },
+]

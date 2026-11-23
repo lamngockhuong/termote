@@ -12,6 +12,7 @@ import type {
   ActivityEvent,
   OverviewPane,
   OverviewUsage,
+  SubagentNode,
 } from '../hooks/use-mux-api'
 import { AgentRequestError } from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
@@ -140,6 +141,9 @@ interface Props {
   // Why a Stop was refused, for the overview's one toast: a refusal from
   // another card replaces it rather than stacking a second one
   onStopFailed?: (message: string) => void
+  // Opens a subagent's conversation from the card's tree (each row a button);
+  // the overview holds it open, so it outlives the card
+  onOpenSubagent?: (node: SubagentNode) => void
 }
 
 // What a card calls its agent: the product's name, else what the server
@@ -175,6 +179,7 @@ export const AgentCard = memo(function AgentCard({
   highlighted,
   canStop,
   onStopFailed,
+  onOpenSubagent,
 }: Props) {
   const { t } = useT()
   const halt = useAgentStop(pane.id, pane.agentStatus, pane.agentSince)
@@ -367,6 +372,7 @@ export const AgentCard = memo(function AgentCard({
                 tree={subagents.tree}
                 error={subagents.error}
                 now={now}
+                onOpen={onOpenSubagent}
               />
             )}
           </div>

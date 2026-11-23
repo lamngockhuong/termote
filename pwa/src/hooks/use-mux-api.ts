@@ -1198,6 +1198,28 @@ export async function fetchTranscript(
   return res.json()
 }
 
+// The conversation of one subagent of the pane's Claude Code session, read
+// like the session's own (cursor forward, before for older entries). Its
+// errors keep their code: session_not_found is a subagent with no file, a
+// 404 without one a server too old to have the route (a machine).
+export async function fetchSubagentTranscript(
+  paneId: string,
+  agentId: string,
+  query: { cursor?: string; before?: string } = {},
+): Promise<TranscriptPage> {
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.before) params.set('before', query.before)
+  const qs = params.toString()
+  const res = await fetch(
+    agentPath(paneId, `subagents/${encodeURIComponent(agentId)}/transcript`) +
+      (qs ? `?${qs}` : ''),
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
 // A Claude Code, Codex or OpenCode session that ran in the pane's root or
 // under it, as the history lists it.
 export type HistoryAgent = 'claude' | 'codex' | 'opencode'
