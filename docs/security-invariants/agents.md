@@ -749,8 +749,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's
   `reported` (then sends it as `reported`, so the same command asked twice is reported twice and a
   dialog kept open once), only background work once, and a job whose agent is gone; when every
-  job's agent is idle with its last turn read it exits 6 (after `agentsWaitGrace`, or at the
-  timeout), and at the timeout it prints each job's state, never a guess; `jobs
+  job's agent is idle with its last turn read and no `live.background` it exits 6 (after
+  `agentsWaitGrace` from its start and from the last time one was busy, or at the timeout), and at the timeout it prints each job's state, never a guess; `jobs
   --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
   nothing. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is

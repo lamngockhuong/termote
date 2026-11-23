@@ -593,8 +593,11 @@ func (c *cli) agentsWaitJobs(args []string) error {
 	start := time.Now()
 	deadline := start.Add(timeout)
 	failures := 0
-	// last: the ledger as the last poll that could read it saw it.
+	// last: the ledger as the last poll that could read it saw it; busyAt:
+	// when a job's agent was last seen busy (from the start), as wait does
+	// for panes: the next turn starts a moment after background work ends.
 	var last []jobView
+	busyAt := start
 	for {
 		list, err := c.jobsGet(port, true)
 		if err != nil {
@@ -614,7 +617,9 @@ func (c *cli) agentsWaitJobs(args []string) error {
 			// An agent given work a moment ago may not have started yet:
 			// as wait does for panes, idle ends the wait only after the
 			// grace, or at the timeout.
-			if jobsAllIdle(list, ids) && (time.Since(start) >= agentsWaitGrace || !time.Now().Before(deadline)) {
+			if !jobsAllIdle(list, ids) {
+				busyAt = time.Now()
+			} else if time.Since(busyAt) >= agentsWaitGrace || !time.Now().Before(deadline) {
 				return c.jobsNothing(list, ids)
 			}
 		}
@@ -627,11 +632,13 @@ func (c *cli) agentsWaitJobs(args []string) error {
 }
 
 // jobsAllIdle: the agent of every one of ids is idle with its last turn
-// read, so nothing would ever end a wait on them.
+// read and nothing its ended turn left running in the background ("1
+// shell", whose end starts its next turn), so nothing would ever end a wait
+// on them.
 func jobsAllIdle(list []jobView, ids []string) bool {
 	for _, id := range ids {
 		j, ok := findJob(list, id)
-		if !ok || j.Live.Status != "idle" || j.Live.Unread {
+		if !ok || j.Live.Status != "idle" || j.Live.Unread || j.Live.Background != "" {
 			return false
 		}
 	}
@@ -670,6 +677,9 @@ func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration) {
 			what = "still waits on the background work reported before (" + plainText(clipLine(l.Background, 80)) + ")"
 		case "idle":
 			what = "is idle and its last turn was read"
+			if l.Background != "" {
+				what = "ended its turn and still runs in the background (" + plainText(clipLine(l.Background, 80)) + "); its next turn starts when that ends"
+			}
 		case "unknown":
 			what = "could not be read"
 		}

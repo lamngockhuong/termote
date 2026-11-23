@@ -177,8 +177,8 @@ view-only devices see titles; `--job <id>` takes up a job the user added in the 
 `read`, `answer`, `stop` and `diff --stat` note what they did on the job of their pane. Begin with
 `termote agents jobs`; it outlives a compacted conversation and a server restart. `wait --job`
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
-is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle and
-its last turn was read, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
+is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,
+its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
 agent is done; leave `done` to the user.
 
 Keep a mark for each pane you wait on: `send` and `start` print the pane with its own
