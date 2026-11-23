@@ -406,7 +406,9 @@ export function OverviewJobs({
         title={selectedTitle}
         closeLabel={t('jobs.detail.close')}
       >
-        <div className="overflow-y-auto px-4 pb-4">{detail}</div>
+        {/* Top padding too: the detail's status line sits 8px up to hug the
+          aside's title, and would slip under the sheet's header without it */}
+        <div className="overflow-y-auto p-4">{detail}</div>
       </Sheet>
       {editing !== undefined && (
         <JobEditSheet
