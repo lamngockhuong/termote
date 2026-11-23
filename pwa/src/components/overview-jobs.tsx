@@ -1,15 +1,19 @@
-import { ChevronDown, Plus } from 'lucide-react'
+import { ChevronDown, Plus, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useJobs } from '../hooks/use-jobs'
 import type { Job } from '../hooks/use-mux-api'
 import { useNow } from '../hooks/use-now'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import { formatAgo } from '../utils/format-ago'
 import { groupJobs, jobFinished } from '../utils/jobs'
-import { JobCard } from './job-card'
+import { visibleUnsafe } from '../utils/unsafe-chars'
+import { JOB_STATE_WORDS, JobCard, jobBranch } from './job-card'
+import { JobDetail } from './job-detail'
 import { type JobAgentChoice, JobEditSheet } from './job-edit-sheet'
 import { JobGrantSheet } from './job-grant-sheet'
-import { Button } from './ui/button'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
+import { Sheet } from './ui/sheet'
 
 interface Props {
   // View-only: the jobs' brief data, nothing to change
@@ -19,26 +23,86 @@ interface Props {
   // Opens the pane of one of agents, as its card would
   onOpenPane: (paneId: string) => void
   // A new object brings the section into view and focuses its title (a
-  // job's notification was tapped)
+  // job's notification was tapped); onFocused says it was done, so the
+  // same request is not met again
   focus?: object
+  onFocused?: () => void
+  // The overview's Activity is open, and the screen wide enough for it to
+  // be a column (1280px)
+  activityOpen?: boolean
+  wide?: boolean
+  // Closes the Activity column
+  onCloseActivity?: () => void
 }
 
+type OpenGroup = 'unread' | 'running' | 'review' | 'todo'
+
+const OPEN_GROUPS: readonly OpenGroup[] = [
+  'unread',
+  'running',
+  'review',
+  'todo',
+]
+
+const GROUP_WORDS: Record<OpenGroup, MessageKey> = {
+  unread: 'jobs.group.unread',
+  running: 'jobs.group.running',
+  review: 'jobs.group.review',
+  todo: 'jobs.group.todo',
+}
+
+const GROUP_NAMES: Record<OpenGroup, MessageKey> = {
+  unread: 'jobs.groupName.unread',
+  running: 'jobs.groupName.running',
+  review: 'jobs.groupName.review',
+  todo: 'jobs.groupName.todo',
+}
+
+// Each group's colour, beside its heading
+const GROUP_DOT = {
+  waiting: 'bg-danger',
+  unread: 'bg-success',
+  running: 'bg-warning',
+  review: 'bg-accent',
+  todo: 'bg-fg-subtle',
+} as const
+
+const TH = 'px-3 py-2 font-medium'
+
 // The overview's Plan: the jobs an orchestrator agent handed out, kept by
-// the server (use-jobs.ts), grouped by what they need from the user. On a
-// desktop the groups are columns, on a phone one list under another.
-export function OverviewJobs({ readOnly, agents, onOpenPane, focus }: Props) {
+// the server (use-jobs.ts), in columns by what they need from the user
+// (on a phone one under another), the finished ones in a table. A full
+// client's job opens its details: beside the columns on a wide screen, in a
+// sheet anywhere else.
+export function OverviewJobs({
+  readOnly,
+  agents,
+  onOpenPane,
+  focus,
+  onFocused,
+  activityOpen,
+  wide,
+  onCloseActivity,
+}: Props) {
   const { t } = useT()
   const store = useJobs()
   const now = useNow(store.clockOffset)
   const titleId = useId()
   const finishedId = useId()
+  const detailTitleId = useId()
   const titleRef = useRef<HTMLHeadingElement>(null)
   const [showFinished, setShowFinished] = useState(false)
   // undefined: no editor; null: a new job
   const [editing, setEditing] = useState<Job | null | undefined>()
   const [granting, setGranting] = useState<Job | null>(null)
+  // The job whose details are open, by id: read again from each read
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const canWrite = !readOnly && !store.readOnly
   const shown = store.loaded && !store.unavailable
+  const selected = canWrite
+    ? store.jobs.find((j) => j.id === selectedId)
+    : undefined
+  const editorOpen = editing !== undefined || granting !== null
 
   useEffect(() => {
     if (!focus || !shown) return
@@ -46,114 +110,304 @@ export function OverviewJobs({ readOnly, agents, onOpenPane, focus }: Props) {
     const title = titleRef.current!
     title.scrollIntoView({ block: 'start' })
     title.focus()
-  }, [focus, shown])
+    onFocused?.()
+  }, [focus, shown, onFocused])
+  // A job gone from the ledger closes its details, unless its editor shows
+  // why (removed elsewhere) and is still open
+  useEffect(() => {
+    if (selectedId && !selected && !editorOpen) setSelectedId(null)
+  }, [selectedId, selected, editorOpen])
+  // The Activity opened: the details make room for it
+  useEffect(() => {
+    if (activityOpen) setSelectedId(null)
+  }, [activityOpen])
 
   if (store.unavailable || (!store.loaded && !store.error)) return null
   const groups = groupJobs(store.jobs)
-  const card = (job: Job) => {
-    const finished = jobFinished(job.state)
-    return (
-      <li key={job.id}>
-        <JobCard
-          job={job}
-          now={now}
-          onOpenPane={
-            job.live.paneId && agents.some((a) => a.paneId === job.live.paneId)
-              ? onOpenPane
-              : undefined
-          }
-          onEdit={canWrite ? setEditing : undefined}
-          onGrants={
-            canWrite && !finished && (job.agent || job.grants?.length)
-              ? setGranting
-              : undefined
-          }
-        />
-      </li>
-    )
+  const choose = (job: Job) => {
+    if (job.id === selectedId) {
+      setSelectedId(null)
+      return
+    }
+    setSelectedId(job.id)
+    if (wide) onCloseActivity?.()
   }
-  const column = (key: MessageKey, jobs: Job[]) =>
-    jobs.length > 0 && (
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <h4 className="m-0 text-[12px] font-semibold text-fg-muted">
-          {t(key, { count: jobs.length })}
-        </h4>
+  const card = (job: Job) => (
+    <li key={job.id}>
+      <JobCard
+        job={job}
+        now={now}
+        onSelect={canWrite ? choose : undefined}
+        selected={job.id === selected?.id}
+      />
+    </li>
+  )
+  // Keyed by group, not by its heading: a count changing keeps the column,
+  // and the focus on its cards
+  const column = (
+    group: keyof typeof GROUP_DOT,
+    heading: string,
+    jobs: Job[],
+    empty?: string,
+  ) => (
+    <div key={group} className="flex min-w-0 flex-col gap-2">
+      <h4 className="m-0 flex items-center gap-1.5 text-[12px] font-semibold text-fg-muted">
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${GROUP_DOT[group]}`}
+        />
+        {heading}
+      </h4>
+      {jobs.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {jobs.map(card)}
         </ul>
-      </div>
-    )
+      ) : (
+        <p className="m-0 rounded-panel border border-dashed border-border-strong px-3 py-4 text-center text-[12px] text-fg-subtle">
+          {empty}
+        </p>
+      )}
+    </div>
+  )
   const open =
     groups.waiting.length +
-    groups.unread.length +
-    groups.running.length +
-    groups.review.length +
-    groups.todo.length
+    OPEN_GROUPS.reduce((n, g) => n + groups[g].length, 0)
+  const emptyGroups = OPEN_GROUPS.filter((g) => groups[g].length === 0)
+
+  // The finished jobs' table leaves out a column no row has a value for
+  const finishedCols = {
+    tree: groups.finished.some((j) => jobBranch(j)),
+    changes: groups.finished.some((j) => j.diff),
+    updated: groups.finished.some((j) =>
+      Number.isFinite(Date.parse(j.updated)),
+    ),
+  }
+  const ago = (at: string) => {
+    const ms = Date.parse(at)
+    return Number.isFinite(ms) ? formatAgo(Math.max(0, now - ms), t) : ''
+  }
+
+  const detail = selected && (
+    <JobDetail
+      job={selected}
+      now={now}
+      onOpenPane={
+        selected.live.paneId &&
+        agents.some((a) => a.paneId === selected.live.paneId)
+          ? onOpenPane
+          : undefined
+      }
+      onEdit={setEditing}
+      canEndGrants={store.canGrant}
+      onGrants={
+        !jobFinished(selected.state) &&
+        (selected.agent || selected.grants?.length)
+          ? setGranting
+          : undefined
+      }
+    />
+  )
+  const selectedTitle = selected ? visibleUnsafe(selected.title) : ''
 
   return (
-    <section aria-labelledby={titleId} className="mb-4 flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <h3
-          id={titleId}
-          ref={titleRef}
-          tabIndex={-1}
-          className="m-0 flex-1 text-[13px] font-semibold outline-none"
-        >
-          {t('jobs.title')}
-        </h3>
-        {canWrite && (
-          <Button size="sm" onClick={() => setEditing(null)}>
-            <Plus size={14} aria-hidden="true" />
-            {t('jobs.new')}
-          </Button>
-        )}
-      </div>
-      {store.error && (
-        <p role="status" className="m-0 text-[12px] text-fg-muted">
-          {t('jobs.readFailed')}
-        </p>
-      )}
-      {store.loaded && open === 0 && (
-        <p className="m-0 text-[12px] text-fg-muted">
-          {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
-        </p>
-      )}
-      {open > 0 && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]">
-          {column('jobs.group.waiting', groups.waiting)}
-          {column('jobs.group.unread', groups.unread)}
-          {column('jobs.group.running', groups.running)}
-          {column('jobs.group.review', groups.review)}
-          {column('jobs.group.todo', groups.todo)}
-        </div>
-      )}
-      {groups.finished.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="self-start"
-            aria-expanded={showFinished}
-            aria-controls={finishedId}
-            onClick={() => setShowFinished((v) => !v)}
-          >
-            <ChevronDown
-              size={14}
-              aria-hidden="true"
-              className={showFinished ? 'rotate-180' : ''}
-            />
-            {t('jobs.group.finished', { count: groups.finished.length })}
-          </Button>
-          {showFinished && (
-            <ul
-              id={finishedId}
-              className="m-0 grid list-none grid-cols-1 gap-2 p-0 md:grid-cols-2 xl:grid-cols-3"
-            >
-              {groups.finished.map(card)}
-            </ul>
+    <section aria-labelledby={titleId} className="flex h-full gap-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* The tab says Plan: its name is for a screen reader, and where a
+            job's notification puts the focus */}
+          <h3 id={titleId} ref={titleRef} tabIndex={-1} className="sr-only">
+            {t('jobs.title')}
+          </h3>
+          {open > 0 && (
+            <p className="m-0 text-fg-muted">
+              {t('jobs.openCount', { count: open })}
+              {emptyGroups.length > 0 && (
+                <span className="text-fg-subtle">
+                  {' · '}
+                  {emptyGroups
+                    .map((g) =>
+                      t('jobs.groupEmpty', { name: t(GROUP_NAMES[g]) }),
+                    )
+                    .join(' · ')}
+                </span>
+              )}
+            </p>
+          )}
+          <span className="flex-1" />
+          {canWrite && (
+            <Button variant="primary" onClick={() => setEditing(null)}>
+              <Plus size={14} aria-hidden="true" />
+              {t('jobs.new')}
+            </Button>
           )}
         </div>
+        {store.error && (
+          <p role="status" className="m-0 text-[12px] text-fg-muted">
+            {t('jobs.readFailed')}
+          </p>
+        )}
+        {store.loaded && open === 0 && (
+          <p className="m-0 text-[12px] text-fg-muted">
+            {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
+          </p>
+        )}
+        {open > 0 && (
+          <>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] items-start gap-3.5">
+              {column(
+                'waiting',
+                t('jobs.group.waiting', { count: groups.waiting.length }),
+                groups.waiting,
+                t('jobs.waitingNone'),
+              )}
+              {OPEN_GROUPS.map(
+                (g) =>
+                  groups[g].length > 0 &&
+                  column(
+                    g,
+                    t(GROUP_WORDS[g], { count: groups[g].length }),
+                    groups[g],
+                  ),
+              )}
+            </div>
+          </>
+        )}
+        {groups.finished.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="self-start"
+              aria-expanded={showFinished}
+              aria-controls={finishedId}
+              onClick={() => setShowFinished((v) => !v)}
+            >
+              <ChevronDown
+                size={14}
+                aria-hidden="true"
+                className={showFinished ? 'rotate-180' : ''}
+              />
+              {t('jobs.group.finished', { count: groups.finished.length })}
+            </Button>
+            {showFinished && (
+              <div
+                id={finishedId}
+                className="overflow-x-auto rounded-panel border border-border bg-surface ui-terminal:bg-bg"
+              >
+                <table className="w-full border-collapse text-left text-[12px]">
+                  <caption className="sr-only">{t('jobs.table.label')}</caption>
+                  <thead className="text-fg-subtle">
+                    <tr className="border-b border-border">
+                      <th scope="col" className={TH}>
+                        {t('jobs.table.job')}
+                      </th>
+                      <th scope="col" className={TH}>
+                        {t('jobs.table.state')}
+                      </th>
+                      {finishedCols.tree && (
+                        <th scope="col" className={TH}>
+                          {t('jobs.table.worktree')}
+                        </th>
+                      )}
+                      {finishedCols.changes && (
+                        <th scope="col" className={TH}>
+                          {t('jobs.table.changes')}
+                        </th>
+                      )}
+                      {finishedCols.updated && (
+                        <th scope="col" className={`${TH} text-right`}>
+                          {t('jobs.table.updated')}
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups.finished.map((job) => {
+                      const title = visibleUnsafe(job.title)
+                      const branch = jobBranch(job)
+                      const isSelected = job.id === selected?.id
+                      return (
+                        <tr
+                          key={job.id}
+                          className={`border-b border-border last:border-b-0 ${isSelected ? 'bg-accent/10' : ''}`}
+                        >
+                          <th scope="row" className="px-2.5 py-1 font-medium">
+                            {canWrite ? (
+                              <button
+                                type="button"
+                                onClick={() => choose(job)}
+                                aria-pressed={isSelected}
+                                className={`min-h-touch rounded-control text-left text-accent hover:underline ${FOCUS_RING}`}
+                              >
+                                {title}
+                              </button>
+                            ) : (
+                              title
+                            )}
+                          </th>
+                          <td className="px-2.5 py-1 text-fg-muted">
+                            {t(JOB_STATE_WORDS[job.state])}
+                          </td>
+                          {finishedCols.tree && (
+                            <td className="px-2.5 py-1 font-term text-fg-muted">
+                              {branch && visibleUnsafe(branch)}
+                            </td>
+                          )}
+                          {finishedCols.changes && (
+                            <td className="whitespace-nowrap px-2.5 py-1 text-fg-muted">
+                              {job.diff &&
+                                `${t('jobs.card.commits', { count: job.diff.commits })} · ${t('jobs.card.files', { count: job.diff.files })}`}
+                            </td>
+                          )}
+                          {finishedCols.updated && (
+                            <td className="whitespace-nowrap px-3 py-1 text-right text-fg-muted">
+                              {ago(job.updated)}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {wide && detail && (
+        <aside
+          aria-labelledby={detailTitleId}
+          className="-my-3 -mr-3 flex w-[min(27.5rem,40%)] shrink-0 flex-col gap-4 self-stretch border-l border-border bg-surface px-5 py-4 ui-terminal:bg-bg"
+        >
+          <div className="flex items-start gap-2">
+            <h3
+              id={detailTitleId}
+              className="m-0 min-w-0 flex-1 break-words text-[17px] font-semibold"
+            >
+              {selectedTitle}
+            </h3>
+            <IconButton
+              size="sm"
+              onClick={() => setSelectedId(null)}
+              aria-label={t('jobs.detail.close')}
+              title={t('jobs.detail.close')}
+            >
+              <X size={16} aria-hidden="true" />
+            </IconButton>
+          </div>
+          {detail}
+        </aside>
       )}
+      {/* On a narrow screen a sheet, out of the way while the job's editor
+        or grants show (never two modals at once) */}
+      <Sheet
+        isOpen={!wide && !!detail && !editorOpen}
+        onClose={() => setSelectedId(null)}
+        title={selectedTitle}
+        closeLabel={t('jobs.detail.close')}
+      >
+        <div className="overflow-y-auto px-4 pb-4">{detail}</div>
+      </Sheet>
       {editing !== undefined && (
         <JobEditSheet
           job={editing}

@@ -239,6 +239,66 @@ describe('AgentCard', () => {
     )
   })
 
+  it('names its figures Branch, Context and Session, each only when known', () => {
+    const { rerender } = renderCard({
+      overview: {
+        paneId: 'w1:p1',
+        key: 'w1:p1',
+        branch: 'feat/x',
+        changed: 2,
+        usage: { contextTokens: 48_200 },
+        sessionUsage: { tokens: 1200, pricesUpdated: '2026-11-15' },
+      },
+    })
+    const open = screen.getByRole('button', { name: /^Open chat: / })
+    expect(open).toHaveTextContent('Branch: feat/x· 2 changed.')
+    expect(open).toHaveTextContent('Context: 48k tokens.')
+    expect(open).toHaveTextContent('Session: Tokens used by this session:')
+    // Read after the card's name, with the rest of its details
+    expect(open).toHaveAccessibleDescription(
+      /Branch:\s?feat\/x· 2 changed\.\s?Context:\s?48k tokens\.\s?Session:/,
+    )
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane()}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat
+        onOpen={vi.fn()}
+        overview={{ paneId: 'w1:p1', key: 'w1:p1', lastText: 'hi' }}
+      />,
+    )
+    expect(open).not.toHaveTextContent('Branch')
+    expect(open).not.toHaveTextContent('Context')
+    expect(open).not.toHaveTextContent('Session')
+  })
+
+  it('lights its whole first row on hover, not the open button alone', () => {
+    renderCard()
+    const open = screen.getByRole('button', { name: /^Open chat: / })
+    // The open button spans the card, its figures included, and lights as
+    // a whole; the terminal button sits over its first line, outside it
+    expect(open).toHaveClass('w-full', 'hover:bg-surface-raised')
+    const terminal = screen.getByRole('button', {
+      name: 'Open terminal: Claude Code, api / build',
+    })
+    expect(open.contains(terminal)).toBe(false)
+    expect(terminal.parentElement).toHaveClass('absolute')
+    // On the card's surface its hover lights a step above it, not to it
+    expect(terminal).toHaveClass('hover:bg-surface-raised', 'active:bg-border')
+    expect(terminal).not.toHaveClass('hover:bg-surface')
+  })
+
+  it('names the job its pane works on, its hidden characters shown', () => {
+    renderCard({ job: 'Fix the lo\u202egin' })
+    const open = screen.getByRole('button', { name: /^Open chat: / })
+    expect(open).toHaveTextContent('Job · Fix the lo⟨U+202E⟩gin')
+    expect(open).toHaveAccessibleDescription(/^Job · Fix the lo⟨U\+202E⟩gin/)
+  })
+
   it('shows a placeholder until the summary is read, none when it failed', () => {
     const { container, rerender } = renderCard({ opensChat: false })
     expect(container.querySelector('[class*="animate-pulse"]')).not.toBeNull()
@@ -437,7 +497,17 @@ describe('AgentCard Stop', () => {
       overview: ov,
       canStop: true,
     })
-    expect(stop()).toHaveClass('top-12')
+    // The card's buttons in Tab order: open, Stop, terminal, History
+    const order = screen
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label'))
+    expect(order).toEqual([
+      expect.stringMatching(/^Open chat: /),
+      'Stop Claude Code, api / build',
+      'Open terminal: Claude Code, api / build',
+      null,
+    ])
+    expect(screen.getAllByRole('button')[3]).toHaveTextContent('History')
     await act(async () => {
       fireEvent.click(stop() as HTMLElement)
     })
@@ -576,7 +646,12 @@ describe('AgentCard Stop', () => {
       opensChat: false,
       onStopFailed,
     })
-    expect(stop()).toHaveClass('top-2')
+    expect(stop()).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
+        name: 'Open terminal: Claude Code, api / build',
+      }),
+    ).toBeNull()
     await act(async () => {
       fireEvent.click(stop() as HTMLElement)
     })

@@ -90,7 +90,15 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   agent's name or the pane title, which any program sets with an escape sequence) in the pane
   strip, the Chat view's header and the close-pane confirmation, a pane's name (pane strip, a
   one-pane tab's row, the Chat view's header), the Herdr metadata chips (pane strip, tab rows,
-  group headers), and a branch name in a worktree group's header and the Changes header
+  group headers), and a branch name in a worktree group's header and the Changes header.
+  What a job holds is shown the same way, though the ledger strips those characters on the way in
+  (an older file may still hold them): its title on its Plan card, its row of the Finished table, its
+  details panel and that panel's title (an `aside` or a `Sheet`), and on the card of the agent whose
+  pane works on it; its branch, folder, prompt, note, history text and the commands answered under a
+  grant in its details (a view-only client gets the brief fields only, and its cards open no
+  details). An agent's card names only an active job whose agent is still in that pane
+  (`pwa/src/utils/job-of-pane.ts`: never `gone`, so a `%N` tmux reused after a restart never shows
+  another agent's job; of two, the one changed last).
   For a pane whose snapshot shows Claude Code `working`, the overview also reads its screen through
   the prompt route's capture cache (`paneBackground`, inside the same bounded parallel reads) and
   sends `background`, the work its working line says it only waits for, never any other screen text;

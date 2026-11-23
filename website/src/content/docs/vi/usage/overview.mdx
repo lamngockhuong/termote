@@ -22,23 +22,38 @@ agent nào đang đợi mình, agent nào còn làm, agent nào đã xong.
 Màn hình này phủ lên các pane chứ không đóng chúng. Muốn thoát, bấm nút đóng, nhấn `Esc`, bấm Back
 của trình duyệt, hoặc chọn một session. Back và Forward đưa bạn qua lại giữa tổng quan và pane vừa rời.
 
+## Agent và Kế hoạch
+
+Màn hình tổng quan có hai tab. Tab **Agent** chứa thẻ của các agent; nhãn của nó đếm số agent, kèm
+một nhãn đỏ đếm những agent đang chờ bạn. Tab **Kế hoạch** chứa các việc của
+[orchestrator](/vi/usage/orchestrator/); nhãn của nó đếm số việc đang mở, kèm một nhãn đỏ đếm những
+việc có agent đang chờ bạn. Server không có sổ việc thì chỉ còn tab Agent và không hiện hàng tab.
+Mở tổng quan sẽ vào tab bạn xem lần trước trên thiết bị này; thông báo của một việc mở tab Kế hoạch,
+còn chip usage trên header mở tab Agent đúng ở thẻ của pane đó. Thứ đang mở ở một tab (hộp thoại đã
+bỏ qua, phần History, chi tiết một việc) vẫn còn nguyên khi bạn sang tab kia rồi quay lại.
+
 ## Các thẻ
 
-Mỗi agent có một thẻ. Thẻ cần bạn nhất đứng đầu: blocked, rồi working, done và idle. Cùng trạng thái
-thì agent vừa chuyển sang trạng thái đó gần đây nhất đứng trước, nên agent bạn vừa dùng luôn ở trên;
-riêng blocked thì agent chờ bạn lâu nhất đứng trước. Mỗi thẻ cho biết:
+Mỗi agent có một thẻ, xếp theo mục: **Chờ bạn** (các hộp thoại đang chờ bạn trả lời, rồi tới thẻ
+của những agent đó), **Đang chạy**, **Xong** và **Rảnh**; tiêu đề mỗi mục ghi kèm số thẻ trong mục.
+Trong cùng một mục, agent vừa chuyển sang trạng thái của nó gần đây nhất đứng trước, nên agent bạn
+vừa dùng luôn ở trên; riêng mục Chờ bạn thì agent chờ lâu nhất đứng trước. Agent đổi trạng thái thì
+thẻ của nó chuyển sang mục mới, phần History đang mở vẫn giữ nguyên. Mỗi thẻ cho biết:
 
 - trạng thái của agent và đã ở trạng thái đó bao lâu. `≥ 5 min ago` nghĩa là lúc server bắt đầu theo
   dõi (chẳng hạn sau khi khởi động lại), agent đã ở sẵn trạng thái đó;
 - session và tab nơi agent chạy, kèm nhãn **worktree** nếu là một linked worktree của git;
+- **Việc** kèm tiêu đề, khi agent đang làm một việc orchestrator giao;
 - tin nhắn cuối của agent;
-- branch và số file thay đổi trong thư mục của agent;
-- context đã đầy tới đâu: một thanh, phần trăm cửa sổ context đã dùng và số token, ví dụ
-  `72% 144k/200k`, kèm model với Claude Code. Thanh chuyển vàng từ 70% và đỏ từ 90%.
+- dưới nhãn **Branch**: branch và số file thay đổi trong thư mục của agent;
+- dưới nhãn **Context**: context đã đầy tới đâu, gồm một thanh, phần trăm cửa sổ context đã dùng và
+  số token, ví dụ `72% 144k/200k`, kèm model với Claude Code. Thanh chuyển vàng từ 70% và đỏ từ 90%;
+- dưới nhãn **Phiên**: số token phiên đã dùng (xem [Token và chi phí](#token-và-chi-phí)).
 
 Chạm vào thẻ để mở agent: Claude Code và Codex mở ở [Chat view](/vi/usage/agent-chat/), agent khác mở terminal. Thẻ có Chat view
-còn có thêm nút mở terminal. Bộ lọc phía trên đếm theo agent và là bộ lọc riêng của màn hình này, không
-làm thay đổi bộ lọc của sidebar.
+còn có thêm nút mở terminal. Bộ lọc phía trên các thẻ (**Tất cả**, **Chờ bạn**, **Đang chạy**, mỗi
+phần ghi kèm số lượng) là bộ lọc riêng của màn hình này, không làm thay đổi bộ lọc của sidebar. Bộ lọc
+hay ô tìm có ẩn thẻ nào thì các hộp thoại của mục Chờ bạn vẫn hiện.
 
 Nút kính lúp trên header mở ô tìm cho các thẻ: chỉ giữ những agent có tab, group, pane, tên agent
 hoặc tiến trình khớp, kết hợp với bộ lọc. **Enter** mở thẻ đầu tiên, **↓** chuyển focus xuống thẻ đó,
@@ -52,7 +67,7 @@ window sẽ không có thẻ. Herdr và Zellij theo dõi mọi pane.
 
 ## Gửi một tin tới nhiều agent
 
-Nút danh sách có dấu tích trên header bật chế độ chọn: thẻ của mỗi agent nhận được tin từ Termote
+Nút danh sách có dấu tích trên header (trên điện thoại, nằm trong menu **Thêm**) bật chế độ chọn: thẻ của mỗi agent nhận được tin từ Termote
 (Claude Code, Codex và OpenCode, những agent có ô soạn tin trong Chat view) hiện thêm một ô chọn, và
 một thanh gửi mở ra ở đáy màn hình. Chọn các agent, gõ tin rồi bấm **Gửi** (hoặc `Ctrl+Enter`,
 `⌘+Enter` trên Mac). Mỗi agent nhận tin như khi bạn gõ trong Chat view của chính nó.
@@ -65,12 +80,21 @@ chọn. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút n
 
 ## Kế hoạch
 
-Khi một [orchestrator](/vi/usage/orchestrator/) giao việc, nhóm **Kế hoạch** phía trên các thẻ hiện
-sổ việc của nó, chia nhóm theo mức cần bạn: đang chờ bạn (agent đang ở một hộp thoại), xong mà
-chưa đọc, đang chạy, cần xem lại, chưa làm, còn các việc đã kết thúc được thu gọn. Màn hình rộng
-xếp thành cột, điện thoại xếp thành danh sách. Mỗi việc hiện tiêu đề, agent của nó đang làm gì,
-pane (chạm vào để mở pane đó), branch và số liệu diff gần nhất; **Chi tiết** hiện prompt, ghi chú,
-thư mục worktree, lịch sử và mọi hộp thoại đã được trả lời theo ủy quyền.
+Khi một [orchestrator](/vi/usage/orchestrator/) giao việc, tab **Kế hoạch** hiện sổ việc của nó
+thành các cột theo mức cần bạn: **Đang chờ bạn** (agent đang ở một hộp thoại) luôn hiện, rồi tới
+xong mà chưa đọc, đang chạy, cần xem lại và chưa làm. Dòng phía trên các cột đếm số việc đang mở
+và ghi tên những nhóm chưa có việc nào. Trên điện thoại, các cột xếp chồng lên nhau. Thẻ của mỗi việc hiện tiêu đề
+và trạng thái, agent của nó đang làm gì, pane và branch, số liệu diff gần nhất và các ủy quyền còn
+hiệu lực. **Đã kết thúc** mở ra một bảng các việc đã kết thúc: việc, trạng thái, worktree, thay đổi
+và lần cập nhật cuối.
+
+Chạm vào một việc (thẻ của nó, hoặc tiêu đề trong bảng) để mở chi tiết. Trên màn hình rộng, chi tiết
+nằm cạnh các cột, thế chỗ cột Activity (mở Activity thì chi tiết đóng lại); trên điện thoại, chi tiết
+là một sheet. Trong đó có nút mở pane của việc, **Ủy quyền** và **Sửa**, rồi tới trạng thái, agent,
+branch, thư mục worktree, diff gần nhất, prompt, ghi chú, các ủy quyền còn hiệu lực, các hộp thoại
+đã được trả lời theo ủy quyền và lịch sử của việc. Mỗi ủy quyền còn hiệu lực ghi lúc nó hết hạn và
+đã được dùng mấy lần; nút **Thu hồi** chấm dứt nó sau khi bạn xác nhận (chỉ ở nơi bạn cấp được ủy
+quyền, xem bên dưới).
 
 - **Thêm việc** tạo một việc chưa làm, có tiêu đề, prompt và ghi chú: orchestrator nhận nó
   bằng `termote agents start --job <id>` khi bạn bảo nó.
@@ -87,13 +111,13 @@ thư mục worktree, lịch sử và mọi hộp thoại đã được trả l�
   server chạy với `--no-auth`.
 
 Khi orchestrator chuyển một việc sang cần xem lại, thiết bị bật thông báo sẽ nhận được thông báo
-đẩy; chạm vào thông báo sẽ mở nhóm này. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) chỉ thấy
-tiêu đề, trạng thái, pane và branch của từng việc, không có nút nào.
+đẩy; chạm vào thông báo sẽ mở tab Kế hoạch. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) chỉ
+thấy tiêu đề, trạng thái, pane và branch của từng việc, và chạm vào việc không mở gì cả.
 
 ## Dừng một agent
 
 Thẻ của agent đang làm việc và nhận tin từ Termote (Claude Code, Codex và OpenCode) có nút **Stop**
-nằm dưới nút terminal. Nút này dừng lượt agent đang chạy, như bấm Esc trong terminal của nó, cho
+nằm ở đầu thẻ, cạnh nút terminal. Nút này dừng lượt agent đang chạy, như bấm Esc trong terminal của nó, cho
 đúng cuộc trò chuyện mà thẻ đang tóm tắt; xem [Dừng agent](/vi/usage/agent-chat/#dừng-agent) để biết
 những trường hợp bị từ chối. Lý do từ chối hiện thoáng qua ở đầu màn hình. Agent Claude Code đã
 viết xong câu trả lời và chỉ còn chờ việc chạy nền thì không có nút Stop: thẻ của nó cho biết nó
@@ -109,8 +133,8 @@ trăm lấy đúng con số Codex tự báo ("% context left", đổi sang phầ
 số token của câu trả lời gần nhất, còn cửa sổ lấy theo danh sách model của chính OpenCode cho model
 đó; model không có trong danh sách thì chỉ hiện số token, không có phần trăm.
 
-Khi có pane Codex đăng nhập bằng gói ChatGPT, phía trên các thẻ có dải **Accounts** cho biết hạn mức của
-tài khoản đó: một thanh cho cửa sổ 5 giờ và một thanh cho cửa sổ tuần, giờ mỗi cửa sổ reset, và lần cuối
+Khi có pane Codex đăng nhập bằng gói ChatGPT, dải **Accounts** sau nút token trên header (xem
+[Token và chi phí](#token-và-chi-phí)) cho biết hạn mức của tài khoản đó: một thanh cho cửa sổ 5 giờ và một thanh cho cửa sổ tuần, giờ mỗi cửa sổ reset, và lần cuối
 Codex ghi lại các số này. Số đã cũ hơn 30 phút thì mờ đi, vì từ lúc đó tài khoản có thể đã được dùng ở
 nơi khác. Claude Code không có dòng như vậy: hạn mức của nó không được ghi ở chỗ nào Termote đọc.
 
@@ -122,8 +146,10 @@ vào **Settings > Sessions > Agent usage in the header**.
 
 Mỗi thẻ của một phiên Claude Code, Codex hoặc OpenCode cho biết phiên đó đã dùng bao nhiêu token và số token ấy
 tốn bao nhiêu nếu tính theo giá API niêm yết, ví dụ `1,2M token · ~3,40 US$`; phần của subagent nằm
-trên một dòng riêng. Phía trên các thẻ có một dải cộng mọi phiên của user chạy server, trong hôm nay
-và trong 7 ngày qua, mỗi agent một dòng; ngày được tính theo giờ trên thiết bị của bạn. Dải này cũng
+trên một dòng riêng. Header của màn hình tổng quan hiện tổng token hôm nay của mọi agent, không bao
+giờ kèm chi phí. Bấm vào đó để mở một dải cộng mọi phiên của user chạy server, trong hôm nay và trong
+7 ngày qua, mỗi agent một dòng kèm chi phí, cùng hạn mức của các tài khoản Codex. Ngày được tính theo
+giờ trên thiết bị của bạn; `Esc` chỉ đóng dải, màn hình tổng quan vẫn mở. Dải này cũng
 nằm ở đầu [Lịch sử phiên](/vi/usage/agent-chat/#tiếp-tục-phiên-cũ), chỉ tính các phiên trong thư
 mục của pane, và một phiên cũ hiện tổng của chính nó dưới tiêu đề.
 
@@ -153,7 +179,9 @@ Khi agent dừng lại chờ một hộp thoại (xin quyền, đặt câu hỏi
 lần lượt từng cái, với các nút giống trong Chat view. Hộp thoại trên cùng đứng yên cho tới khi bạn trả
 lời hoặc bấm **Skip**; agent nào bắt đầu chờ sau thì xếp vào cuối, không bao giờ chen lên trước. Trả lời
 xong, thẻ ghi **Answered**, và phải bấm **Next** thì hộp thoại kế mới hiện ra, nên chạm thêm một lần
-cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại.
+cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại. Đầu hộp
+thoại cho biết agent đã chờ bao lâu và đang làm việc nào (nếu có); trên màn hình rộng, các nút trả
+lời nằm bên phải câu hỏi.
 
 [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) thấy hộp thoại nhưng không có nút. Agent mà Termote không đọc hay trả lời được hộp thoại
 thì chỉ có nút **Open terminal**. Với Zellij, nếu lúc đó câu trả lời chưa tới được pane, thẻ sẽ báo và
@@ -173,7 +201,7 @@ tool gọi gần nhất, thời gian đã chạy và số token của lần gọ
 không đổi trong 10 phút và ghi thêm `(guessed)`. Thu gọn lại, nút vẫn ghi số lượng, ví dụ
 `2 subagents, 1 running`.
 
-Nút **Activity** trên đầu màn hình liệt kê mọi lần đổi trạng thái của mọi agent từ lúc server khởi động
+Nút **Activity** trên đầu màn hình (trên điện thoại, nằm trong menu **Thêm**) liệt kê mọi lần đổi trạng thái của mọi agent từ lúc server khởi động
 (tối đa 500 lần gần nhất), mới nhất ở trên. Có thể lọc theo trạng thái mà agent chuyển sang. Bấm một dòng
 để mở pane của agent đó, kể cả khi window tmux của nó đã bị di chuyển. Dòng của pane đã đóng thì không
 bấm được.

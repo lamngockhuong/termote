@@ -369,6 +369,7 @@ export default {
   'chat.queue.skipped_other': '{count} hộp thoại đã bỏ qua vẫn đang chờ.',
   'chat.queue.showAgain': 'Hiện lại',
   'chat.queue.title': '{agent} đang chờ bạn · {where}',
+  'chat.queue.waited': '· {ago}',
   'chat.queue.more': 'còn {count} đang chờ',
   'chat.queue.last': 'cuối cùng',
   'chat.queue.answered': 'Đã trả lời.',

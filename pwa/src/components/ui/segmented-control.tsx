@@ -14,6 +14,9 @@ interface Props<T extends string> {
   value: T
   onChange: (value: T) => void
   className?: string
+  // chips: separate pills with words, the selected one filled (a filter
+  // with room for its words); segments by default
+  variant?: 'segments' | 'chips'
 }
 
 // A radio group drawn as a segmented button row. One tab stop for the group
@@ -24,7 +27,9 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   className = '',
+  variant = 'segments',
 }: Props<T>) {
+  const chips = variant === 'chips'
   const groupRef = useRef<HTMLDivElement>(null)
   const current = options.findIndex((o) => o.value === value)
 
@@ -54,7 +59,11 @@ export function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={`inline-flex gap-0.5 border border-border bg-bg p-0.5 rounded-control ui-native:border-0 ui-native:bg-[rgb(118_118_128/0.12)] dark:ui-native:bg-bg ${className}`}
+      className={
+        chips
+          ? `flex flex-wrap gap-2 ${className}`
+          : `inline-flex gap-0.5 border border-border bg-bg p-0.5 rounded-control ui-native:border-0 ui-native:bg-[rgb(118_118_128/0.12)] dark:ui-native:bg-bg ${className}`
+      }
     >
       {options.map((o, i) => {
         const selected = i === current
@@ -70,11 +79,19 @@ export function SegmentedControl<T extends string>({
             // With no match (an unknown value) the first option keeps the tab stop
             tabIndex={selected || (current === -1 && i === 0) ? 0 : -1}
             onClick={() => onChange(o.value)}
-            className={`flex h-8 min-w-9 items-center justify-center px-2 text-[13px] rounded-[calc(var(--radius-control)-2px)] pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
-              selected
-                ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
-                : 'text-fg-muted hover:text-fg'
-            }`}
+            className={
+              chips
+                ? `flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium pointer-coarse:h-10 ${FOCUS_RING} ${
+                    selected
+                      ? 'border-fg bg-fg text-bg'
+                      : 'border-border bg-surface text-fg hover:border-border-strong'
+                  }`
+                : `flex h-8 min-w-9 items-center justify-center px-2 text-[13px] rounded-[calc(var(--radius-control)-2px)] pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
+                    selected
+                      ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                      : 'text-fg-muted hover:text-fg'
+                  }`
+            }
           >
             {o.content}
           </button>

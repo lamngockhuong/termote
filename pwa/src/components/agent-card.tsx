@@ -1,11 +1,5 @@
-import {
-  ChevronDown,
-  GitBranch,
-  Hourglass,
-  Square,
-  SquareTerminal,
-} from 'lucide-react'
-import { memo, type Ref, useId, useState } from 'react'
+import { ChevronDown, Hourglass, Square, SquareTerminal } from 'lucide-react'
+import { memo, type ReactNode, type Ref, useId, useState } from 'react'
 import { agentLabel, reportedCostAgent, subagentAgent } from '../chat-agents'
 import { useAgentStop } from '../hooks/use-agent-stop'
 import type {
@@ -24,7 +18,6 @@ import { formatAgo } from '../utils/format-ago'
 import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { percentLabel, usageLevel } from '../utils/usage-format'
-import { AgentStatusBadge } from './agent-status-badge'
 import { SessionUsageLine } from './session-usage-line'
 import { StatusTimeline } from './status-timeline'
 import { formatTokens, SubagentTree, subagentSummary } from './subagent-tree'
@@ -37,6 +30,14 @@ const STATUS_WORDS: Record<AgentStatus, MessageKey> = {
   working: 'tasks.status.working',
   done: 'tasks.status.done',
   idle: 'tasks.status.idle',
+}
+
+// The status as a dot beside its word
+const STATUS_DOT: Record<AgentStatus, string> = {
+  blocked: 'bg-danger',
+  working: 'bg-warning',
+  done: 'bg-success',
+  idle: 'bg-fg-subtle',
 }
 
 const LEVEL_TEXT = {
@@ -64,7 +65,7 @@ function ContextUsage({ usage }: { usage: OverviewUsage }) {
               used: formatTokens(contextTokens),
               size: formatTokens(contextWindow),
             })}
-            className="w-12 shrink-0"
+            className="w-14 shrink-0"
           />
           <span
             className={`shrink-0 tabular-nums ${LEVEL_TEXT[usageLevel(contextPercent)]}`}
@@ -144,6 +145,26 @@ interface Props {
   // Opens a subagent's conversation from the card's tree (each row a button);
   // the overview holds it open, so it outlives the card
   onOpenSubagent?: (node: SubagentNode) => void
+  // The title of the job the pane works on (utils/job-of-pane.ts), as the
+  // ledger has it
+  job?: string
+}
+
+// One of the card's figures under its name (Branch, Context, Session): spans
+// only, as the card's open button holds them
+function Metric({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <span className="text-fg-subtle">
+        {label}
+        <span className="sr-only">: </span>
+      </span>
+      <span className="min-w-0">
+        {children}
+        <span className="sr-only">. </span>
+      </span>
+    </>
+  )
 }
 
 // What a card calls its agent: the product's name, else what the server
@@ -180,10 +201,13 @@ export const AgentCard = memo(function AgentCard({
   canStop,
   onStopFailed,
   onOpenSubagent,
+  job,
 }: Props) {
   const { t } = useT()
   const halt = useAgentStop(pane.id, pane.agentStatus, pane.agentSince)
   const detailsId = useId()
+  const jobId = useId()
+  const metricsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
   // Only Claude Code's and OpenCode's sessions have a subagent tree to read.
@@ -211,6 +235,12 @@ export const AgentCard = memo(function AgentCard({
     !!canStop &&
     !!cursor &&
     ((status === 'working' && !background) || halt.stopping)
+  const actions = (stopShown ? 1 : 0) + (opensChat ? 1 : 0)
+  const metrics =
+    showChanges ||
+    !!overview?.usage ||
+    !!overview?.sessionUsage?.tokens ||
+    !!pending('sessionUsage')
   const stop = async (c: string) => {
     const err = await halt.stop(c)
     if (!err) return
@@ -245,81 +275,100 @@ export const AgentCard = memo(function AgentCard({
           status: status ? t(STATUS_WORDS[status]) : t('tasks.card.noStatus'),
           place,
         })}
-        aria-describedby={detailsId}
-        className={`flex w-full min-h-touch flex-col gap-1.5 rounded-panel p-3 pr-12 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
+        aria-describedby={[job && jobId, detailsId, metrics && metricsId]
+          .filter(Boolean)
+          .join(' ')}
+        className={`flex w-full min-h-touch flex-col rounded-t-panel text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
       >
-        <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
-          <AgentStatusBadge status={status} />
-          <span className="truncate font-semibold text-fg">{name}</span>
-          {status && (
-            <span className="shrink-0 text-fg-muted">
-              · {t(STATUS_WORDS[status])}
-              {age && (
-                <span
-                  title={
-                    pane.agentSinceFirstSeen
-                      ? t('tasks.card.firstSeen')
-                      : undefined
-                  }
-                >
-                  {' '}
-                  · {age}
-                </span>
-              )}
-            </span>
-          )}
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
+        <span className="flex w-full flex-col gap-1.5 p-3">
+          {/* Room on the first line for the Stop and terminal buttons */}
           <span
-            className="truncate"
-            title={groupTitle && visibleUnsafe(groupTitle)}
+            className={`flex min-w-0 items-center gap-2 text-[13px] ${actions === 2 ? 'pr-20' : actions === 1 ? 'pr-10' : ''}`}
           >
-            {place}
-          </span>
-          {worktree && (
-            <span className="shrink-0 rounded-control border border-border px-1 text-[11px]">
-              {t('tasks.card.worktree')}
-            </span>
-          )}
-        </span>
-        {/* What a screen reader reads after the card's name */}
-        <span id={detailsId} className="contents">
-          {stuckFor !== undefined && (
-            <span className="flex items-center gap-1.5 text-[12px] text-warning">
-              <Hourglass size={13} aria-hidden="true" className="shrink-0" />
-              {t('tasks.card.stuck', { n: stuckFor })}
-            </span>
-          )}
-          {background && (
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
-              <Hourglass size={13} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">
-                {t('chat.activity.background', {
-                  what: visibleUnsafe(background),
-                })}
+            <span
+              aria-hidden="true"
+              data-dot={status}
+              className={`size-2 shrink-0 rounded-full ${status ? STATUS_DOT[status] : 'bg-fg-subtle'}`}
+            />
+            <span className="truncate font-semibold text-fg">{name}</span>
+            {status && (
+              <span className="shrink-0 text-fg-muted">
+                · {t(STATUS_WORDS[status])}
+                {age && (
+                  <span
+                    title={
+                      pane.agentSinceFirstSeen
+                        ? t('tasks.card.firstSeen')
+                        : undefined
+                    }
+                  >
+                    {' '}
+                    · {age}
+                  </span>
+                )}
               </span>
+            )}
+          </span>
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-fg-muted">
+            <span
+              className="truncate"
+              title={groupTitle && visibleUnsafe(groupTitle)}
+            >
+              {place}
             </span>
-          )}
-          {overview?.lastText ? (
-            <span className="line-clamp-2 text-[13px] text-fg">
-              {visibleUnsafe(overview.lastText)}
-            </span>
-          ) : (
-            (pending('transcript') || (!overview && !overviewFailed)) && (
-              <Skeleton className="h-4 w-3/4" />
-            )
-          )}
-          {(showChanges || overview?.usage) && (
-            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-muted">
-              {showChanges && (
+            {worktree && (
+              <span className="shrink-0 rounded-control border border-border px-1 text-[11px]">
+                {t('tasks.card.worktree')}
+              </span>
+            )}
+            {job && (
+              <span
+                id={jobId}
+                className="min-w-0 max-w-full truncate rounded-full bg-accent/10 px-2 text-[11px] text-accent"
+              >
+                {t('tasks.card.job', { title: visibleUnsafe(job) })}
+              </span>
+            )}
+          </span>
+          {/* What a screen reader reads after the card's name */}
+          <span id={detailsId} className="contents">
+            {stuckFor !== undefined && (
+              <span className="flex items-center gap-1.5 text-[12px] text-warning">
+                <Hourglass size={13} aria-hidden="true" className="shrink-0" />
+                {t('tasks.card.stuck', { n: stuckFor })}
+              </span>
+            )}
+            {background && (
+              <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
+                <Hourglass size={13} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">
+                  {t('chat.activity.background', {
+                    what: visibleUnsafe(background),
+                  })}
+                </span>
+              </span>
+            )}
+            {overview?.lastText ? (
+              <span className="line-clamp-2 text-[13px] leading-normal text-fg">
+                {visibleUnsafe(overview.lastText)}
+              </span>
+            ) : (
+              (pending('transcript') || (!overview && !overviewFailed)) && (
+                <Skeleton className="h-4 w-3/4" />
+              )
+            )}
+          </span>
+        </span>
+        {metrics && (
+          <span
+            id={metricsId}
+            className="grid w-full grid-cols-[4rem_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 border-t border-border px-3 pb-2.5 pt-2 text-[12px] tabular-nums text-fg-muted"
+          >
+            {showChanges && (
+              <Metric label={t('tasks.card.metric.branch')}>
                 <span className="flex min-w-0 items-center gap-1">
-                  <GitBranch
-                    size={13}
-                    aria-hidden="true"
-                    className="shrink-0"
-                  />
                   {overview.branch && (
-                    <span className="truncate font-mono">
+                    <span className="truncate font-term text-[11px] text-fg">
                       {visibleUnsafe(overview.branch)}
                     </span>
                   )}
@@ -330,22 +379,62 @@ export const AgentCard = memo(function AgentCard({
                     })}
                   </span>
                 </span>
-              )}
-              {overview?.usage && <ContextUsage usage={overview.usage} />}
-            </span>
+              </Metric>
+            )}
+            {overview?.usage && (
+              <Metric label={t('tasks.card.metric.context')}>
+                <ContextUsage usage={overview.usage} />
+              </Metric>
+            )}
+            {overview?.sessionUsage?.tokens ? (
+              <Metric label={t('tasks.card.metric.session')}>
+                <SessionUsageLine
+                  {...overview.sessionUsage}
+                  reported={reportedCostAgent(pane.agentName)}
+                />
+              </Metric>
+            ) : (
+              pending('sessionUsage') && (
+                <Metric label={t('tasks.card.metric.session')}>
+                  <Skeleton className="h-4 w-1/3" />
+                </Metric>
+              )
+            )}
+          </span>
+        )}
+      </button>
+      {actions > 0 && (
+        <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          {stopShown && (
+            <IconButton
+              size="sm"
+              variant="onSurface"
+              onClick={() => void stop(cursor)}
+              disabled={halt.stopping}
+              aria-busy={halt.stopping}
+              aria-label={
+                halt.stopping
+                  ? t('tasks.card.stopping', { name })
+                  : t('tasks.card.stop', { name, place })
+              }
+              title={t('tasks.card.stop', { name, place })}
+            >
+              <Square size={13} aria-hidden="true" fill="currentColor" />
+            </IconButton>
           )}
-          {!!overview?.sessionUsage?.tokens && (
-            <SessionUsageLine
-              {...overview.sessionUsage}
-              reported={reportedCostAgent(pane.agentName)}
-              className="text-[12px] text-fg-muted"
-            />
-          )}
-          {!overview?.sessionUsage?.tokens && pending('sessionUsage') && (
-            <Skeleton className="h-4 w-1/3" />
+          {opensChat && (
+            <IconButton
+              size="sm"
+              variant="onSurface"
+              onClick={() => onOpen(session, pane, 'terminal')}
+              aria-label={t('tasks.card.openTerminalOf', { name, place })}
+              title={t('tasks.card.openTerminal')}
+            >
+              <SquareTerminal size={16} aria-hidden="true" />
+            </IconButton>
           )}
         </span>
-      </button>
+      )}
       <div className="border-t border-border px-3 py-1">
         <button
           type="button"
@@ -378,34 +467,6 @@ export const AgentCard = memo(function AgentCard({
           </div>
         )}
       </div>
-      {opensChat && (
-        <IconButton
-          size="sm"
-          onClick={() => onOpen(session, pane, 'terminal')}
-          aria-label={t('tasks.card.openTerminalOf', { name, place })}
-          title={t('tasks.card.openTerminal')}
-          className="absolute right-2 top-2"
-        >
-          <SquareTerminal size={16} aria-hidden="true" />
-        </IconButton>
-      )}
-      {stopShown && (
-        <IconButton
-          size="sm"
-          onClick={() => void stop(cursor)}
-          disabled={halt.stopping}
-          aria-busy={halt.stopping}
-          aria-label={
-            halt.stopping
-              ? t('tasks.card.stopping', { name })
-              : t('tasks.card.stop', { name, place })
-          }
-          title={t('tasks.card.stop', { name, place })}
-          className={`absolute right-2 ${opensChat ? 'top-12' : 'top-2'}`}
-        >
-          <Square size={14} aria-hidden="true" fill="currentColor" />
-        </IconButton>
-      )}
     </div>
   )
 })

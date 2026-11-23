@@ -13,9 +13,20 @@ const JOBS = /\/api\/mux\/jobs(?:[/?]|$)/
 async function open(page: Page) {
   await page.goto('/#/overview')
   await expect(page.getByRole('region', { name: 'Agents' })).toBeVisible({ timeout: 15000 })
+  await page.getByRole('tab', { name: /^Plan/ }).click()
 }
 
 const plan = (page: Page) => page.getByRole('region', { name: 'Plan' })
+
+// A job's details, opened from its card: beside the columns on a wide
+// screen, a sheet on a narrow one
+async function details(page: Page, title: string) {
+  await plan(page).getByRole('article', { name: title }).getByRole('button', { name: title }).click()
+  const panel = page.getByRole('complementary', { name: title })
+    .or(page.getByRole('dialog', { name: title }))
+  await expect(panel).toBeVisible()
+  return panel
+}
 
 interface ListedJob {
   id: string
@@ -49,7 +60,7 @@ test.describe('the Plan, on the server', () => {
     const card = plan(page).getByRole('article', { name: title })
     await expect(card).toContainText('To do')
 
-    await card.getByRole('button', { name: `Edit ${title}` }).click()
+    await (await details(page, title)).getByRole('button', { name: `Edit ${title}` }).click()
     const edit = page.getByRole('dialog', { name: `Edit ${title}` })
     await edit.getByRole('combobox', { name: 'State' }).selectOption('review')
     await edit.getByRole('button', { name: 'Save' }).click()
@@ -117,7 +128,7 @@ test.describe('the Plan, answered here', () => {
     await ledger.install()
     await open(page)
     const title = `e2e grant ${tag}`
-    await plan(page).getByRole('button', { name: `Grants of ${title}` }).click()
+    await (await details(page, title)).getByRole('button', { name: `Grants of ${title}` }).click()
     const sheet = page.getByRole('dialog', { name: `Grants of ${title}` })
     await expect(sheet.getByText('No grant is in force')).toBeVisible()
     const prefix = sheet.getByRole('textbox', { name: 'Command prefix' })

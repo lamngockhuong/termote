@@ -303,6 +303,8 @@ test.describe('agent overview with an agent', () => {
     })
     await page.setViewportSize({ width: 1280, height: 800 })
     await open(page, '#/overview')
+    // Behind the header's tokens
+    await page.getByRole('button', { name: /^Tokens today/ }).click({ timeout: 20000 })
     const strip = page.getByRole('region', { name: 'Accounts' })
     await expect(strip).toContainText('Codex · plus', { timeout: 20000 })
     await expect(strip).toContainText('updated just now')
@@ -340,7 +342,9 @@ test.describe('agent overview with an agent', () => {
         name: new RegExp(`^Open chat: Claude Code, .*${windowName}$`),
       })
       await expect(card).toBeVisible({ timeout: 20000 })
-      await overview(page).getByRole('button', { name: 'Send a message to several agents' })
+      // On a phone, in the header's More menu
+      await overview(page).getByRole('button', { name: 'More overview actions' }).click()
+      await page.getByRole('menuitemcheckbox', { name: 'Send a message to several agents' })
         .click()
       const bar = page.getByRole('region', { name: 'Pick the agents to send to' })
       await expect(bar).toBeVisible()

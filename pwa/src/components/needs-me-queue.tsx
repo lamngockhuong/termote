@@ -15,6 +15,7 @@ import {
   updateQueue,
 } from '../utils/needs-me-queue'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { statusAge } from './agent-card'
 import { PromptCard, WaitingCard } from './prompt-card'
 import { ReadOnlyBar } from './read-only-bar'
 import { Button } from './ui/button'
@@ -41,12 +42,23 @@ interface Props {
     pane: SessionPane,
     view: 'chat' | 'terminal',
   ) => void
+  // Server time (ms): how long the agent on top has waited
+  now?: number
+  // The title of the job an agent's pane works on (utils/job-of-pane.ts)
+  jobOf?: (paneId: string) => string | undefined
 }
 
 // The dialogs waiting on the user, answered one at a time at the top of the
 // overview (utils/needs-me-queue.ts: the card on top is pinned, an answer
 // never moves on by itself). Only that card's dialog is read.
-export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
+export function NeedsMeQueue({
+  cards,
+  readOnly,
+  canAnswer,
+  onOpen,
+  now,
+  jobOf,
+}: Props) {
   const { t } = useT()
   const blocked: Blocked[] = useMemo(
     () =>
@@ -112,23 +124,39 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
     ) : null
   }
   const left = queue.waiting.length
+  const waited =
+    now === undefined
+      ? undefined
+      : statusAge(card.pane.agentSince, card.pane.agentSinceFirstSeen, now, t)
+  const job = jobOf?.(card.pane.id)
   return (
     <section
       aria-labelledby={titleId}
-      className="mb-4 overflow-hidden rounded-panel border border-danger/50 bg-surface ui-terminal:bg-bg"
+      className="mb-4 overflow-hidden rounded-panel border border-danger/50 bg-surface ring-[3px] ring-danger/10 ui-terminal:bg-bg"
     >
-      <div className="flex items-center gap-2 px-3 pt-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-3">
         <h3
           id={titleId}
           ref={titleRef}
           tabIndex={-1}
-          className="min-w-0 flex-1 truncate text-[14px] font-semibold outline-none"
+          className="min-w-0 truncate text-[14px] font-semibold outline-none"
         >
           {t('chat.queue.title', {
             agent: agentLabel(card.pane.agentName),
             where: visibleUnsafe(card.where),
           })}
         </h3>
+        {waited && (
+          <span className="shrink-0 text-[12px] text-fg-muted">
+            {t('chat.queue.waited', { ago: waited })}
+          </span>
+        )}
+        {job && (
+          <span className="min-w-0 max-w-full truncate rounded-full bg-accent/10 px-2 text-[11px] text-accent">
+            {t('tasks.card.job', { title: visibleUnsafe(job) })}
+          </span>
+        )}
+        <span className="flex-1" />
         <span className="shrink-0 text-[12px] text-fg-muted">
           {left > 0
             ? t('chat.queue.more', { count: left })
@@ -236,6 +264,7 @@ function QueueDialog({
         onSending={onSending}
         onSent={() => setSent(true)}
         onChanged={p.show}
+        layout="wide"
       />
       {readOnly && <ReadOnlyBar label={t('chat.queue.viewOnly')} />}
     </>

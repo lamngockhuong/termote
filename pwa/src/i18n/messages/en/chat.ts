@@ -384,6 +384,8 @@ export default {
   'chat.queue.skipped_other': '{count} skipped dialogs are still waiting.',
   'chat.queue.showAgain': 'Show again',
   'chat.queue.title': 'Needs you: {agent}, {where}',
+  // How long the agent on top has waited, as its card says it: "2 min ago"
+  'chat.queue.waited': '· {ago}',
   'chat.queue.more': '{count} more waiting',
   'chat.queue.last': 'last one',
   'chat.queue.answered': 'Answered.',
