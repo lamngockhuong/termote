@@ -465,7 +465,7 @@ func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
 	tree := &jobTree{Branch: "job-ledger-case", Base: "main", Dir: "/home/u/.herdr/worktrees/termote/job-ledger-case"}
 	listing := func(outside bool, dir, branch string) {
 		j := job{ID: "j1", Title: "Case worktree", State: "active", Worktree: tree, Agent: &jobAgent{PaneID: "%1", Kind: "claude"}}
-		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
+		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job: j, Live: jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
 			Dir: dir, Branch: branch, OutsideWorktree: outside}}}}))
 	}
 	run := func(args ...string) string {
@@ -730,8 +730,8 @@ func TestAgentsRefuseOwnPane(t *testing.T) {
 	}}}}))
 	j := job{ID: "j1", Title: "x", State: "todo"}
 	s.set("POST /api/mux/jobs", answer(http.StatusCreated, `{"job":{"id":"j1","title":"x","state":"active"}}`))
-	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{}}}}))
-	s.set("PATCH /api/mux/jobs/j1", jsonAnswer(map[string]any{"job": jobView{j, jobLive{}}}))
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job: j}}}))
+	s.set("PATCH /api/mux/jobs/j1", jsonAnswer(map[string]any{"job": jobView{job: j}}))
 	maps.Copy(tc.env, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t1", "HERDR_PANE_ID": "w1:pB1"})
 	const self = "--pane w1:pB1 is the pane this command runs in; a job goes to the agent that does the work"
 	for _, args := range [][]string{{"job", "add", "--title", "x", "--pane", "w1:pB1"}, {"job", "add", "--title", "x", "--pane", "orch"},

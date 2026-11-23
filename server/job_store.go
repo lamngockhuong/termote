@@ -110,12 +110,14 @@ type job struct {
 	ReadConv string `json:"readConv,omitempty"`
 	// Reported: the dialog wait --job reported last, so a dialog the user
 	// keeps open is reported once.
-	Reported string     `json:"reported,omitempty"`
-	Diff     *jobDiff   `json:"diff,omitempty"`
-	Grants   []grant    `json:"grants,omitempty"`
-	Events   []jobEvent `json:"events,omitempty"`
-	Created  time.Time  `json:"created"`
-	Updated  time.Time  `json:"updated"`
+	Reported string   `json:"reported,omitempty"`
+	Diff     *jobDiff `json:"diff,omitempty"`
+	// CI: the job's pull requests and their checks (job_pr.go).
+	CI      *jobCI     `json:"ci,omitempty"`
+	Grants  []grant    `json:"grants,omitempty"`
+	Events  []jobEvent `json:"events,omitempty"`
+	Created time.Time  `json:"created"`
+	Updated time.Time  `json:"updated"`
 }
 
 // jobAgent is the agent a job was given to, and what tells it from another
@@ -153,7 +155,8 @@ type jobDiff struct {
 
 // jobEvent is one line of a job's history: kind is created, started,
 // continued, sent, read, answered, stopped, diff, state, agent, note,
-// grant, revoked or delegated.
+// grant, revoked, delegated, pr (attached or detached), ci (a check failed,
+// every pull request merged), ci_sent or ci_failed_send.
 type jobEvent struct {
 	At   string `json:"at"`
 	Kind string `json:"kind"`
@@ -310,6 +313,7 @@ func (j job) clone() job {
 		d := *j.Diff
 		j.Diff = &d
 	}
+	j.CI = j.CI.clone()
 	j.Events = slices.Clone(j.Events)
 	j.Grants = slices.Clone(j.Grants)
 	for i := range j.Grants {
