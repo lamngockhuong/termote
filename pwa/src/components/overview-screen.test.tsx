@@ -287,8 +287,8 @@ describe('OverviewScreen', () => {
     await act(async () => {})
     expect(cardNames()).toEqual([
       'Open chat: Claude Code, Needs you, web / t3',
-      'Open chat: Claude Code, Working, web / t3',
       'Open terminal: Codex, Working, web / t2',
+      'Open chat: Claude Code, Working, web / t3',
       'Open chat: Claude Code, Idle, api / t1',
     ])
     expect(screen.getByText('Run the migration?')).toBeInTheDocument()
