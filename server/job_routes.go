@@ -36,8 +36,8 @@ type jobLive struct {
 	// Unread: a turn ended that the orchestrator has not read.
 	Unread     bool   `json:"unread,omitempty"`
 	Background string `json:"background,omitempty"`
-	// LastTS, Conv: the transcript's last entry and conversation, which a
-	// read sends back (full clients only).
+	// LastTS: the agent's newest entry (never a message of the user's),
+	// which a read sends back (full clients only).
 	LastTS string `json:"lastTs,omitempty"`
 }
 
@@ -450,7 +450,7 @@ func (a *agentAPI) readMark(ag *jobAgent) readMark {
 	if c, ok := decodeCursor(sum.cursor); ok {
 		conv = c.Session
 	}
-	return readMark{ts: sum.lastTS, conv: conv}
+	return readMark{ts: sum.agentTS, conv: conv}
 }
 
 // jobTreeFor finds the worktree in names in the server's own list of its
@@ -581,9 +581,10 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 			live.Status, live.Background = "background", bg
 		}
 	}
-	if live.Status == "working" || live.Status == "blocked" {
+	if live.Status == "working" {
 		return live
 	}
+	// Blocked: the last entry tells one dialog from the next for wait --job.
 	sum, err := a.summarizePane(p.pane.ID)
 	if err != nil {
 		return live
@@ -592,8 +593,8 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 	if c, ok := decodeCursor(sum.cursor); ok {
 		conv = c.Session
 	}
-	live.LastTS = sum.lastTS
-	live.Unread = sum.lastTS != "" && (conv != j.ReadConv || tsAfter(sum.lastTS, j.ReadTS))
+	live.LastTS = sum.agentTS
+	live.Unread = live.Status != "blocked" && sum.agentTS != "" && (conv != j.ReadConv || tsAfter(sum.agentTS, j.ReadTS))
 	return live
 }
 

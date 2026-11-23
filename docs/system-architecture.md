@@ -1590,8 +1590,8 @@ job (`server/job_identity.go`): its activity key with the process id and start t
 a process (Herdr's own agents), its session id, so an agent at a tmux `%N` reused after a restart
 is not the job's. Nothing the ledger stores is about what the agent does now: each `GET` reads it
 from the tracker's last snapshot, the cached agent lookup, the overview's background read and the
-transcript's last entry, and calls a turn `unread` when that entry is later than the read mark the
-CLI's `read` moved, or belongs to another conversation. `wait --job` polls this, so a turn that
+agent's newest transcript entry (never a message of the user's), and calls a turn `unread` when that
+entry is later than the read mark the CLI's `read` moved, or belongs to another conversation. `wait --job` polls this, so a turn that
 ended before the wait or while the server was down is still reported. A job moved to `review`
 pushes `job_review` with its id.
 

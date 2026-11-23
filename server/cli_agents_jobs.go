@@ -30,7 +30,11 @@ type jobsListing struct {
 }
 
 // jobsGet reads the ledger: every job with all, else the unfinished ones.
+// The snapshot is read first: what each job's agent does comes from the
+// server's last one, which nothing else may have read lately (no page
+// open).
 func (c *cli) jobsGet(port int, all bool) ([]jobView, error) {
+	c.agentsSnapshot(port)
 	var l jobsListing
 	path := "/api/mux/jobs"
 	if all {
@@ -544,13 +548,18 @@ func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd
 		case l.Unread:
 			end = jobEndDone
 		case l.Status == "blocked":
+			// A dialog is told from the next by what it shows and the
+			// transcript's last entry then (the same command asked twice);
+			// one the server cannot read is reported too, as wait does.
+			sig := "no-dialog-read"
 			var pr promptResponse
 			if err := c.agentsGet(port, panePath(l.PaneID, "/agent/prompt"), &pr); err == nil && pr.Prompt != nil {
-				if sig := reportedSig(*pr.Prompt); sig != j.Reported {
-					end = jobEndDialog
-					if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "reported", Sig: sig}); err != nil {
-						c.jobWarn(err)
-					}
+				sig = reportedSig(*pr.Prompt)
+			}
+			if sig += "@" + l.LastTS; sig != j.Reported {
+				end = jobEndDialog
+				if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "reported", Sig: sig}); err != nil {
+					c.jobWarn(err)
 				}
 			}
 		case l.Status == "background" && j.Reported != "background:"+l.Background:

@@ -715,8 +715,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   before the transcript and the cursor read with it; a ledger that cannot be read or written is a
   warning on stderr, never the command's failure, and `--json` output stays clean. `wait --job`
   reads `GET /api/mux/jobs?all=1` on every poll (no mark), reports a job whose `live.unread` is set,
-  a dialog whose `reportedSig` (kind, title, body, option labels) differs from the job's `reported`
-  (then sends it as `reported`), only background work once, and a job whose agent is gone; `jobs
+  a blocked pane whose dialog signature (`reportedSig`: kind, title, body, option labels, or
+  `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's
+  `reported` (then sends it as `reported`, so the same command asked twice is reported twice and a
+  dialog kept open once), only background work once, and a job whose agent is gone; `jobs
   --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
   nothing. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
@@ -751,10 +753,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   it is the same agent only while the key, kind, pid and start time all match, or, where the backend
   finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
   after a restart reads `gone`. What the agent does (`live`) is computed per request from the
-  tracker's last snapshot, the cached agent lookup, the overview's screen read for background work
-  and the transcript's last entry (`summarizePane`), so `unread` (a later entry, or another
-  conversation, than the read mark) survives a restart and needs no hook into the tracker; a `read`
-  from the PWA's Chat view does not move it. Giving the job another agent (`pane`) or finishing it
+  tracker's last snapshot (the CLI reads the snapshot before each ledger read, so it is fresh with
+  no page open), the cached agent lookup, the overview's screen read for background work and the
+  agent's newest transcript entry or subagent write (`summarizePane`'s `agentTS`; a message of the
+  user's is not one), so `unread` (a later one, or another conversation, than the read mark, never
+  while blocked) survives a restart and needs no hook into the tracker; a `read` from the PWA's Chat
+  view does not move it. Giving the job another agent (`pane`) or finishing it
   ends every grant it has. Moving a job to `review` queues a Web Push of kind `job_review` with the
   job id only (never its title or prompt), only while a device can be sent one
   (`notifyJobReview`). Zellij renames move the ledger's ids as the tracker's (`renameGroup`). Not in

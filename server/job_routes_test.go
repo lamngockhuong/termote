@@ -275,6 +275,11 @@ func TestJobUnreadFromTranscript(t *testing.T) {
 	if got := jt.list()[0]["readTs"]; got != "2026-11-23T09:05:00.000Z" {
 		t.Errorf("an older read moved the mark back: %v", got)
 	}
+	// A message of the user's is not a turn to read.
+	jt.appendTranscript(`{"type":"user","uuid":"00000000-0000-4000-8000-0000000000a9","timestamp":"2026-11-23T09:07:00.000Z","message":{"role":"user","content":"next please"}}`)
+	if l := live(jt.list()[0]); l["unread"] != nil || l["lastTs"] != "2026-11-23T09:05:00.000Z" {
+		t.Errorf("the user's message: %v", l)
+	}
 	if code, _ := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "read", "cursor": "forged.x"}); code != http.StatusBadRequest {
 		t.Errorf("unsigned cursor = %d", code)
 	}

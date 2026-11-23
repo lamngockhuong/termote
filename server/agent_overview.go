@@ -376,6 +376,9 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 		if last, err := time.Parse(time.RFC3339Nano, sum.lastTS); err != nil || w.After(last) {
 			sum.lastTS = w.UTC().Format(activityTimeFormat)
 		}
+		if last, err := time.Parse(time.RFC3339Nano, sum.agentTS); err != nil || w.After(last) {
+			sum.agentTS = w.UTC().Format(activityTimeFormat)
+		}
 	}
 	return sum, nil
 }
@@ -406,7 +409,11 @@ type transcriptSummary struct {
 	cursor   string // the conversation read (transcriptResponse.Cursor)
 	lastText string
 	lastTS   string
-	usage    *overviewUsage
+	// agentTS: the time of the agent's newest entry (assistant), or of a
+	// later write of one of its subagents: what the job ledger counts as
+	// a turn to read (a message of the user's is not one)
+	agentTS string
+	usage   *overviewUsage
 	// provider: the provider of an OpenCode answer's model
 	provider  string
 	limits    *codexLimits
@@ -425,6 +432,9 @@ func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSu
 		e := entries[i]
 		if sum.lastTS == "" && e.TS != "" {
 			sum.lastTS = e.TS
+		}
+		if sum.agentTS == "" && e.TS != "" && e.Role == "assistant" {
+			sum.agentTS = e.TS
 		}
 		if e.Role != "assistant" {
 			continue

@@ -187,6 +187,17 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout {
 		t.Errorf("same dialog again: exit %d %s", exitCode(err), tc.stdout)
 	}
+	// Blocked with no dialog the server can read (Claude Code after a
+	// refused tool): reported once too.
+	f.setScreen(boxScreen(""))
+	settle()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "2s"}); exitCode(err) != agentsExitDialog {
+		t.Errorf("blocked, no dialog: exit %d %s", exitCode(err), tc.stdout)
+	}
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitTimeout {
+		t.Errorf("blocked, no dialog, again: exit %d", exitCode(err))
+	}
 	// Its agent gone (tmux restarted, %1 reused by another process).
 	f.setStatus("%1", "idle")
 	f.mu.Lock()
