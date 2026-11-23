@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -490,7 +492,7 @@ func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
 // A wrong job command says what is wrong and prints its own usage, never
 // every agents command's; each usage is the line agentsUsage has.
 func TestAgentsJobUsage(t *testing.T) {
-	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, waitJobUsage} {
+	for _, u := range []string{jobsUsage, jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage, jobsPruneUsage, waitJobUsage} {
 		if !strings.Contains(agentsUsage, strings.TrimPrefix(u, "usage: ")) {
 			t.Errorf("agentsUsage lacks %q", u)
 		}
@@ -504,13 +506,19 @@ func TestAgentsJobUsage(t *testing.T) {
 		{[]string{"job", "add", "--title", "x", "extra"}, "job add takes no arguments", jobAddUsage},
 		{[]string{"job", "add"}, "job add needs --title <title>", ""},
 		{[]string{"job", "add", "--title", "  "}, "job add needs --title <title>", ""},
-		{[]string{"job"}, "agents job needs add, show or set", jobShowUsage},
+		{[]string{"job"}, "agents job needs add, show, set or remove", jobRemoveUsage},
 		{[]string{"job", "nope"}, "unknown agents job command: nope", jobSetUsage},
 		{[]string{"job", "show"}, "job show takes one job id", jobShowUsage},
 		{[]string{"job", "show", "a", "b"}, "job show takes one job id", jobShowUsage},
 		{[]string{"job", "set"}, "job set takes one job id", jobSetUsage},
 		{[]string{"job", "set", "a"}, "job set needs --state, --title, --note or --pane", jobSetUsage},
 		{[]string{"jobs", "x"}, "jobs takes no arguments", jobsUsage},
+		{[]string{"job", "remove"}, "job remove takes one job id", jobRemoveUsage},
+		{[]string{"job", "remove", "a", "b"}, "job remove takes one job id", jobRemoveUsage},
+		{[]string{"jobs", "prune", "x"}, "jobs prune takes no arguments", jobsPruneUsage},
+		{[]string{"jobs", "prune", "--older-than", "3x"}, "--older-than takes a count above 0", jobsPruneUsage},
+		{[]string{"jobs", "prune", "--older-than", "0d"}, "--older-than takes a count above 0", jobsPruneUsage},
+		{[]string{"jobs", "prune", "--older-than", "999999w"}, "--older-than is too long", jobsPruneUsage},
 		{[]string{"wait", "--job"}, "wait --job needs at least one job id", waitJobUsage},
 		{[]string{"wait", "--job", "a", "--timeout", "0s"}, "--timeout must be more than 0", waitJobUsage},
 	} {
@@ -519,6 +527,185 @@ func TestAgentsJobUsage(t *testing.T) {
 			strings.Contains(err.Error(), "agents list") {
 			t.Errorf("%q: %v", c.args, err)
 		}
+	}
+}
+
+// job remove and jobs prune against the real server: a finished job only,
+// the server's own check behind the CLI's.
+func TestAgentsJobRemoveAndPrune(t *testing.T) {
+	tc, _, _ := jobsCLI(t)
+	active := addJob(t, tc, "--title", "Fix the parser", "--pane", "web/api")
+	gone := addJob(t, tc, "--title", "Old idea")
+	if err := tc.dispatch("agents", []string{"job", "remove", active.ID}); err == nil ||
+		!strings.Contains(err.Error(), "is active; only a done, failed or abandoned job is removed") ||
+		!strings.Contains(err.Error(), "termote agents job set "+active.ID+" --state abandoned") {
+		t.Errorf("remove active: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"job", "remove", "nope"}); err == nil || !strings.Contains(err.Error(), "no job nope") {
+		t.Errorf("remove unknown: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"job", "set", gone.ID, "--state", "abandoned"}); err != nil {
+		t.Fatal(err)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"job", "remove", gone.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Removed job "+gone.ID+": Old idea") {
+		t.Errorf("remove: %s", out)
+	}
+	if got := jobsOf(t, tc, "--all"); len(got) != 1 || got[0].ID != active.ID {
+		t.Fatalf("after remove: %+v", got)
+	}
+	// prune: finished jobs only, and none of them is a week old.
+	var done []string
+	for _, title := range []string{"A", "B"} {
+		j := addJob(t, tc, "--title", title)
+		if err := tc.dispatch("agents", []string{"job", "set", j.ID, "--state", "done"}); err != nil {
+			t.Fatal(err)
+		}
+		done = append(done, j.ID)
+	}
+	slices.Sort(done)
+	prune := func(args ...string) map[string][]string {
+		t.Helper()
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", append([]string{"jobs", "prune", "--json"}, args...)); err != nil {
+			t.Fatalf("prune %v: %v", args, err)
+		}
+		var out map[string][]string
+		if err := json.Unmarshal(tc.stdout.Bytes(), &out); err != nil {
+			t.Fatalf("%v: %s", err, tc.stdout)
+		}
+		for _, ids := range out {
+			slices.Sort(ids)
+		}
+		return out
+	}
+	if out := prune("--older-than", "7d"); len(out["removed"]) != 0 || len(out["skipped"]) != 0 {
+		t.Errorf("older than a week: %v", out)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--older-than", "1h"}); err != nil || !strings.Contains(tc.stdout.String(), "No finished job to remove") {
+		t.Errorf("nothing: %v %s", err, tc.stdout)
+	}
+	if out := prune("--dry-run"); !slices.Equal(out["wouldRemove"], done) {
+		t.Errorf("dry run: %v, want %v", out, done)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--dry-run"}); err != nil || !strings.Contains(tc.stdout.String(), "Would remove 2 job(s)") ||
+		!strings.Contains(tc.stdout.String(), done[0]) {
+		t.Errorf("dry run table: %v %s", err, tc.stdout)
+	}
+	if got := jobsOf(t, tc, "--all"); len(got) != 3 {
+		t.Fatalf("dry run removed: %+v", got)
+	}
+	if out := prune(); !slices.Equal(out["removed"], done) || len(out["skipped"]) != 0 {
+		t.Errorf("prune: %v", out)
+	}
+	if got := jobsOf(t, tc, "--all"); len(got) != 1 || got[0].ID != active.ID {
+		t.Errorf("after prune: %+v", got)
+	}
+}
+
+// Against a scripted server: nothing is deleted for an unfinished job or a
+// dry run, each delete names the job as read, a job changed meanwhile is
+// skipped, and any other refusal stops prune.
+func TestAgentsJobsPruneScripted(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	at := func(d time.Duration) time.Time { return now.Add(-d).Add(123456789 * time.Nanosecond) }
+	jobs := []jobView{
+		{job{ID: "j1", Title: "Running", State: "active", Updated: at(30 * 24 * time.Hour)}, jobLive{}},
+		{job{ID: "j2", Title: "Old done", State: "done", Updated: at(10 * 24 * time.Hour)}, jobLive{}},
+		{job{ID: "j3", Title: "Old failed", State: "failed", Updated: at(9 * 24 * time.Hour)}, jobLive{}},
+		{job{ID: "j4", Title: "New done", State: "done", Updated: at(time.Hour)}, jobLive{}},
+	}
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": jobs, "serverNow": now.Format(activityTimeFormat)}))
+	var mu sync.Mutex
+	var deletes []string
+	refuse := map[string]string{"j3": `{"error":"the job was changed elsewhere","code":"job_conflict"}`}
+	for _, j := range jobs {
+		s.set("DELETE /api/mux/jobs/"+j.ID, func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			deletes = append(deletes, j.ID+" "+r.URL.Query().Get("updated"))
+			body := refuse[j.ID]
+			mu.Unlock()
+			if body != "" {
+				status := http.StatusConflict
+				if strings.Contains(body, "internal") {
+					status = http.StatusInternalServerError
+				}
+				answer(status, body)(w, r)
+				return
+			}
+			answer(http.StatusOK, `{"ok":true}`)(w, r)
+		})
+	}
+	took := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		out := deletes
+		deletes = nil
+		return out
+	}
+	if err := tc.dispatch("agents", []string{"job", "remove", "j1"}); err == nil || !strings.Contains(err.Error(), "j1 is active") || len(took()) != 0 {
+		t.Errorf("remove active: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--older-than", "7d", "--dry-run"}); err != nil || len(took()) != 0 {
+		t.Errorf("dry run: %v", err)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--older-than", "1w"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"j2 " + jobs[1].Updated.Format(time.RFC3339Nano), "j3 " + jobs[2].Updated.Format(time.RFC3339Nano)}
+	if got := took(); !slices.Equal(got, want) {
+		t.Errorf("deletes %v, want %v", got, want)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Removed 1 job(s); skipped 1 (changed meanwhile)") {
+		t.Errorf("prune: %s", out)
+	}
+	// The server's own refusal of an unfinished job, with its hint.
+	refuse["j2"] = `{"error":"only a done, failed or abandoned job can be removed here","code":"job_unfinished"}`
+	if err := tc.dispatch("agents", []string{"job", "remove", "j2"}); err == nil || !strings.Contains(err.Error(), "(job_unfinished); finish it first") {
+		t.Errorf("server refusal: %v", err)
+	}
+	took()
+	refuse["j2"] = `{"error":"internal error","code":"internal"}`
+	if err := tc.dispatch("agents", []string{"jobs", "prune"}); err == nil || !strings.Contains(err.Error(), "removed 0 job(s), then: the server refused: internal error") {
+		t.Errorf("other refusal: %v", err)
+	}
+	if got := took(); len(got) != 1 {
+		t.Errorf("went on after a failure: %v", got)
+	}
+}
+
+// A flag it does not know, a ledger that cannot be read, a delete whose
+// answer never came, and an older server without its clock in the listing.
+func TestAgentsJobRemoveFailures(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	for _, args := range [][]string{{"job", "remove", "--x", "j1"}, {"jobs", "prune", "--x"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	s.set("GET /api/mux/jobs", answer(http.StatusInternalServerError, `{"error":"internal error","code":"internal"}`))
+	for _, args := range [][]string{{"job", "remove", "j1"}, {"jobs", "prune"}} {
+		if err := tc.dispatch("agents", args); err == nil || !strings.Contains(err.Error(), "internal error") {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	old := time.Now().Add(-48 * time.Hour)
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{job{ID: "j1", Title: "x", State: "done", Updated: old}, jobLive{}}}}))
+	s.set("DELETE /api/mux/jobs/j1", hangUp)
+	if err := tc.dispatch("agents", []string{"job", "remove", "j1"}); err == nil || !strings.Contains(err.Error(), "may have been made") {
+		t.Errorf("hang up: %v", err)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--older-than", "1d", "--dry-run", "--json"}); err != nil || !strings.Contains(strings.Join(strings.Fields(tc.stdout.String()), ""), `"wouldRemove":["j1"]`) {
+		t.Errorf("without serverNow: %v %s", err, tc.stdout)
 	}
 }
 
