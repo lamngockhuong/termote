@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {
@@ -744,9 +745,17 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // On a Mac, Option+drag selects in a pane that takes the mouse, as
         // Shift+drag does elsewhere.
         macOptionClickForcesSelection: true,
+        // term.unicode, which Unicode11Addon registers its widths through
+        allowProposedApi: true,
       })
       const fit = new FitAddon()
       term.loadAddon(fit)
+      // The widths the programs and the multiplexers use: with the default
+      // Unicode 6 table an emoji such as ✅ takes one cell here and two
+      // there, so the text after it shifts and the cell a screen render
+      // (Herdr) skips as the emoji's right half keeps what it showed before.
+      term.loadAddon(new Unicode11Addon())
+      term.unicode.activeVersion = '11'
       term.open(container)
       termRef.current = term
       fitRef.current = fit
