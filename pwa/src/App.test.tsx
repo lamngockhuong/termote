@@ -6702,6 +6702,27 @@ describe('App views, view-only and deep links', () => {
       )
     })
 
+    it("a card's terminal opens the terminal of a pane left on its Chat view", async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App views={VIEWS} />)
+      await screen.findByRole('region', { name: 'Agents' })
+      // The pane is left on its Chat view
+      fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+      await waitFor(() => expect(overview()).toBeNull())
+      expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+      window.history.replaceState(null, '', '/#/overview')
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      // The link leaves the terminal out: the pane must not come back on chat
+      fireEvent.click(
+        await screen.findByRole('button', { name: /^Open terminal: Agent/ }),
+      )
+      await waitFor(() => expect(overview()).toBeNull())
+      await waitFor(() => expect(screen.queryByTestId('chat-main')).toBeNull())
+      expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+    })
+
     it('a card opens its pane, the close button the pane on screen', async () => {
       window.history.replaceState(null, '', '/#/overview')
       render(<App />)

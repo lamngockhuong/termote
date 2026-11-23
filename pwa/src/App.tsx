@@ -1922,6 +1922,14 @@ export default function App({
   // A card opens its pane, on the Chat view or the terminal, as a link does.
   const openFromOverview = useCallback(
     (session: Session, pane: SessionPane, view: 'chat' | 'terminal') => {
+      // Kept for the pane before it shows: a link leaves the terminal out
+      // (the default), and a pane left on its Chat view would come back on
+      // it rather than on the terminal asked for
+      savePaneView(pane.id, {
+        view,
+        panel: loadPaneView(pane.id)?.panel ?? null,
+      })
+      if (pane.id === viewPaneRef.current) setViewId(view)
       if (!session.groupId) {
         // No link names it: picked in place
         setOverviewOpen(false)
