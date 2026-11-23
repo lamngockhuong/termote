@@ -4,7 +4,12 @@ import type { ComponentProps } from 'react'
 export const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'danger'
+  | 'onSurface'
 // grow: at least md's height, taller for content on several lines
 export type ButtonSize = 'sm' | 'md' | 'grow'
 
@@ -17,6 +22,10 @@ const VARIANTS: Record<ButtonVariant, string> = {
     'border border-border bg-surface text-fg hover:border-border-strong hover:bg-surface-raised',
   ghost: 'text-fg-muted hover:bg-surface hover:text-fg',
   danger: 'text-danger hover:bg-danger/10',
+  // A ghost on a surface (a card): ghost's hover is that surface, so it
+  // lights a step above it, and darker while pressed
+  onSurface:
+    'text-fg-muted hover:bg-surface-raised hover:text-fg active:bg-border ui-terminal:hover:bg-accent-soft',
 }
 
 // 32px / 36px with a mouse; 44px on touch screens (pointer: coarse).

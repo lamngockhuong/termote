@@ -408,6 +408,7 @@ export const AgentCard = memo(function AgentCard({
           {stopShown && (
             <IconButton
               size="sm"
+              variant="onSurface"
               onClick={() => void stop(cursor)}
               disabled={halt.stopping}
               aria-busy={halt.stopping}
@@ -424,6 +425,7 @@ export const AgentCard = memo(function AgentCard({
           {opensChat && (
             <IconButton
               size="sm"
+              variant="onSurface"
               onClick={() => onOpen(session, pane, 'terminal')}
               aria-label={t('tasks.card.openTerminalOf', { name, place })}
               title={t('tasks.card.openTerminal')}

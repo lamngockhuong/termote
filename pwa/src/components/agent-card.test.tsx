@@ -287,6 +287,9 @@ describe('AgentCard', () => {
     })
     expect(open.contains(terminal)).toBe(false)
     expect(terminal.parentElement).toHaveClass('absolute')
+    // On the card's surface its hover lights a step above it, not to it
+    expect(terminal).toHaveClass('hover:bg-surface-raised', 'active:bg-border')
+    expect(terminal).not.toHaveClass('hover:bg-surface')
   })
 
   it('names the job its pane works on, its hidden characters shown', () => {
