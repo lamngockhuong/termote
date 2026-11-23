@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -152,7 +153,9 @@ func bashUse(cmd string) string {
 
 func TestDelegatedAnswer(t *testing.T) {
 	dt := newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
-	g := dt.grant("bash", "pnpm test", 0)
+	// The option is in the prefix the user typed: a word after a prefix
+	// is never one.
+	g := dt.grant("bash", "pnpm test --run", 0)
 	code, out := dt.answer()
 	if code != http.StatusNoContent {
 		t.Fatalf("delegated = %d %v", code, out)
@@ -180,13 +183,14 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		setup              func(dt *delegateTest)
 		reason             string
 	}{
-		"command chained": {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
-		"command expands": {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
-		"not the prefix":  {"bash", bashUse("pnpm testx --run"), nil, "mismatch"},
-		"screen differs":  {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
-		"background":      {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
-		"interpreter":     {"bash", bashUse("bash -c x"), nil, "interpreter"},
-		"no grant for it": {"touch", bashUse("touch MARK456.txt"), nil, "no_grant"},
+		"command chained":         {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
+		"command expands":         {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
+		"not the prefix":          {"bash", bashUse("pnpm testx --run"), nil, "mismatch"},
+		"screen differs":          {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
+		"background":              {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
+		"interpreter":             {"bash", bashUse("bash -c x"), nil, "interpreter"},
+		"option after the prefix": {"bash", bashUse("pnpm test --run"), nil, "option"},
+		"no grant for it":         {"touch", bashUse("touch MARK456.txt"), nil, "no_grant"},
 		"two waiting": {"bash", bashUse("pnpm test --run") + toolUseLine("toolu_2", "Bash", map[string]any{"command": "pnpm test --run"}, false),
 			nil, "pending_many"},
 		"none waiting (parallel calls)": {"parallel", "", nil, "unparsed"},
@@ -265,6 +269,86 @@ func TestDelegatedEdit(t *testing.T) {
 }
 
 // Only the CLI answers under a grant; it names no option.
+// The key was sent but the dialog did not close in time: the answer may
+// still take effect, so the use is kept and both audit lines are written,
+// each saying the dialog was not seen to close.
+func TestDelegatedAnswerNotConfirmed(t *testing.T) {
+	dt := newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
+	dt.f.mu.Lock()
+	dt.f.onKeys = nil
+	dt.f.mu.Unlock()
+	g := dt.grant("bash", "pnpm test --run", 0)
+	logs := captureLog(t)
+	code, out := dt.answer()
+	if code != http.StatusBadGateway || out["code"] != "answer_not_confirmed" {
+		t.Fatalf("delegated = %d %v", code, out)
+	}
+	if keys := dt.keys(); len(keys) != 1 || keys[0][0] != "1" {
+		t.Errorf("keys %v", keys)
+	}
+	j := dt.list()[0]
+	grant := j["grants"].([]any)[0].(map[string]any)
+	if uses, _ := grant["uses"].([]any); grant["id"] != g || len(uses) != 1 {
+		t.Errorf("grant %v", grant)
+	}
+	ev := j["events"].([]any)
+	if last := ev[len(ev)-1].(map[string]any); last["kind"] != "delegated" {
+		t.Errorf("events %v", ev)
+	}
+	text := logs.String()
+	for _, want := range []string{
+		`audit: dialog_delegated grant="` + g + `"`,
+		`audit: dialog_answer pane="w1:pa" agent="claude" dialog="Bash command" option="Yes" delegated="true" grant="` + g + `" confirmed="false" by="socket"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no %q in\n%s", want, text)
+		}
+	}
+	if !regexp.MustCompile(`audit: dialog_delegated grant="` + g + `" .* command_sha256="[0-9a-f]{64}" confirmed="false"`).MatchString(text) {
+		t.Errorf("dialog_delegated without confirmed=false:\n%s", text)
+	}
+	if strings.Contains(text, `confirmed="true"`) {
+		t.Errorf("an unconfirmed answer logged as confirmed:\n%s", text)
+	}
+}
+
+// The CLI's own answer to a permission dialog is logged once its key is
+// sent, whether or not the dialog was seen to close; a refused one, which
+// sends no key, is not.
+func TestCLIAnswerAuditedOnceSent(t *testing.T) {
+	for name, tc := range map[string]struct {
+		closes bool
+		choice any
+		code   int
+		audit  string
+	}{
+		"closed":     {true, 1, http.StatusNoContent, `confirmed="true"`},
+		"still open": {false, 1, http.StatusBadGateway, `confirmed="false"`},
+		"refused":    {true, 2, http.StatusForbidden, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
+			if !tc.closes {
+				dt.f.mu.Lock()
+				dt.f.onKeys = nil
+				dt.f.mu.Unlock()
+			}
+			logs := captureLog(t)
+			code, out := dt.do("socket", http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", map[string]any{"promptId": dt.promptID(), "choice": tc.choice})
+			if code != tc.code {
+				t.Fatalf("= %d %v", code, out)
+			}
+			line := `audit: dialog_answer pane="w1:pa" agent="claude" dialog="Bash command" option="Yes" delegated="false" grant="" ` + tc.audit + ` by="socket"`
+			if got := strings.Contains(logs.String(), "audit: dialog_answer"); got != (tc.audit != "") {
+				t.Fatalf("audit line written %v:\n%s", got, logs.String())
+			}
+			if tc.audit != "" && !strings.Contains(logs.String(), line) {
+				t.Errorf("no %q in\n%s", line, logs.String())
+			}
+		})
+	}
+}
+
 func TestDelegatedOnlyFromSocket(t *testing.T) {
 	dt := newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
 	dt.grant("bash", "pnpm test", 0)

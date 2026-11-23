@@ -69,6 +69,10 @@ describe('grantPrefixProblem', () => {
       'ts-node x',
       'BASH.EXE',
       'sh.cmd.exe',
+      'sed',
+      'sed -n',
+      '/usr/bin/SED.exe x',
+      'ed',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     // An extension is dropped once, in the server's order
@@ -76,9 +80,30 @@ describe('grantPrefixProblem', () => {
   })
 
   it('refuses a package manager running any package', () => {
-    for (const p of ['pnpm dlx x', 'pnpm EXEC x', 'npm x y', 'yarn dlx z'])
+    for (const p of [
+      'pnpm dlx x',
+      'pnpm EXEC x',
+      'npm x y',
+      'yarn dlx z',
+      // after options too, at any position after the program's name
+      'pnpm -s exec',
+      'pnpm --filter termote exec',
+      'pnpm --filter termote dlx',
+      'npm --prefix a x',
+      'yarn workspace a exec',
+      'npm run build EXEC',
+    ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
-    for (const p of ['pnpm test', 'npm run build', 'yarn', 'gcc -c x.c'])
+    for (const p of [
+      'pnpm test',
+      'npm run build',
+      'yarn',
+      'gcc -c x.c',
+      'pnpm --filter termote test',
+      'yarn x',
+      'npm dlx',
+      'cargo exec',
+    ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })
 

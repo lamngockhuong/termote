@@ -36,13 +36,17 @@ var delegateInterpreters = []string{
 	"npx", "pnpx", "bunx", "dlx", "uvx", "uv", "pipx", "tsx", "ts-node", "busybox", "node", "deno", "bun",
 	"python", "perl", "ruby", "php", "lua", "awk", "eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout",
 	"watch", "make",
+	// sed and ed run a program from their script (sed's e command, ed's !).
+	"sed", "ed",
 	// git runs any program through its options (--upload-pack, -x,
 	// --exec, difftool, bisect run, submodule foreach) and its config.
 	"git",
 }
 
-// delegateRunners are package managers whose second word runs any package:
-// "pnpm dlx x", "npm exec x".
+// delegateRunners are package managers with a word that runs any package:
+// "pnpm dlx x", "npm exec x", and also after options ("pnpm -s exec x",
+// "pnpm --filter a exec x"), so the word is refused at any position after
+// the program's name.
 var delegateRunners = map[string][]string{
 	"npm": {"exec", "x"}, "pnpm": {"dlx", "exec", "x"}, "yarn": {"dlx", "exec"}, "bun": {"x"},
 }
@@ -82,11 +86,26 @@ func checkDelegateCommand(cmd, prefix string) string {
 	if slices.Contains(delegateInterpreters, first) || interpreterVersionRe.MatchString(first) {
 		return "interpreter"
 	}
-	if runs, ok := delegateRunners[first]; ok && len(words) > 1 && slices.Contains(runs, strings.ToLower(words[1])) {
-		return "interpreter"
+	if runs, ok := delegateRunners[first]; ok {
+		for _, w := range words[1:] {
+			if slices.Contains(runs, strings.ToLower(w)) {
+				return "interpreter"
+			}
+		}
 	}
-	if prefix != "" && cmd != prefix && !strings.HasPrefix(cmd, prefix+" ") {
+	if prefix == "" || cmd == prefix {
+		return ""
+	}
+	if !strings.HasPrefix(cmd, prefix+" ") {
 		return "no_grant"
+	}
+	// A word after the prefix is never an option: a granted program runs
+	// another one through its own (rg --pre=x, tar --to-command=x, go test
+	// -exec=x), so only what the user typed in the prefix chooses options.
+	for _, w := range strings.Fields(cmd[len(prefix):]) {
+		if strings.HasPrefix(w, "-") {
+			return "option"
+		}
 	}
 	return ""
 }

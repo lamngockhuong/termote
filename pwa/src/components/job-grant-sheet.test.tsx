@@ -79,7 +79,9 @@ describe('JobGrantSheet', () => {
     // Nothing filled in for the user
     expect(prefixBox()).toHaveValue('')
     expect(
-      screen.getByText(/pnpm test runs whatever package.json/),
+      screen.getByText(
+        /pnpm test runs its test files and whatever package.json/,
+      ),
     ).toBeVisible()
     typePrefix(' pnpm test ')
     expect(screen.queryByRole('alert')).toBeNull()
@@ -150,6 +152,18 @@ describe('JobGrantSheet', () => {
       prefix: 'pnpm',
       minutes: 1440,
     })
+  })
+
+  it('says a test or build command runs code the agent can edit, and that options after the prefix are not covered', () => {
+    open()
+    expect(
+      screen.getByText(
+        /A test, build or script command runs code the agent can edit/,
+      ),
+    ).toBeVisible()
+    expect(screen.getByText(/words that are no option/)).toBeVisible()
+    fireEvent.click(screen.getByRole('radio', { name: 'Edit files' }))
+    expect(screen.queryByText(/runs code the agent can edit/)).toBeNull()
   })
 
   it('gives a grant to edit files in the worktree, naming what it never covers', async () => {
