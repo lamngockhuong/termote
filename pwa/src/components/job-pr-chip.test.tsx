@@ -28,6 +28,12 @@ describe('JobPRChip', () => {
     expect(screen.getByTestId('job-pr-chip').textContent).toContain(
       'all merged',
     )
+    // Numbers left out (an older server): counted, named by none
+    rerender(<JobPRChip summary={{ worst: 'pending', count: 1 }} />)
+    expect(screen.getByTestId('job-pr-chip').textContent).toContain('1 PR')
+    expect(
+      screen.getByRole('img', { name: 'Pull requests : checks running' }),
+    ).toBeTruthy()
     rerender(<JobPRChip summary={undefined} />)
     expect(screen.queryByTestId('job-pr-chip')).toBeNull()
     rerender(<JobPRChip summary={{ count: 0 }} />)

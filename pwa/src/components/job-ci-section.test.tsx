@@ -98,6 +98,34 @@ describe('JobCISection', () => {
     )
   })
 
+  it('reads the pull requests again', async () => {
+    mockRun.mockResolvedValue({ job: job(), queued: false })
+    render(<JobCISection job={job()} now={NOW} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    })
+    expect(mockRun).toHaveBeenCalledWith(expect.anything(), 'refresh')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('says the agent took them, and that an unexplained failure failed', async () => {
+    mockRun.mockResolvedValue({ job: job(), queued: false })
+    render(<JobCISection job={job()} now={NOW} />)
+    const send = screen.getByRole('button', {
+      name: 'Send the failed checks to the agent',
+    })
+    await act(async () => {
+      fireEvent.click(send)
+    })
+    expect(screen.getByRole('status').textContent).toBe('Sent to the agent')
+    mockRun.mockRejectedValue(new Error('network'))
+    await act(async () => {
+      fireEvent.click(send)
+    })
+    expect(screen.getByRole('alert').textContent).toBe('Could not do that')
+  })
+
   it('explains a refusal by its code', async () => {
     mockRun.mockRejectedValue(
       new RequestError(409, 'refused', 'input_has_draft'),
@@ -197,6 +225,20 @@ describe('JobCISection', () => {
         name: 'Send the failed checks to the agent',
       }),
     ).toBeTruthy()
+  })
+
+  it('says no pull request was found, before any read', () => {
+    render(
+      <JobCISection
+        job={job({ ci: undefined, ciChecked: undefined })}
+        now={NOW}
+      />,
+    )
+    expect(
+      screen.getByText('No pull request for the job’s branch yet'),
+    ).toBeTruthy()
+    expect(screen.queryByText(/Checked/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Send/ })).toBeNull()
   })
 
   it('tells a failed read by its code', () => {

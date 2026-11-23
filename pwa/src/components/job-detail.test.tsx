@@ -50,7 +50,7 @@ describe('JobDetail', () => {
         grant({
           kind: 'ci',
           prefix: undefined,
-          uses: [{ at: ago(3), command: '12@abc,15@def' }],
+          uses: [{ at: ago(3), command: '12@abc,15@def' }, { at: ago(4) }],
         }),
       ],
       events: [{ at: ago(3), kind: 'ci_sent', text: 'sent CI failure of #12' }],
@@ -58,6 +58,10 @@ describe('JobDetail', () => {
     const { rerender } = render(<JobDetail job={j} now={NOW} />)
     expect(screen.queryByTestId('job-ci')).toBeNull()
     expect(screen.getByText('Sent on their own: #12, #15')).toBeVisible()
+    // A use with no set recorded names none
+    expect(
+      screen.getAllByText(/^Sent on their own:/).map((e) => e.textContent),
+    ).toEqual(['Sent on their own: #12, #15', 'Sent on their own: '])
     expect(screen.getByText('Failed checks sent to the agent')).toBeVisible()
     rerender(<JobDetail job={j} now={NOW} ciAvailable />)
     expect(screen.getByTestId('job-ci')).toBeVisible()

@@ -44,6 +44,8 @@ describe('job-ci', () => {
     expect(prChecksTone(pr({ checks: 'fail' }))).toBe('text-danger')
     expect(prChecksTone(pr({ checks: 'pending' }))).toBe('text-warning')
     expect(prChecksTone(pr({ checks: 'pass' }))).toBe('text-success')
+    expect(prChecksTone(pr({ checks: 'none' }))).toBe('text-fg-muted')
+    expect(prChecksTone(pr({}))).toBe('text-fg-muted')
     expect(prChecksTone(pr({ state: 'closed', checks: 'pass' }))).toBe(
       'text-fg-muted',
     )

@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   deleteJob: vi.fn(),
   createGrant: vi.fn(),
   revokeGrant: vi.fn(),
+  jobCI: vi.fn(),
   follow: vi.fn(),
   stop: vi.fn(),
 }))
@@ -20,6 +21,7 @@ vi.mock('./use-mux-api', async (orig) => ({
   deleteJob: (id: string, u: string) => api.deleteJob(id, u),
   createGrant: (id: string, g: unknown) => api.createGrant(id, g),
   revokeGrant: (id: string, g: string) => api.revokeGrant(id, g),
+  jobCI: (id: string, a: string) => api.jobCI(id, a),
 }))
 vi.mock('./use-agent-overview', () => ({
   followOverview: (read: () => Promise<void>) => {
@@ -32,10 +34,12 @@ import {
   addJob,
   changeJob,
   grantJob,
+  pinJobPRs,
   reloadJobs,
   removeJob,
   resetJobs,
   revokeJobGrant,
+  runJobCI,
   useCurrentJob,
   useJobs,
 } from './use-jobs'
@@ -167,6 +171,40 @@ describe('useJobs', () => {
     await act(() => removeJob(changed))
     expect(api.deleteJob).toHaveBeenCalledWith('b', 'b-2')
     expect(result.current.jobs.map((j) => j.id)).toEqual(['a', 'c'])
+  })
+
+  it("attaches pull requests and runs a job's CI action, showing the answer", async () => {
+    api.fetchJobs.mockResolvedValue(list([job('a')]))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+
+    api.updateJob.mockResolvedValue(job('a', { updated: 'a-2' }))
+    await act(() => pinJobPRs(job('a'), [12], [3]).then(() => {}))
+    expect(api.updateJob).toHaveBeenCalledWith('a', {
+      addPrs: [12],
+      removePrs: [3],
+      updated: 'a-1',
+    })
+    expect(result.current.jobs[0].updated).toBe('a-2')
+
+    const read = job('a', {
+      updated: 'a-2',
+      ciSummary: { worst: 'fail', count: 1, numbers: [12] },
+    })
+    api.jobCI.mockResolvedValue({ job: read, queued: true })
+    let answer: { queued: boolean } | undefined
+    await act(async () => {
+      answer = await runJobCI(job('a'), 'send')
+    })
+    expect(api.jobCI).toHaveBeenCalledWith('a', 'send')
+    expect(answer?.queued).toBe(true)
+    expect(result.current.jobs[0].ciSummary?.worst).toBe('fail')
+
+    // A refusal is thrown to the caller, the job read again first
+    api.jobCI.mockRejectedValue(refusal('job_not_found', 404))
+    await expect(runJobCI(job('a'), 'refresh')).rejects.toMatchObject({
+      code: 'job_not_found',
+    })
   })
 
   it('reads again after a job changed or went elsewhere, then throws', async () => {
