@@ -292,6 +292,7 @@ export default {
   'chat.composer.dialogClosed': 'The dialog closed before the answer was sent.',
   'chat.composer.attach': 'Attach image',
   'chat.composer.templates': 'Templates',
+  'chat.composer.quote': 'Quote selected text',
   'chat.composer.messageTo': 'Message to {agent}',
   'chat.composer.placeholder': 'Message',
   'chat.composer.send': 'Send',
