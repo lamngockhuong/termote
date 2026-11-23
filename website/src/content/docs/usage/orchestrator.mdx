@@ -206,6 +206,36 @@ From the command line, an option that stops a dialog from asking again ("don't a
 "always allow", switching to auto mode) is always refused: only you pick one, in the PWA or the
 terminal. Every answer to a permission dialog made from the command line is written to the audit log.
 
+## Pull requests and CI
+
+The agent pushes its branch and opens the pull request; Termote never opens, merges or closes
+one. On a native install, the server follows each unfinished job's pull requests with the GitHub
+CLI you signed in on that machine (`gh auth login`; Termote keeps no token): those of the job's
+branch (on the `upstream` remote when the branch is pushed to a fork), and any attached by number
+with `termote agents job set <id> --pr <number>` or from the job's details. A pull request closed
+before the job was made, and the repository's default branch, are left out.
+
+Each job's card shows a chip coloured by its worst pull request: checks failed, running, passed,
+draft, or all merged. View-only devices see the chip and the numbers, never a check's name. The
+job's details list each pull request with its failed checks and a link to it. Pull requests are
+read every 20 seconds while checks run, every minute otherwise, and again when you press Check
+again. When checks fail anew, or every pull request is merged or closed, you get a push.
+
+**Send the failed checks to the agent** pastes a short message into the agent's input box: the
+pull request's number, the failed checks' names, and the `gh pr checks` and `gh run view
+--log-failed` commands to read them. It never sends a log: the agent reads it with `gh` itself.
+The orchestrator does the same with `termote agents job ci <id> --send`, after asking you. To let
+the server send them on its own, give the job a **Send failed checks** grant: it sends each new
+set of failures once, while the agent is at rest, at most three times, and never for a pull
+request from another repository. Once every pull request is merged, the details offer **Set
+done**; removing the worktree stays yours.
+
+<Aside type="note">
+  The GitHub CLI has to be installed and signed in for the user the server runs as. If it is
+  missing or signed out, the job's details say so. In [container mode](/installation/docker/)
+  pull requests are not followed.
+</Aside>
+
 ## Stop
 
 `stop` ends the turn an agent is working on, as Esc does in its terminal. It needs the `cursor`
@@ -260,6 +290,8 @@ The skill keeps your decisions yours:
 - It shows you a permission dialog (run a command, edit a file) and answers it with the option
   you choose, unless a grant you gave covers it; it never picks an option that stops the dialog
   asking, and never offers to give itself a grant.
+- It never opens, merges or closes a pull request, sends the failed checks to an agent only after
+  asking you, and never sets a job `done` because its pull requests merged.
 - It never runs `termote show-password` or `termote pair`, and needs no password: the commands
   reach the server over its local socket, which only your own user can open.
 - It never types into a pane with tmux, Herdr or Zellij commands: Termote checks that each
