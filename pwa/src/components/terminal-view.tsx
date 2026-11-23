@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import {
@@ -71,7 +72,7 @@ interface Props {
   paneSeen?: unknown
   copyModeSupported?: boolean
   // The backend scrolls the pane's history (Caps.scroll): the stream only
-  // carries screen renders, so the xterm.js scrollback stays empty.
+  // carries screen renders, so the xterm.js scrollback is turned off.
   serverScroll?: boolean
   // The stream carries the program's own bytes (Caps.altScroll): a program
   // on the alternate screen that asked for mouse reports keeps its history
@@ -200,6 +201,9 @@ export function terminalTheme(theme: 'light' | 'dark') {
   if (!background) return THEMES[theme]
   return { ...THEMES[theme], background, cursorAccent: background }
 }
+
+// Lines of history xterm.js keeps when the backend does not scroll the pane.
+const SCROLLBACK = 5000
 
 // Smallest font a server-sized pane is shrunk to; beyond that it scrolls.
 export const MIN_FONT_SIZE = 6
@@ -732,7 +736,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         fontFamily: terminalFontFamily(fontFamilyRef.current),
         theme: terminalTheme(theme),
         cursorBlink: true,
-        scrollback: 5000,
+        scrollback: SCROLLBACK,
         // xterm.js sizes its scrollbar (and FitAddon the room it keeps for
         // it) from this width, 14px when unset; 8px matches the thin
         // scrollbars in index.css. With no decorations the ruler draws nothing.
@@ -741,9 +745,17 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // On a Mac, Option+drag selects in a pane that takes the mouse, as
         // Shift+drag does elsewhere.
         macOptionClickForcesSelection: true,
+        // term.unicode, which Unicode11Addon registers its widths through
+        allowProposedApi: true,
       })
       const fit = new FitAddon()
       term.loadAddon(fit)
+      // The widths the programs and the multiplexers use: with the default
+      // Unicode 6 table an emoji such as ✅ takes one cell here and two
+      // there, so the text after it shifts and the cell a screen render
+      // (Herdr) skips as the emoji's right half keeps what it showed before.
+      term.loadAddon(new Unicode11Addon())
+      term.unicode.activeVersion = '11'
       term.open(container)
       termRef.current = term
       fitRef.current = fit
@@ -1006,6 +1018,17 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
       return () => sub.dispose()
     }, [])
+
+    // The backend keeps the history when it scrolls it: lines a shrinking
+    // grid pushes out would sit in a scrollback that xterm.js's own wheel
+    // handling scrolls besides the backend, showing a stale screen above
+    // the live one's top rows.
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      term.options.scrollback = serverScroll ? 0 : SCROLLBACK
+    }, [serverScroll])
 
     // No cursor or keyboard focus for input that would go nowhere.
     useEffect(() => {
