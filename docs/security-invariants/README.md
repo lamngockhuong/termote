@@ -65,7 +65,7 @@ Covers the Chat view of Claude Code, Codex and OpenCode. Code: `server/agent_*.g
 
 ## [Agents](agents.md)
 
-Covers agent status, overview, subagents, starting and resuming agents, usage, prompt templates, tasks and review comments. Code: `server/agent_*.go` outside Chat, `server/template*.go`, `server/task*.go`, `server/tasks*.go`.
+Covers agent status, overview, subagents, starting and resuming agents, usage, prompt templates, tasks and review comments. Code: `server/agent_*.go` outside Chat, `server/cli_agents*.go`, `server/template*.go`, `server/task*.go`, `server/tasks*.go`.
 
 - Agent activity
 - Agent overview
