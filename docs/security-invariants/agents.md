@@ -126,6 +126,25 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   finished one is not read again; a running one is read on every tree read (shared for 2 s).
   Grandchildren that cannot be read are left out and the tree marked truncated. No service found
   answers `{nodes: []}`; a service that refuses or fails, 404 with nothing of its words.
+  A Claude Code subagent's own conversation (`server/agent_subagent_transcript.go`,
+  `GET /api/mux/panes/{id}/agent/subagents/{agentId}/transcript`): `requireMethod(GET)`,
+  `crossSiteRejection`, `requireAgentRead`, then a view-only client is refused (`view_only`, 403): the
+  task a subagent is given and the report it ends with are plain text in its file, where in the
+  session's transcript they are an Agent tool call's input and result, which `viewTranscript` leaves
+  out. The client sends only `agentId`, which must match `^[a-z0-9]{1,64}$` (else 400
+  `invalid_request`); only the pane's own Claude Code session (another agent: 404
+  `session_not_found`). The file `agent-<agentId>.jsonl` is never opened by a path: it is `Lstat`ed
+  inside the `os.Root` of `openSubagentsDir` (the same directory checks as the tree), opened in that
+  root nonblocking and kept only when it is a plain file and `os.SameFile` with what was `Lstat`ed, so
+  a link, even to another subagent's file, and a file swapped between the two are refused. Every
+  failure to find it (no transcript, no directory, a link at any level) is 404 `session_not_found`,
+  answered before the read waits for a `transcriptReads` slot, so an id with no file costs no slot.
+  The read is the transcript's own (`readJournal`: tail, `cursor`, `before`, the read cache keyed by
+  the subagent and the file identity); its cursors name the session and the subagent, so neither the
+  session's transcript nor another subagent's continues from one. Rows marked `isSidechain` are shown
+  only here; the session's transcript still leaves them out. There is no image route and no file link
+  for a subagent's conversation (`files/mentioned` still compares a path with the pane's own agent
+  transcript only). `Cache-Control: no-store`; internal errors are logged only.
   Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
   returns agent ids, the type, the description (200 runes), status, times, the last tool's name and
