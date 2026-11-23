@@ -198,6 +198,7 @@ export function OverviewJobs({
           : undefined
       }
       onEdit={setEditing}
+      canEndGrants={store.canGrant}
       onGrants={
         !jobFinished(selected.state) &&
         (selected.agent || selected.grants?.length)

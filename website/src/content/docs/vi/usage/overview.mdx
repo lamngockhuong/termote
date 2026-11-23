@@ -92,7 +92,9 @@ Chạm vào một việc (thẻ của nó, hoặc tiêu đề trong bảng) đ�
 nằm cạnh các cột, thế chỗ cột Activity (mở Activity thì chi tiết đóng lại); trên điện thoại, chi tiết
 là một sheet. Trong đó có nút mở pane của việc, **Ủy quyền** và **Sửa**, rồi tới trạng thái, agent,
 branch, thư mục worktree, diff gần nhất, prompt, ghi chú, các ủy quyền còn hiệu lực, các hộp thoại
-đã được trả lời theo ủy quyền và lịch sử của việc.
+đã được trả lời theo ủy quyền và lịch sử của việc. Mỗi ủy quyền còn hiệu lực ghi lúc nó hết hạn và
+đã được dùng mấy lần; nút **Thu hồi** chấm dứt nó sau khi bạn xác nhận (chỉ ở nơi bạn cấp được ủy
+quyền, xem bên dưới).
 
 - **Thêm việc** tạo một việc chưa làm, có tiêu đề, prompt và ghi chú: orchestrator nhận nó
   bằng `termote agents start --job <id>` khi bạn bảo nó.
@@ -177,7 +179,9 @@ Khi agent dừng lại chờ một hộp thoại (xin quyền, đặt câu hỏi
 lần lượt từng cái, với các nút giống trong Chat view. Hộp thoại trên cùng đứng yên cho tới khi bạn trả
 lời hoặc bấm **Skip**; agent nào bắt đầu chờ sau thì xếp vào cuối, không bao giờ chen lên trước. Trả lời
 xong, thẻ ghi **Answered**, và phải bấm **Next** thì hộp thoại kế mới hiện ra, nên chạm thêm một lần
-cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại.
+cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại. Đầu hộp
+thoại cho biết agent đã chờ bao lâu và đang làm việc nào (nếu có); trên màn hình rộng, các nút trả
+lời nằm bên phải câu hỏi.
 
 [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) thấy hộp thoại nhưng không có nút. Agent mà Termote không đọc hay trả lời được hộp thoại
 thì chỉ có nút **Open terminal**. Với Zellij, nếu lúc đó câu trả lời chưa tới được pane, thẻ sẽ báo và

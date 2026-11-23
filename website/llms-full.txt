@@ -3255,7 +3255,7 @@ Beside each agent the bar then says **Sent**, **Queued** (the agent was working 
 
 When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then done and not read yet, running, to review and to do. The line above the columns counts the open jobs and names the groups with no job. On a phone the columns stack. A job’s card shows its title and state, what its agent does, its pane and branch, and its last diff and grants in force. **Finished** unfolds the finished jobs as a table: job, state, worktree, changes and when it last changed.
 
-Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They hold a button that opens the job’s pane, **Grants** and **Edit**, then the job’s state, agent, branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a grant and its history.
+Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They hold a button that opens the job’s pane, **Grants** and **Edit**, then the job’s state, agent, branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a grant and its history. Each grant in force says when it ends and how often it was used, and **End** revokes it after you confirm (only where you can give grants, see below).
 
 * **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with `termote agents start --job <id>` when you ask it to.
 * **Edit** changes the title, prompt, note, state or the agent the job is given to. Giving it to another agent ends its grants. When the orchestrator changed the job meanwhile, the form loads the job as it is now and tells you.
@@ -3295,7 +3295,7 @@ Limits: the strip counts the files written in the last 8 days, at most 5000 per 
 
 [Section titled “Needs you”](#needs-you)
 
-When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at a time, with the same buttons as the Chat view. The dialog on top stays until you answer it or press **Skip**: an agent that starts waiting later joins the end, never in front of it. After an answer the card says **Answered**, and only **Next** shows the next dialog, so a second tap never answers another agent. **Show again** brings back the dialogs you skipped.
+When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at a time, with the same buttons as the Chat view. The dialog on top stays until you answer it or press **Skip**: an agent that starts waiting later joins the end, never in front of it. After an answer the card says **Answered**, and only **Next** shows the next dialog, so a second tap never answers another agent. **Show again** brings back the dialogs you skipped. The dialog’s header says how long the agent has waited and the job it works on, if any; on a wide screen the answers sit beside the question.
 
 A [view-only device](/usage/devices/#view-only) sees the dialogs without buttons. An agent whose dialogs Termote cannot read or answer gets an **Open terminal** button instead. With Zellij, if the answer cannot reach the pane at that moment, the card says so and you can try again.
 

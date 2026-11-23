@@ -1,6 +1,13 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import type { Job, JobGrant } from '../hooks/use-mux-api'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { mockRevoke } = vi.hoisted(() => ({ mockRevoke: vi.fn() }))
+vi.mock('../hooks/use-jobs', async (orig) => ({
+  ...(await orig<typeof import('../hooks/use-jobs')>()),
+  revokeJobGrant: (...a: unknown[]) => mockRevoke(...a),
+}))
+
+import { type Job, type JobGrant, RequestError } from '../hooks/use-mux-api'
 import { JobDetail } from './job-detail'
 
 const NOW = Date.parse('2026-11-23T10:00:00Z')
@@ -227,5 +234,78 @@ describe('JobDetail', () => {
     expect(screen.getByText('/w⟨U+200B⟩')).toBeInTheDocument()
     expect(screen.getByText('a⟨U+200B⟩b')).toBeInTheDocument()
     expect(screen.getByText('c⟨U+2066⟩d')).toBeInTheDocument()
+  })
+
+  describe('ending a grant', () => {
+    beforeEach(() => {
+      mockRevoke.mockReset()
+      HTMLDialogElement.prototype.showModal = vi.fn(function (
+        this: HTMLDialogElement,
+      ) {
+        this.setAttribute('open', '')
+      })
+      HTMLDialogElement.prototype.close = vi.fn()
+    })
+    const endButton = () =>
+      screen.queryByRole('button', { name: 'End the grant Run: pnpm test' })
+    const confirm = async () => {
+      fireEvent.click(endButton()!)
+      const dialog = screen.getByRole('dialog', { name: 'End this grant?' })
+      expect(dialog).toHaveTextContent('Run: pnpm test')
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: 'End' }))
+      })
+    }
+
+    it('offers End only where this browser may end grants', () => {
+      const { rerender } = render(
+        <JobDetail job={job({ grants: [grant()] })} now={NOW} />,
+      )
+      expect(endButton()).toBeNull()
+      rerender(
+        <JobDetail job={job({ grants: [grant()] })} now={NOW} canEndGrants />,
+      )
+      expect(endButton()).toBeInTheDocument()
+    })
+
+    it('ends a grant once confirmed, and says so', async () => {
+      mockRevoke.mockResolvedValue(undefined)
+      const j = job({ grants: [grant()] })
+      render(<JobDetail job={j} now={NOW} canEndGrants />)
+      // Cancel ends nothing
+      fireEvent.click(endButton()!)
+      fireEvent.click(
+        within(
+          screen.getByRole('dialog', { name: 'End this grant?' }),
+        ).getByRole('button', { name: 'Cancel' }),
+      )
+      expect(mockRevoke).not.toHaveBeenCalled()
+      await confirm()
+      expect(mockRevoke).toHaveBeenCalledWith(j, 'g1')
+      expect(screen.getByRole('status')).toHaveTextContent('The grant ended')
+    })
+
+    it('tells a refused end, in the server words or its own', async () => {
+      mockRevoke.mockRejectedValueOnce(
+        new RequestError(404, 'grant_not_found', 'x'),
+      )
+      render(
+        <JobDetail job={job({ grants: [grant()] })} now={NOW} canEndGrants />,
+      )
+      await confirm()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'This grant no longer exists',
+      )
+      mockRevoke.mockRejectedValueOnce(new Error('offline'))
+      await confirm()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not change the grants',
+      )
+      // A later end that works clears the refusal
+      mockRevoke.mockResolvedValueOnce(undefined)
+      await confirm()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByRole('status')).toHaveTextContent('The grant ended')
+    })
   })
 })

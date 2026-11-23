@@ -1,13 +1,21 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { agentLabel } from '../chat-agents'
-import type { Job, JobState } from '../hooks/use-mux-api'
+import { revokeJobGrant } from '../hooks/use-jobs'
+import {
+  type Job,
+  type JobGrant,
+  type JobState,
+  RequestError,
+} from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { formatAgo } from '../utils/format-ago'
 import { activeGrants, grantLabel, grantLeft, jobPaneRef } from '../utils/jobs'
+import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { Button } from './ui/button'
+import { ConfirmDialog } from './ui/confirm-dialog'
 
 // A history line's words, by its kind; one this version does not know is
 // told by its kind alone
@@ -39,14 +47,43 @@ interface Props {
   // Absent where the job cannot be changed, or takes no grant
   onEdit?: (job: Job) => void
   onGrants?: (job: Job) => void
+  // This browser may end a grant here (signed in with the password or a
+  // full paired device, and the job can change)
+  canEndGrants?: boolean
 }
 
 // What a full client knows of one job, under the title its panel gives it:
 // what its agent does and since when, its pane, Grants and Edit, then each
 // field it has: state, agent, branch, folder, changes, prompt, note, the
 // grants in force, the answers given under one, and its history.
-export function JobDetail({ job, now, onOpenPane, onEdit, onGrants }: Props) {
+export function JobDetail({
+  job,
+  now,
+  onOpenPane,
+  onEdit,
+  onGrants,
+  canEndGrants,
+}: Props) {
   const { t } = useT()
+  // The grant whose end waits for a yes, and how the last end went
+  const [ending, setEnding] = useState<JobGrant | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [ended, setEnded] = useState(false)
+  const end = async (g: JobGrant) => {
+    setEnding(null)
+    setEnded(false)
+    try {
+      await revokeJobGrant(job, g.id)
+      setProblem(null)
+      setEnded(true)
+    } catch (err) {
+      setProblem(
+        err instanceof RequestError
+          ? serverErrorText(err, t)
+          : t('jobs.grant.failed'),
+      )
+    }
+  }
   const title = visibleUnsafe(job.title)
   const status = job.live.status
   const live = jobLiveWords(job, t)
@@ -166,21 +203,55 @@ export function JobDetail({ job, now, onOpenPane, onEdit, onGrants }: Props) {
             {grants.map((g) => (
               <li
                 key={g.id}
-                className="flex flex-col gap-0.5 rounded-control border border-border px-3 py-2.5"
+                className="flex items-center gap-2.5 rounded-control border border-border px-3 py-2.5"
               >
-                <span className="break-all font-term text-[12px]">
-                  {grantLabel(g, t)}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="break-all font-term text-[12px]">
+                    {grantLabel(g, t)}
+                  </span>
+                  <span className="text-[11px] text-fg-muted">
+                    {grantLeft(g.expires, now, t)}
+                    {' · '}
+                    {t('jobs.grant.uses', { count: g.uses?.length ?? 0 })}
+                  </span>
                 </span>
-                <span className="text-[11px] text-fg-muted">
-                  {grantLeft(g.expires, now, t)}
-                  {' · '}
-                  {t('jobs.grant.uses', { count: g.uses?.length ?? 0 })}
-                </span>
+                {canEndGrants && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setEnding(g)}
+                    aria-label={t('jobs.grant.revokeName', {
+                      label: grantLabel(g, t),
+                    })}
+                  >
+                    {t('jobs.grant.revoke')}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
         </Section>
       )}
+      {problem && (
+        <p role="alert" className="m-0 text-[12px] text-danger">
+          {problem}
+        </p>
+      )}
+      {ended && (
+        <p role="status" className="m-0 text-[12px] text-fg-muted">
+          {t('jobs.grant.revoked')}
+        </p>
+      )}
+      <ConfirmDialog
+        isOpen={!!ending}
+        title={t('jobs.grant.revokeTitle')}
+        confirmLabel={t('jobs.grant.revoke')}
+        destructive
+        onConfirm={() => void end(ending as JobGrant)}
+        onCancel={() => setEnding(null)}
+      >
+        <p className="m-0 break-all">{ending && grantLabel(ending, t)}</p>
+      </ConfirmDialog>
       {uses.length > 0 && (
         <Section label={t('jobs.card.delegated')}>
           <ol className="m-0 flex list-none flex-col gap-1.5 p-0 text-[12px]">
