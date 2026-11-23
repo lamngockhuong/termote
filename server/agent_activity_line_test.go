@@ -26,6 +26,10 @@ func TestClaudeActivityScreens(t *testing.T) {
 		// Recorded in tmux (200x50) on 2.1.330 while the turn waited on a
 		// background agent, its answer written: the session file said busy.
 		"2.1.330-wait-background-agent": {Label: "Waiting", Background: "1 background agent"},
+		// Recorded in Herdr on 2.1.330 in a new session, its screen not yet
+		// filled: 15 blank rows between the line that ends the turn and the
+		// input box.
+		"2.1.330-done-background-blank-rows": {Label: "Baked", Elapsed: 5, Background: "1 shell"},
 		// Recorded in tmux (200x50) on 2.1.330 while a foreground command ran.
 		"2.1.330-working": {Label: "Architecting", Elapsed: 9, Tokens: "231"},
 		// "running PostToolUse hook · 6s · ↓ 267 tokens · thought for 1s"
@@ -153,34 +157,45 @@ func TestClaudeActivityLines(t *testing.T) {
 		above string
 		want  *AgentActivity
 	}{
-		"tokens while writing":     {"✶ Pondering… (12s · ↓ 1.2k tokens)", &AgentActivity{Label: "Pondering", Elapsed: 12, Tokens: "1.2k"}},
-		"hours":                    {"* Pondering… (1h 2m 3s · still thinking)", &AgentActivity{Label: "Pondering", Elapsed: 3723, Phase: "thinking", Detail: "still thinking"}},
-		"custom words":             {"✻ Reading the docs… (3s)", &AgentActivity{Label: "Reading the docs", Elapsed: 3}},
-		"unknown item kept":        {"✻ Pondering… (3s · reading files)", &AgentActivity{Label: "Pondering", Elapsed: 3, Detail: "reading files"}},
-		"no esc hint":              {"✻ Pondering… (3s · esc to interrupt)", &AgentActivity{Label: "Pondering", Elapsed: 3}},
-		"one hook, thought before": {"✽ Coalescing… (running PostToolUse hook · 6s · ↓ 267 tokens · thought for 1s)", &AgentActivity{Label: "Coalescing", Elapsed: 6, Phase: "hooks", Detail: "running PostToolUse hook", Tokens: "267"}},
-		"writing after thinking":   {"✻ Pondering… (12s · ↓ 1.2k tokens · thought for 9s)", &AgentActivity{Label: "Pondering", Elapsed: 12, Tokens: "1.2k"}},
-		"over a todo list":         {"✻ Pondering… (3s)\n  ⎿  ☐ one\n     ☐ two\n     ☐ three\n     ☐ four\n     ☐ five\n", &AgentActivity{Label: "Pondering", Elapsed: 3}},
-		"over a list too long":     {"✻ Pondering… (3s)\n" + strings.Repeat("     ☐ item\n", 25), nil},
-		"answer over a list":       {"● The answer:\n  ⎿  one\n     two\n     three\n     four\n", nil},
-		"over effort row":          {"✻ Pondering… (3s)\n\n" + strings.Repeat(" ", 60) + "◐ medium · /effort", &AgentActivity{Label: "Pondering", Elapsed: 3}},
-		"turn done":                {"✻ Sautéed for 1m 14s · done 4:17 AM", nil},
-		"done, shells running":     {"✻ Cogitated for 5m 36s · done 12:26 AM · 2 shells still running", &AgentActivity{Label: "Cogitated", Elapsed: 336, Background: "2 shells"}},
-		"waiting on agents":        {"✻ Waiting for 2 background agents to finish", &AgentActivity{Label: "Waiting", Background: "2 background agents"}},
-		"waiting, no count":        {"✻ Waiting for background agents to finish", nil},
-		"done, shell and monitor":  {"✻ Brewed for 4s · 1 shell, 1 monitor still running", &AgentActivity{Label: "Brewed", Elapsed: 4, Background: "1 shell, 1 monitor"}},
-		"done over effort row":     {"✻ Brewed for 1h 2m · done 9:01 PM · 3 background tasks still running\n\n" + strings.Repeat(" ", 60) + "◐ medium · /effort", &AgentActivity{Label: "Brewed", Elapsed: 3720, Background: "3 background tasks"}},
-		"done under a recap":       {"✻ Cogitated for 54m 40s · done 10:05 AM · 1 monitor still running\n\n※ recap: Phase 3 is done and the PR is open. I am waiting for CI\n  to finish before I report back. (disable recaps in /config)\n", &AgentActivity{Label: "Cogitated", Elapsed: 3280, Background: "1 monitor"}},
-		"working under a recap":    {"✻ Pondering… (3s)\n\n※ recap: the build is running\n", &AgentActivity{Label: "Pondering", Elapsed: 3}},
-		"recap, nothing running":   {"✻ Sautéed for 1m 14s · done 4:17 AM\n\n※ recap: the build is done\n", nil},
-		"recap alone":              {"● The answer.\n\n※ recap: the build is done\n", nil},
-		"done, no duration":        {"✻ Brewed for a while · 2 shells still running", nil},
-		"done, nothing named":      {"✻ Brewed for 4s ·  still running", nil},
-		"answer still running":     {"* the build for 2s · it is still running", nil},
-		"answer text":              {"* a bullet the answer ends with", nil},
-		"answer ellipsis":          {"- Wait… (later)", nil},
-		"indented":                 {"  ✻ Pondering… (3s)", nil},
-		"too far up":               {"✻ Pondering… (3s)\n\n\n\n\n", nil},
+		"tokens while writing":      {"✶ Pondering… (12s · ↓ 1.2k tokens)", &AgentActivity{Label: "Pondering", Elapsed: 12, Tokens: "1.2k"}},
+		"hours":                     {"* Pondering… (1h 2m 3s · still thinking)", &AgentActivity{Label: "Pondering", Elapsed: 3723, Phase: "thinking", Detail: "still thinking"}},
+		"custom words":              {"✻ Reading the docs… (3s)", &AgentActivity{Label: "Reading the docs", Elapsed: 3}},
+		"unknown item kept":         {"✻ Pondering… (3s · reading files)", &AgentActivity{Label: "Pondering", Elapsed: 3, Detail: "reading files"}},
+		"no esc hint":               {"✻ Pondering… (3s · esc to interrupt)", &AgentActivity{Label: "Pondering", Elapsed: 3}},
+		"one hook, thought before":  {"✽ Coalescing… (running PostToolUse hook · 6s · ↓ 267 tokens · thought for 1s)", &AgentActivity{Label: "Coalescing", Elapsed: 6, Phase: "hooks", Detail: "running PostToolUse hook", Tokens: "267"}},
+		"writing after thinking":    {"✻ Pondering… (12s · ↓ 1.2k tokens · thought for 9s)", &AgentActivity{Label: "Pondering", Elapsed: 12, Tokens: "1.2k"}},
+		"over a todo list":          {"✻ Pondering… (3s)\n  ⎿  ☐ one\n     ☐ two\n     ☐ three\n     ☐ four\n     ☐ five\n", &AgentActivity{Label: "Pondering", Elapsed: 3}},
+		"over a list too long":      {"✻ Pondering… (3s)\n" + strings.Repeat("     ☐ item\n", 25), nil},
+		"answer over a list":        {"● The answer:\n  ⎿  one\n     two\n     three\n     four\n", nil},
+		"over effort row":           {"✻ Pondering… (3s)\n\n" + strings.Repeat(" ", 60) + "◐ medium · /effort", &AgentActivity{Label: "Pondering", Elapsed: 3}},
+		"turn done":                 {"✻ Sautéed for 1m 14s · done 4:17 AM", nil},
+		"done, shells running":      {"✻ Cogitated for 5m 36s · done 12:26 AM · 2 shells still running", &AgentActivity{Label: "Cogitated", Elapsed: 336, Background: "2 shells"}},
+		"waiting on agents":         {"✻ Waiting for 2 background agents to finish", &AgentActivity{Label: "Waiting", Background: "2 background agents"}},
+		"waiting, no count":         {"✻ Waiting for background agents to finish", nil},
+		"done, shell and monitor":   {"✻ Brewed for 4s · 1 shell, 1 monitor still running", &AgentActivity{Label: "Brewed", Elapsed: 4, Background: "1 shell, 1 monitor"}},
+		"done over effort row":      {"✻ Brewed for 1h 2m · done 9:01 PM · 3 background tasks still running\n\n" + strings.Repeat(" ", 60) + "◐ medium · /effort", &AgentActivity{Label: "Brewed", Elapsed: 3720, Background: "3 background tasks"}},
+		"done under a recap":        {"✻ Cogitated for 54m 40s · done 10:05 AM · 1 monitor still running\n\n※ recap: Phase 3 is done and the PR is open. I am waiting for CI\n  to finish before I report back. (disable recaps in /config)\n", &AgentActivity{Label: "Cogitated", Elapsed: 3280, Background: "1 monitor"}},
+		"working under a recap":     {"✻ Pondering… (3s)\n\n※ recap: the build is running\n", &AgentActivity{Label: "Pondering", Elapsed: 3}},
+		"recap, nothing running":    {"✻ Sautéed for 1m 14s · done 4:17 AM\n\n※ recap: the build is done\n", nil},
+		"recap alone":               {"● The answer.\n\n※ recap: the build is done\n", nil},
+		"done, no duration":         {"✻ Brewed for a while · 2 shells still running", nil},
+		"done, nothing named":       {"✻ Brewed for 4s ·  still running", nil},
+		"answer still running":      {"* the build for 2s · it is still running", nil},
+		"answer text":               {"* a bullet the answer ends with", nil},
+		"answer ellipsis":           {"- Wait… (later)", nil},
+		"indented":                  {"  ✻ Pondering… (3s)", nil},
+		"too far up":                {"✻ Pondering… (3s)\n" + strings.Repeat("\n", claudeBlankRows), nil},
+		"done over blank rows":      {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n" + strings.Repeat("\n", 15), &AgentActivity{Label: "Baked", Elapsed: 5, Background: "1 shell"}},
+		"done over the most blanks": {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n" + strings.Repeat("\n", claudeBlankRows-1), &AgentActivity{Label: "Baked", Elapsed: 5, Background: "1 shell"}},
+		"working over blank rows":   {"✻ Pondering… (5s)\n" + strings.Repeat("\n", 15) + strings.Repeat(" ", 60) + "◐ medium · /effort", &AgentActivity{Label: "Pondering", Elapsed: 5}},
+		"waiting over blank rows":   {"✻ Waiting for 1 background agent to finish\n" + strings.Repeat("\n", 15), &AgentActivity{Label: "Waiting", Background: "1 background agent"}},
+		"recap over blank rows":     {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n\n※ recap: the build runs\n  in the background\n" + strings.Repeat("\n", 15), &AgentActivity{Label: "Baked", Elapsed: 5, Background: "1 shell"}},
+		"list over blank rows":      {"✻ Pondering… (3s)\n" + strings.Repeat("     ☐ item\n\n", 25), nil},
+		// An older turn's line is not read over a newer turn's rows, however
+		// many blank rows are under them.
+		"old done under a prompt":  {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n\n❯ next task\n" + strings.Repeat("\n", 15), nil},
+		"old done under an answer": {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n\n● Done.\n" + strings.Repeat("\n", 15), nil},
+		"old done under the end":   {"✻ Baked for 5s · done 9:10 AM · 1 shell still running\n\n❯ next task\n\n● Done.\n\n✻ Brewed for 2s · done 9:11 AM\n" + strings.Repeat("\n", 15), nil},
 	} {
 		sc := readClaudeScreen(tc.above + "\n" + rule + "\n❯ \n" + rule + "\n")
 		got := sc.activity
