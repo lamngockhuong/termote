@@ -73,7 +73,7 @@ export default {
   'tasks.overview.close': 'Close the agent overview',
   'tasks.overview.closeEsc': 'Close (Esc)',
   // A phone's menu of the header's other buttons
-  'tasks.overview.more': 'More',
+  'tasks.overview.more': 'More overview actions',
   'tasks.overview.readFailed': "Could not read the agents' details; retrying.",
   'tasks.overview.none': 'No agent is running in any session.',
   'tasks.overview.start': 'Start an agent in this pane',

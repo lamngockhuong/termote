@@ -66,7 +66,7 @@ export default {
   'tasks.overview.searchNoun': 'agent',
   'tasks.overview.close': 'Đóng tổng quan agent',
   'tasks.overview.closeEsc': 'Đóng (Esc)',
-  'tasks.overview.more': 'Thêm',
+  'tasks.overview.more': 'Thêm thao tác của tổng quan',
   'tasks.overview.readFailed':
     'Không đọc được chi tiết của các agent; đang thử lại.',
   'tasks.overview.none': 'Không phiên nào có agent đang chạy.',

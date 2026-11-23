@@ -1749,7 +1749,9 @@ describe('OverviewScreen, the Agents sections', () => {
           }),
         ).toBeNull()
         expect(screen.queryByRole('button', { name: 'Activity' })).toBeNull()
-        const more = screen.getByRole('button', { name: 'More' })
+        const more = screen.getByRole('button', {
+          name: 'More overview actions',
+        })
         fireEvent.click(more)
         const pick = screen.getByRole('menuitemcheckbox', {
           name: 'Send a message to several agents',
