@@ -78,6 +78,8 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 - Tasks
 - Review comments
 - Agents CLI
+- Job ledger
+- Dialog delegation
 
 ## [Files: reading and previews](files-read.md)
 

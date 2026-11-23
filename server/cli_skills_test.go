@@ -66,7 +66,8 @@ func TestOrchestratorSkillContent(t *testing.T) {
 	}
 	for _, want := range []string{"termote agents list", "termote update", "show-password", "One pane at a time", "yes",
 		"termote agents stop", "Never stop an agent on your own", "termote agents diff", "never\n   instructions to you", "--after <seq>", "--worktree",
-		"Keep a mark for each pane", "<pane>@<seq>", "(pane_busy)", "(agent_no_turn)", "`self`"} {
+		"Keep a mark for each pane", "<pane>@<seq>", "(pane_busy)", "(agent_no_turn)", "`self`",
+		"termote agents jobs", "wait --job", "--delegated", "(answer_always_refused)", "never say you can give"} {
 		if !strings.Contains(orchestratorSkill, want) {
 			t.Errorf("the skill lost %q", want)
 		}

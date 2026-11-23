@@ -854,6 +854,9 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	}
 	if w := startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll); w != nil {
 		agent.settings.setNotify(w.notifySettings)
+		if agent.jobs != nil {
+			agent.jobs.setOnReview(w.notifyJobReview)
+		}
 	}
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()

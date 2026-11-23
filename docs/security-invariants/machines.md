@@ -12,11 +12,14 @@ Part of the [security invariants](README.md): other termote servers reached over
   400); the header is ignored on every other connection. `X-Termote-Origin-Auth` (`password|device`)
   only reaches the audit `via` (`machine:<origin>`), never a grant. `isCLI` is false for
   `authMachine`. On the bridge, sign-in and sign-out (`/login`, `/pair`, `/login/link`,
-  `/api/mux/logout`), `login-links`, `devices*`, `signins*`, `push*` and `settings*` answer 403
+  `/api/mux/logout`), `login-links`, `devices*`, `signins*`, `push*`, `settings*` and a job's
+  `grants*` (`/api/mux/jobs/{id}/grants...`, see Dialog delegation) answer 403
   `machine_forbidden` before any handler, whatever the role (cleaned path); a snapshot read over the
   bridge carries no `settingsProposal` and `caps.settingsProposals` false, so a machine's settings
   proposal never reaches a browser open on it through another termote. `hostGuard` takes
-  `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`.
+  `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`. A
+  permission dialog answered over the bridge never takes an option that stops it asking
+  (`answer_always_refused`), and every such answer is an `audit: dialog_answer` line.
   `termote bridge` (the forced command of the key `machine add` installs) takes only
   `--socket-dir <abs>`, reads the saved config for the port (none → error, nothing on stdout),
   dials the bridge with the owner check of `dialSocketOS`, writes `TERMOTE-BRIDGE 1 <version>\n`

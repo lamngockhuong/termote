@@ -204,7 +204,12 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   Code's rewind or Codex's backtrack); a key that failed does not count. OpenCode gets no key: the
   route calls its service's `POST /api/session/{id}/interrupt` (OpenCode 2.3.2), whose
   `interrupted: false` answers `agent_not_working`. It answers 204 once the key is sent, never
-  waiting for the status. Under `panes*`, it goes through the Machines proxy as every pane route.
+  waiting for the status; `agent_no_turn`'s message says the agent may only wait for background work
+  or that this Claude Code version draws its working line differently, and the newest recorded
+  screen of each state must parse (`TestClaudeActivityNewestScreens`), so a version that draws it
+  otherwise fails a test rather than every Stop. The overview card and the Chat composer hide Stop
+  while the pane only waits for background work (`background`), and `termote agents stop` follows
+  the pane afterwards (exit 8 when it still works). Under `panes*`, it goes through the Machines proxy as every pane route.
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

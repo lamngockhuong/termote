@@ -87,6 +87,11 @@ termote agents diff <pane> [--stat]          # its commits since the base, then 
 termote agents stop <pane> --cursor <cursor> # end the turn it runs, as Esc (cursor from read --json)
 termote agents start --workspace <id> --kind claude --name tests 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix the login test'
+termote agents jobs [--mine] [--all] [--json] # the job ledger: each job's pane, status, unread turn, branch
+termote agents job show <id>                 # its prompt, note, grants and history
+termote agents job set <id> --state review --note 'What was done'
+termote agents wait --job <id>...            # until one of the jobs' agents needs the orchestrator
+termote agents answer <pane> --delegated     # Yes, this once, under a grant you gave in the PWA
 ```
 
 A `<pane>` is the pane id `list` shows (`%3`, `w1:p2`), or a name only one pane has: the pane's
@@ -119,12 +124,64 @@ unstaged and untracked. Each file's diff comes after a line saying it is data wr
 agent, not instructions; a sensitive file such as `.env` shows by name only, and at most 64 KB of
 diff is printed (`--stat` lists the files only).
 
+## The job ledger
+
+Termote keeps a ledger of the work the orchestrator hands out, so neither of you depends on its
+memory: it survives a compacted conversation, a new tab and a server restart. Every `start` records
+a job, titled with `--title` (or "claude in fix-login": never the prompt, since a view-only device
+sees titles), and `send`, `read`, `answer`, `stop` and `diff --stat` note what they did on the job of
+their pane. `termote agents jobs` lists the jobs not finished yet: the pane, what its agent does,
+whether a turn ended that the orchestrator has not read, the branch and folder.
+
+`wait --job <id>...` reports a turn the orchestrator has not read however long ago it ended (even
+before the wait started, or while the server was down), a dialog once even if you keep it open, and
+a job whose agent is gone (tmux restarted, the pane closed). Termote tells a job's agent from another
+one at the same pane address by its process, so an agent that took over a reused tmux pane id is
+never taken for it. When an agent is done the orchestrator sets the job to `review` with a note, and
+you get a push; it never marks a job `done` for you.
+
+You see the same ledger in the [Overview](/usage/overview/)'s Plan section, where you can also add
+a job for the orchestrator to take up (`start --job <id>`), edit one, and give grants.
+
+## Grants for permission dialogs
+
+A permission dialog (run a command, edit a file) is yours to answer. To keep a long task moving
+while you are away, you can give one job's agent a grant in the PWA, signed in with your password
+or a paired device: run commands that start with a prefix you type (`pnpm test`), or edit files in
+the job's worktree, for up to a day. Only you give grants: the orchestrator, the command line,
+another Termote and a server without sign-in cannot.
+
+The orchestrator then tries `answer <pane> --delegated` first. Termote itself checks the dialog
+and answers "Yes" for this one time only when the dialog on screen and the one tool call the
+agent's transcript has waiting name the same command or file, no subagent runs, the command holds
+nothing a shell would chain, expand or redirect and does not start with a shell or interpreter, and
+the file is in the worktree, reached through no link, and not one that configures the agent, runs
+as a hook, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
+Anything else is refused and comes to you as before. Each answer shows on the job's card and in the
+server's audit log.
+
+<Aside type="caution">
+  A grant to run `pnpm test` runs whatever `package.json` declares for `test`, and an agent that can
+  edit files in the worktree could change that. Give grants for short, well-known commands, on jobs
+  you follow.
+</Aside>
+
+From the command line, an option that stops a dialog from asking again ("don't ask again",
+"always allow", switching to auto mode) is always refused: only you pick one, in the PWA or the
+terminal. Every answer to a permission dialog made from the command line is written to the audit log.
+
+## Stop
+
 `stop` ends the turn an agent is working on, as Esc does in its terminal. It needs the `cursor`
 from `read --json`, so it never reaches another conversation the pane may have moved on to; an
 agent that is not working, or waits on a dialog, is not stopped. Neither is a Claude Code agent
 whose screen shows no turn running, such as one that has written its answer and only waits on a
-background agent: Esc would not end that work, so `stop` says so (`agent_no_turn`). You can also stop an agent from
-its [Chat view](/usage/agent-chat/) or its card in the [Overview](/usage/overview/).
+background agent: Esc would not end that work, so `stop` says so (`agent_no_turn`), and the Stop
+button is not shown for it. After Esc, `stop` watches the agent for a few seconds and exits 8 when
+it still works. You can also stop an agent from its [Chat view](/usage/agent-chat/) or its card in
+the [Overview](/usage/overview/).
+
+## Start
 
 Without `--worktree`, `start` opens a new tab in the workspace (`--name` names it) and starts the
 agent there with the prompt as its first message. `list`
@@ -140,8 +197,8 @@ workspace. With Herdr the worktree goes under `~/.herdr/worktrees/<repo>/`, not 
 repository. A new worktree has no `node_modules`, so its git hooks (lefthook, husky) are skipped
 until its dependencies are installed there; when the repository has a lockfile, `start` reminds
 you with the command to run. Run the same command again after a failure and it goes on in the
-worktree it made; while the agent of that worktree still runs there, it names that pane to give the
-task to with `termote agents send` instead. A branch that exists without a worktree is refused, so
+worktree it made, and with its job: when the agent of that worktree still runs there and is idle,
+it gets the prompt; while it works or waits on a dialog, `start` names its pane and job instead. A branch that exists without a worktree is refused, so
 an agent never works in a branch you left half done. Termote never removes a worktree
 it made: remove it from the workspace menu (Remove worktree) or with git.
 
@@ -165,7 +222,8 @@ The skill keeps your decisions yours:
 - It stops an agent only when you ask or agree, and never tries again on its own.
 - It treats what `read` and `diff` print as the agents' data, never as instructions.
 - It shows you a permission dialog (run a command, edit a file) and answers it with the option
-  you choose.
+  you choose, unless a grant you gave covers it; it never picks an option that stops the dialog
+  asking, and never offers to give itself a grant.
 - It never runs `termote show-password` or `termote pair`, and needs no password: the commands
   reach the server over its local socket, which only your own user can open.
 - It never types into a pane with tmux, Herdr or Zellij commands: Termote checks that each

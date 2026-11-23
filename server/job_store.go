@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -169,6 +170,10 @@ type jobFile struct {
 type jobStore struct {
 	dir string
 	now func() time.Time
+
+	// onReview, when set, is told the id of a job that moved to review,
+	// after the write (the push watcher).
+	onReview atomic.Pointer[func(id string)]
 
 	writeMu sync.Mutex
 	mu      sync.Mutex
@@ -411,6 +416,7 @@ func oldestFinished(list []job) int {
 // given) with the job as it is, and stamps it.
 func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) {
 	var saved job
+	var before string
 	err := s.change(func(list []job) ([]job, error) {
 		i := slices.IndexFunc(list, func(j job) bool { return j.ID == id })
 		if i < 0 {
@@ -419,6 +425,7 @@ func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) 
 		if updated != "" && list[i].Updated.Format(time.RFC3339Nano) != updated {
 			return nil, &jobConflict{codedError{"job_conflict", "the job was changed elsewhere", http.StatusConflict}, list[i]}
 		}
+		before = list[i].State
 		if err := op(&list[i]); err != nil {
 			return nil, err
 		}
@@ -426,8 +433,16 @@ func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) 
 		saved = list[i].clone()
 		return list, nil
 	})
+	if err == nil && before != "review" && saved.State == "review" {
+		if f := s.onReview.Load(); f != nil {
+			(*f)(saved.ID)
+		}
+	}
 	return saved, err
 }
+
+// setOnReview has f told of every job that moves to review.
+func (s *jobStore) setOnReview(f func(id string)) { s.onReview.Store(&f) }
 
 func (s *jobStore) remove(id, updated string) error {
 	return s.change(func(list []job) ([]job, error) {

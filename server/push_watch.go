@@ -44,6 +44,9 @@ type pushEvent struct {
 	// MachineID: the pane is on that machine (its snapshot is read through
 	// the machine poll); empty for this server's own.
 	MachineID string `json:"machineId,omitempty"`
+	// JobID: the job of kind "job_review" (its agent's work is ready for
+	// the user to look at); the service worker reads its title itself.
+	JobID string `json:"jobId,omitempty"`
 }
 
 // pushSendFunc sends one push (sendPush through the hardened client).
@@ -115,6 +118,16 @@ func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *ac
 // its kind only, never a value.
 func (w *pushWatcher) notifySettings() {
 	w.enqueue(pushEvent{Kind: "settings"})
+}
+
+// notifyJobReview queues the push saying job id moved to review: its id
+// only, never its title or prompt. Nothing is queued while no device can
+// be sent one.
+func (w *pushWatcher) notifyJobReview(id string) {
+	if !w.store.anySendable() {
+		return
+	}
+	w.enqueue(pushEvent{Kind: "job_review", JobID: id})
 }
 
 // pushStatuses are the statuses that count as an observation; anything
@@ -285,6 +298,9 @@ func (w *pushWatcher) deliverEvent(ctx context.Context, e pushEvent) {
 	pane := e.PaneID
 	if e.MachineID != "" {
 		pane = e.MachineID + "/" + pane
+	}
+	if e.JobID != "" {
+		pane = "job/" + e.JobID
 	}
 	topic := pushTopic(topicKey, pane, e.Kind)
 	now := w.now()
