@@ -635,6 +635,10 @@ Options of agents (a <pane> is its id or a name only one pane has):
   job show <id> [--json]     A job with its prompt, note, grants and history
   job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->]
                              [--pane <pane>]  Change a job; another pane ends every grant it has
+  job remove <id>            Remove a done, failed or abandoned job from the ledger, as read (its
+                             worktree and branch stay); an unfinished one is refused
+  jobs prune [--older-than <duration>] [--dry-run] [--json]  Remove every finished job, or those
+                             not changed for --older-than (12h, 7d, 2w); --dry-run lists them
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

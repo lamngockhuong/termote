@@ -190,7 +190,9 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 			writeJobError(w, invalidJob("updated is required"))
 			return
 		}
-		if err := a.jobs.remove(id, updated); err != nil {
+		// The CLI and an agent on this machine remove a finished job only;
+		// a browser or another termote's bridge, any job it read.
+		if err := a.jobs.remove(id, updated, socket); err != nil {
 			writeJobError(w, err)
 			return
 		}

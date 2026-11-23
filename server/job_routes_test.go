@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,7 +67,7 @@ func (jt *jobsTest) snapshot() {
 }
 
 // as: "socket" (the CLI), "full" (a browser signed in), "view" (a
-// view-only device).
+// view-only device), "bridge" (another termote with the full role).
 func (jt *jobsTest) do(as, method, path string, body any) (int, map[string]any) {
 	jt.t.Helper()
 	var rd *bytes.Reader
@@ -87,6 +88,9 @@ func (jt *jobsTest) do(as, method, path string, body any) (int, map[string]any) 
 		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authSession, Role: roleFull, SessionID: "s"}))
 	case "view":
 		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authDevice, Role: roleView, DeviceID: "d"}))
+	case "bridge":
+		req = onBridge(req)
+		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authMachine, Role: roleFull}))
 	}
 	rec := serve(jt.mux, req)
 	var out map[string]any
@@ -438,6 +442,40 @@ func TestJobPatchAndDelete(t *testing.T) {
 	}
 	if code, _ := jt.do("full", http.MethodPut, "/api/mux/jobs/"+id, nil); code != http.StatusMethodNotAllowed {
 		t.Errorf("PUT = %d", code)
+	}
+}
+
+// Over the local socket a DELETE removes a finished job only, checked under
+// the store's lock; a browser, and another termote's bridge (not the local
+// socket), remove any job they read.
+func TestJobDeleteFinishedOnlyOnSocket(t *testing.T) {
+	jt := newJobsTest(t)
+	id := jt.create(map[string]any{"title": "Parser", "state": "active"})["id"].(string)
+	if code, out := jt.do("socket", http.MethodDelete, "/api/mux/jobs/"+id, nil); code != http.StatusConflict || out["code"] != "job_unfinished" {
+		t.Errorf("socket delete active = %d %v", code, out)
+	}
+	if len(jt.list()) != 1 {
+		t.Fatal("an unfinished job was removed")
+	}
+	// A stale updated is a conflict first, whatever the state.
+	if code, out := jt.do("socket", http.MethodDelete, "/api/mux/jobs/"+id+"?updated="+url.QueryEscape("2026-11-23T09:00:00+07:00"), nil); code != http.StatusConflict || out["code"] != "job_conflict" {
+		t.Errorf("socket delete stale = %d %v", code, out)
+	}
+	if code, out := jt.do("socket", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"state": "abandoned"}); code != http.StatusOK {
+		t.Fatalf("abandon = %d %v", code, out)
+	}
+	if code, out := jt.do("socket", http.MethodDelete, "/api/mux/jobs/"+id, nil); code != http.StatusOK {
+		t.Errorf("socket delete abandoned without updated = %d %v", code, out)
+	}
+	for _, as := range []string{"full", "bridge"} {
+		id := jt.create(map[string]any{"title": as, "state": "active"})["id"].(string)
+		updated := jt.list()[0]["updated"].(string)
+		if code, out := jt.do(as, http.MethodDelete, "/api/mux/jobs/"+id+"?updated="+updated, nil); code != http.StatusOK {
+			t.Errorf("%s delete active = %d %v", as, code, out)
+		}
+	}
+	if n := len(jt.list()); n != 0 {
+		t.Errorf("%d jobs left", n)
 	}
 }
 

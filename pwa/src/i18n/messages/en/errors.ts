@@ -100,6 +100,8 @@ export default {
   'errors.job_invalid': 'The job cannot take this change',
   'errors.job_no_agent': 'No agent runs in that pane',
   'errors.job_not_found': 'This job no longer exists',
+  'errors.job_unfinished':
+    'Only a done, failed or abandoned job can be removed',
   'errors.jobs_unavailable': 'The plan is not available on this server',
   'errors.last_pane': "A tab's last pane is closed by closing the tab",
   'errors.layout_busy': 'herdr-app changed the layout meanwhile. Try again',

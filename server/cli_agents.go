@@ -37,7 +37,9 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]
        termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]
        termote agents job show <id> [--json]
-       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]`
+       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]
+       termote agents job remove <id>
+       termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
 // and 2 (usage). With several panes ending at once, the gravest wins. stop
@@ -236,6 +238,10 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; the worktree was made: open it from the PWA, then start the agent there"
 	case "unknown":
 		hint = "; check the PWA's worktrees before trying again"
+	case "job_unfinished":
+		hint = "; finish it first: termote agents job set <id> --state abandoned"
+	case "job_conflict":
+		hint = "; read it again: termote agents job show <id>"
 	}
 	if e.Code == "input_not_ready" && strings.Contains(msg, "dialog") {
 		hint = "; answer it first: termote agents answer <pane>"

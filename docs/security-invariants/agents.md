@@ -782,7 +782,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
   hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
   `codedError` codes (`job_not_found`, `job_conflict` with the job as it is, `too_many_jobs`,
-  `job_invalid`, `job_no_agent`), anything else a logged 500. `GET` is same-site
+  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500. `GET` is same-site
   (`crossSiteRejection`) for every role; a view-only client gets `id, title, state, branch, live,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
@@ -792,7 +792,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
   and the pane's are shown, the worktree record kept. Writes:
   `requireWriteRole` first; a browser's `PATCH` and `DELETE` need `updated` (a stale one is 409
-  `job_conflict`); `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
+  `job_conflict`); a `DELETE` over the local socket removes only a finished job (`done`, `failed`,
+  `abandoned`; else 409 `job_unfinished`, checked under the store's lock, so no write slips between
+  reading the state and removing it), while a browser removes any job with `updated`; another
+  termote's bridge is not the local socket (`TestBridgeConnContext`) and is held like a browser
+  (`TestJobDeleteFinishedOnlyOnSocket`). `termote agents job remove` and `jobs prune` refuse an
+  unfinished job before sending anything and send the `updated` they read; `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
   with a cursor that verifies (`decodeCursor`). A browser's job is always `createdBy: "pwa"`; a
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
