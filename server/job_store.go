@@ -399,6 +399,11 @@ func (s *jobStore) create(j job) (job, error) {
 		s.addEvent(&j, "created", "")
 		return append(list, j), nil
 	})
+	if err == nil && j.State == "review" {
+		if f := s.onReview.Load(); f != nil {
+			(*f)(j.ID)
+		}
+	}
 	return j, err
 }
 

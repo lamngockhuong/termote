@@ -209,6 +209,12 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 		!strings.Contains(tc.stdout.String(), "its agent no longer runs in") {
 		t.Errorf("gone: exit %d %s", exitCode(err), tc.stdout)
 	}
+	// A finished job: nothing to wait for, said at once.
+	tc.dispatch("agents", []string{"job", "set", j.ID, "--state", "done"})
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "2s"}); err != nil || !strings.Contains(tc.stdout.String(), "is done: nothing to wait for") {
+		t.Errorf("finished: %v %s", err, tc.stdout)
+	}
 	if err := tc.dispatch("agents", []string{"wait", "--job", "nope"}); err == nil || !strings.Contains(err.Error(), "no job nope") {
 		t.Errorf("unknown job: %v", err)
 	}

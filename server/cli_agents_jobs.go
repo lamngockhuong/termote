@@ -462,6 +462,7 @@ const (
 	jobEndBackground
 	jobEndDialog
 	jobEndGone
+	jobEndFinished
 )
 
 func (e jobEnd) exit() int {
@@ -541,6 +542,8 @@ func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd
 		}
 		end := jobEndNone
 		switch l := j.Live; {
+		case jobFinished(j.State):
+			end = jobEndFinished
 		case j.Agent == nil:
 			return nil, nil, fmt.Errorf("job %s has no agent to wait for; give it one: termote agents start --job %s ...", plainText(id), plainText(id))
 		case l.Status == "gone":
@@ -556,7 +559,7 @@ func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd
 			if err := c.agentsGet(port, panePath(l.PaneID, "/agent/prompt"), &pr); err == nil && pr.Prompt != nil {
 				sig = reportedSig(*pr.Prompt)
 			}
-			if sig += "@" + l.LastTS; sig != j.Reported {
+			if sig += "@" + l.EntryTS; sig != j.Reported {
 				end = jobEndDialog
 				if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "reported", Sig: sig}); err != nil {
 					c.jobWarn(err)
@@ -595,6 +598,8 @@ func (c *cli) jobsEnded(list []jobView, ids []string, ends map[string]jobEnd, re
 				jid, plainText(j.Title), ref, pid, plainText(clipLine(j.Live.Background, 80)), pid)
 		case jobEndDialog:
 			fmt.Fprintf(c.out, "Job %s (%s): %s (%s) waits on a dialog; see it: termote agents answer %s\n", jid, plainText(j.Title), ref, pid, pid)
+		case jobEndFinished:
+			fmt.Fprintf(c.out, "Job %s (%s) is %s: nothing to wait for\n", jid, plainText(j.Title), plainText(j.State))
 		case jobEndGone:
 			fmt.Fprintf(c.out, "Job %s (%s): its agent no longer runs in %s (%s); give the job another pane (termote agents job set %s --pane <pane>) or end it (--state abandoned)\n",
 				jid, plainText(j.Title), ref, pid, jid)
@@ -692,6 +697,10 @@ func (c *cli) continueInWorktree(port int, t startTarget, r startRecord) error {
 	id := plainText(p.pane.ID)
 	list, _ := c.jobsGet(port, true)
 	j, found := worktreeJob(list, t.dir)
+	if r.todo != nil {
+		// --job: the user's job is the one that goes on here.
+		j, found = *r.todo, true
+	}
 	jobHint := ""
 	if found {
 		jobHint = fmt.Sprintf(" (job %s)", plainText(j.ID))

@@ -39,6 +39,9 @@ type jobLive struct {
 	// LastTS: the agent's newest entry (never a message of the user's),
 	// which a read sends back (full clients only).
 	LastTS string `json:"lastTs,omitempty"`
+	// EntryTS: the agent's newest transcript entry, a subagent's writes
+	// left out: what tells one dialog from the next for wait --job.
+	EntryTS string `json:"entryTs,omitempty"`
 }
 
 type jobView struct {
@@ -522,7 +525,7 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		live := a.jobLiveIn(snap, j)
 		if viewOnly {
 			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated}
-			b.Live.LastTS = ""
+			b.Live.LastTS, b.Live.EntryTS = "", ""
 			if j.Worktree != nil {
 				b.Branch = j.Worktree.Branch
 			}
@@ -593,8 +596,11 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 	if c, ok := decodeCursor(sum.cursor); ok {
 		conv = c.Session
 	}
-	live.LastTS = sum.agentTS
-	live.Unread = live.Status != "blocked" && sum.agentTS != "" && (conv != j.ReadConv || tsAfter(sum.agentTS, j.ReadTS))
+	live.LastTS, live.EntryTS = sum.agentTS, sum.entryTS
+	// Only an agent at rest has a turn to read: one that only waits on
+	// background work is reported once as such, its subagents' writes
+	// moving agentTS meanwhile.
+	live.Unread = live.Status == "idle" && sum.agentTS != "" && (conv != j.ReadConv || tsAfter(sum.agentTS, j.ReadTS))
 	return live
 }
 

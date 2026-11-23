@@ -413,6 +413,8 @@ type transcriptSummary struct {
 	// later write of one of its subagents: what the job ledger counts as
 	// a turn to read (a message of the user's is not one)
 	agentTS string
+	// entryTS: agentTS from the transcript alone, never a subagent's write
+	entryTS string
 	usage   *overviewUsage
 	// provider: the provider of an OpenCode answer's model
 	provider  string
@@ -434,7 +436,7 @@ func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSu
 			sum.lastTS = e.TS
 		}
 		if sum.agentTS == "" && e.TS != "" && e.Role == "assistant" {
-			sum.agentTS = e.TS
+			sum.agentTS, sum.entryTS = e.TS, e.TS
 		}
 		if e.Role != "assistant" {
 			continue

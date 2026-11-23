@@ -756,13 +756,14 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   tracker's last snapshot (the CLI reads the snapshot before each ledger read, so it is fresh with
   no page open), the cached agent lookup, the overview's screen read for background work and the
   agent's newest transcript entry or subagent write (`summarizePane`'s `agentTS`; a message of the
-  user's is not one), so `unread` (a later one, or another conversation, than the read mark, never
-  while blocked) survives a restart and needs no hook into the tracker; a `read` from the PWA's Chat
+  user's is not one), so `unread` (a later one, or another conversation, than the read mark, only
+  while the agent is idle: one that only waits on background work is reported as that, once) survives a restart and needs no hook into the tracker; a `read` from the PWA's Chat
   view does not move it. Giving the job another agent (`pane`) or finishing it
   ends every grant it has. Moving a job to `review` queues a Web Push of kind `job_review` with the
   job id only (never its title or prompt), only while a device can be sent one
-  (`notifyJobReview`). Zellij renames move the ledger's ids as the tracker's (`renameGroup`). Not in
-  container mode (no `termote agents` there).
+  (`notifyJobReview`), whether the job moved there or was made in it. Zellij renames move the
+  ledger's ids as the tracker's (`renameGroup`). In container mode the ledger exists but only the
+  PWA writes it (`termote agents` does not run there).
 - **Dialog delegation** (`server/job_grants.go`, `server/agent_delegate*.go`, `handleAnswer`):
   a grant is made and revoked (`POST /api/mux/jobs/{id}/grants`, `DELETE .../grants/{gid}`) only by
   a browser signed in with the password or as a full paired device (`canGrant`: `authSession` or
@@ -786,14 +787,19 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   file`, `Create file`, `Overwrite file`: `Write`). Bash: the input has only `command`,
   `description`, `timeout` (`run_in_background` and anything else: `input_keys`); the command is
   printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
-  (`chars`), its first word (base name) is no shell, interpreter or wrapper of the one list
-  `delegateInterpreters`, and `git` takes no `-c`, `--output`, `--exec-path` or `--config-env`
-  (`interpreter`); the words between the two dashed rules under the header (a wrapped row's leading `│`
+  (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
+  no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
+  `delegateInterpreters`, which holds `git` too (its options and config run any program:
+  `--upload-pack`, `-x`, `difftool`, `bisect run`), and a package manager's second word is no
+  runner (`pnpm dlx`, `npm exec`) (`interpreter`); the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
   the prefix and a space (`no_grant`). Edit: the file path is absolute, inside the grant's directory,
-  shown on the row under the header as its path relative to that directory (`mismatch`), not a
-  denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.husky`,
-  `.githooks`, `.vscode`, `.idea`, `node_modules`, `.github/workflows`, `.mcp.json`, `CLAUDE.md`,
+  shown on the row under the header as its path relative to that directory (`mismatch`), every
+  component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
+  short name or stream, nothing case folding or Windows maps onto another name), not a
+  denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
+  `.opencode`, `.agents`, `.husky`, `.githooks`, `.lefthook`, `.vscode`, `.idea`, `.cargo`,
+  `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
   `AGENTS.md`, `.envrc`, `.env*`, `package.json`, lockfiles, `Makefile`, hook configs, sensitive
   names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
@@ -803,8 +809,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
   the grant, job, pane, path and the command's SHA-256, never the command. Over the local socket and
   the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
-  before any key) every option of a permission dialog of any agent except cancel, one whose label
+  before any key) every option of a permission dialog of any agent, a browser's answer
+  forwarded from another termote over the bridge included, except cancel, one whose label
   is `No` or starts with `No` and a comma or a space, and the first option when it reads exactly `Yes`, `Yes, proceed` or
-  `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers are
-  unchanged. Every answer to a permission dialog over the socket or the bridge is logged as
+  `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers to
+  this server's own panes are unchanged. A grant revoked in the milliseconds between the grant check
+  and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
   `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, by).

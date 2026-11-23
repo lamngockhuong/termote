@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -32,13 +33,32 @@ const delegateBadChars = ";&|$(){}*?[]~\\'\"`><!#\n\r\t"
 var delegateInterpreters = []string{
 	"bash", "sh", "zsh", "dash", "fish", "ksh", "csh", "tcsh", "pwsh", "powershell", "cmd",
 	"env", "sudo", "doas", "su", "command", "builtin", "nice", "time", "script", "ssh",
-	"npx", "pnpx", "bunx", "dlx", "node", "deno", "bun", "python", "python2", "python3", "perl", "ruby", "php", "lua", "awk",
-	"eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout", "watch", "make",
+	"npx", "pnpx", "bunx", "dlx", "uvx", "uv", "pipx", "tsx", "ts-node", "busybox", "node", "deno", "bun",
+	"python", "perl", "ruby", "php", "lua", "awk", "eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout",
+	"watch", "make",
+	// git runs any program through its options (--upload-pack, -x,
+	// --exec, difftool, bisect run, submodule foreach) and its config.
+	"git",
 }
 
-// delegateGitOptions are git options that run something else or write
-// elsewhere.
-var delegateGitOptions = []string{"-c", "--output", "--exec-path", "--config-env"}
+// delegateRunners are package managers whose second word runs any package:
+// "pnpm dlx x", "npm exec x".
+var delegateRunners = map[string][]string{
+	"npm": {"exec", "x"}, "pnpm": {"dlx", "exec", "x"}, "yarn": {"dlx", "exec"}, "bun": {"x"},
+}
+
+// interpreterVersionRe: a versioned name of an interpreter (python3.12).
+var interpreterVersionRe = regexp.MustCompile(`^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
+
+// commandName is a command's first word as its program is found: its base
+// name, lowercased, without a Windows extension.
+func commandName(w string) string {
+	n := strings.ToLower(filepath.Base(strings.ReplaceAll(w, "\\", "/")))
+	for _, ext := range []string{".exe", ".cmd", ".bat", ".com", ".ps1"} {
+		n = strings.TrimSuffix(n, ext)
+	}
+	return n
+}
 
 // checkDelegateCommand is "" when cmd may be answered under a grant whose
 // prefix is prefix (an empty prefix: checks cmd alone, as a prefix is when
@@ -58,18 +78,12 @@ func checkDelegateCommand(cmd, prefix string) string {
 	if strings.Join(words, " ") != cmd {
 		return "chars"
 	}
-	first := filepath.Base(words[0])
-	if slices.Contains(delegateInterpreters, strings.ToLower(first)) {
+	first := commandName(words[0])
+	if slices.Contains(delegateInterpreters, first) || interpreterVersionRe.MatchString(first) {
 		return "interpreter"
 	}
-	if first == "git" {
-		for _, w := range words[1:] {
-			for _, o := range delegateGitOptions {
-				if w == o || strings.HasPrefix(w, o+"=") || (o == "-c" && strings.HasPrefix(w, "-c") && len(w) > 2) {
-					return "interpreter"
-				}
-			}
-		}
+	if runs, ok := delegateRunners[first]; ok && len(words) > 1 && slices.Contains(runs, strings.ToLower(words[1])) {
+		return "interpreter"
 	}
 	if prefix != "" && cmd != prefix && !strings.HasPrefix(cmd, prefix+" ") {
 		return "no_grant"
@@ -92,11 +106,13 @@ var delegateDeniedNames = []string{
 	"pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb", "npm-shrinkwrap.json",
 	"go.sum", "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "uv.lock",
 	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", "lefthook.yml", ".lefthook.yml", ".pre-commit-config.yaml",
+	"lefthook-local.yml", ".lefthook-local.yml", "opencode.json", "opencode.jsonc",
 }
 
 // delegateDeniedDirs are directories nothing under which a grant covers
 // ("/"-separated, lowercased, from the worktree's root down).
-var delegateDeniedDirs = []string{".git", ".claude", ".husky", ".githooks", ".vscode", ".idea", ".github/workflows", "node_modules"}
+var delegateDeniedDirs = []string{".git", ".claude", ".codex", ".opencode", ".agents", ".husky", ".githooks", ".lefthook",
+	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules"}
 
 // checkDelegatePath is "" when rel, a path relative to a grant's dir, may
 // be edited under it, else the refusal code. Only the names are read here;
@@ -109,6 +125,20 @@ func checkDelegatePath(rel string) string {
 	parts := strings.Split(strings.ToLower(rel), "/")
 	if slices.Contains(parts, "..") || slices.Contains(parts, ".") || slices.Contains(parts, "") {
 		return "denied_path"
+	}
+	// Only names a file system cannot read as another: printable ASCII
+	// (case folding maps some other letters to ASCII ones on macOS), no
+	// Windows short name (GIT~1), stream (a:b), or trailing dot or space,
+	// which Windows drops when it writes.
+	for _, part := range parts {
+		for i := 0; i < len(part); i++ {
+			if c := part[i]; c < 0x20 || c > 0x7e || c == '~' || c == ':' || c == '\\' {
+				return "denied_path"
+			}
+		}
+		if strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") {
+			return "denied_path"
+		}
 	}
 	base := parts[len(parts)-1]
 	if slices.Contains(delegateDeniedNames, base) || strings.HasPrefix(base, ".env") || isSensitive("/"+strings.Join(parts, "/")) {

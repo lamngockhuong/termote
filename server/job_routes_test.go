@@ -256,6 +256,16 @@ func TestJobUnreadFromTranscript(t *testing.T) {
 			t.Errorf("%s: %v", st, l)
 		}
 	}
+	// Its answer written, only background work left: reported as such,
+	// never as a turn to read while its subagents write.
+	setPaneStatus(jt.f, "working")
+	jt.f.mu.Lock()
+	jt.f.screen = fixtureScreen(t, "2.1.330-wait-background-agent")
+	jt.f.mu.Unlock()
+	jt.snapshot()
+	if l := live(jt.list()[0]); l["unread"] != nil || l["status"] != "background" || l["background"] != "1 background agent" {
+		t.Errorf("background: %v", l)
+	}
 	setPaneStatus(jt.f, "idle")
 	jt.snapshot()
 

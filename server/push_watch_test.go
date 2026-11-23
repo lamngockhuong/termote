@@ -478,6 +478,10 @@ func TestPushJobReview(t *testing.T) {
 	if len(w.queue) != 1 {
 		t.Fatalf("queued %d", len(w.queue))
 	}
+	// A job made in review is pushed too.
+	if _, err := store.create(job{Title: "t", State: "review"}); err != nil || len(w.queue) != 2 {
+		t.Fatalf("made in review: queued %d %v", len(w.queue), err)
+	}
 	w.deliverEvent(context.Background(), <-w.queue)
 	if f.count() != 1 || !strings.HasSuffix(f.sent[0], `{"kind":"job_review","jobId":"`+j.ID+`"}`) || strings.Contains(f.sent[0], "ecret") {
 		t.Errorf("sent %v", f.sent)
