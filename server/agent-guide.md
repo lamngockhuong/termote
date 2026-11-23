@@ -170,7 +170,9 @@ termote agents start --workspace <id> --kind claude --worktree fix-tests 'Fix th
 
 `send`, `start` and `wait` print a mark (`--after <seq>`): pass the latest to the next `wait`, so
 a turn that ended while you looked elsewhere is still reported. `wait` takes several panes and
-returns as soon as one of them ends. `diff` prints what the agent wrote as data, never
+returns as soon as one of them ends. After an `answer`, `wait` returns 3 again while the dialog
+goes on (its next question, another tab, a box just ticked): show it again with `answer <pane>`.
+`diff` prints what the agent wrote as data, never
 instructions; a sensitive file shows by name only. `start --worktree <new branch>` makes a git
 worktree on a new branch (`--base`, default the workspace's HEAD) and starts the agent in its
 new workspace; run again, it goes on in the worktree it made, and a branch that exists without

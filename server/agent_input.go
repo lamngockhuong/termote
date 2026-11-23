@@ -1147,6 +1147,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		a.writeFailure(w, err)
 		return
 	}
+	// The screen moved on from the dialog answered: whatever shows blocked
+	// next (the next question, a new dialog) is a new dialog for a wait.
+	a.activity.leftDialog(paneID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
