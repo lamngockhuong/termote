@@ -677,7 +677,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   part of the name, and the server answers a bad `after` `invalid_after`), reading the ring from the
   oldest mark and counting for each pane only its changes after its own, the snapshot read first so
   the changes are recorded with no page open; a status shown before a pane's mark ends nothing, a
-  reset ring exits 7 rather than guess. Its `next` line always names each pane left with its own
+  reset ring exits 7 rather than guess. It exits 6 only when, past `agentsWaitGrace` from its start
+  and from the last time one was busy, no pane works nor shows background work its ended turn left
+  running (`busyPanes`: a Claude Code pane not blocked whose `agent/prompt` activity names it). Its `next` line always names each pane left with its own
   mark, or says none is left; a pane reported on a dialog stays in it with the latest mark, so the
   wait after an answer reports what follows (the next question, the turn's end). A Claude Code pane that went to working after its mark and is still
   working, but whose screen (`agent/prompt`'s activity) shows its answer written and only background
@@ -747,8 +749,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's
   `reported` (then sends it as `reported`, so the same command asked twice is reported twice and a
   dialog kept open once), only background work once, and a job whose agent is gone; when every
-  job's agent is idle with its last turn read it exits 6 (after `agentsWaitGrace`, or at the
-  timeout), and at the timeout it prints each job's state, never a guess; `jobs
+  job's agent is idle with its last turn read and no `live.background` it exits 6 (after
+  `agentsWaitGrace` from its start and from the last time one was busy, or at the timeout), and at the timeout it prints each job's state, never a guess; `jobs
   --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
   nothing. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
@@ -790,9 +792,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
   after a restart reads `gone`. What the agent does (`live`) is computed per request from the
   tracker's last snapshot (the CLI reads the snapshot before each ledger read, so it is fresh with
-  no page open), the cached agent lookup, the overview's screen read for background work and the
-  agent's newest transcript entry or subagent write (`summarizePane`'s `agentTS`; a message of the
-  user's is not one), so `unread` (a later one, or another conversation, than the read mark, only
+  no page open), the cached agent lookup, the overview's screen read for background work (for an
+  idle Claude Code too: `background` then names what its ended turn left running, its status stays
+  idle) and the agent's newest transcript entry or subagent write (`summarizePane`'s `agentTS`; a
+  message of the user's is not one), so `unread` (a later one, or another conversation, than the read mark, only
   while the agent is idle: one that only waits on background work is reported as that, once) survives a restart and needs no hook into the tracker; a `read` from the PWA's Chat
   view does not move it. Giving the job another agent (`pane`) or finishing it
   ends every grant it has. Moving a job to `review` queues a Web Push of kind `job_review` with the

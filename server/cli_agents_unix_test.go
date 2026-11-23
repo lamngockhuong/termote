@@ -701,3 +701,42 @@ func TestStartTookPrompt(t *testing.T) {
 		}
 	}
 }
+
+// A pane whose turn ended while work it started runs in the background is
+// still waited on: that work ending starts its next turn, which ends the
+// wait; ended with no new turn, there is nothing to wait for.
+func TestAgentsWaitBackgroundShell(t *testing.T) {
+	shortWait(t)
+	tc, f := agentsTest(t, lines(0, 1))
+	f.setStatus("%1", "done")
+	f.setScreen(shellScreen())
+	// Past the grace, the timeout: still waiting, the shell named.
+	tc.stdout.Reset()
+	err := tc.dispatch("agents", []string{"wait", "%1", "--timeout", "500ms"})
+	if exitCode(err) != agentsExitTimeout || !strings.Contains(tc.stdout.String(), "web/api (%1, in the background: 1 shell)") {
+		t.Errorf("background shell: exit %d %s", exitCode(err), tc.stdout)
+	}
+	// The shell ends and the agent takes up its result: the turn's end is
+	// reported.
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		f.setScreen(boxScreen(""))
+		settle() // the server's screen read
+		f.setStatus("%1", "working")
+		time.Sleep(150 * time.Millisecond)
+		f.setStatus("%1", "done")
+	}()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "--timeout", "5s"}); err != nil || !strings.Contains(tc.stdout.String(), "is done") {
+		t.Errorf("next turn: %v %s", err, tc.stdout)
+	}
+	// The shell ends with no new turn: nothing to wait for.
+	f.setScreen(shellScreen())
+	settle()
+	go func() { time.Sleep(300 * time.Millisecond); f.setScreen(boxScreen("")) }()
+	start := time.Now()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "--timeout", "5s"}); exitCode(err) != agentsExitIdle || time.Since(start) < 300*time.Millisecond {
+		t.Errorf("shell ended, no turn: exit %d after %v %s", exitCode(err), time.Since(start), tc.stdout)
+	}
+}

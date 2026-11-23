@@ -62,7 +62,9 @@ or loses its agent (5) after its mark; every pane that ended is printed, the gra
 A pane that wrote its answer and only waits on background work is reported once too (exit 0,
 "only waits on background work") when it started that turn after its mark: `read` it; it stays
 in the `next:` line with a new mark, so the next `wait` tells you when its turn ends. 4: the timeout passed; 6: no pane works and none ended, nothing
-to wait for; 7: the history was reset, so `read` each pane. After an `answer`, `wait` returns 3 again while the
+to wait for. A Claude Code pane whose turn ended while work it started still runs in the
+background (`list`: `done` or `idle` with `background: "1 shell"`) is still waited on: that work
+ending starts its next turn, which ends the wait; 6 only once the work is over with no new turn; 7: the history was reset, so `read` each pane. After an `answer`, `wait` returns 3 again while the
 dialog goes on (its next question, another tab, a box just ticked in a multi-choice question):
 look at it again with `answer <pane>` before the next answer. A pane that waits on a dialog stays
 in the `next:` line with a new mark, so after you answer it the next `wait` reports what follows.
@@ -91,7 +93,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   background work left, or a job whose agent is gone (tmux restarted, the pane closed): then ask
   the user and give the job another pane (`job set <id> --pane <pane>`) or end it (`--state
   abandoned`). `read` the pane after each report: that marks the turn read. Exit 6: every job's
-  agent is idle and its last turn was read, so nothing would end the wait: give one work or set
+  agent is idle, its last turn was read and nothing it started still runs in the background, so
+  nothing would end the wait: give one work or set
   its state; 4: the timeout passed while one still works, or still waits on a dialog or background
   work reported before (each job's line says which).
 - When an agent finished, review its work (`diff --stat`), then `job set <id> --state review

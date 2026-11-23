@@ -22,6 +22,14 @@ func boxScreen(draft string) string {
 	return "● Earlier answer.\n\n" + rule + "\n❯ " + draft + "\n" + rule + "\n  sonnet · main\n  ⏸ manual mode on\n"
 }
 
+// shellScreen is Claude Code's screen once its turn ended while a shell it
+// started still runs in the background.
+func shellScreen() string {
+	rule := strings.Repeat("─", 40)
+	return "● Started the tests in the background.\n\n✻ Cogitated for 5m 36s · done 12:26 AM · 1 shell still running\n\n" +
+		rule + "\n❯ \n" + rule + "\n  sonnet · main\n"
+}
+
 func fixtureScreen(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile("testdata/claude/screens/" + name + ".txt")

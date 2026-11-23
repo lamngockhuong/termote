@@ -652,3 +652,19 @@ func TestDirInTree(t *testing.T) {
 		}
 	}
 }
+
+// An idle Claude Code whose turn ended while a shell it started still runs
+// says so in live.background; its status stays idle, its turn readable.
+func TestJobLiveIdleBackground(t *testing.T) {
+	jt := newJobsTest(t)
+	jt.create(map[string]any{"title": "Tests", "pane": "w1:pa"})
+	jt.f.setScreen(shellScreen())
+	if l := live(jt.list()[0]); l["status"] != "idle" || l["background"] != "1 shell" {
+		t.Errorf("shell running: %v", l)
+	}
+	jt.f.setScreen(boxScreen(""))
+	jt.agent.input.captures = newTTLCache[string](0)
+	if l := live(jt.list()[0]); l["status"] != "idle" || l["background"] != nil {
+		t.Errorf("shell ended: %v", l)
+	}
+}

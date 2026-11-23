@@ -104,7 +104,9 @@ còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read
 
 Agent Claude Code đã viết xong câu trả lời và chỉ còn chờ việc chạy nền do nó mở (một subagent chạy
 nền) cũng được báo một lần, và vẫn nằm trong dòng `next:` để lần `wait` sau báo khi phần chạy nền đó
-xong; `list` ghi trạng thái của nó là `background`.
+xong; `list` ghi trạng thái của nó là `background`. Agent đã kết thúc lượt nhưng một shell nó chạy
+vẫn còn chạy nền (`done` kèm `background: "1 shell"`) vẫn được chờ tiếp: shell chạy xong thì agent
+bắt đầu lượt mới, và `wait` báo khi lượt đó kết thúc thay vì báo không còn gì để chờ.
 
 Mỗi pane được chờ từ mốc riêng của nó, lấy từ nhật ký hoạt động của server: `send` và `start` in ra
 pane kèm mốc (`termote agents wait %3@41`), còn `wait` in một dòng `next:` gồm từng pane chưa được
@@ -136,8 +138,8 @@ thúc mà orchestrator chưa đọc không, branch và thư mục.
 
 `wait --job <id>...` báo một lượt orchestrator chưa đọc, dù lượt đó kết thúc từ lúc nào (kể cả trước
 khi bắt đầu chờ, hay trong lúc server tắt), báo một hộp thoại đúng một lần dù bạn để nó mở, và báo
-việc nào mà agent đã mất (tmux khởi động lại, pane bị đóng). Khi agent của mọi việc đều rảnh và lượt
-cuối đã được đọc, lệnh báo không còn gì để chờ thay vì chờ tới hết giờ. Termote nhận ra agent của một việc qua
+việc nào mà agent đã mất (tmux khởi động lại, pane bị đóng). Khi agent của mọi việc đều rảnh, lượt
+cuối đã được đọc và không còn shell nào nó mở chạy nền, lệnh báo không còn gì để chờ thay vì chờ tới hết giờ. Termote nhận ra agent của một việc qua
 tiến trình của nó, nên một agent khác chiếm lại id pane tmux cũ không bao giờ bị nhầm là agent của
 việc. Khi agent làm xong, orchestrator chuyển việc sang `review` kèm ghi chú và bạn nhận được một
 thông báo đẩy; nó không bao giờ tự đánh dấu việc là `done` thay bạn.
