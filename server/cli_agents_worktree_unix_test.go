@@ -143,8 +143,15 @@ func TestAgentsStartWorktree(t *testing.T) {
 		t.Errorf("reopened pane: %s", last)
 	}
 	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true}`))
-	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "unexpected answer") {
+	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "unexpected answer") ||
+		!strings.Contains(err.Error(), "(branch feat, in /wt/feat stays)") {
 		t.Errorf("no id: %v", err)
+	}
+	// The worktree is there and opening it is refused: it is named.
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusConflict, `{"error":"no","code":"open_failed"}`))
+	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "(open_failed)") ||
+		!strings.Contains(err.Error(), "(branch feat, in /wt/feat stays)") {
+		t.Errorf("open refused: %v", err)
 	}
 	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`))
 	// A refused start keeps the worktree and names it.
@@ -207,7 +214,9 @@ func TestAgentsStartWorktreeRefusals(t *testing.T) {
 	for code, want := range map[string]string{"linked_source": "from the main checkout's workspace", "invalid_name": "not a valid branch name",
 		"open_failed": "open it from the PWA", "branch_exists": "pick a new branch name"} {
 		s.set("POST /api/mux/worktrees", answer(http.StatusConflict, `{"error":"no","code":"`+code+`"}`))
-		if err := start("claude", "feat"); err == nil || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), want) {
+		// Nothing was made, so nothing is said to stay.
+		if err := start("claude", "feat"); err == nil || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), want) ||
+			strings.Contains(err.Error(), "stay") {
 			t.Errorf("%s: %v", code, err)
 		}
 	}
@@ -249,5 +258,126 @@ func TestAgentsStartWorktreeSettles(t *testing.T) {
 	}
 	if n := countPosts(s, "/api/mux/worktrees "); n != 2 {
 		t.Errorf("creates %d", n)
+	}
+}
+
+// Every failure once the worktree exists names what stays, though the
+// workspace or the directory may not be known yet.
+func TestAgentsStartWorktreeNamesWhatStays(t *testing.T) {
+	shortWorktreeWaits(t)
+	tc, s := scriptedCLI(t)
+	ws := newWorktreeScript(t, s, worktreeCaps)
+	start := func() error {
+		ws.mu.Lock()
+		ws.made = false
+		ws.mu.Unlock()
+		return tc.dispatch("agents", []string{"start", "--workspace", "w", "--kind", "claude", "--worktree", "feat", "go"})
+	}
+	const stays = "(branch feat and its worktree stay; see the PWA's worktrees)"
+
+	// Made, but the answer cannot be read.
+	s.set("POST /api/mux/worktrees", func(w http.ResponseWriter, r *http.Request) {
+		ws.make()
+		answer(http.StatusOK, `{"ok":true}`)(w, r)
+	})
+	if err := start(); err == nil || !strings.Contains(err.Error(), "unexpected answer") || !strings.Contains(err.Error(), stays) {
+		t.Errorf("unreadable answer: %v", err)
+	}
+
+	// Made, answered 200, yet not in the list read after it.
+	s.set("POST /api/mux/worktrees", answer(http.StatusOK, `{"ok":true,"id":"w2"}`))
+	if err := start(); err == nil || !strings.Contains(err.Error(), "not in the list after it was made") || !strings.Contains(err.Error(), stays) {
+		t.Errorf("not listed: %v", err)
+	}
+
+	// Made, and the list read after it fails.
+	lists := 0
+	listed := func(w http.ResponseWriter, r *http.Request) {
+		if lists++; lists > 1 {
+			answer(http.StatusInternalServerError, `{"error":"no","code":"internal"}`)(w, r)
+			return
+		}
+		jsonAnswer(worktreeListing{RepoName: "repo", Worktrees: []Worktree{{Path: "/src/repo", Branch: "main"}}, Branches: []string{"main"}})(w, r)
+	}
+	s.set("GET /api/mux/worktrees", listed)
+	s.set("POST /api/mux/worktrees", answer(http.StatusOK, `{"ok":true,"id":"w2"}`))
+	if err := start(); err == nil || !strings.Contains(err.Error(), stays) {
+		t.Errorf("list after: %v", err)
+	}
+
+	// The answer to a create is cut short: nothing is known to be made.
+	s.set("GET /api/mux/worktrees", listed)
+	lists = 0
+	s.set("POST /api/mux/worktrees", shortBody)
+	if err := start(); err == nil || !strings.Contains(err.Error(), "reading the server's answer") || strings.Contains(err.Error(), "stay") {
+		t.Errorf("create cut short: %v", err)
+	}
+
+	// A create that did not answer shows in the list with no workspace, and
+	// opening it is refused.
+	shown := false
+	s.set("GET /api/mux/worktrees", func(w http.ResponseWriter, r *http.Request) {
+		l := worktreeListing{RepoName: "repo", Worktrees: []Worktree{{Path: "/src/repo", Branch: "main"}}, Branches: []string{"main"}}
+		if shown {
+			l.Worktrees = append(l.Worktrees, Worktree{Path: "/wt/feat", Branch: "feat", Linked: true, Openable: true})
+			l.Branches = append(l.Branches, "feat")
+		}
+		jsonAnswer(l)(w, r)
+	})
+	s.set("POST /api/mux/worktrees", func(w http.ResponseWriter, r *http.Request) {
+		shown = true
+		answer(http.StatusGatewayTimeout, `{"error":"later","code":"unknown"}`)(w, r)
+	})
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusConflict, `{"error":"no","code":"open_failed"}`))
+	if err := start(); err == nil || !strings.Contains(err.Error(), "(open_failed)") || !strings.Contains(err.Error(), stays) {
+		t.Errorf("settled, open refused: %v", err)
+	}
+
+	// Run again: the worktree is listed, and the answer to opening it is cut
+	// short.
+	s.set("POST /api/mux/worktrees/open", shortBody)
+	if err := start(); err == nil || !strings.Contains(err.Error(), "reading the server's answer") ||
+		!strings.Contains(err.Error(), "(branch feat, in /wt/feat stays)") {
+		t.Errorf("open cut short: %v", err)
+	}
+}
+
+// What the list and the snapshot say before and after the worktree is made.
+func TestAgentsStartWorktreeListFailures(t *testing.T) {
+	shortWorktreeWaits(t)
+	tc, s := scriptedCLI(t)
+	ws := newWorktreeScript(t, s, worktreeCaps)
+	start := func() error {
+		return tc.dispatch("agents", []string{"start", "--workspace", "w", "--kind", "claude", "--worktree", "feat", "go"})
+	}
+	// The first list fails: nothing is made, nothing is said to stay.
+	s.set("GET /api/mux/worktrees", answer(http.StatusInternalServerError, `{"error":"no","code":"internal"}`))
+	if err := start(); err == nil || !strings.Contains(err.Error(), "(internal)") || strings.Contains(err.Error(), "stay") || countPosts(s, "/api/mux/") != 0 {
+		t.Errorf("first list: %v", err)
+	}
+	// A worktree the server cannot open is refused before anything is made.
+	s.set("GET /api/mux/worktrees", jsonAnswer(worktreeListing{RepoName: "repo",
+		Worktrees: []Worktree{{Path: "/src/repo", Branch: "main"}, {Path: "/wt/feat", Branch: "feat", Linked: true}}, Branches: []string{"main", "feat"}}))
+	if err := start(); err == nil || !strings.Contains(err.Error(), "(/wt/feat) cannot be opened") || countPosts(s, "/api/mux/") != 0 {
+		t.Errorf("not openable: %v", err)
+	}
+	// The snapshot fails while the new workspace is awaited: it is named.
+	ws = newWorktreeScript(t, s, worktreeCaps)
+	ws.make()
+	opened := false
+	snapshot := s.routes["GET /api/mux/snapshot"]
+	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		if opened {
+			answer(http.StatusInternalServerError, `{"error":"no","code":"internal"}`)(w, r)
+			return
+		}
+		snapshot(w, r)
+	})
+	s.set("POST /api/mux/worktrees/open", func(w http.ResponseWriter, r *http.Request) {
+		opened = true
+		answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`)(w, r)
+	})
+	if err := start(); err == nil || !strings.Contains(err.Error(), "workspace w2, branch feat, in /wt/feat stays") {
+		t.Errorf("snapshot after: %v", err)
 	}
 }

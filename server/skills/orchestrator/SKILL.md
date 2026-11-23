@@ -110,8 +110,9 @@ command to run (`next: termote agents wait ... --after ...`).
   `(unknown)` the worktree may still be made, check the user's worktrees before trying again;
   `(linked_source)` run it from the main checkout's workspace; `(branch_exists)` pick a new
   branch name; `(open_failed)` the worktree was made but its workspace did not open: tell the
-  user. Whatever fails after the worktree exists, the message names the workspace, branch and
-  directory that stay.
+  user. Whatever fails after the worktree exists, the message names what stays: the branch, with
+  its directory (and workspace) when known, else "see the PWA's worktrees". Tell the user, and
+  run the same command again rather than a new branch name.
 
 ## Never
 
