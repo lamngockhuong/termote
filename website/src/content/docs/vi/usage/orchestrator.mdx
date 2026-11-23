@@ -103,6 +103,12 @@ hoặc không còn agent (5); mọi pane đã kết thúc đều được in, v�
 `--timeout` (mặc định 30 phút), 6 là không pane nào đang làm và cũng không pane nào vừa xong (không
 còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read` từng pane).
 
+Agent có thể kết thúc lượt bằng một câu hỏi viết ngay trong câu trả lời thay vì trong hộp thoại
+("Có cần thêm test không?"). Lượt đó vẫn tính là đã kết thúc (mã 0), nhưng `wait` ghi rằng pane
+`ends with a question`, và `read` cũng đánh dấu như vậy (trường `endsWithQuestion` trong
+`read --json`), để orchestrator hỏi lại bạn rồi gửi câu trả lời của bạn, thay vì báo việc đã xong.
+Termote chỉ xét dòng cuối của câu trả lời có kết thúc bằng dấu hỏi hay không.
+
 Agent Claude Code đã viết xong câu trả lời và chỉ còn chờ việc chạy nền do nó mở (một subagent chạy
 nền) cũng được báo một lần, và vẫn nằm trong dòng `next:` để lần `wait` sau báo khi phần chạy nền đó
 xong; `list` ghi trạng thái của nó là `background`. Agent đã kết thúc lượt nhưng một shell nó chạy

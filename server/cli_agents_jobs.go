@@ -611,7 +611,7 @@ func (c *cli) agentsWaitJobs(args []string) error {
 				return err
 			}
 			if len(ends) > 0 {
-				return c.jobsEnded(list, ids, ends, rest)
+				return c.jobsEnded(port, list, ids, ends, rest)
 			}
 			last = list
 			// An agent given work a moment ago may not have started yet:
@@ -738,7 +738,7 @@ func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd
 }
 
 // jobsEnded prints every job that needs the orchestrator and how to go on.
-func (c *cli) jobsEnded(list []jobView, ids []string, ends map[string]jobEnd, rest []string) error {
+func (c *cli) jobsEnded(port int, list []jobView, ids []string, ends map[string]jobEnd, rest []string) error {
 	code := 0
 	for _, id := range ids {
 		end, ok := ends[id]
@@ -749,7 +749,11 @@ func (c *cli) jobsEnded(list []jobView, ids []string, ends map[string]jobEnd, re
 		ref, pid, jid := plainText(j.Live.Ref), plainText(j.Live.PaneID), plainText(j.ID)
 		switch end {
 		case jobEndDone:
-			fmt.Fprintf(c.out, "Job %s (%s): %s (%s) ended a turn; read it: termote agents read %s\n", jid, plainText(j.Title), ref, pid, pid)
+			if c.paneEndsWithQuestion(port, j.Live.PaneID) {
+				fmt.Fprintf(c.out, "Job %s (%s): %s (%s) ended a turn with a question for the user; read it: termote agents read %s\n", jid, plainText(j.Title), ref, pid, pid)
+			} else {
+				fmt.Fprintf(c.out, "Job %s (%s): %s (%s) ended a turn; read it: termote agents read %s\n", jid, plainText(j.Title), ref, pid, pid)
+			}
 		case jobEndBackground:
 			fmt.Fprintf(c.out, "Job %s (%s): %s (%s) wrote its answer and only waits on background work (%s); read it: termote agents read %s\n",
 				jid, plainText(j.Title), ref, pid, plainText(clipLine(j.Live.Background, 80)), pid)

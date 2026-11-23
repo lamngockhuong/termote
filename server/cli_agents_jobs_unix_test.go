@@ -196,6 +196,19 @@ func TestAgentsJobHooksAndWait(t *testing.T) {
 		t.Errorf("between polls: %v %s", err, tc.stdout)
 	}
 	tc.dispatch("agents", []string{"read", "%1"})
+	// A turn that ends on a question for the user says so, in wait --job
+	// and in read; the exit status stays 0.
+	appendFile(t, path, tsLine(3, "2026-11-23T09:07:00.000Z", "Fixed. Should I also update the docs?"))
+	settle()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "2s"}); err != nil ||
+		!strings.Contains(tc.stdout.String(), "Job "+j.ID+" (Parser): web/api (%1) ended a turn with a question for the user; read it: termote agents read %1") {
+		t.Errorf("question: %v %s", err, tc.stdout)
+	}
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "[it ends with a question for the user") {
+		t.Errorf("read question: %v %s", err, tc.stdout)
+	}
 
 	// A dialog the user keeps open is reported once; the other jobs are
 	// still waited for.

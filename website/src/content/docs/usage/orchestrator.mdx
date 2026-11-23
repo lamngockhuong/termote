@@ -104,6 +104,12 @@ dialog (3) or loses its agent (5); every pane that ended is printed, and the gra
 means `--timeout` passed (30 minutes by default), 6 that no pane works and none ended (nothing to
 wait for), 7 that the server's history was reset (read each pane).
 
+An agent may end its turn with a question for you written in its answer rather than in a dialog
+("Shall I add a test too?"). That is still a turn that ended (exit 0), but `wait` says the pane
+`ends with a question`, and `read` marks it too (`endsWithQuestion` in `read --json`), so the
+orchestrator asks you and sends your answer instead of reporting the work as done. Termote only
+looks at whether the last line of the answer ends with a question mark.
+
 A Claude Code agent that has written its answer and only waits on background work it started
 (a background agent) is reported once too, and stays in the `next:` line so the next `wait`
 reports when that work is done; `list` shows it as `background`. An agent whose turn ended while

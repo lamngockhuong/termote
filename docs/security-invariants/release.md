@@ -283,7 +283,8 @@ Part of the [security invariants](README.md): Homebrew, release integrity, the w
   data and never as instructions, and never to run `termote show-password` or `termote pair`; to
   begin with `termote agents jobs`, follow jobs with `wait --job`, try `answer --delegated` before
   asking about a permission dialog, never pick an option that stops a dialog asking and never say it
-  can give or widen a grant (only the user does, in the PWA); a test checks those rules
+  can give or widen a grant (only the user does, in the PWA), and to read the end of an answer before
+  reporting it done (a question for the user is relayed, not set `review`); a test checks those rules
   stay and that every command and flag it names is in `termote help`. The `termote-plugins` job of the
   release workflow (stable releases, after `publish`) writes `lamngockhuong/termote-plugins` with
   `scripts/termote-plugins.sh` from that same file, with a deploy key that can push to that repository

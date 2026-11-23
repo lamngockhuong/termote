@@ -69,7 +69,7 @@ func TestOrchestratorSkillContent(t *testing.T) {
 		"Keep a mark for each pane", "<pane>@<seq>", "(pane_busy)", "(agent_no_turn)", "`self`",
 		"termote agents jobs", "wait --job", "--delegated", "(answer_always_refused)", "never say you can give",
 		"Wait in the background", "run_in_background", "Only after you `read` each", "One running `wait` per pane",
-		"never stands for a\n     yes", "10 minutes"} {
+		"never stands for a\n     yes", "10 minutes", "ends with a question", "endsWithQuestion", "do not set `review`"} {
 		if !strings.Contains(orchestratorSkill, want) {
 			t.Errorf("the skill lost %q", want)
 		}

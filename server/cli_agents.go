@@ -651,10 +651,12 @@ func (c *cli) agentsRead(args []string) error {
 	if !all {
 		entries = lastTurn(entries)
 	}
+	question := endsWithQuestion(t.Entries)
 	if asJSON {
 		// cursor: the conversation read, which a stop names so it never
 		// reaches another session.
-		return writeJSON(c.out, map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "cursor": t.Cursor, "entries": entries})
+		return writeJSON(c.out, map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "cursor": t.Cursor,
+			"endsWithQuestion": question, "entries": entries})
 	}
 	if len(entries) == 0 {
 		fmt.Fprintf(c.out, "%s (%s) has no messages yet.\n", plainText(p.ref()), plainText(p.pane.ID))
@@ -675,6 +677,9 @@ func (c *cli) agentsRead(args []string) error {
 	}
 	if st := p.status(); st != "" {
 		fmt.Fprintf(c.out, "\n[status: %s]\n", plainText(st))
+	}
+	if question {
+		fmt.Fprintln(c.out, "[it ends with a question for the user: ask them, and send their answer]")
 	}
 	return nil
 }
@@ -1015,11 +1020,11 @@ func (c *cli) agentsWait(args []string) error {
 			from = max(from, page.Latest)
 			if ends := waitVerdict(events, keys, marks, s); len(ends) > 0 {
 				w.jobs = c.paneJobIDs(port)
-				return c.waitEnded(s, w, ends, nil, marks, page.Latest)
+				return c.waitEnded(port, s, w, ends, nil, marks, page.Latest)
 			}
 			if ends, what := c.waitBackgroundOnly(port, s, events, keys, marks); len(ends) > 0 {
 				w.jobs = c.paneJobIDs(port)
-				return c.waitEnded(s, w, ends, what, marks, page.Latest)
+				return c.waitEnded(port, s, w, ends, what, marks, page.Latest)
 			}
 			// A pane whose turn ended while work it started runs in the
 			// background (a shell, a background agent) is still waited on:
@@ -1197,7 +1202,7 @@ func sameMarks(keys []string, m uint64) map[string]uint64 {
 // theirs recorded after the snapshot this verdict read is not skipped.
 // what: the background work of each pane that ended with it, which a later
 // wait from latest follows to its turn's end.
-func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, what map[string]string, marks map[string]uint64, latest uint64) error {
+func (c *cli) waitEnded(port int, s Snapshot, w waitPanes, ends map[string]waitEnd, what map[string]string, marks map[string]uint64, latest uint64) error {
 	code := 0
 	var rest []string
 	next := maps.Clone(marks)
@@ -1218,7 +1223,11 @@ func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, what m
 		ref, pid := w.name(s, key)
 		switch end {
 		case waitDone:
-			fmt.Fprintf(c.out, "%s (%s) is done; read it: termote agents read %s\n", ref, pid, pid)
+			if p, ok := findPaneByKey(s, key); ok && c.paneEndsWithQuestion(port, p.pane.ID) {
+				fmt.Fprintf(c.out, "%s (%s) is done and ends with a question for the user; read it: termote agents read %s\n", ref, pid, pid)
+			} else {
+				fmt.Fprintf(c.out, "%s (%s) is done; read it: termote agents read %s\n", ref, pid, pid)
+			}
 		case waitBackground:
 			fmt.Fprintf(c.out, "%s (%s) wrote its answer and only waits on background work (%s); read it: termote agents read %s; its turn ends when that work does (next: waits on it)\n",
 				ref, pid, clipLine(what[key], 80), pid)

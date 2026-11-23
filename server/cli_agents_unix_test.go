@@ -361,6 +361,30 @@ func TestAgentsStopOverLocalSocket(t *testing.T) {
 	}
 }
 
+// A turn that ends on a question for the user is marked in read, as text
+// and in --json; one that ends on a statement is not.
+func TestAgentsReadEndsWithQuestion(t *testing.T) {
+	tc, _ := agentsTest(t, userLine("add a row?")+line(9, "Added the parser.\n\nBạn có muốn bổ sung một dòng cho nó không?"))
+	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "[it ends with a question for the user: ask them, and send their answer]") {
+		t.Errorf("read: %v\n%s", err, tc.stdout)
+	}
+	tc.stdout.Reset()
+	var r struct {
+		EndsWithQuestion *bool `json:"endsWithQuestion"`
+	}
+	if err := tc.dispatch("agents", []string{"read", "%1", "--json"}); err != nil || json.Unmarshal(tc.stdout.Bytes(), &r) != nil || r.EndsWithQuestion == nil || !*r.EndsWithQuestion {
+		t.Errorf("read --json: %v %s", err, tc.stdout)
+	}
+	plain, _ := agentsTest(t, userLine("fix it?")+line(9, "done, fixed"))
+	if err := plain.dispatch("agents", []string{"read", "%1", "--json"}); err != nil || json.Unmarshal(plain.stdout.Bytes(), &r) != nil || r.EndsWithQuestion == nil || *r.EndsWithQuestion {
+		t.Errorf("plain --json: %v %s", err, plain.stdout)
+	}
+	plain.stdout.Reset()
+	if plain.dispatch("agents", []string{"read", "%1"}); strings.Contains(plain.stdout.String(), "ends with a question") {
+		t.Errorf("plain: %s", plain.stdout)
+	}
+}
+
 func TestAgentsReadEmpty(t *testing.T) {
 	tc, _ := agentsTest(t, "")
 	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "has no messages yet") {

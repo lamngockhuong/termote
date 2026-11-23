@@ -185,7 +185,9 @@ limit (Claude Code stops an ordinary command after 10 minutes at most). `wait --
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
 is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,
 its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
-agent is done; leave `done` to the user.
+agent is done; leave `done` to the user. A turn that ends with a question for the user written in
+its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks
+it (`read --json`: `endsWithQuestion`); ask the user and `send` their answer instead.
 
 Keep a mark for each pane you wait on: `send` and `start` print the pane with its own
 (`<pane>@<seq>`), `wait` prints a `next:` line with each pane it did not report and its mark, and

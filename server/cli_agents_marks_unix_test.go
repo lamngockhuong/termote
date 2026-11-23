@@ -214,3 +214,27 @@ func TestAgentsWaitBackgroundOnly(t *testing.T) {
 		t.Errorf("working line: %v\n%s", err, tc.stdout)
 	}
 }
+
+// wait marks a turn that ended on a question for the user, with the same
+// exit status as any turn that ended.
+func TestAgentsWaitEndsWithQuestion(t *testing.T) {
+	shortWait(t)
+	tc, f := agentsTest(t, userLine("add a row")+line(9, "Should I add a row for it as well?**"))
+	port, _ := tc.agentsPort()
+	record := func(pane, status string) {
+		f.setStatus(pane, status)
+		tc.dispatch("agents", []string{"list"})
+	}
+	record("%1", "idle")
+	mark, err := tc.activityLatest(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record("%1", "working")
+	record("%1", "done")
+	tc.stdout.Reset()
+	err = tc.dispatch("agents", []string{"wait", "%1@" + strconv.FormatUint(mark, 10)})
+	if out := tc.stdout.String(); err != nil || !strings.Contains(out, "web/api (%1) is done and ends with a question for the user; read it: termote agents read %1\n") {
+		t.Errorf("%v\n%s", err, out)
+	}
+}
