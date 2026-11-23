@@ -99,7 +99,13 @@ function fakeLedger(page: Page) {
         const body = req.postData() ? JSON.parse(req.postData() as string) : undefined
         sent.push({ method: req.method(), path, body })
         if (req.method() === 'GET') {
-          return answer(route, { jobs: [job], readOnly: false, serverNow: new Date().toISOString(), canGrant: true })
+          return answer(route, {
+            jobs: [job],
+            readOnly: false,
+            serverNow: new Date().toISOString(),
+            canGrant: true,
+            ciAvailable: true,
+          })
         }
         if (req.method() === 'POST' && path.endsWith('/grants')) {
           job.grants.push({
@@ -154,6 +160,27 @@ test.describe('the Plan, answered here', () => {
     await confirm.getByRole('button', { name: 'End' }).click()
     await expect(sheet.getByText('No grant is in force')).toBeVisible()
     expect(ledger.sent.some((s) => s.method === 'DELETE')).toBe(true)
+  })
+
+  test('gives a grant to send failed checks, which names no command', async ({ page }) => {
+    const ledger = fakeLedger(page)
+    await ledger.install()
+    await open(page)
+    const title = `e2e grant ${tag}`
+    await (await details(page, title)).getByRole('button', { name: `Grants of ${title}` }).click()
+    const sheet = page.getByRole('dialog', { name: `Grants of ${title}` })
+    await sheet.getByRole('radio', { name: 'Send failed checks' }).click()
+    await expect(sheet.getByText(/up to 3 times/)).toBeVisible()
+    await expect(sheet.getByRole('textbox', { name: 'Command prefix' })).toHaveCount(0)
+    await sheet.getByRole('button', { name: 'Give the grant' }).click()
+    await expect(sheet.getByText('The grant is in force')).toBeVisible()
+    expect(ledger.sent.find((s) => s.method === 'POST')).toEqual({
+      method: 'POST',
+      path: '/api/mux/jobs/0123456789abcdef/grants',
+      body: { kind: 'ci', minutes: 1440 },
+    })
+    await expect(sheet.getByText('Send failed checks to the agent')).toBeVisible()
+    await expect(sheet.getByText(/sent 0 of 3 times/)).toBeVisible()
   })
 
   test('a view-only device reads the jobs and changes nothing', async ({ page }) => {

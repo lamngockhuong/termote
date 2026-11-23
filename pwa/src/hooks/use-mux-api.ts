@@ -3347,15 +3347,20 @@ export async function jobCI(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action }),
-    signal: AbortSignal.timeout(CI_REQUEST_TIMEOUT_MS),
+    // A send waits for the pane and pastes, as a message does (no limit
+    // here: the server's own bounds it); a refresh's read is bounded
+    signal:
+      action === 'refresh'
+        ? AbortSignal.timeout(CI_REQUEST_TIMEOUT_MS)
+        : undefined,
   })
   if (!res.ok) throw await requestError(res)
   const body = await res.json()
   return { job: body.job, queued: body.queued === true }
 }
 
-// A refresh runs several gh calls on the server, a send pastes a message
-export const CI_REQUEST_TIMEOUT_MS = 60_000
+// A refresh runs several gh calls on the server (90 s at most there)
+export const CI_REQUEST_TIMEOUT_MS = 100_000
 
 // Ends a grant at once. Throws RequestError (grant_not_found,
 // grant_pwa_only).

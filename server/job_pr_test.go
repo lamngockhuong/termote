@@ -54,7 +54,8 @@ func TestCISummary(t *testing.T) {
 		{[]jobPR{{State: prOpen, Checks: ciPass}, {State: prOpen, Checks: ciFail}}, ciFail, false},
 		{[]jobPR{{State: prOpen, Checks: ciPending}, {State: prOpen, Checks: ciPass}}, ciPending, false},
 		{[]jobPR{{State: prOpen, Checks: ciNone}, {State: prOpen, Draft: true}}, prOpen, false},
-		{[]jobPR{{State: prOpen, Draft: true, Checks: ciFail}, {State: prMerged}}, "draft", false},
+		{[]jobPR{{State: prOpen, Draft: true, Checks: ciFail}, {State: prMerged}}, ciFail, false},
+		{[]jobPR{{State: prOpen, Draft: true, Checks: ciPass}, {State: prMerged}}, "draft", false},
 		{[]jobPR{{State: prMerged}, {State: prClosed}}, prMerged, true},
 	} {
 		for i := range c.prs {
@@ -168,7 +169,7 @@ func TestJobPRPins(t *testing.T) {
 
 func TestJobCIViews(t *testing.T) {
 	jt := newJobsTest(t)
-	jt.agent.ci = &ciPoller{a: jt.agent, now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
+	jt.agent.ci = &ciPoller{a: jt.agent, now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
 	id := jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
 	jt.agent.jobs.setJobCI(id, func(j *job) bool {
 		j.CI = &jobCI{Repo: "github.com/o/r", Error: "ci_failed", PRs: []jobPR{

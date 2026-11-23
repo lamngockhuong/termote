@@ -42,7 +42,7 @@ func newCITest(t *testing.T, branch string, remotes ...string) *ciTest {
 	rr := newRootResolver(git)
 	ct := &ciTest{jobsTest: jt, gh: f, repo: repo}
 	ct.p = &ciPoller{a: jt.agent, gh: g, git: git, resolve: rr.resolve, now: time.Now,
-		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
+		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
 	ct.p.onFailed = func(string) { ct.failed.Add(1) }
 	ct.p.onMerged = func(string) { ct.merged.Add(1) }
 	jt.agent.ci = ct.p
@@ -295,5 +295,74 @@ func TestCIPollerTickAndReadOnly(t *testing.T) {
 	}
 	if _, err := ct.p.refresh(context.Background(), id); !errors.Is(err, errCIUnavailable) {
 		t.Errorf("refresh when off = %v", err)
+	}
+}
+
+// A failed read of an attached pull request is a failed read, never the
+// pull request gone: the set of failures is not pushed again when it comes
+// back. A number gh cannot find is left out.
+func TestCIPollerPinReadFails(t *testing.T) {
+	ct := newCITest(t, "feat", "origin", "https://github.com/o/r.git")
+	id := ct.worktreeJob("feat")
+	ct.agent.jobs.update(id, "", func(j *job) error { return applyPRPins(ct.agent.jobs, j, []int{12, 99}, nil) })
+	view := func(n int) string { return fmt.Sprintf("pr view %d --repo=github.com/o/r --json=%s", n, ghPRFields) }
+	ct.list("feat")
+	ct.gh.reply(view(99), fakeGhReply{Err: "GraphQL: Could not resolve to a PullRequest with the number of 99.", Code: 1})
+	ct.gh.reply(view(12), fakeGhReply{Out: ghPRJSON(12, "OPEN", "a", "o", ct.now(), passCheck)})
+	ct.read(id)
+	ct.gh.reply(view(12), fakeGhReply{Out: ghPRJSON(12, "OPEN", "a", "o", ct.now(), failCheck("lint"))})
+	j := ct.read(id)
+	if ct.failed.Load() != 1 || len(j.CI.PRs) != 1 {
+		t.Fatalf("first failure: pushes %d, %+v", ct.failed.Load(), j.CI.PRs)
+	}
+	ct.gh.reply(view(12), fakeGhReply{Err: "error connecting to api.github.com", Code: 1})
+	if _, err := ct.p.read(context.Background(), id); !errors.Is(err, errGhFailed) {
+		t.Errorf("failed read = %v", err)
+	}
+	if j, _ = ct.agent.jobs.job(id); len(j.CI.PRs) != 1 || j.CI.Error != "ci_failed" {
+		t.Errorf("after a failed read %+v", j.CI)
+	}
+	ct.gh.reply(view(12), fakeGhReply{Out: ghPRJSON(12, "OPEN", "a", "o", ct.now(), failCheck("lint"))})
+	j = ct.read(id)
+	if ct.failed.Load() != 1 || countEvents(j, "ci") != 1 || j.CI.Error != "" {
+		t.Errorf("pushed again after a failed read: %d, %d events, %+v", ct.failed.Load(), countEvents(j, "ci"), j.CI)
+	}
+}
+
+// A read cut short (a refresh whose client left, the server stopping)
+// leaves nothing on the job.
+func TestCIPollerCancelledRead(t *testing.T) {
+	ct := newCITest(t, "feat", "origin", "https://github.com/o/r.git")
+	id := ct.worktreeJob("feat")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ct.p.read(ctx, id); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled read = %v", err)
+	}
+	if j, _ := ct.agent.jobs.job(id); j.CI != nil {
+		t.Errorf("a cut read wrote %+v", j.CI)
+	}
+	if ciErrorCode(context.DeadlineExceeded) != "" {
+		t.Error("a deadline is a job's failure")
+	}
+}
+
+// A job without a worktree whose agent is still on the default branch is
+// read again from its folder, so the branch it moves to is followed.
+func TestCIPollerDefaultBranchNotKept(t *testing.T) {
+	ct := newCITest(t, "main", "origin", "https://github.com/o/r.git")
+	ct.f.mu.Lock()
+	ct.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Cwd: ct.repo}
+	ct.f.mu.Unlock()
+	ct.snapshot()
+	id := ct.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
+	if j := ct.read(id); j.CI == nil || j.CI.Branch != "" {
+		t.Fatalf("default branch kept %+v", j.CI)
+	}
+	gitIn(t, ct.repo, "checkout", "-q", "-b", "fix-x")
+	ct.p.targets = map[string]ciTargetAt{}
+	ct.list("fix-x", ghPRJSON(4, "OPEN", "a", "o", ct.now(), passCheck))
+	if j := ct.read(id); j.CI.Branch != "fix-x" || len(j.CI.PRs) != 1 {
+		t.Errorf("new branch not followed %+v", j.CI)
 	}
 }

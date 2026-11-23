@@ -40,7 +40,12 @@ const (
 	// ciRefreshPerMinute refreshes a server takes in a minute.
 	ciRefreshPerMinute = 30
 	ciDefaultTTL       = time.Hour
-	ciNoneKey          = "none"
+	// ciRefreshMost bounds a refresh's read.
+	ciRefreshMost = 90 * time.Second
+	// ciTargetTTL: where a folder's pull requests are asked is read again
+	// after this long (git runs a few times for it).
+	ciTargetTTL = 2 * time.Minute
+	ciNoneKey   = "none"
 )
 
 type ciPoller struct {
@@ -61,6 +66,7 @@ type ciPoller struct {
 	mu        sync.Mutex
 	state     map[string]*ciJobState
 	defaults  map[string]ciDefault
+	targets   map[string]ciTargetAt
 	refreshes []time.Time
 	off       bool
 }
@@ -76,6 +82,8 @@ type ciJobState struct {
 	sendKey   string
 	sendTries int
 	sendNext  time.Time
+	// sending: an automatic send of the job runs
+	sending bool
 }
 
 type ciDefault struct {
@@ -85,7 +93,7 @@ type ciDefault struct {
 
 func newCIPoller(a *agentAPI, files *filesAPI, dir string) *ciPoller {
 	p := &ciPoller{a: a, gh: newGhRunner(dir), git: files.git, resolve: files.roots.resolve, now: time.Now,
-		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
+		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
 	p.afterRead = p.autoSend
 	return p
 }
@@ -199,6 +207,8 @@ func (p *ciPoller) readClaimed(ctx context.Context, id string) {
 	switch {
 	case errors.Is(err, errCIBusy):
 		s.next = now.Add(ciEvery)
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		// Cut short: no failure of the job's, read at the next tick.
 	case err != nil:
 		s.fails++
 		s.next = now.Add(min(ciEvery<<min(s.fails, 6), ciMostBackoff))
@@ -262,7 +272,11 @@ func (p *ciPoller) refresh(ctx context.Context, id string) (job, error) {
 	p.refreshes = append(p.refreshes, now)
 	s.running = make(chan struct{})
 	p.mu.Unlock()
-	p.readClaimed(ctx, id)
+	// The read ends even when the client leaves: a cut one would read as a
+	// failure of the job's.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ciRefreshMost)
+	defer cancel()
+	p.readClaimed(rctx, id)
 	j, ok := p.a.jobs.job(id)
 	if !ok {
 		return job{}, errJobNotFound
@@ -314,7 +328,9 @@ func (p *ciPoller) read(ctx context.Context, id string) (job, error) {
 		if j.Worktree == nil && c.Branch != "" && c.Branch != t.branch {
 			return false
 		}
-		if j.Worktree == nil {
+		// Kept only once it is a branch of the job's own: a pane still on
+		// the default branch is read again from its folder next time.
+		if j.Worktree == nil && t.byBranch {
 			c.Branch = t.branch
 		}
 		c.Repo, c.Push, c.Error = t.repo.String(), t.push.String(), ""
@@ -344,9 +360,35 @@ func (p *ciPoller) read(ctx context.Context, id string) (job, error) {
 		p.onMerged(id)
 	}
 	if err == nil && p.afterRead != nil {
-		p.afterRead(ctx, saved)
+		p.sendAfter(ctx, saved)
 	}
 	return saved, err
+}
+
+// sendAfter runs afterRead (the automatic send, which can wait for the
+// pane's lock and a paste) apart from the reads, one per job at a time, so
+// a slow pane holds up neither the other jobs' reads nor a refresh.
+func (p *ciPoller) sendAfter(ctx context.Context, j job) {
+	p.mu.Lock()
+	s := p.state[j.ID]
+	if s == nil {
+		s = &ciJobState{}
+		p.state[j.ID] = s
+	}
+	if s.sending {
+		p.mu.Unlock()
+		return
+	}
+	s.sending = true
+	p.mu.Unlock()
+	go func() {
+		defer func() {
+			p.mu.Lock()
+			s.sending = false
+			p.mu.Unlock()
+		}()
+		p.afterRead(context.WithoutCancel(ctx), j)
+	}()
 }
 
 // ciTransition moves c.Notified to what c's pull requests show now and
@@ -414,8 +456,9 @@ func (p *ciPoller) pullRequests(ctx context.Context, j job, t ciTarget) ([]jobPR
 			continue
 		}
 		g, err := p.gh.viewPR(ctx, t.repo, n)
-		if errors.Is(err, errGhFailed) {
-			// No such pull request in the repo: nothing to show for it.
+		if errors.Is(err, errPRNotFound) {
+			// No such pull request in the repo: nothing to show for it
+			// (the PWA lists the number to detach it).
 			continue
 		}
 		if err != nil {
@@ -518,6 +561,35 @@ func parseRepoString(s string) (ghRepo, bool) {
 // given), the repo it is pushed to, and where its pull requests are: the
 // upstream remote when there is one besides (a fork), else the same.
 func (p *ciPoller) targetIn(ctx context.Context, dir, branch string) (ciTarget, error) {
+	key := dir + "\x00" + branch
+	p.mu.Lock()
+	c, ok := p.targets[key]
+	p.mu.Unlock()
+	if ok && p.now().Sub(c.at) < ciTargetTTL {
+		return c.t, nil
+	}
+	t, err := p.readTarget(ctx, dir, branch)
+	if err == nil {
+		p.mu.Lock()
+		p.targets[key] = ciTargetAt{t: t, at: p.now()}
+		p.mu.Unlock()
+	}
+	return t, err
+}
+
+type ciTargetAt struct {
+	t  ciTarget
+	at time.Time
+}
+
+// readTarget is targetIn without the cache. A read cut short is ctx's
+// error, never ci_no_repo.
+func (p *ciPoller) readTarget(ctx context.Context, dir, branch string) (t ciTarget, err error) {
+	defer func() {
+		if err != nil && ctx.Err() != nil {
+			err = ctx.Err()
+		}
+	}()
 	root, err := p.resolve(ctx, dir)
 	if err != nil || !root.IsRepo {
 		return ciTarget{}, errNoRepo

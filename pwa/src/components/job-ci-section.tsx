@@ -44,6 +44,11 @@ export function JobCISection({ job, now }: Props) {
   const [badNumber, setBadNumber] = useState(false)
   const ci = job.ci
   const prs = ci?.prs ?? []
+  // Attached numbers gh found no pull request for (a typo, an issue's
+  // number): listed so they can be detached here too
+  const unread = (ci?.pins ?? []).filter(
+    (n) => !prs.some((p) => p.number === n),
+  )
   const failKey = ciFailKey(prs)
   const finished = jobFinished(job.state)
   const canSend = !!failKey && !!job.agent && !finished
@@ -115,7 +120,31 @@ export function JobCISection({ job, now }: Props) {
       >
         {t('jobs.ci.title')}
       </h4>
-      {prs.length === 0 && !ci?.error && (
+      {unread.length > 0 && (
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {unread.map((n) => (
+            <li
+              key={`pin-${n}`}
+              data-testid="job-pr-unread"
+              className="flex items-center gap-2.5 rounded-control border border-dashed border-border px-3 py-2 text-[12px]"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="font-term font-semibold">#{n}</span>{' '}
+                <span className="text-fg-muted">{t('jobs.ci.notFound')}</span>
+              </span>
+              <Button
+                size="sm"
+                onClick={() => void detach(n)}
+                disabled={busy !== null}
+                aria-label={t('jobs.ci.detachName', { n })}
+              >
+                {t('jobs.ci.detach')}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {prs.length === 0 && unread.length === 0 && !ci?.error && (
         <p className="m-0 text-[12px] text-fg-muted">{t('jobs.ci.none')}</p>
       )}
       {prs.length > 0 && (

@@ -190,6 +190,7 @@ export default {
   'jobs.ci.checks.fail': 'check lỗi',
   'jobs.ci.checks.none': 'không có check',
   'jobs.ci.attached': 'gắn tay',
+  'jobs.ci.notFound': 'đã gắn, nhưng không tìm thấy pull request mang số này',
   'jobs.ci.foreign': 'từ repo khác: không bao giờ tự gửi',
   'jobs.ci.open': 'Mở pull request #{n}',
   'jobs.ci.detach': 'Gỡ',

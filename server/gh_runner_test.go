@@ -158,10 +158,14 @@ func TestGhRunnerErrors(t *testing.T) {
 	if _, err := g.viewPR(ctx, testRepo, 1); !errors.Is(err, errGhAuth) {
 		t.Errorf("auth = %v", err)
 	}
-	f.reply("pr view 2 --repo=github.com/o/r --json="+ghPRFields, fakeGhReply{Err: "GraphQL: Could not resolve to a PullRequest (secret text)", Code: 1})
+	f.reply("pr view 2 --repo=github.com/o/r --json="+ghPRFields, fakeGhReply{Err: "error connecting to host (secret text)", Code: 1})
 	_, err := g.viewPR(ctx, testRepo, 2)
 	if !errors.Is(err, errGhFailed) || strings.Contains(err.Error(), "secret") {
 		t.Errorf("failed = %v", err)
+	}
+	f.reply("pr view 5 --repo=github.com/o/r --json="+ghPRFields, fakeGhReply{Err: "GraphQL: Could not resolve to a PullRequest with the number of 5.", Code: 1})
+	if _, err := g.viewPR(ctx, testRepo, 5); !errors.Is(err, errPRNotFound) {
+		t.Errorf("no such pull request = %v", err)
 	}
 	f.reply("pr view 3 --repo=github.com/o/r --json="+ghPRFields, fakeGhReply{Out: "not json"})
 	if _, err := g.viewPR(ctx, testRepo, 3); !errors.Is(err, errGhFailed) {
@@ -215,6 +219,16 @@ func TestGhSignedIn(t *testing.T) {
 	g.signedIn(ctx, "github.com")
 	if n := f.callsOf("auth status --hostname=github.com"); n != 1 {
 		t.Errorf("asked %d times", n)
+	}
+	// No login is asked again: gh auth login shows at once
+	g.signedIn(ctx, "ghe.example.com")
+	if n := f.callsOf("auth status --hostname=ghe.example.com"); n != 2 {
+		t.Errorf("no login kept: asked %d times", n)
+	}
+	// A failed call is not taken for no login
+	f.reply("auth status --hostname=other.example.com", fakeGhReply{Err: "error connecting", Code: 1})
+	if ok, err := g.signedIn(ctx, "other.example.com"); ok || !errors.Is(err, errGhFailed) {
+		t.Errorf("failed call = %v %v", ok, err)
 	}
 }
 

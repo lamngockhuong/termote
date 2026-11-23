@@ -209,6 +209,7 @@ export default {
   'jobs.ci.checks.fail': 'checks failed',
   'jobs.ci.checks.none': 'no checks',
   'jobs.ci.attached': 'attached',
+  'jobs.ci.notFound': 'attached, but no pull request of that number was found',
   'jobs.ci.foreign': 'from another repository: never sent on its own',
   'jobs.ci.open': 'Open pull request #{n}',
   'jobs.ci.detach': 'Detach',

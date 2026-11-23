@@ -49,7 +49,7 @@ describe('job-ci', () => {
     )
   })
 
-  it('keys the failing set as the server does, foreign ones left out', () => {
+  it('keys the failing set as the server does, foreign ones as asked', () => {
     expect(
       ciFailKey([
         pr({ number: 15, checks: 'fail', head: 'b' }),
@@ -57,7 +57,16 @@ describe('job-ci', () => {
         pr({ number: 9, checks: 'pass', head: 'c' }),
         pr({ number: 7, checks: 'fail', head: 'd', foreign: true }),
       ]),
-    ).toBe('fail:12@a,15@b')
+    ).toBe('fail:12@a,15@b,7@d')
+    expect(
+      ciFailKey(
+        [
+          pr({ number: 12, checks: 'fail', head: 'a' }),
+          pr({ number: 7, checks: 'fail', head: 'd', foreign: true }),
+        ],
+        false,
+      ),
+    ).toBe('fail:12@a')
     expect(ciFailKey([pr({ checks: 'pass' })])).toBe('')
     expect(ciSetNumbers('12@abc,15@def')).toBe('#12, #15')
     expect(ciSetNumbers('fail:3@x')).toBe('#3')

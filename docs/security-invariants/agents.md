@@ -913,7 +913,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
   repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias
   mapped to github.com, and only a host `gh auth status` says is signed in (github.com not signed
-  in is `ci_gh_auth`, any other host `ci_no_repo`). gh's stderr only classifies the failure
+  in is `ci_gh_auth`, any other host `ci_no_repo`; a login is kept 10 minutes, no login is asked again on the next read). gh's stderr only classifies the failure
   (`ci_gh_missing`, `ci_gh_auth`, `ci_no_repo`, `ci_failed`, `ci_busy`); it is logged cut to 200
   bytes, never stored or returned. What is kept of a pull request is checked: its URL only when it
   is `https://<host>/<owner>/<repo>/pull/<n>` of that repo, a failed run's id only from a link of
@@ -926,7 +926,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`setJobCI`, which never moves `updated`); that change decides whether a set of failures
   (`<n>@<head>` of each failing pull request) is new against the kept `notified` mark, and only a
   write that succeeded queues a Web Push (`job_ci_failed`, `job_merged`) with the job id only.
-  The first read of a job only sets the mark; a ledger a newer Termote wrote stops the poller.
+  The first read of a job only sets the mark; a failed read (an attached number gh says does not exist aside, which is left out) keeps the pull requests read before, and one cut short (the server stopping, a refresh's client gone) writes nothing; a ledger a newer Termote wrote stops the poller.
   The route: `requireMethod(POST)`, `requireWriteRole`, the global `writeGuard`, a 1 KB body,
   `action` `refresh` (the read's result, ci codes included; one per job every 10 s, 30 a minute
   for the server, `ci_busy` beyond) or `send`. A send (the route's, the CLI's over the socket, or

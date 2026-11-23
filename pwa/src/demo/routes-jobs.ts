@@ -45,9 +45,9 @@ function ciSummary(ci?: JobCI): JobCISummary | undefined {
   if (prs.length === 0) return undefined
   const rank = (p: JobPR): [number, JobCISummary['worst']] => {
     if (p.state !== 'open') return [0, 'merged']
-    if (p.draft) return [1, 'draft']
     if (p.checks === 'fail') return [4, 'fail']
     if (p.checks === 'pending') return [3, 'pending']
+    if (p.draft) return [1, 'draft']
     return [2, 'open']
   }
   let best = -1

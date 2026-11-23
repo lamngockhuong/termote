@@ -154,12 +154,13 @@ func ciRank(p jobPR) (int, string) {
 	switch {
 	case p.State != prOpen:
 		return 0, prMerged
-	case p.Draft:
-		return 1, "draft"
 	case p.Checks == ciFail:
+		// A draft's failed checks too: they are pushed and sent
 		return 4, ciFail
 	case p.Checks == ciPending:
 		return 3, ciPending
+	case p.Draft:
+		return 1, "draft"
 	}
 	return 2, prOpen
 }

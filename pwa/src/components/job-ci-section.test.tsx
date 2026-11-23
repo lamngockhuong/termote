@@ -113,7 +113,7 @@ describe('JobCISection', () => {
   it('offers sending again once that set was sent, and nothing without a failure', () => {
     const { rerender } = render(
       <JobCISection
-        job={job({ ci: { ...job().ci, sent: 'fail:12@aaa' } })}
+        job={job({ ci: { ...job().ci, sent: 'fail:12@aaa,20@' } })}
         now={NOW}
       />,
     )
@@ -166,6 +166,37 @@ describe('JobCISection', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Set done' }))
     })
     expect(mockChange).toHaveBeenCalledWith(merged, { state: 'done' })
+  })
+
+  it('lists an attached number gh found nothing for, to detach it', async () => {
+    mockPin.mockResolvedValue(job())
+    render(
+      <JobCISection
+        job={job({ ci: { ...job().ci, pins: [15, 404] } })}
+        now={NOW}
+      />,
+    )
+    expect(screen.getByTestId('job-pr-unread').textContent).toContain('#404')
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Detach pull request #404' }),
+      )
+    })
+    expect(mockPin).toHaveBeenCalledWith(expect.anything(), [], [404])
+  })
+
+  it('offers sending when only a foreign pull request failed', () => {
+    render(
+      <JobCISection
+        job={job({ ci: { prs: [job().ci!.prs![2]] } })}
+        now={NOW}
+      />,
+    )
+    expect(
+      screen.getByRole('button', {
+        name: 'Send the failed checks to the agent',
+      }),
+    ).toBeTruthy()
   })
 
   it('tells a failed read by its code', () => {

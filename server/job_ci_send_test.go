@@ -44,7 +44,7 @@ func newCISendTest(t *testing.T) (*jobsTest, string) {
 	t.Helper()
 	shortConfirm(t)
 	jt := newJobsTest(t)
-	jt.agent.ci = &ciPoller{a: jt.agent, now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
+	jt.agent.ci = &ciPoller{a: jt.agent, now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
 	id := jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
 	setFailing(t, jt, id, "aaa")
 	return jt, id
@@ -231,5 +231,10 @@ func TestJobCIAutoSendBacksOff(t *testing.T) {
 	}
 	if s := p.state[id]; s.sendTries != 1 || !s.sendNext.After(time.Now()) {
 		t.Errorf("backoff %+v", s)
+	}
+	// Refused again by hand: still one history line for the set
+	jt.agent.sendCI(ctx, id, "u", false)
+	if j, _ = jt.agent.jobs.job(id); countEvents(j, "ci_failed_send") != 1 {
+		t.Errorf("%d ci_failed_send lines", countEvents(j, "ci_failed_send"))
 	}
 }

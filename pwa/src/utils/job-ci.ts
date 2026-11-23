@@ -65,11 +65,15 @@ export function prChecksTone(pr: JobPR): string {
   return 'text-fg-muted'
 }
 
-// The set of failures a job's agent can be sent now (foreign pull requests
-// left out), as server/job_pr.go's ciFailKey names it: "fail:12@abc,15@def"
-export function ciFailKey(prs: JobPR[]): string {
+// The set of failures a job's agent is sent, as server/job_pr.go's
+// ciFailKey names it: "fail:12@abc,15@def". A send the user makes takes the
+// foreign pull requests too (foreign), one under a grant never does.
+export function ciFailKey(prs: JobPR[], foreign = true): string {
   const parts = prs
-    .filter((p) => p.state === 'open' && p.checks === 'fail' && !p.foreign)
+    .filter(
+      (p) =>
+        p.state === 'open' && p.checks === 'fail' && (foreign || !p.foreign),
+    )
     .map((p) => `${p.number}@${p.head ?? ''}`)
     .sort()
   return parts.length ? `fail:${parts.join(',')}` : ''

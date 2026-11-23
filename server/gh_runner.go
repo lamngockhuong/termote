@@ -57,14 +57,18 @@ var (
 	errGhFailed  = &codedError{"ci_failed", "gh could not read the pull requests", http.StatusBadGateway}
 	errNoRepo    = &codedError{"ci_no_repo", "the job's branch is not on a GitHub repository gh is signed in to", http.StatusConflict}
 	errCIBusy    = &codedError{"ci_busy", "too many GitHub reads: try again later", http.StatusTooManyRequests}
+	// errPRNotFound: the repository has no pull request of that number (a
+	// number attached by mistake); never a failed call.
+	errPRNotFound = errors.New("no such pull request")
 )
 
 // ciErrorCode is the code a failed read leaves on the job; "" for a call
-// skipped by the budget, which is no failure of the job's.
+// skipped by the budget or cut short (the server stopping, a refresh whose
+// client left), which is no failure of the job's.
 func ciErrorCode(err error) string {
 	var ce *codedError
 	switch {
-	case err == nil, errors.Is(err, errCIBusy):
+	case err == nil, errors.Is(err, errCIBusy), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return ""
 	case errors.As(err, &ce) && strings.HasPrefix(ce.code, "ci_"):
 		return ce.code
@@ -193,6 +197,7 @@ func (g *ghRunner) spend() bool {
 
 var ghRateLimitRe = regexp.MustCompile(`(?i)rate limit|abuse detection`)
 var ghAuthRe = regexp.MustCompile(`(?i)gh auth login|not logged in|authentication|HTTP 401|bad credentials`)
+var ghNoPRRe = regexp.MustCompile(`(?i)could not resolve to a pullrequest|no pull requests? found`)
 
 // run runs gh with args and returns its stdout.
 func (g *ghRunner) run(ctx context.Context, args ...string) ([]byte, error) {
@@ -239,6 +244,8 @@ func (g *ghRunner) run(ctx context.Context, args ...string) ([]byte, error) {
 				return nil, errCIBusy
 			case ghAuthRe.MatchString(msg):
 				return nil, errGhAuth
+			case ghNoPRRe.MatchString(msg):
+				return nil, errPRNotFound
 			}
 			return nil, errGhFailed
 		}
@@ -269,7 +276,8 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 
 var _ io.Writer = (*limitedBuffer)(nil)
 
-// signedIn: gh has a login for host (checked once per ghAuthTTL).
+// signedIn: gh has a login for host. A login is kept ghAuthTTL; no login is
+// asked again on the next read, so gh auth login shows at once.
 func (g *ghRunner) signedIn(ctx context.Context, host string) (bool, error) {
 	g.mu.Lock()
 	a, ok := g.auth[host]
@@ -278,14 +286,17 @@ func (g *ghRunner) signedIn(ctx context.Context, host string) (bool, error) {
 		return a.ok, nil
 	}
 	_, err := g.run(ctx, "auth", "status", "--hostname="+host)
-	// gh exits 1 for a host it has no login for.
-	if err != nil && !errors.Is(err, errGhAuth) && !errors.Is(err, errGhFailed) {
+	switch {
+	case errors.Is(err, errGhAuth):
+		// gh says it has no login for the host
+		return false, nil
+	case err != nil:
 		return false, err
 	}
 	g.mu.Lock()
-	g.auth[host] = ghAuth{ok: err == nil, at: g.now()}
+	g.auth[host] = ghAuth{ok: true, at: g.now()}
 	g.mu.Unlock()
-	return err == nil, nil
+	return true, nil
 }
 
 // forgetAuth drops what is known of host's login (a call said it is gone).

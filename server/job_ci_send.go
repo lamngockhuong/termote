@@ -132,7 +132,6 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 	if text == "" {
 		return false, j, errCINothingFailed
 	}
-	parts, _ := messageParts(text, nil, 0)
 	snap, err := peekSnapshot(ctx, a.m)
 	if err != nil {
 		return false, j, err
@@ -142,7 +141,9 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 		return false, j, errJobNoAgent
 	}
 	paneID := p.pane.ID
-	budget := messageBudget(0, pasteGrowMost(text))
+	// The message is made again under the lock, from the pull requests as
+	// they are then; this one only sizes the wait, with room for a longer.
+	budget := messageBudget(0, pasteGrowMost(text+text))
 	unlock, err := a.lockPane(ctx, paneID, budget)
 	if err != nil {
 		return false, j, err
@@ -172,7 +173,7 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 	// spent. Another send of the same set finds it marked.
 	now := a.jobs.now()
 	use := grantUse{At: now.UTC().Format(activityTimeFormat)}
-	var prevSent, key, gid, prs string
+	var prevSent, key, gid, prs, msg string
 	var reserveErr error
 	_, wrote, err := a.jobs.setJobCI(id, func(j *job) bool {
 		if j.CI == nil || j.Agent == nil || !j.Agent.matches(p, s) {
@@ -194,6 +195,8 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 			g.Uses = append(g.Uses, use)
 			gid = g.ID
 		}
+		// The message names the set that is marked sent
+		msg = ciMessage(j.CI.PRs, !auto, !auto, j.CI.Repo)
 		prs = ciKeyPRs(key)
 		prevSent, j.CI.Sent = j.CI.Sent, key
 		text := "sent CI failure of " + prs
@@ -211,6 +214,7 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 	case !wrote:
 		return false, j, errJobNotFound
 	}
+	parts, _ := messageParts(msg, nil, 0)
 	err = a.sendMessage(ctx, wr, paneID, s.ID, parts, nil, false)
 	if err != nil && !errors.Is(err, errQueued) {
 		a.undoCISend(id, key, prevSent, gid, use.At)
@@ -253,7 +257,16 @@ func (a *agentAPI) undoCISend(id, key, prevSent, gid, at string) {
 				j.Grants[i].Uses = slices.DeleteFunc(j.Grants[i].Uses, func(u grantUse) bool { return u.At == at })
 			}
 		}
-		a.jobs.addEvent(j, "ci_failed_send", "could not send the CI failure of "+ciKeyPRs(key))
+		// The send did not happen: its line goes too
+		if n := len(j.Events); n > 0 && j.Events[n-1].Kind == "ci_sent" &&
+			strings.HasPrefix(j.Events[n-1].Text, "sent CI failure of "+ciKeyPRs(key)) {
+			j.Events = j.Events[:n-1]
+		}
+		// Once for a set, however often it is tried
+		text := "could not send the CI failure of " + ciKeyPRs(key)
+		if n := len(j.Events); n == 0 || j.Events[n-1].Kind != "ci_failed_send" || j.Events[n-1].Text != text {
+			a.jobs.addEvent(j, "ci_failed_send", text)
+		}
 		return true
 	})
 }
