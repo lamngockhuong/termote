@@ -91,6 +91,8 @@ termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix th
 termote agents jobs [--mine] [--all] [--json] # the job ledger: each job's pane, status, unread turn, branch
 termote agents job show <id>                 # its prompt, note, grants and history
 termote agents job set <id> --state review --note 'What was done'
+termote agents job remove <id>               # remove a done, failed or abandoned job from the ledger
+termote agents jobs prune --older-than 7d    # every finished job not changed for 7 days (--dry-run lists them)
 termote agents wait --job <id>...            # until one of the jobs' agents needs the orchestrator
 termote agents answer <pane> --delegated     # Yes, this once, under a grant you gave in the PWA
 ```

@@ -169,6 +169,7 @@ termote agents start --workspace <id> --kind claude --worktree fix-tests --title
 termote agents jobs                            # the job ledger: each job's pane, status, unread turn, branch, dir
 termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 4: timeout, 5: gone, 6: all idle and read
 termote agents job set <id> --state review --note 'What was done'
+termote agents job remove <id>                 # a finished job only; jobs prune [--older-than 7d] [--dry-run]: every finished one
 termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
 ```
 
@@ -185,7 +186,9 @@ limit (Claude Code stops an ordinary command after 10 minutes at most). `wait --
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
 is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,
 its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
-agent is done; leave `done` to the user. A turn that ends with a question for the user written in
+agent is done; leave `done` to the user. The ledger is the user's history: remove finished jobs
+(`job remove <id>`, `jobs prune`) only when the user asks; an unfinished one is refused, so
+`job set <id> --state abandoned` it first. A turn that ends with a question for the user written in
 its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks
 it (`read --json`: `endsWithQuestion`); ask the user and `send` their answer instead.
 
