@@ -3068,7 +3068,7 @@ termote skills status                  # installed, and does it match this termo
 termote skills uninstall
 ```
 
-It writes `~/.claude/skills/termote-orchestrator/` (or under `CLAUDE_CONFIG_DIR`) and `~/.codex/skills/termote-orchestrator/` (or under `CODEX_HOME`), and only for an agent whose directory exists. A folder of that name you made yourself is left alone. After `termote update`, Termote tells you when the installed skill is from another version; run `termote skills install` again. `termote skills status` compares the installed file with the one in the binary too, so a skill left from an earlier build of the same version is reported as out of date.
+It writes `~/.claude/skills/termote-orchestrator/` (or under `CLAUDE_CONFIG_DIR`) and `~/.codex/skills/termote-orchestrator/` (or under `CODEX_HOME`), and only for an agent whose directory exists. A folder of that name you made yourself is left alone. After `termote update`, Termote tells you when the installed skill is from another version; run `termote skills install` again. `termote skills status` compares the installed file with the one in the binary too, so a skill left from an earlier build of the same version is reported as out of date; `--json` gives the SHA-256 of the skill this termote carries (`sha256`) and of each installed one.
 
 **As a plugin**, from the small `termote-plugins` marketplace (it never downloads the Termote repository):
 
@@ -3124,6 +3124,8 @@ termote agents answer <pane> --delegated     # Yes, this once, under a grant you
 A `<pane>` is the pane id `list` shows (`%3`, `w1:p2`), or a name only one pane has: the pane’s own name, else its tab’s (`api`), or `workspace/name` (`web/api`). A name two panes share is refused, with both ids.
 
 `wait` takes one pane or several and returns as soon as one of them ends a turn (exit 0), shows a dialog (3) or loses its agent (5); every pane that ended is printed, and the gravest exit wins. 4 means `--timeout` passed (30 minutes by default), 6 that no pane works and none ended (nothing to wait for), 7 that the server’s history was reset (read each pane).
+
+An agent may end its turn with a question for you written in its answer rather than in a dialog (“Shall I add a test too?”). That is still a turn that ended (exit 0), but `wait` says the pane `ends with a question`, and `read` marks it too (`endsWithQuestion` in `read --json`), so the orchestrator asks you and sends your answer instead of reporting the work as done. Termote only looks at whether the last line of the answer ends with a question mark.
 
 A Claude Code agent that has written its answer and only waits on background work it started (a background agent) is reported once too, and stays in the `next:` line so the next `wait` reports when that work is done; `list` shows it as `background`. An agent whose turn ended while a shell it started still runs (`done` with `background: "1 shell"`) is still waited on: the shell ending starts its next turn, and `wait` reports that turn’s end rather than say there is nothing to wait for.
 

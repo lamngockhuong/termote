@@ -16,6 +16,7 @@ primary
 secondary
 minimal
 external
+head
 # right-arrow (tên icon): checker xét từng phần của từ có gạch nối
 right
 arrow

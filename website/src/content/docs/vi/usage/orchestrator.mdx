@@ -43,7 +43,8 @@ Lệnh này ghi vào `~/.claude/skills/termote-orchestrator/` (hoặc dưới `C
 trên máy. Thư mục cùng tên do bạn tự tạo thì được giữ nguyên. Sau `termote update`, Termote báo khi
 skill đã cài thuộc phiên bản khác; chạy lại `termote skills install` để cập nhật. `termote skills
 status` còn so file đã cài với bản đi kèm chương trình `termote`, nên skill còn sót lại từ một bản build cũ hơn
-của cùng phiên bản cũng được báo là cần cập nhật.
+của cùng phiên bản cũng được báo là cần cập nhật; `--json` có thêm mã SHA-256 của skill đi kèm
+termote này (`sha256`) và của từng bản đã cài.
 
 **Dưới dạng plugin**, từ marketplace nhỏ `termote-plugins` (không tải repo Termote về):
 
@@ -102,6 +103,12 @@ hoặc không còn agent (5); mọi pane đã kết thúc đều được in, v�
 `--timeout` (mặc định 30 phút), 6 là không pane nào đang làm và cũng không pane nào vừa xong (không
 còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read` từng pane).
 
+Agent có thể kết thúc lượt bằng một câu hỏi viết ngay trong câu trả lời thay vì trong hộp thoại
+("Có cần thêm test không?"). Lượt đó vẫn tính là đã kết thúc (mã 0), nhưng `wait` ghi rằng pane
+`ends with a question`, và `read` cũng đánh dấu như vậy (trường `endsWithQuestion` trong
+`read --json`), để orchestrator hỏi lại bạn rồi gửi câu trả lời của bạn, thay vì báo việc đã xong.
+Termote chỉ xét dòng cuối của câu trả lời có kết thúc bằng dấu hỏi hay không.
+
 Agent Claude Code đã viết xong câu trả lời và chỉ còn chờ việc chạy nền do nó mở (một subagent chạy
 nền) cũng được báo một lần, và vẫn nằm trong dòng `next:` để lần `wait` sau báo khi phần chạy nền đó
 xong; `list` ghi trạng thái của nó là `background`. Agent đã kết thúc lượt nhưng một shell nó chạy
@@ -118,7 +125,7 @@ cho một pane khác, còn lượt đã báo rồi thì không báo lại. `--af
 nêu mà không kèm mốc riêng; `list --json` có mốc mới nhất (`latest`) cho lần chờ đầu tiên, và nêu
 pane mà chính lệnh đang chạy trong đó (`self`) khi biến môi trường của tmux, Herdr hoặc Zellij cho
 biết chắc chắn. Khi đó `send` tới pane ấy bị từ chối, và `--pane` của một việc (`job add`, `job set`)
-trỏ vào nó cũng vậy: việc phải giao cho agent làm việc đó.
+trỏ vào nó cũng vậy: một việc phải giao cho agent trực tiếp làm.
 
 Orchestrator chạy trong Claude Code để `wait` chạy nền, dù chờ theo mốc hay theo `--job`, nên bạn
 vẫn nói chuyện với nó được trong lúc các agent làm việc: Claude Code báo cho nó khi `wait` thoát.
@@ -129,7 +136,7 @@ chạy nền không báo lại được, như Codex, vẫn chờ như cũ với 
 một lệnh của nó; Claude Code dừng một lệnh chạy thường sau tối đa 10 phút.
 
 `diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
-base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
+base (mặc định là branch mà thư mục repo chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
 đã đưa vào index, chưa đưa vào index và chưa được git theo dõi. Diff của từng file nằm sau một dòng nói rằng đây là dữ liệu
 agent viết ra, không phải chỉ dẫn; file nhạy cảm như `.env` chỉ hiện tên, và lệnh in tối đa 64 KB diff
 (`--stat` chỉ liệt kê file).

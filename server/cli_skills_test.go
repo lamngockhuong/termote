@@ -69,7 +69,7 @@ func TestOrchestratorSkillContent(t *testing.T) {
 		"Keep a mark for each pane", "<pane>@<seq>", "(pane_busy)", "(agent_no_turn)", "`self`",
 		"termote agents jobs", "wait --job", "--delegated", "(answer_always_refused)", "never say you can give",
 		"Wait in the background", "run_in_background", "Only after you `read` each", "One running `wait` per pane",
-		"never stands for a\n     yes", "10 minutes"} {
+		"never stands for a\n     yes", "10 minutes", "ends with a question", "endsWithQuestion", "do not set `review`"} {
 		if !strings.Contains(orchestratorSkill, want) {
 			t.Errorf("the skill lost %q", want)
 		}
@@ -225,6 +225,16 @@ func TestSkillsStatus(t *testing.T) {
 	if json.Unmarshal(tc.stdout.Bytes(), &differs) != nil || differs.Agents[0].Current || !differs.Agents[0].Differs {
 		t.Errorf("differs --json: %s", tc.stdout)
 	}
+	// The hashes tell the two texts apart, the installed one as it is.
+	var sums struct {
+		SHA256 string        `json:"sha256"`
+		Agents []skillStatus `json:"agents"`
+	}
+	json.Unmarshal(tc.stdout.Bytes(), &sums)
+	if sums.SHA256 != skillSHA256([]byte(orchestratorSkill)) || len(sums.SHA256) != 64 ||
+		sums.Agents[0].SHA256 != skillSHA256([]byte(orchestratorSkill[:len(orchestratorSkill)-1]+"?")) || sums.Agents[1].SHA256 != "" {
+		t.Errorf("sha256 --json: %s", tc.stdout)
+	}
 	// A link in its place is not the installed text, whatever it points at.
 	target := filepath.Join(t.TempDir(), "SKILL.md")
 	writeFile(t, target, orchestratorSkill)
@@ -232,8 +242,22 @@ func TestSkillsStatus(t *testing.T) {
 	if err := os.Symlink(target, skillFile); err != nil {
 		t.Fatal(err)
 	}
-	if a := tc.skillAgents()[0]; skillTextCurrent(a) {
+	if a := tc.skillAgents()[0]; skillTextCurrent(a) || installedSkillText(a) != nil {
 		t.Error("a link counted as the installed skill")
+	}
+	tc.stdout.Reset()
+	tc.dispatch("skills", []string{"status", "--json"})
+	var linked struct {
+		Agents []skillStatus `json:"agents"`
+	}
+	if json.Unmarshal(tc.stdout.Bytes(), &linked) != nil || linked.Agents[0].SHA256 != "" || linked.Agents[0].Current {
+		t.Errorf("link --json: %s", tc.stdout)
+	}
+	// A file far larger than any skill is not read.
+	os.Remove(skillFile)
+	writeFile(t, skillFile, strings.Repeat("x", skillTextMax+1))
+	if installedSkillText(tc.skillAgents()[0]) != nil {
+		t.Error("an oversized SKILL.md was read")
 	}
 	tc.dispatch("skills", []string{"install", "--agent", "claude"})
 	tc.version = "1.2.0"
@@ -243,7 +267,8 @@ func TestSkillsStatus(t *testing.T) {
 		Version string        `json:"version"`
 		Agents  []skillStatus `json:"agents"`
 	}
-	if err := json.Unmarshal(tc.stdout.Bytes(), &st); err != nil || st.Version != "1.2.0" || !st.Agents[0].Installed || st.Agents[0].Current || st.Agents[0].Version != "1.0.0" || !st.Agents[1].Plugin {
+	if err := json.Unmarshal(tc.stdout.Bytes(), &st); err != nil || st.Version != "1.2.0" || !st.Agents[0].Installed || st.Agents[0].Current || st.Agents[0].Version != "1.0.0" || !st.Agents[1].Plugin ||
+		st.Agents[0].SHA256 != skillSHA256([]byte(orchestratorSkill)) {
 		t.Errorf("status --json: %v %+v", err, st)
 	}
 	tc.stdout.Reset()

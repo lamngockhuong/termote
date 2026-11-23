@@ -675,7 +675,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   already let through). In container mode it refuses before sending anything. A pane is named by its
   id or by a name (its own, else its tab's, or `workspace/name`) that exactly one pane has: a name two
   panes share is refused with both ids, there is no pattern, and a command that writes reaches one
-  pane; only `wait` reads several (32 at most, each name resolved before it starts). `read`,
+  pane; only `wait` reads several (32 at most, each name resolved before it starts). A turn whose
+  last word is assistant text ending in `?` (`endsWithQuestion`, `server/cli_agents_question.go`) is
+  only marked: `read` from the transcript it already read, `wait` and `wait --job` from one more
+  `agent/transcript` read of each pane reported done (a read the server refuses marks nothing);
+  the exit status, the job's state and its read mark stay as they are. `read`,
   `send`, `answer`, `stop` and `wait` refuse a pane that runs no agent, before any request to it. `wait` follows
   the activity ring after a mark of each pane's own (`pane@seq`: `send` and `start` print it for the
   pane they gave work to, `wait` for each pane it did not report; `--after` is the mark of a pane
