@@ -770,7 +770,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
   read found, which a view-only client does not get for a home dir (`viewHidden`), as the
-  overview's changes; the route never runs git itself. Writes:
+  overview's changes; the route never runs git itself. A job's worktree is its branch and folder
+  (a view-only client's `branch`) only while its agent's pane is in it (`dirInTree`, through
+  symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
+  and the pane's are shown, the worktree record kept. Writes:
   `requireWriteRole` first; a browser's `PATCH` and `DELETE` need `updated` (a stale one is 409
   `job_conflict`); `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only

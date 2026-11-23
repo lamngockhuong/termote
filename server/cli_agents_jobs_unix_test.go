@@ -439,3 +439,36 @@ func TestAgentsStartJobAgentLate(t *testing.T) {
 		t.Errorf("never, --job: %+v\n%s", j, out)
 	}
 }
+
+// jobs and job show give a job's worktree as its branch and folder only
+// while its agent's pane is in it; given a pane elsewhere, the pane's.
+func TestAgentsJobsWorktreeElsewhere(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
+	tree := &jobTree{Branch: "job-ledger-case", Base: "main", Dir: "/home/u/.herdr/worktrees/termote/job-ledger-case"}
+	listing := func(outside bool, dir, branch string) {
+		j := job{ID: "j1", Title: "Case worktree", State: "active", Worktree: tree, Agent: &jobAgent{PaneID: "%1", Kind: "claude"}}
+		s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{{j, jobLive{Status: "idle", PaneID: "%1", Ref: "w/api",
+			Dir: dir, Branch: branch, OutsideWorktree: outside}}}}))
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", args); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return tc.stdout.String()
+	}
+	listing(false, tree.Dir, "job-ledger-case")
+	if out := run("jobs"); !strings.Contains(out, "job-ledger-case") || !strings.Contains(out, tree.Dir) {
+		t.Errorf("in the worktree:\n%s", out)
+	}
+	listing(true, "/src/termote", "main")
+	if out := run("jobs"); strings.Contains(out, "job-ledger-case") || !strings.Contains(out, "main") || !strings.Contains(out, "/src/termote") {
+		t.Errorf("elsewhere:\n%s", out)
+	}
+	if out := run("job", "show", "j1"); !strings.Contains(out, "Folder: /src/termote, branch main") ||
+		!strings.Contains(out, "Worktree: branch job-ledger-case (base main) in "+tree.Dir+"; its agent now works in another folder") {
+		t.Errorf("show elsewhere:\n%s", out)
+	}
+}

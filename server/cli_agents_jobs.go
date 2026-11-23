@@ -265,10 +265,11 @@ func (c *cli) agentsJobs(args []string) error {
 		if j.Live.PaneID != "" {
 			pane = plainText(j.Live.Ref) + " (" + plainText(j.Live.PaneID) + ")"
 		}
-		if j.Worktree != nil {
+		if j.Worktree != nil && !j.Live.OutsideWorktree {
 			branch, dir = plainText(j.Worktree.Branch), plainText(c.tildeDir(j.Worktree.Dir))
 		} else {
-			// The pane's folder and branch now.
+			// The pane's folder and branch now: the job has no worktree,
+			// or it was given a pane in another folder.
 			branch, dir = dash(plainText(j.Live.Branch)), dash(plainText(c.tildeDir(j.Live.Dir)))
 		}
 		unread := ""
@@ -404,10 +405,15 @@ func (c *cli) agentsJobShow(args []string) error {
 		}
 		fmt.Fprintf(c.out, "Agent: %s in %s (%s): %s%s\n", plainText(j.Agent.Kind), plainText(j.Live.Ref), plainText(j.Live.PaneID), c.liveText(j.Live), unread)
 	}
-	if w := j.Worktree; w != nil {
-		fmt.Fprintf(c.out, "Worktree: branch %s (base %s) in %s\n", plainText(w.Branch), dash(plainText(w.Base)), plainText(c.tildeDir(w.Dir)))
-	} else if j.Live.Dir != "" {
+	if j.Live.Dir != "" && (j.Worktree == nil || j.Live.OutsideWorktree) {
 		fmt.Fprintf(c.out, "Folder: %s, branch %s\n", plainText(c.tildeDir(j.Live.Dir)), dash(plainText(j.Live.Branch)))
+	}
+	if w := j.Worktree; w != nil {
+		elsewhere := ""
+		if j.Live.OutsideWorktree {
+			elsewhere = "; its agent now works in another folder"
+		}
+		fmt.Fprintf(c.out, "Worktree: branch %s (base %s) in %s%s\n", plainText(w.Branch), dash(plainText(w.Base)), plainText(c.tildeDir(w.Dir)), elsewhere)
 	}
 	if d := j.Diff; d != nil {
 		fmt.Fprintf(c.out, "Last diff: %d commits, %d files (%s)\n", d.Commits, d.Files, sinceText(d.At))

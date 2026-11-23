@@ -3087,6 +3087,9 @@ export interface JobLive {
   // overview last read it
   dir?: string
   branch?: string
+  // The job has a worktree and its agent's pane is in another folder now:
+  // its branch and folder are the pane's (full clients only)
+  outsideWorktree?: boolean
 }
 
 // The agent a job was given to, pinned by its process
