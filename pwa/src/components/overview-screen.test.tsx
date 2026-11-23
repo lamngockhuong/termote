@@ -17,7 +17,9 @@ const {
   mockTranscript,
   mockSendMessage,
   mockInterrupt,
+  mockFetchJobs,
 } = vi.hoisted(() => ({
+  mockFetchJobs: vi.fn(),
   mockFetchOverview: vi.fn(),
   mockFetchActivity: vi.fn(),
   mockFetchUsage: vi.fn(),
@@ -34,10 +36,12 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   sendAgentMessage: (pane: string, text: string, cursor: string) =>
     mockSendMessage(pane, text, cursor),
   interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
+  fetchJobs: () => mockFetchJobs(),
 }))
 
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
+import { resetJobs } from '../hooks/use-jobs'
 import { AgentRequestError, RequestError } from '../hooks/use-mux-api'
 import { agentCards } from '../utils/agent-cards'
 import { OVERVIEW_TICK, OverviewScreen } from './overview-screen'
@@ -141,6 +145,13 @@ describe('OverviewScreen', () => {
     vi.setSystemTime(NOW)
     resetAgentOverview()
     resetActivityLog()
+    resetJobs()
+    mockFetchJobs.mockResolvedValue({
+      jobs: [],
+      readOnly: false,
+      canGrant: false,
+      serverNow: '2026-10-13T09:10:00Z',
+    })
     mockFetchActivity.mockResolvedValue({
       events: [
         {
@@ -969,5 +980,122 @@ describe('agentCards', () => {
         screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
       ).not.toBeChecked()
     })
+  })
+})
+
+describe('OverviewScreen, the Plan', () => {
+  const job = (id: string, paneId: string, ref: string) => ({
+    id,
+    title: `job ${id}`,
+    state: 'active',
+    updated: 'u',
+    agent: { key: paneId, paneId, kind: 'claude' },
+    live: { status: 'working', paneId, ref },
+  })
+
+  beforeEach(() => {
+    resetAgentOverview()
+    resetActivityLog()
+    resetJobs()
+    mockFetchUsage.mockRejectedValue(new Error('no usage'))
+    mockFetchActivity.mockRejectedValue(new Error('no activity'))
+    mockFetchOverview.mockResolvedValue({ serverNow: '', panes: [] })
+    mockFetchJobs.mockResolvedValue({
+      jobs: [job('a', 'p-blocked', 'web:t3'), job('b', 'p-new', 'web:t2')],
+      readOnly: false,
+      canGrant: true,
+      serverNow: '',
+    })
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('reads the jobs with the overview, above the cards', async () => {
+    renderScreen()
+    await act(async () => {})
+    expect(mockFetchJobs).toHaveBeenCalledTimes(1)
+    const plan = screen.getByRole('region', { name: 'Plan' })
+    expect(within(plan).getAllByRole('article')).toHaveLength(2)
+    // The title keeps the focus
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+  })
+
+  it("opens a job's pane as its card does", async () => {
+    const { onOpen } = renderScreen()
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Open pane web:t3' }))
+    expect(onOpen).toHaveBeenLastCalledWith(
+      SESSIONS[2],
+      SESSIONS[2].panes![1],
+      'chat',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open pane web:t2' }))
+    expect(onOpen).toHaveBeenLastCalledWith(
+      SESSIONS[1],
+      SESSIONS[1].panes![0],
+      'terminal',
+    )
+  })
+
+  it('offers the agents to give a job to', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    renderScreen()
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Edit job a' }))
+    const options = within(
+      screen.getByRole('combobox', { name: 'Agent' }),
+    ).getAllByRole('option')
+    // In the cards' order, which the clock decides
+    expect(options[0]).toHaveTextContent('Keep the agent it has')
+    expect(
+      options
+        .slice(1)
+        .map((o) => o.textContent)
+        .sort(),
+    ).toEqual([
+      'Claude Code · api / t1',
+      'Claude Code · web / t3',
+      'Claude Code · web / t3',
+      'Codex · web / t2',
+    ])
+  })
+
+  it('brings the Plan into view when its address asks for it', async () => {
+    window.location.hash = '#/overview?plan=1'
+    renderScreen()
+    await act(async () => {})
+    expect(screen.getByRole('heading', { name: 'Plan' })).toHaveFocus()
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('brings the Plan into view when asked while open', async () => {
+    renderScreen()
+    await act(async () => {})
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+    act(() => {
+      window.dispatchEvent(
+        new HashChangeEvent('hashchange', {
+          newURL: 'http://localhost/#/overview?plan=1',
+        }),
+      )
+    })
+    expect(screen.getByRole('heading', { name: 'Plan' })).toHaveFocus()
+    // A synthetic event reads the address; one without the Plan is ignored
+    screen.getByRole('heading', { name: 'Agents' }).focus()
+    act(() => {
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+    window.location.hash = '#/overview?plan=1'
+    act(() => {
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(screen.getByRole('heading', { name: 'Plan' })).toHaveFocus()
   })
 })

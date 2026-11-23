@@ -4,6 +4,7 @@ import source from '../../public/notify-sw.js?raw'
 import { LOCALES } from '../i18n'
 import { tFor } from '../i18n/i18n-context'
 import { cleanName, notificationContent } from '../utils/agent-notify'
+import { OVERVIEW_PLAN_HASH } from '../utils/deep-link'
 import { LOCALE_CACHE, LOCALE_URL } from '../utils/notify-locale'
 
 type Listener = (event: unknown) => void
@@ -118,7 +119,7 @@ describe('notify-sw.js', () => {
       data: { type: 'termote-notify-ping' },
       ports: [port],
     })
-    expect(port.postMessage).toHaveBeenCalledWith({ version: 3 })
+    expect(port.postMessage).toHaveBeenCalledWith({ version: 4 })
     await dispatch('message', { data: { type: 'SKIP_WAITING' }, ports: [port] })
     await dispatch('message', { data: null, ports: [] })
     await dispatch('message', {
@@ -741,5 +742,114 @@ describe('notify-sw.js settings proposals', () => {
     const none = loadWorker([machine])
     await none.dispatch('notificationclick', click({ settings: true }))
     expect(none.clients.openWindow).toHaveBeenCalledWith('/')
+  })
+})
+
+describe('notify-sw.js job reviews', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  const JOBS_URL = '/api/mux/jobs?all=1'
+  const ID = '0123456789abcdef'
+  const keep = (locale?: string) =>
+    vi.stubGlobal('caches', {
+      match: vi.fn(async () =>
+        locale === undefined ? undefined : new Response(locale),
+      ),
+      open: vi.fn(async () => ({ put: vi.fn() })),
+    })
+  const options = (body: string) => ({
+    body,
+    tag: `termote-job-${ID}`,
+    renotify: true,
+    icon: '/pwa-192x192.png',
+    badge: '/badge-96x96.png',
+    data: { job: ID },
+  })
+
+  it.each(LOCALES)(
+    "shows the job's title in %s, read with the device's credentials",
+    async (locale) => {
+      keep(locale)
+      const calls = stubFetch({
+        [JOBS_URL]: {
+          body: {
+            jobs: [
+              { id: 'ffffffffffffffff', title: 'other' },
+              { id: ID, title: ' Fix\u202e the login\u0007 ' },
+            ],
+          },
+        },
+      })
+      const { registration, dispatch } = loadWorker()
+      await dispatch('push', pushData({ kind: 'job_review', jobId: ID }))
+      expect(registration.showNotification).toHaveBeenCalledWith(
+        tFor(locale)('dialogs.notify.jobReview'),
+        options('Fix the login'),
+      )
+      expect(calls).toHaveLength(1)
+      expect(calls[0].init?.credentials).toBe('same-origin')
+    },
+  )
+
+  it.each(LOCALES)(
+    'says a job waits in %s when its title cannot be read',
+    async (locale) => {
+      keep(locale)
+      const t = tFor(locale)
+      const fallback = options(t('dialogs.notify.jobFallback'))
+      const routes: Record<string, { status?: number; body?: unknown }>[] = [
+        {},
+        { [JOBS_URL]: { status: 403 } },
+        { [JOBS_URL]: { body: { jobs: 'none' } } },
+        { [JOBS_URL]: { body: { jobs: [null, { id: ID }] } } },
+        { [JOBS_URL]: { body: { jobs: [] } } },
+      ]
+      for (const r of routes) {
+        stubFetch(r)
+        const { registration, dispatch } = loadWorker()
+        await dispatch('push', pushData({ kind: 'job_review', jobId: ID }))
+        expect(registration.showNotification).toHaveBeenCalledWith(
+          t('dialogs.notify.jobReview'),
+          fallback,
+        )
+      }
+    },
+  )
+
+  it("takes no id but the server's, and reads nothing for one", async () => {
+    keep('en')
+    const calls = stubFetch({})
+    for (const jobId of ['../x', 'ABCDEF0123456789', 7, '']) {
+      const { registration, dispatch } = loadWorker()
+      await dispatch('push', pushData({ kind: 'job_review', jobId }))
+      expect(registration.showNotification).toHaveBeenCalledWith('Termote', {
+        body: tFor('en')('dialogs.notify.fallback'),
+        icon: '/pwa-192x192.png',
+        badge: '/badge-96x96.png',
+      })
+    }
+    expect(calls).toEqual([])
+  })
+
+  it("opens the overview's Plan", async () => {
+    keep('en')
+    expect(OVERVIEW_PLAN_HASH).toBe('#/overview?plan=1')
+    const win = windowClient()
+    const open = loadWorker([win])
+    await open.dispatch('notificationclick', click({ job: ID }))
+    expect(win.postMessage).toHaveBeenCalledWith({
+      type: 'termote-open',
+      hash: OVERVIEW_PLAN_HASH,
+      machine: '',
+    })
+
+    const none = loadWorker()
+    await none.dispatch('notificationclick', click({ job: ID }))
+    expect(none.clients.openWindow).toHaveBeenCalledWith(
+      `/${OVERVIEW_PLAN_HASH}`,
+    )
   })
 })

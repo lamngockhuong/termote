@@ -1,6 +1,7 @@
 import { type Handler, unsupported } from './http'
 import { AGENT_ROUTES, advanceTurns } from './routes-agent'
 import { FILES_ROUTES } from './routes-files'
+import { JOB_ROUTES } from './routes-jobs'
 import { MUX_ROUTES } from './routes-mux'
 import { STORE_ROUTES } from './routes-store'
 import type { DemoState } from './state'
@@ -33,6 +34,7 @@ export const ROUTES: Record<string, Handler> = {
   ...AGENT_ROUTES,
   ...FILES_ROUTES,
   ...STORE_ROUTES,
+  ...JOB_ROUTES,
   ...REFUSED,
 }
 

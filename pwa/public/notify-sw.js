@@ -5,10 +5,10 @@
 ;(() => {
   // The page turns notifications on only once the active worker answers this,
   // since an older worker kept active (registerType 'prompt') lacks the click
-  // handler, one from before 2 lacks the push handler, and one from before 3
-  // the settings proposal push. Equal to NOTIFY_WORKER_VERSION in
-  // src/utils/notify-permission.ts.
-  const NOTIFY_VERSION = 3
+  // handler, one from before 2 lacks the push handler, one from before 3
+  // the settings proposal push, and one from before 4 the job review push.
+  // Equal to NOTIFY_WORKER_VERSION in src/utils/notify-permission.ts.
+  const NOTIFY_VERSION = 4
 
   self.addEventListener('message', (event) => {
     if (event.data?.type !== 'termote-notify-ping') return
@@ -96,11 +96,20 @@
     await self.clients.openWindow('/')
   }
 
+  // The overview's address that brings its Plan into view. Equal to
+  // OVERVIEW_PLAN_HASH in src/utils/deep-link.ts.
+  const PLAN_HASH = '#/overview?plan=1'
+
   self.addEventListener('notificationclick', (event) => {
     event.notification.close()
     const data = event.notification.data
     if (data?.settings === true) {
       event.waitUntil(openProposal())
+      return
+    }
+    // A job of this server's plan waits for a review
+    if (typeof data?.job === 'string') {
+      event.waitUntil(openPane(PLAN_HASH, ''))
       return
     }
     event.waitUntil(openPane(paneHash(data), machineOf(data?.machine)))
@@ -119,6 +128,8 @@
       agent: 'Agent',
       fallback: 'An agent may need you',
       settings: 'An agent proposes settings changes',
+      jobReview: 'Ready for review',
+      jobFallback: 'A job is ready for you to review',
     },
     vi: {
       blocked: 'Agent cần bạn',
@@ -126,6 +137,8 @@
       agent: 'Agent',
       fallback: 'Có thể một agent đang cần bạn',
       settings: 'Agent đề xuất thay đổi cài đặt',
+      jobReview: 'Việc chờ bạn xem lại',
+      jobFallback: 'Có một việc đang chờ bạn xem lại',
     },
   }
   // Where the page keeps the app's language, so a push read with no page
@@ -281,8 +294,53 @@
     }
   }
 
+  // {"kind":"job_review","jobId":...}: a job of the plan moved to review.
+  // The job's id (16 hex digits, as the server makes them), or ''.
+  function jobReviewId(data) {
+    try {
+      const ev = data?.json()
+      return ev?.kind === 'job_review' &&
+        typeof ev.jobId === 'string' &&
+        /^[0-9a-f]{16}$/.test(ev.jobId)
+        ? ev.jobId
+        : ''
+    } catch {
+      return ''
+    }
+  }
+
+  // The job's title, read with this device's credentials (a view-only
+  // device reads titles too), cleaned as a name; '' when it cannot be read.
+  async function readJobTitle(id) {
+    try {
+      const res = await fetch('/api/mux/jobs?all=1', {
+        credentials: 'same-origin',
+        signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
+      })
+      if (!res.ok) return ''
+      const body = await res.json()
+      const jobs = Array.isArray(body?.jobs) ? body.jobs : []
+      return cleanName(jobs.find((j) => j?.id === id)?.title)
+    } catch {
+      return ''
+    }
+  }
+
   async function showPush(data) {
     const text = await readText()
+    const jobId = jobReviewId(data)
+    if (jobId) {
+      const title = await readJobTitle(jobId)
+      await self.registration.showNotification(text.jobReview, {
+        body: title || text.jobFallback,
+        tag: `termote-job-${jobId}`,
+        renotify: true,
+        icon: ICON,
+        badge: BADGE,
+        data: { job: jobId },
+      })
+      return
+    }
     if (isSettingsPush(data)) {
       // Never a value: the page shows what would change
       await self.registration.showNotification(text.settings, {

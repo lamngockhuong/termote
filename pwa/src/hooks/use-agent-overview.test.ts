@@ -8,6 +8,7 @@ vi.mock('./use-mux-api', async (orig) => ({
 }))
 
 import {
+  followOverview,
   OVERVIEW_POLL,
   resetAgentOverview,
   useAgentOverview,
@@ -169,5 +170,65 @@ describe('useAgentOverview', () => {
     })
     expect(mockFetchOverview).toHaveBeenCalledTimes(2)
     unmount()
+  })
+
+  it('runs its followers after each read, before it tells the readers', async () => {
+    mockFetchOverview
+      .mockResolvedValueOnce(page('one'))
+      .mockRejectedValue(new Error('down'))
+    const order: string[] = []
+    const follower = vi.fn(async () => {
+      order.push(`follower ${mockFetchOverview.mock.calls.length}`)
+    })
+    const stop = followOverview(follower)
+    // Nothing polls yet: nothing runs
+    expect(follower).not.toHaveBeenCalled()
+    const { result, unmount } = renderHook(() => {
+      const o = useAgentOverview()
+      order.push(`render ${o.loaded}`)
+      return o
+    })
+    await act(async () => {})
+    expect(result.current.loaded).toBe(true)
+    expect(order).toEqual(['render false', 'follower 1', 'render true'])
+    // A failed read runs them too
+    await act(async () => {
+      vi.advanceTimersByTime(OVERVIEW_POLL)
+    })
+    expect(follower).toHaveBeenCalledTimes(2)
+    stop()
+    await act(async () => {
+      vi.advanceTimersByTime(OVERVIEW_POLL)
+    })
+    expect(follower).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('runs a follower at once when the overview polls between reads', async () => {
+    let finish = (_v: unknown) => {}
+    mockFetchOverview.mockReturnValueOnce(
+      new Promise((ok) => {
+        finish = ok
+      }),
+    )
+    const { unmount } = renderHook(() => useAgentOverview())
+    // A read is under way: the follower waits for its end
+    const late = vi.fn(async () => {})
+    followOverview(late)
+    expect(late).not.toHaveBeenCalled()
+    await act(async () => finish(page('x')))
+    expect(late).toHaveBeenCalledTimes(1)
+    // Between reads: at once
+    const now = vi.fn(async () => {})
+    followOverview(now)
+    expect(now).toHaveBeenCalledTimes(1)
+    unmount()
+    resetAgentOverview()
+    mockFetchOverview.mockResolvedValue(page('y'))
+    const again = renderHook(() => useAgentOverview())
+    await act(async () => {})
+    // Forgotten by the reset
+    expect(late).toHaveBeenCalledTimes(1)
+    again.unmount()
   })
 })

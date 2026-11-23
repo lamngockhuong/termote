@@ -1,0 +1,203 @@
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Job } from './use-mux-api'
+
+const api = vi.hoisted(() => ({
+  fetchJobs: vi.fn(),
+  createJob: vi.fn(),
+  updateJob: vi.fn(),
+  deleteJob: vi.fn(),
+  createGrant: vi.fn(),
+  revokeGrant: vi.fn(),
+  follow: vi.fn(),
+  stop: vi.fn(),
+}))
+vi.mock('./use-mux-api', async (orig) => ({
+  ...(await orig<typeof import('./use-mux-api')>()),
+  fetchJobs: () => api.fetchJobs(),
+  createJob: (j: unknown) => api.createJob(j),
+  updateJob: (id: string, c: unknown) => api.updateJob(id, c),
+  deleteJob: (id: string, u: string) => api.deleteJob(id, u),
+  createGrant: (id: string, g: unknown) => api.createGrant(id, g),
+  revokeGrant: (id: string, g: string) => api.revokeGrant(id, g),
+}))
+vi.mock('./use-agent-overview', () => ({
+  followOverview: (read: () => Promise<void>) => {
+    api.follow(read)
+    return api.stop
+  },
+}))
+
+import {
+  addJob,
+  changeJob,
+  grantJob,
+  reloadJobs,
+  removeJob,
+  resetJobs,
+  revokeJobGrant,
+  useCurrentJob,
+  useJobs,
+} from './use-jobs'
+import { RequestError } from './use-mux-api'
+
+const job = (id: string, over: Partial<Job> = {}): Job => ({
+  id,
+  title: id,
+  state: 'todo',
+  updated: `${id}-1`,
+  live: {},
+  ...over,
+})
+
+const list = (jobs: Job[], over = {}) => ({
+  jobs,
+  readOnly: false,
+  canGrant: true,
+  serverNow: new Date(Date.now() + 5000).toISOString(),
+  ...over,
+})
+
+const refusal = (code: string, status = 409) =>
+  new RequestError(status, code, code)
+
+describe('useJobs', () => {
+  beforeEach(() => {
+    resetJobs()
+    for (const fn of Object.values(api)) fn.mockReset()
+  })
+  afterEach(() => resetJobs())
+
+  it('follows the overview while read, and reads with it', async () => {
+    api.fetchJobs.mockResolvedValue(list([job('a')]))
+    const a = renderHook(() => useJobs())
+    const b = renderHook(() => useJobs())
+    expect(api.follow).toHaveBeenCalledTimes(1)
+    expect(a.result.current.loaded).toBe(false)
+    const read = api.follow.mock.calls[0][0] as () => Promise<void>
+    expect(read).toBe(reloadJobs)
+    await act(() => read())
+    expect(b.result.current).toMatchObject({
+      jobs: [job('a')],
+      loaded: true,
+      canGrant: true,
+      readOnly: false,
+      error: false,
+    })
+    expect(b.result.current.clockOffset).toBeGreaterThan(4000)
+    a.unmount()
+    expect(api.stop).not.toHaveBeenCalled()
+    b.unmount()
+    expect(api.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes no offset from a server time it cannot read', async () => {
+    api.fetchJobs.mockResolvedValue(list([], { serverNow: '' }))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+    expect(result.current.clockOffset).toBe(0)
+  })
+
+  it('keeps the last read through a failure, and hides on no ledger', async () => {
+    api.fetchJobs
+      .mockResolvedValueOnce(list([job('a')]))
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(refusal('jobs_unavailable', 503))
+      .mockRejectedValueOnce(new RequestError(404, '', 'not found'))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+    await act(() => reloadJobs())
+    expect(result.current).toMatchObject({
+      jobs: [job('a')],
+      error: true,
+      unavailable: false,
+    })
+    await act(() => reloadJobs())
+    expect(result.current.unavailable).toBe(true)
+    await act(() => reloadJobs())
+    expect(result.current.unavailable).toBe(true)
+  })
+
+  it('lands only the latest read', async () => {
+    let first = (_v: unknown) => {}
+    let fail = (_e: unknown) => {}
+    api.fetchJobs
+      .mockReturnValueOnce(new Promise((ok) => (first = ok)))
+      .mockReturnValueOnce(new Promise((_ok, no) => (fail = no)))
+      .mockResolvedValueOnce(list([job('new')]))
+    const { result } = renderHook(() => useJobs())
+    const a = reloadJobs()
+    const b = reloadJobs()
+    await act(() => reloadJobs())
+    first(list([job('old')]))
+    fail(new Error('late'))
+    await act(() => Promise.all([a, b]))
+    expect(result.current.jobs).toEqual([job('new')])
+    expect(result.current.error).toBe(false)
+  })
+
+  it('shows what a write answered before the next read', async () => {
+    api.fetchJobs.mockResolvedValue(list([job('a'), job('b')]))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+
+    api.createJob.mockResolvedValue(job('c'))
+    await act(() => addJob({ title: 'c' }).then(() => {}))
+    expect(api.createJob).toHaveBeenCalledWith({ title: 'c' })
+    expect(result.current.jobs.map((j) => j.id)).toEqual(['a', 'b', 'c'])
+
+    const changed = job('b', { state: 'review', updated: 'b-2' })
+    api.updateJob.mockResolvedValue(changed)
+    await act(() => changeJob(job('b'), { state: 'review' }).then(() => {}))
+    expect(api.updateJob).toHaveBeenCalledWith('b', {
+      state: 'review',
+      updated: 'b-1',
+    })
+    expect(result.current.jobs[1]).toEqual(changed)
+
+    api.createGrant.mockResolvedValue(job('a', { updated: 'a-2' }))
+    await act(() => grantJob(job('a'), { kind: 'edit' }).then(() => {}))
+    expect(api.createGrant).toHaveBeenCalledWith('a', { kind: 'edit' })
+    api.revokeGrant.mockResolvedValue(job('a', { updated: 'a-3' }))
+    await act(() => revokeJobGrant(job('a'), 'g1').then(() => {}))
+    expect(api.revokeGrant).toHaveBeenCalledWith('a', 'g1')
+    expect(result.current.jobs[0].updated).toBe('a-3')
+
+    api.deleteJob.mockResolvedValue(undefined)
+    await act(() => removeJob(changed))
+    expect(api.deleteJob).toHaveBeenCalledWith('b', 'b-2')
+    expect(result.current.jobs.map((j) => j.id)).toEqual(['a', 'c'])
+  })
+
+  it('reads again after a job changed or went elsewhere, then throws', async () => {
+    api.fetchJobs.mockResolvedValue(list([job('a', { updated: 'a-9' })]))
+    const { result } = renderHook(() => useJobs())
+    for (const code of ['job_conflict', 'job_not_found', 'grant_not_found']) {
+      api.updateJob.mockRejectedValueOnce(refusal(code))
+      await act(async () => {
+        await expect(changeJob(job('a'), { title: 'x' })).rejects.toMatchObject(
+          { code },
+        )
+      })
+    }
+    expect(api.fetchJobs).toHaveBeenCalledTimes(3)
+    expect(result.current.jobs[0].updated).toBe('a-9')
+    // Any other refusal reads nothing
+    api.createJob.mockRejectedValueOnce(refusal('job_invalid', 400))
+    await expect(addJob({ title: '' })).rejects.toMatchObject({
+      code: 'job_invalid',
+    })
+    api.deleteJob.mockRejectedValueOnce(new Error('offline'))
+    await expect(removeJob(job('a'))).rejects.toThrow('offline')
+    expect(api.fetchJobs).toHaveBeenCalledTimes(3)
+  })
+
+  it('finds a job as the last read has it, else as given', async () => {
+    api.fetchJobs.mockResolvedValue(list([job('a', { title: 'now' })]))
+    const held = renderHook(() => useCurrentJob(job('a')))
+    const gone = renderHook(() => useCurrentJob(job('z')))
+    await act(() => reloadJobs())
+    expect(held.result.current.title).toBe('now')
+    expect(gone.result.current.title).toBe('z')
+  })
+})

@@ -57,6 +57,7 @@ const promptStore = {
 }
 vi.mock('../hooks/use-agent-prompt', () => ({
   useAgentPrompt: () => promptStore,
+  useAgentActivity: () => ({ activity: null, dialog: false }),
 }))
 vi.mock('../hooks/use-agent-transcript', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-agent-transcript')>()),

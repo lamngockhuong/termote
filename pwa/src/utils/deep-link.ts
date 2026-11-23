@@ -149,6 +149,17 @@ export function parseScreenLink(hash: string): Screen | null {
   return hashPath(hash) === OVERVIEW_HASH ? 'overview' : null
 }
 
+// The overview's address that brings its Plan into view (a job's
+// notification opens it).
+export const OVERVIEW_PLAN_HASH = `${OVERVIEW_HASH}?plan=1`
+
+// Whether a location.hash is the overview's asking for its Plan.
+export function asksOverviewPlan(hash: string): boolean {
+  if (parseScreenLink(hash) !== 'overview') return false
+  const q = hash.indexOf('?')
+  return q !== -1 && new URLSearchParams(hash.slice(q + 1)).get('plan') === '1'
+}
+
 // The hash for the overview, in a focus window when solo.
 export function formatOverviewLink({ solo }: { solo?: boolean } = {}): string {
   return solo ? `${OVERVIEW_HASH}?solo=1` : OVERVIEW_HASH

@@ -6,6 +6,7 @@ import dialogs from './dialogs'
 import errors from './errors'
 import files from './files'
 import help from './help'
+import jobs from './jobs'
 import settings from './settings'
 import shell from './shell'
 import tasks from './tasks'
@@ -20,6 +21,7 @@ export const vi = {
   ...errors,
   ...files,
   ...help,
+  ...jobs,
   ...settings,
   ...shell,
   ...tasks,

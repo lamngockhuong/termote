@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  asksOverviewPlan,
   formatDeepLink,
   formatOverviewLink,
   OVERVIEW_HASH,
+  OVERVIEW_PLAN_HASH,
   parseDeepLink,
   parseScreenLink,
   parseSolo,
@@ -72,6 +74,16 @@ describe('formatDeepLink', () => {
   it('round-trips ids with special characters', () => {
     const link = { group: 'a b/c?', tab: '#1', pane: '..x%', view: 'chat' }
     expect(parseDeepLink(formatDeepLink(link))).toEqual(link)
+  })
+})
+
+describe('asksOverviewPlan', () => {
+  it("reads the overview's address that asks for its Plan", () => {
+    expect(asksOverviewPlan(OVERVIEW_PLAN_HASH)).toBe(true)
+    expect(asksOverviewPlan('#/overview?solo=1&plan=1')).toBe(true)
+    expect(asksOverviewPlan('#/overview')).toBe(false)
+    expect(asksOverviewPlan('#/overview?plan=0')).toBe(false)
+    expect(asksOverviewPlan('#/s/g/t?plan=1')).toBe(false)
   })
 })
 

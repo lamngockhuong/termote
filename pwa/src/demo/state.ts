@@ -12,6 +12,7 @@ import type {
 import { ACME_TRANSCRIPT, WEB_TRANSCRIPT } from './fixtures/agent'
 import { HEAD_FILES } from './fixtures/changes'
 import { FILES } from './fixtures/files'
+import { type DemoJob, demoJobs } from './fixtures/jobs'
 import { ACME_ROOT, DEMO_HOME, demoGroups } from './fixtures/workspace'
 
 // Everything the demo's server holds, in memory: a reload starts again from
@@ -63,6 +64,8 @@ export interface DemoState {
   screens: Map<string, string>
   templates: PromptTemplate[]
   userTasks: UserTask[]
+  // The plan's jobs (routes-jobs.ts)
+  jobs: DemoJob[]
   runs: Map<string, DemoRun>
   recentGroups: RecentGroup[]
   activity: ActivityEvent[]
@@ -112,6 +115,7 @@ export function createState(now: () => number = Date.now): DemoState {
         updated: new Date(t).toISOString(),
       },
     ],
+    jobs: demoJobs(t),
     runs: new Map(),
     recentGroups: [],
     activity: [],
