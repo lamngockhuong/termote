@@ -164,6 +164,26 @@ describe('JobCard', () => {
     expect(screen.queryByText('careful')).toBeNull()
   })
 
+  it("shows a job's pane folder and branch when it has no worktree", () => {
+    render(
+      <JobCard
+        job={job({
+          worktree: undefined,
+          live: {
+            status: 'idle',
+            paneId: '%1',
+            dir: '/src/web',
+            branch: 'main',
+          },
+        })}
+        now={NOW}
+      />,
+    )
+    expect(screen.getByText('main')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    expect(screen.getByText('/src/web')).toBeInTheDocument()
+  })
+
   it('has no details without any', () => {
     render(<JobCard job={job({ worktree: undefined })} now={NOW} />)
     expect(screen.queryByRole('button', { name: 'Details' })).toBeNull()

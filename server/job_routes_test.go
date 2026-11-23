@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // jobsTest is an agent API over a fake Claude Code in pane w1:pa, with a
@@ -524,3 +525,51 @@ func (m *fakeWorktreeMux) OpenWorktree(context.Context, string, string) (string,
 	return "", false, nil
 }
 func (m *fakeWorktreeMux) RemoveWorktree(context.Context, string, bool) error { return nil }
+
+type stubDirer struct{}
+
+func (stubDirer) PaneDir(context.Context, string) (string, string, error) {
+	return "/src/web", "w1:pa", nil
+}
+
+// A job made without a worktree shows its pane's folder and branch now:
+// the folder to full clients only, the branch as the overview read it (none
+// to a view-only client when it is a home dir's).
+func TestJobLiveFolderAndBranch(t *testing.T) {
+	jt := newJobsTest(t)
+	jt.f.mu.Lock()
+	jt.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Name: "claude", Cwd: "/src/web"}
+	jt.f.caps = &Caps{CopyMode: true, Files: true}
+	jt.f.mu.Unlock()
+	jt.snapshot()
+	jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})
+	// Not read yet: the folder, no branch.
+	if l := live(jt.list()[0]); l["dir"] != "/src/web" || l["branch"] != nil {
+		t.Errorf("before the read: %v", l)
+	}
+	jt.agent.files = &filesAPI{dirs: stubDirer{}}
+	// No git here: a read queued in the background finds nothing.
+	jt.agent.changes.mu.Lock()
+	jt.agent.changes.runJob = func(*filesAPI, overviewJob) (overviewChange, bool) { return overviewChange{}, false }
+	jt.agent.changes.mu.Unlock()
+	seed := func(hidden bool) {
+		jt.agent.changes.mu.Lock()
+		jt.agent.changes.byKey["w1:pa"] = overviewChange{status: true, branch: "feat/x", at: time.Now(), asked: time.Now(), viewHidden: hidden}
+		jt.agent.changes.mu.Unlock()
+	}
+	seed(false)
+	if l := live(jt.list()[0]); l["dir"] != "/src/web" || l["branch"] != "feat/x" {
+		t.Errorf("full: %v", l)
+	}
+	_, out := jt.do("view", http.MethodGet, "/api/mux/jobs", nil)
+	b := out["jobs"].([]any)[0].(map[string]any)
+	if b["branch"] != "feat/x" || b["live"].(map[string]any)["dir"] != nil {
+		t.Errorf("view-only: %v", b)
+	}
+	seed(true)
+	_, out = jt.do("view", http.MethodGet, "/api/mux/jobs", nil)
+	b = out["jobs"].([]any)[0].(map[string]any)
+	if b["branch"] != nil || b["live"].(map[string]any)["branch"] != nil {
+		t.Errorf("view-only, home dir: %v", b)
+	}
+}

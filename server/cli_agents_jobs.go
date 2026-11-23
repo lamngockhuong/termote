@@ -215,6 +215,9 @@ func (c *cli) agentsJobs(args []string) error {
 		}
 		if j.Worktree != nil {
 			branch, dir = plainText(j.Worktree.Branch), plainText(c.tildeDir(j.Worktree.Dir))
+		} else {
+			// The pane's folder and branch now.
+			branch, dir = dash(plainText(j.Live.Branch)), dash(plainText(c.tildeDir(j.Live.Dir)))
 		}
 		unread := ""
 		if j.Live.Unread {
@@ -351,6 +354,8 @@ func (c *cli) agentsJobShow(args []string) error {
 	}
 	if w := j.Worktree; w != nil {
 		fmt.Fprintf(c.out, "Worktree: branch %s (base %s) in %s\n", plainText(w.Branch), dash(plainText(w.Base)), plainText(c.tildeDir(w.Dir)))
+	} else if j.Live.Dir != "" {
+		fmt.Fprintf(c.out, "Folder: %s, branch %s\n", plainText(c.tildeDir(j.Live.Dir)), dash(plainText(j.Live.Branch)))
 	}
 	if d := j.Diff; d != nil {
 		fmt.Fprintf(c.out, "Last diff: %d commits, %d files (%s)\n", d.Commits, d.Files, sinceText(d.At))

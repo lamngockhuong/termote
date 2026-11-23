@@ -42,6 +42,14 @@ type jobLive struct {
 	// EntryTS: the agent's newest transcript entry, a subagent's writes
 	// left out: what tells one dialog from the next for wait --job.
 	EntryTS string `json:"entryTs,omitempty"`
+	// Dir: the pane's folder now (full clients only); Branch: its git
+	// branch as the overview last read it in the background (never a git
+	// run in the request), empty until read.
+	Dir    string `json:"dir,omitempty"`
+	Branch string `json:"branch,omitempty"`
+	// branchHidden: a view-only client may not read the folder's branch
+	// (a home dir, as the overview's changes)
+	branchHidden bool
 }
 
 type jobView struct {
@@ -525,9 +533,15 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		live := a.jobLiveIn(snap, j)
 		if viewOnly {
 			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated}
-			b.Live.LastTS, b.Live.EntryTS = "", ""
-			if j.Worktree != nil {
+			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir = "", "", ""
+			if live.branchHidden {
+				b.Live.Branch = ""
+			}
+			switch {
+			case j.Worktree != nil:
 				b.Branch = j.Worktree.Branch
+			default:
+				b.Branch = b.Live.Branch
 			}
 			brief = append(brief, b)
 			continue
@@ -572,7 +586,14 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 		live.Status = "unknown"
 		return live
 	}
-	live.PaneID, live.Ref = p.pane.ID, p.ref()
+	live.PaneID, live.Ref, live.Dir = p.pane.ID, p.ref(), p.cwd()
+	if f := a.files; f != nil && f.dirs != nil && a.m.Caps().Files {
+		// Queues a read in the background when there is none yet, one git
+		// status at a time, as the overview does.
+		if c, ok := a.changes.lookup(f, p.key(), p.pane.ID); ok && c.status && !c.failed {
+			live.Branch, live.branchHidden = c.branch, c.viewHidden
+		}
+	}
 	switch st := p.status(); st {
 	case "working", "blocked":
 		live.Status = st

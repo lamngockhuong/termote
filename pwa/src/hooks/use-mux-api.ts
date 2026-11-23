@@ -3061,6 +3061,10 @@ export interface JobLive {
   // What a working agent only waits for ("1 background agent")
   background?: string
   lastTs?: string
+  // The pane's folder now (full clients only) and its git branch as the
+  // overview last read it
+  dir?: string
+  branch?: string
 }
 
 // The agent a job was given to, pinned by its process

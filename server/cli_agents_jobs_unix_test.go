@@ -80,7 +80,7 @@ func TestAgentsJobCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := tc.stdout.String()
-	for _, want := range []string{"Jobs (unfinished jobs, of every creator): 2", "Fix the parser[31m", "web/api (%1)", "idle", "Write docs", "todo"} {
+	for _, want := range []string{"Jobs (unfinished jobs, of every creator): 2", "Fix the parser[31m", "web/api (%1)", "idle", "/src/web", "Write docs", "todo"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("jobs lacks %q:\n%s", want, out)
 		}
@@ -93,7 +93,7 @@ func TestAgentsJobCommands(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"job", "show", j.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if out := tc.stdout.String(); !strings.Contains(out, "Agent: claude in web/api (%1): idle") || !strings.Contains(out, "look at lexer.go") ||
+	if out := tc.stdout.String(); !strings.Contains(out, "Folder: /src/web, branch -") || !strings.Contains(out, "Agent: claude in web/api (%1): idle") || !strings.Contains(out, "look at lexer.go") ||
 		!strings.Contains(out, "History:") {
 		t.Errorf("show:\n%s", out)
 	}

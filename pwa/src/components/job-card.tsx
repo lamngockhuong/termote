@@ -85,18 +85,16 @@ export function JobCard({ job, now, onOpenPane, onEdit, onGrants }: Props) {
   const status = job.live.status
   const paneId = job.live.paneId
   const ref = jobPaneRef(job)
-  const branch = job.worktree?.branch ?? job.branch
+  // A job made without a worktree shows its pane's folder and branch now.
+  const branch = job.worktree?.branch ?? job.branch ?? job.live.branch
+  const dir = job.worktree?.dir ?? job.live.dir
   const grants = activeGrants(job, now)
   const uses = (job.grants ?? [])
     .flatMap((g) => g.uses ?? [])
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
   const events = [...(job.events ?? [])].reverse()
   const hasDetails =
-    !!job.prompt ||
-    !!job.note ||
-    !!job.worktree ||
-    uses.length > 0 ||
-    events.length > 0
+    !!job.prompt || !!job.note || !!dir || uses.length > 0 || events.length > 0
   const ago = (at: string) => formatAgo(Math.max(0, now - Date.parse(at)), t)
 
   return (
@@ -236,10 +234,10 @@ export function JobCard({ job, now, onOpenPane, onEdit, onGrants }: Props) {
               </p>
             </Detail>
           )}
-          {job.worktree && (
+          {dir && (
             <Detail label={t('jobs.card.dir')}>
               <p className="m-0 break-all font-term text-[12px]">
-                {visibleUnsafe(job.worktree.dir)}
+                {visibleUnsafe(dir)}
               </p>
             </Detail>
           )}
