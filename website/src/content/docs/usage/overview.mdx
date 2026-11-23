@@ -24,7 +24,8 @@ button, or by picking a session. Back and Forward move between the overview and 
 ## The cards
 
 One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one
-state, the agent that has been in it longest comes first. Each card shows:
+state, the agent that entered it most recently comes first, so the ones you just used stay on top;
+blocked agents are the exception: the one waiting on you longest comes first. Each card shows:
 
 - the agent's state and how long it has been in it. "≥ 5 min ago" means the server found the agent
   already in that state when it started watching (after a restart, for example);

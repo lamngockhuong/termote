@@ -3215,7 +3215,7 @@ It covers the panes without closing them: leave with its close button, `Esc`, th
 
 [Section titled “The cards”](#the-cards)
 
-One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one state, the agent that has been in it longest comes first. Each card shows:
+One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one state, the agent that entered it most recently comes first, so the ones you just used stay on top; blocked agents are the exception: the one waiting on you longest comes first. Each card shows:
 
 * the agent’s state and how long it has been in it. “≥ 5 min ago” means the server found the agent already in that state when it started watching (after a restart, for example);
 * the session and tab it runs in, and **worktree** for a linked git worktree;

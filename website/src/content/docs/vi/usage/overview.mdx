@@ -25,7 +25,8 @@ của trình duyệt, hoặc chọn một session. Back và Forward đưa bạn 
 ## Các thẻ
 
 Mỗi agent có một thẻ. Thẻ cần bạn nhất đứng đầu: blocked, rồi working, done và idle. Cùng trạng thái
-thì agent ở lâu hơn đứng trước. Mỗi thẻ cho biết:
+thì agent vừa chuyển sang trạng thái đó gần đây nhất đứng trước, nên agent bạn vừa dùng luôn ở trên;
+riêng blocked thì agent chờ bạn lâu nhất đứng trước. Mỗi thẻ cho biết:
 
 - trạng thái của agent và đã ở trạng thái đó bao lâu. `≥ 5 min ago` nghĩa là lúc server bắt đầu theo
   dõi (chẳng hạn sau khi khởi động lại), agent đã ở sẵn trạng thái đó;

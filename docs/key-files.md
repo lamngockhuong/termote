@@ -135,7 +135,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-host-stats.ts`                 | Polls `/api/mux/system` (10 s) while visible and on            |
 | `pwa/src/utils/host-format.ts`                    | Host levels (80/95, battery 20/10), bytes, minutes             |
 | `pwa/src/utils/usage-format.ts`                   | Usage labels: level, `~72%`, `5h`/`7d`, "resets 14:30"         |
-| `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first     |
+| `pwa/src/utils/overview-order.ts`                 | Overview order by status; blocked oldest first, others newest  |
 | `pwa/src/utils/agent-cards.ts`                    | Panes running an agent with their tab; grouped by status       |
 | `pwa/src/hooks/use-now.ts`                        | Server time now, read every 30 s (overview, sidebar Agents)    |
 | `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log            |

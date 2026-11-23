@@ -106,6 +106,33 @@ describe('SidebarAgents', () => {
     expect(status('Idle')).toHaveTextContent(/^Idle1api · docs$/)
   })
 
+  it('puts the agent used last first within a status', () => {
+    renderAgents({
+      sessions: [
+        tab('parked', 'g1', [
+          pane('p-old', {
+            agentStatus: 'idle',
+            agentSince: ago(120),
+            agentSinceFirstSeen: true,
+          }),
+        ]),
+        tab('unknown', 'g1', [pane('p-none', { agentStatus: 'idle' })]),
+        tab('fresh', 'g1', [
+          pane('p-fresh', { agentStatus: 'idle', agentSince: ago(2) }),
+        ]),
+      ],
+    })
+    expect(
+      within(within(agents()).getByRole('region', { name: 'Idle' }))
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('title')),
+    ).toEqual([
+      'api · fresh · p-fresh',
+      'api · parked · p-old',
+      'api · unknown · p-none',
+    ])
+  })
+
   it('names the tab alone with one group, or for a tab in none', () => {
     const { unmount } = renderAgents({ groups: [GROUPS[0]] })
     const row = screen.getByRole('button', { name: /compile/ })

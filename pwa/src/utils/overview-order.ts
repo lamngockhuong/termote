@@ -11,21 +11,25 @@ const rank = (s?: AgentStatus) => {
   return i === -1 ? AGENT_STATUS_ORDER.length : i
 }
 
-const startedAt = (since?: string) => {
+// The key within one status, smallest first: a blocked agent by how long it
+// has waited on the user (the oldest first), any other by the time it
+// entered its status (the newest first), so an agent used a moment ago is
+// above those left idle for hours. One without a time goes last.
+const withinStatus = ({ status, since }: Ordered) => {
   const t = since ? Date.parse(since) : Number.NaN
-  return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY
+  if (!Number.isFinite(t)) return Number.POSITIVE_INFINITY
+  return status === 'blocked' ? t : -t
 }
 
 // The overview's order: the heaviest status first (blocked, working, done,
-// idle), then within one status the one in it longest; ties keep their
-// order (the sidebar's).
+// idle), then withinStatus; ties keep their order (the sidebar's).
 export function overviewOrder<T extends Ordered>(cards: T[]): T[] {
   return cards
     .map((card, i) => ({ card, i }))
     .sort(
       (a, b) =>
         rank(a.card.status) - rank(b.card.status) ||
-        startedAt(a.card.since) - startedAt(b.card.since) ||
+        withinStatus(a.card) - withinStatus(b.card) ||
         a.i - b.i,
     )
     .map(({ card }) => card)
