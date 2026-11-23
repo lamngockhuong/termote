@@ -62,14 +62,41 @@ failed, the message stays in the box and only that agent stays picked, so **Send
 only it, never twice the others. An agent whose pane closes is unpicked. Press the checklist button
 again to stop picking. A [view-only device](/usage/devices/#view-only) has no checklist button.
 
+## Plan
+
+When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** section above the cards
+shows its job ledger, grouped by what needs you: waiting for you (the agent is on a dialog), done
+and not read yet, running, to review, to do, and the finished jobs folded away. Columns on a wide
+screen, a list on a phone. A job shows its title, what its agent does, the pane (tap it to open
+that pane), the branch and the last diff counts; **Details** shows the prompt, the note, the
+worktree folder, the history and every dialog answered under a grant.
+
+- **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with
+  `termote agents start --job <id>` when you ask it to.
+- **Edit** changes the title, prompt, note, state or the agent the job is given to. Giving it to
+  another agent ends its grants. When the orchestrator changed the job meanwhile, the form loads
+  the job as it is now and tells you.
+- **Grants** lets the job's agent have one kind of permission dialog answered by the orchestrator
+  without asking you: run commands that start with a prefix you type, or edit files in the job's
+  worktree, for 30 minutes up to a day. Each grant shows the pane and folder it is pinned to, and
+  **End** revokes it. The form checks the prefix as Termote does and says what a grant never
+  covers; see [Grants for permission dialogs](/usage/orchestrator/#grants-for-permission-dialogs).
+  Grants are given only when you signed in with your password or a paired device, never with
+  `--no-auth`.
+
+When the orchestrator moves a job to review, a device with notifications on gets a push; tapping
+it opens this section. A [view-only device](/usage/devices/#view-only) sees each job's title,
+state, pane and branch only, with no button.
+
 ## Stopping an agent
 
 The card of a working agent that takes messages from Termote (Claude Code, Codex and OpenCode) has a
 **Stop** button under its terminal button. It ends the turn the agent is running, as Esc in its
 terminal, for the conversation the card sums up; see
 [Stopping the Agent](/usage/agent-chat/#stopping-the-agent) for what is refused. A refusal shows
-for a moment at the top of the screen. A [view-only device](/usage/devices/#view-only) has no Stop
-button.
+for a moment at the top of the screen. A Claude Code agent that has written its answer and only
+waits on background work has no Stop button: its card says what it waits for instead. A
+[view-only device](/usage/devices/#view-only) has no Stop button.
 
 ## Context and limits
 

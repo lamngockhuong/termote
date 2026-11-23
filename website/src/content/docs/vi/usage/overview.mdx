@@ -62,13 +62,41 @@ nằm trong ô và chỉ agent đó còn được chọn, nên bấm **Gửi** l
 không nhận trùng. Agent có pane bị đóng cũng được bỏ chọn. Bấm lại nút danh sách để thoát chế độ
 chọn. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút này.
 
+## Kế hoạch
+
+Khi một [orchestrator](/vi/usage/orchestrator/) giao việc, nhóm **Kế hoạch** phía trên các thẻ hiện
+sổ việc của nó, chia nhóm theo mức cần bạn: đang chờ bạn (agent đang ở một hộp thoại), xong mà
+chưa đọc, đang chạy, cần xem lại, chưa làm, còn các việc đã kết thúc được thu gọn. Màn hình rộng
+xếp thành cột, điện thoại xếp thành danh sách. Mỗi việc hiện tiêu đề, agent của nó đang làm gì,
+pane (chạm vào để mở pane đó), branch và số liệu diff gần nhất; **Chi tiết** hiện prompt, ghi chú,
+thư mục worktree, lịch sử và mọi hộp thoại đã được trả lời theo ủy quyền.
+
+- **Thêm việc** tạo một việc chưa làm, có tiêu đề, prompt và ghi chú: orchestrator nhận nó
+  bằng `termote agents start --job <id>` khi bạn bảo nó.
+- **Sửa** đổi tiêu đề, prompt, ghi chú, trạng thái hoặc agent được giao việc. Giao cho agent khác
+  thì mọi ủy quyền của việc chấm dứt. Nếu orchestrator vừa đổi việc trong lúc bạn sửa, form nạp lại
+  việc như hiện tại và báo cho bạn.
+- **Ủy quyền** cho phép orchestrator trả lời thay bạn một loại hộp thoại xin quyền của agent được
+  giao việc: chạy các lệnh bắt đầu bằng một tiền tố bạn gõ, hoặc sửa file trong worktree của việc,
+  trong 30 phút tới tối đa một ngày. Mỗi ủy quyền hiện pane và thư mục nó được ghim vào, và
+  **Thu hồi** chấm dứt nó. Form kiểm tra tiền tố như Termote kiểm tra và nói rõ những gì ủy quyền
+  không bao giờ bao trùm; xem
+  [Ủy quyền cho hộp thoại xin quyền](/vi/usage/orchestrator/#ủy-quyền-cho-hộp-thoại-xin-quyền).
+  Chỉ cấp được ủy quyền khi bạn đăng nhập bằng mật khẩu hoặc thiết bị đã ghép, không bao giờ khi
+  server chạy với `--no-auth`.
+
+Khi orchestrator chuyển một việc sang cần xem lại, thiết bị bật thông báo sẽ nhận được thông báo
+đẩy; chạm vào thông báo sẽ mở nhóm này. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) chỉ thấy
+tiêu đề, trạng thái, pane và branch của từng việc, không có nút nào.
+
 ## Dừng một agent
 
 Thẻ của agent đang làm việc và nhận tin từ Termote (Claude Code, Codex và OpenCode) có nút **Stop**
 nằm dưới nút terminal. Nút này dừng lượt agent đang chạy, như bấm Esc trong terminal của nó, cho
 đúng cuộc trò chuyện mà thẻ đang tóm tắt; xem [Dừng agent](/vi/usage/agent-chat/#dừng-agent) để biết
-những trường hợp bị từ chối. Lý do từ chối hiện thoáng qua ở đầu màn hình.
-[Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút Stop.
+những trường hợp bị từ chối. Lý do từ chối hiện thoáng qua ở đầu màn hình. Agent Claude Code đã
+viết xong câu trả lời và chỉ còn chờ việc chạy nền thì không có nút Stop: thẻ của nó cho biết nó
+đang chờ gì. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút Stop.
 
 ## Context và hạn mức
 
