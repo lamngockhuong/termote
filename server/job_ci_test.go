@@ -366,3 +366,48 @@ func TestCIPollerDefaultBranchNotKept(t *testing.T) {
 		t.Errorf("new branch not followed %+v", j.CI)
 	}
 }
+
+// An SSH alias (a host without a dot) is github.com only when github.com is
+// the one host gh is signed in to; with another one, or when gh cannot
+// list its hosts, the alias may name a GitHub Enterprise: ci_no_repo.
+func TestCIPollerSSHAlias(t *testing.T) {
+	hosts := func(names ...string) string {
+		var parts []string
+		for _, h := range names {
+			parts = append(parts, fmt.Sprintf(`%q:[{"state":"success","active":true}]`, h))
+		}
+		return `{"hosts":{` + strings.Join(parts, ",") + `}}`
+	}
+	for _, c := range []struct {
+		name  string
+		reply fakeGhReply
+		want  string
+	}{
+		{"github.com alone", fakeGhReply{Out: hosts("github.com")}, ""},
+		{"another host too", fakeGhReply{Out: hosts("github.com", "ghe.example.com")}, "ci_no_repo"},
+		{"only another host", fakeGhReply{Out: hosts("ghe.example.com")}, "ci_no_repo"},
+		{"a failed login only", fakeGhReply{Out: `{"hosts":{"github.com":[{"state":"error"}]}}`}, "ci_no_repo"},
+		{"gh cannot list them", fakeGhReply{Err: "unknown flag: --json", Code: 1}, "ci_no_repo"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ct := newCITest(t, "feat", "origin", "git@github-work:o/r.git")
+			id := ct.worktreeJob("feat")
+			ct.gh.reply("auth status --json=hosts", c.reply)
+			ct.list("feat", ghPRJSON(3, "OPEN", "a", "o", ct.now(), passCheck))
+			ct.p.read(context.Background(), id)
+			j, _ := ct.agent.jobs.job(id)
+			if j.CI == nil {
+				t.Fatal("nothing written")
+			}
+			if j.CI.Error != c.want {
+				t.Errorf("error %q, want %q", j.CI.Error, c.want)
+			}
+			if c.want == "" && (j.CI.Repo != "github.com/o/r" || len(j.CI.PRs) != 1) {
+				t.Errorf("alias not read as github.com: %+v", j.CI)
+			}
+			if c.want != "" && ct.gh.callsOf("pr list") != 0 {
+				t.Error("asked github.com for an alias that may be another host")
+			}
+		})
+	}
+}

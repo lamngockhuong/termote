@@ -112,6 +112,9 @@ type ghRunner struct {
 	calls    []time.Time
 	paused   time.Time
 	auth     map[string]ghAuth
+	// hosts: the hosts gh has a login for, kept ghAuthTTL when one has
+	hosts   []string
+	hostsAt time.Time
 }
 
 type ghAuth struct {
@@ -299,9 +302,52 @@ func (g *ghRunner) signedIn(ctx context.Context, host string) (bool, error) {
 	return true, nil
 }
 
+// signedInHosts lists the hosts gh has a working login for (gh auth status
+// --json hosts, gh 2.65 or later). An error when gh cannot say, an older gh
+// among the causes.
+func (g *ghRunner) signedInHosts(ctx context.Context) ([]string, error) {
+	g.mu.Lock()
+	if len(g.hosts) > 0 && g.now().Sub(g.hostsAt) < ghAuthTTL {
+		hosts := slices.Clone(g.hosts)
+		g.mu.Unlock()
+		return hosts, nil
+	}
+	g.mu.Unlock()
+	out, err := g.run(ctx, "auth", "status", "--json=hosts")
+	if err != nil {
+		return nil, err
+	}
+	var v struct {
+		Hosts map[string][]struct {
+			State string `json:"state"`
+		} `json:"hosts"`
+	}
+	if err := json.Unmarshal(out, &v); err != nil {
+		return nil, errGhFailed
+	}
+	var hosts []string
+	for h, logins := range v.Hosts {
+		if slices.ContainsFunc(logins, func(l struct {
+			State string `json:"state"`
+		}) bool {
+			return l.State == "success"
+		}) {
+			hosts = append(hosts, strings.ToLower(h))
+		}
+	}
+	slices.Sort(hosts)
+	if len(hosts) > 0 {
+		g.mu.Lock()
+		g.hosts, g.hostsAt = slices.Clone(hosts), g.now()
+		g.mu.Unlock()
+	}
+	return hosts, nil
+}
+
 // forgetAuth drops what is known of host's login (a call said it is gone).
 func (g *ghRunner) forgetAuth(host string) {
 	g.mu.Lock()
+	g.hosts = nil
 	delete(g.auth, host)
 	g.mu.Unlock()
 }

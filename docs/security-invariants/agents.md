@@ -912,7 +912,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   read with its `gitRunner` (`checkRoot`, hooks and fsmonitor off): the branch's push remote and
   an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
   repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias
-  mapped to github.com, and only a host `gh auth status` says is signed in (github.com not signed
+  (a host without a dot) mapped to github.com only when github.com is the one host
+  `gh auth status --json hosts` lists with a working login, else `ci_no_repo` (another login may
+  make the alias a GitHub Enterprise, and a same-named repository on github.com would be read), and only a host `gh auth status` says is signed in (github.com not signed
   in is `ci_gh_auth`, any other host `ci_no_repo`; a login is kept 10 minutes, no login is asked again on the next read). gh's stderr only classifies the failure
   (`ci_gh_missing`, `ci_gh_auth`, `ci_no_repo`, `ci_failed`, `ci_busy`); it is logged cut to 200
   bytes, never stored or returned. What is kept of a pull request is checked: its URL only when it

@@ -634,15 +634,29 @@ func (p *ciPoller) readTarget(ctx context.Context, dir, branch string) (t ciTarg
 	return ciTarget{repo: repo, push: push, branch: branch}, nil
 }
 
-// checkHost maps an SSH alias (a host without a dot) to github.com and
-// accepts only a host gh is signed in to: github.com not signed in is
-// ci_gh_auth, any other host ci_no_repo (gh would send it nothing, and
-// gh auth login is not the user's fix for a remote elsewhere).
+// checkHost maps an SSH alias (a host without a dot, a Host entry of
+// ~/.ssh/config) to github.com only when github.com is the one host gh is
+// signed in to: with another one the alias may name a GitHub Enterprise,
+// and a repository of the same name on github.com would be read instead,
+// so it is ci_no_repo, as when gh cannot list its hosts. Then only a host
+// gh is signed in to is accepted: github.com not signed in is ci_gh_auth,
+// any other host ci_no_repo (gh would send it nothing, and gh auth login
+// is not the user's fix for a remote elsewhere).
 func (p *ciPoller) checkHost(ctx context.Context, t *ciTarget) error {
 	for _, r := range []*ghRepo{&t.repo, &t.push} {
-		if !strings.Contains(r.Host, ".") {
-			r.Host = "github.com"
+		if strings.Contains(r.Host, ".") {
+			continue
 		}
+		hosts, err := p.gh.signedInHosts(ctx)
+		switch {
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case errors.Is(err, errCIBusy), errors.Is(err, errGhMissing):
+			return err
+		case err != nil || !slices.Equal(hosts, []string{"github.com"}):
+			return errNoRepo
+		}
+		r.Host = "github.com"
 	}
 	ok, err := p.gh.signedIn(ctx, t.repo.Host)
 	switch {
