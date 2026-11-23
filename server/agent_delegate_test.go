@@ -215,11 +215,14 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 			os.WriteFile(filepath.Join(subs, "agent-a1.jsonl"), []byte(toolUseLine("s", "Bash", map[string]any{"command": "ls"}, true)), 0o600)
 		}, "subagent"},
 		"edit a denied file": {"edit", strings.Replace(edit, "notes.txt", ".claude/settings.local.json", 1), nil, "mismatch"},
-		"edit outside":       {"edit", strings.Replace(edit, "WT/notes.txt", "/etc/notes.txt", 1), nil, "no_grant"},
+		"edit outside":       {"edit", strings.Replace(edit, "WT/notes.txt", "OUT/notes.txt", 1), nil, "no_grant"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dt := newDelegateTest(t, delegateScreen(t, tc.screen), "")
-			os.WriteFile(dt.path, []byte(jobsTranscript+strings.ReplaceAll(tc.transcript, "WT", dt.wt)), 0o600)
+			// Paths go into JSON strings escaped (a Windows path has backslashes).
+			esc := func(p string) string { b, _ := json.Marshal(p); return string(b[1 : len(b)-1]) }
+			transcript := strings.ReplaceAll(tc.transcript, "OUT", esc(t.TempDir()))
+			os.WriteFile(dt.path, []byte(jobsTranscript+strings.ReplaceAll(transcript, "WT", esc(dt.wt))), 0o600)
 			dt.grant("bash", "pnpm test", 0)
 			dt.grant("edit", "", 0)
 			if tc.setup != nil {

@@ -500,7 +500,7 @@ func (a *agentAPI) jobTreeFor(r *http.Request, in *jobWorktreeInput) (*jobTree, 
 // jobDirTooWide: dir is the home dir or holds it (or is not absolute).
 func jobDirTooWide(dir, home string) bool {
 	dir = filepath.Clean(dir)
-	if !filepath.IsAbs(dir) || dir == string(filepath.Separator) {
+	if !filepath.IsAbs(dir) || filepath.Dir(dir) == dir { // a root: / or C:\
 		return true
 	}
 	if home == "" {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -22,6 +23,16 @@ import (
 
 // agentsJobsWait is the longest wait --job waits by default.
 var agentsJobsWait = 20 * time.Minute
+
+// A job given to an agent just started may name a pane whose agent the
+// server does not see yet (job_no_agent): Herdr reports a new Claude Code
+// session a few seconds after it runs, and Codex has none before its first
+// message. The write is tried again every agentsJobAgentEvery for
+// agentsJobAgentWait, then the job is written without the pane.
+var (
+	agentsJobAgentWait  = 10 * time.Second
+	agentsJobAgentEvery = 500 * time.Millisecond
+)
 
 type jobsListing struct {
 	Jobs      []jobView `json:"jobs"`
@@ -119,6 +130,47 @@ func (c *cli) jobWrite(port int, method, path string, body any, want int) (jobVi
 	if r.status != want {
 		return jobView{}, agentsRefusal(r)
 	}
+	return jobReply(r)
+}
+
+// jobWriteAgent is jobWrite for a body that gives the job a pane's agent:
+// while the server does not see that agent yet, the write is tried again;
+// past agentsJobAgentWait, without the pane and the state that goes with
+// it. bound reports whether the job got the agent.
+func (c *cli) jobWriteAgent(port int, method, path string, body map[string]any, want int) (j jobView, bound bool, err error) {
+	deadline := time.Now().Add(agentsJobAgentWait)
+	for {
+		r, err := c.agentsCall(port, method, path, body, agentsReadTimeout)
+		switch {
+		case err != nil:
+			return jobView{}, false, err
+		case r.status == want:
+			j, err := jobReply(r)
+			return j, err == nil, err
+		case r.failure().Code != "job_no_agent":
+			return jobView{}, false, agentsRefusal(r)
+		}
+		if !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(agentsJobAgentEvery)
+	}
+	without := maps.Clone(body)
+	delete(without, "pane")
+	delete(without, "state")
+	j, err = c.jobWrite(port, method, path, without, want)
+	return j, false, err
+}
+
+// noAgentYet says that job j was written without the agent of paneID, and
+// how to give it that agent once the server sees it.
+func (c *cli) noAgentYet(j jobView, paneID string) {
+	c.infof("Job %s: %s, without its agent: the server does not see the agent in pane %s yet; give it the job once it does: termote agents job set %s --pane %s --state active",
+		plainText(j.ID), plainText(j.Title), plainText(paneID), plainText(j.ID), plainText(paneID))
+}
+
+// jobReply reads the job of a write's answer.
+func jobReply(r agentsReply) (jobView, error) {
 	var out struct {
 		Job jobView `json:"job"`
 	}
@@ -652,8 +704,9 @@ func (r startRecord) worktree() map[string]string {
 // a new one. A failure is a warning: the agent runs.
 func (c *cli) recordStart(port int, t startTarget, r startRecord) {
 	var (
-		j   jobView
-		err error
+		j     jobView
+		bound bool
+		err   error
 	)
 	body := map[string]any{"pane": t.paneID, "state": "active"}
 	if wt := r.worktree(); wt != nil {
@@ -671,7 +724,7 @@ func (c *cli) recordStart(port int, t startTarget, r startRecord) {
 		if r.prompt != "" && prior.Prompt == "" {
 			body["prompt"] = r.prompt
 		}
-		j, err = c.jobWrite(port, http.MethodPatch, "/api/mux/jobs/"+url.PathEscape(prior.ID), body, http.StatusOK)
+		j, bound, err = c.jobWriteAgent(port, http.MethodPatch, "/api/mux/jobs/"+url.PathEscape(prior.ID), body, http.StatusOK)
 		if err == nil && r.todo == nil {
 			c.jobEvent(port, j.ID, jobEventInput{Kind: "continued", Text: "agent started again"})
 		}
@@ -685,13 +738,16 @@ func (c *cli) recordStart(port int, t startTarget, r startRecord) {
 		if by := c.selfKey(r.snap); by != "" {
 			body["createdBy"] = by
 		}
-		j, err = c.jobWrite(port, http.MethodPost, "/api/mux/jobs", body, http.StatusCreated)
+		j, bound, err = c.jobWriteAgent(port, http.MethodPost, "/api/mux/jobs", body, http.StatusCreated)
 	}
-	if err != nil {
+	switch {
+	case err != nil:
 		c.jobWarn(err)
-		return
+	case !bound:
+		c.noAgentYet(j, t.paneID)
+	default:
+		c.infof("Job %s: %s; wait for it: termote agents wait --job %s", plainText(j.ID), plainText(j.Title), plainText(j.ID))
 	}
-	c.infof("Job %s: %s; wait for it: termote agents wait --job %s", plainText(j.ID), plainText(j.Title), plainText(j.ID))
 }
 
 // continueInWorktree gives the prompt of a start run again to the agent
@@ -730,9 +786,14 @@ func (c *cli) continueInWorktree(port int, t startTarget, r startRecord) error {
 		how = "queued the prompt"
 	}
 	if found && !jobFinished(j.State) {
-		nj, err := c.jobWrite(port, http.MethodPatch, "/api/mux/jobs/"+url.PathEscape(j.ID), map[string]any{"pane": p.pane.ID, "state": "active"}, http.StatusOK)
+		nj, bound, err := c.jobWriteAgent(port, http.MethodPatch, "/api/mux/jobs/"+url.PathEscape(j.ID), map[string]any{"pane": p.pane.ID, "state": "active"}, http.StatusOK)
 		if err == nil {
 			c.jobEvent(port, nj.ID, jobEventInput{Kind: "continued", Text: r.prompt})
+			if !bound {
+				c.infof("Continued in pane %s (%s): %s%s", id, t.where, how, hint)
+				c.noAgentYet(nj, p.pane.ID)
+				return nil
+			}
 			c.infof("Continued job %s in pane %s (%s): %s%s; wait for it: termote agents wait --job %s", plainText(nj.ID), id, t.where, how, hint, plainText(nj.ID))
 			return nil
 		}

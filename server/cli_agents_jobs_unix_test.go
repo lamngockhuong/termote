@@ -337,3 +337,79 @@ func TestAgentsAnswerDelegated(t *testing.T) {
 		t.Errorf("always: %v", err)
 	}
 }
+
+// The server may see a new agent seconds after start does (Herdr reports a
+// new Claude Code session late): start tries the job again until it does,
+// and past the wait still writes the job, without the agent, saying how to
+// give it the pane.
+func TestAgentsStartJobAgentLate(t *testing.T) {
+	tc, f := agentsTest(t, "")
+	f.promptDir = useStartPromptDir(t, "start-prompts")
+	every, wait, startEvery := agentsJobAgentEvery, agentsJobAgentWait, agentsStartEvery
+	agentsJobAgentEvery, agentsJobAgentWait, agentsStartEvery = 50*time.Millisecond, 5*time.Second, 10*time.Millisecond
+	t.Cleanup(func() { agentsJobAgentEvery, agentsJobAgentWait, agentsStartEvery = every, wait, startEvery })
+	setShellStartProc(t, "claude")
+	hide := func() {
+		f.mu.Lock()
+		f.found = false
+		f.mu.Unlock()
+	}
+	showLater := func() {
+		go func() {
+			time.Sleep(agentCacheTTL + 200*time.Millisecond)
+			f.mu.Lock()
+			f.found = true
+			f.mu.Unlock()
+		}()
+	}
+	start := func(args ...string) string {
+		t.Helper()
+		tc.stdout.Reset()
+		tc.stderr.Reset()
+		if err := tc.dispatch("agents", append([]string{"start", "--workspace", "web", "--kind", "claude"}, args...)); err != nil {
+			t.Fatalf("%v (%s)", err, tc.stderr)
+		}
+		return tc.stdout.String() + tc.stderr.String()
+	}
+	byTitle := func(title string) jobView {
+		t.Helper()
+		for _, j := range jobsOf(t, tc, "--all") {
+			if j.Title == title {
+				return j
+			}
+		}
+		t.Fatalf("no job %q", title)
+		return jobView{}
+	}
+
+	// --title: the agent shows late, the job gets it.
+	hide()
+	showLater()
+	out := start("--title", "Late title", "go")
+	if j := byTitle("Late title"); j.Agent == nil || j.State != "active" || !strings.Contains(out, "wait for it: termote agents wait --job "+j.ID) {
+		t.Errorf("late, --title: %+v\n%s", j, out)
+	}
+	// --job: the same.
+	todo := addJob(t, tc, "--title", "Late todo")
+	hide()
+	showLater()
+	start("--job", todo.ID, "go")
+	if j := byTitle("Late todo"); j.Agent == nil || j.State != "active" {
+		t.Errorf("late, --job: %+v", j)
+	}
+
+	// Never seen in time: the job is written all the same, without the
+	// agent, and the way to give it the pane is printed.
+	agentsJobAgentWait = 200 * time.Millisecond
+	hide()
+	out = start("--title", "Never seen", "go")
+	if j := byTitle("Never seen"); j.Agent != nil || j.State != "todo" || j.Prompt != "go" ||
+		!strings.Contains(out, "termote agents job set "+j.ID+" --pane %t") || strings.Contains(out, "was not updated") {
+		t.Errorf("never, --title: %+v\n%s", j, out)
+	}
+	todo = addJob(t, tc, "--title", "Never todo")
+	out = start("--job", todo.ID, "go")
+	if j := byTitle("Never todo"); j.Agent != nil || j.State != "todo" || !strings.Contains(out, "termote agents job set "+j.ID+" --pane") {
+		t.Errorf("never, --job: %+v\n%s", j, out)
+	}
+}

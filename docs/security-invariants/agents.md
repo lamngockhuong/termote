@@ -713,7 +713,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   ledger): the first 200 characters of a message, an answer's option and label (never typed text),
   a stop's result, `diff --stat`'s counts, and for `read` the transcript's last entry time read
   before the transcript and the cursor read with it; a ledger that cannot be read or written is a
-  warning on stderr, never the command's failure, and `--json` output stays clean. `wait --job`
+  warning on stderr, never the command's failure, and `--json` output stays clean. A job a start gives
+  to its new agent is written again every 0.5 s for 10 s while the server answers `job_no_agent`
+  (Herdr reports a new Claude Code session late, Codex has none before its first message), then
+  without the pane and its state, with `job set <id> --pane <pane> --state active` printed; the agent
+  is never recorded from anything but the server's own lookup. `wait --job`
   reads `GET /api/mux/jobs?all=1` on every poll (no mark), reports a job whose `live.unread` is set,
   a blocked pane whose dialog signature (`reportedSig`: kind, title, body, option labels, or
   `no-dialog-read` when the server reads none) with the agent's newest entry differs from the job's

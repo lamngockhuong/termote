@@ -472,10 +472,12 @@ func TestJobsUnavailable(t *testing.T) {
 }
 
 func TestJobDirTooWide(t *testing.T) {
-	home := filepath.Join(string(filepath.Separator), "home", "u")
+	// Absolute on every OS: a volume's root (C:\ on Windows).
+	root := filepath.VolumeName(os.TempDir()) + string(filepath.Separator)
+	home := filepath.Join(root, "home", "u")
 	for dir, want := range map[string]bool{
-		home: true, filepath.Dir(home): true, string(filepath.Separator): true, "rel/dir": true,
-		filepath.Join(home, "src", "wt"): false, filepath.Join(string(filepath.Separator), "srv", "x"): false,
+		home: true, filepath.Dir(home): true, root: true, "rel/dir": true,
+		filepath.Join(home, "src", "wt"): false, filepath.Join(root, "srv", "x"): false,
 	} {
 		if got := jobDirTooWide(dir, home); got != want {
 			t.Errorf("%s: %v", dir, got)
