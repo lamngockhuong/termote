@@ -98,6 +98,13 @@ export default {
   'tasks.usage.button': 'Today {tokens}',
   'tasks.usage.buttonName': 'Tokens today: {tokens}',
   'tasks.usage.panel': 'Tokens and limits',
+  // The Agents tab's sections; {count}: the agents in it
+  'tasks.overview.section.blocked': 'Needs you · {count}',
+  'tasks.overview.section.working': 'Working · {count}',
+  'tasks.overview.section.done': 'Done · {count}',
+  'tasks.overview.section.idle': 'Idle · {count}',
+  // A filter segment with its words: "Needs you · 1"
+  'tasks.filter.labelled': '{name} · {count}',
   // Sending one message to several agents (components/overview-dispatch.tsx)
   'tasks.dispatch.select': 'Send a message to several agents',
   // A card's checkbox: "Pick Claude Code, api / tab"
@@ -136,6 +143,12 @@ export default {
   'tasks.card.noStatus': 'status unknown',
   'tasks.card.firstSeen': 'Already in this state when the server first saw it',
   'tasks.card.worktree': 'worktree',
+  // The card's figures, each under its name
+  'tasks.card.metric.branch': 'Branch',
+  'tasks.card.metric.context': 'Context',
+  'tasks.card.metric.session': 'Session',
+  // The job the agent works on: "Job · Fix the login"
+  'tasks.card.job': 'Job · {title}',
   'tasks.card.stuck': 'May be stuck: no new activity for {n} min',
   // {n} files changed, "12" or "500+"
   'tasks.card.changed': '{n} changed',

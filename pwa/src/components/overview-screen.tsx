@@ -9,10 +9,17 @@ import { NOW_TICK, useNow } from '../hooks/use-now'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useUsageSummary } from '../hooks/use-usage-summary'
 import { useT } from '../i18n/i18n-context'
-import type { Session, SessionGroup, SessionPane } from '../types/session'
+import type { MessageKey } from '../i18n/messages/en'
+import type {
+  AgentStatus,
+  Session,
+  SessionGroup,
+  SessionPane,
+} from '../types/session'
 import { agentCards, type OverviewCard } from '../utils/agent-cards'
 import { stuckFor } from '../utils/agent-stuck'
 import { asksOverviewPlan } from '../utils/deep-link'
+import { jobOfPane } from '../utils/job-of-pane'
 import { groupJobs } from '../utils/jobs'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
@@ -202,6 +209,23 @@ export function OverviewScreen({
     cardKey,
     (id) => !known.has(id),
   )
+  // The cards, each section named by a row before its first card (but the
+  // blocked ones, under the dialogs). The cards stay in one list, so one
+  // moving to another section is not drawn anew.
+  const rows: ({ head: Section } | { entry: (typeof entries)[number] })[] = []
+  const headed = new Set<Section>()
+  for (const entry of entries) {
+    const section = sectionOf(entry.item.pane.agentStatus)
+    if (section !== 'blocked' && !headed.has(section)) {
+      headed.add(section)
+      rows.push({ head: section })
+    }
+    rows.push({ entry })
+  }
+  const sectionCount = (section: Section) =>
+    shown.filter((c) => sectionOf(c.pane.agentStatus) === section).length
+  // The job each card's pane works on
+  const jobByPane = useMemo(() => jobOfPane(jobs.jobs), [jobs.jobs])
   // The card asked for takes focus once it is shown (the cards are drawn
   // only when ready), over the title, and keeps an accent border until focus
   // leaves it. A card shown after the user moved on takes nothing.
@@ -472,13 +496,7 @@ export function OverviewScreen({
               </div>
             ) : (
               <>
-                <NeedsMeQueue
-                  cards={queueCards}
-                  readOnly={readOnly}
-                  canAnswer={canAnswer}
-                  onOpen={onOpen}
-                />
-                <div className="mb-3 flex max-w-md flex-col gap-2">
+                <div className="mb-3 flex max-w-xl flex-col gap-2">
                   {searchOpen && (
                     <SessionSearchField
                       id={searchId}
@@ -498,7 +516,7 @@ export function OverviewScreen({
                       onArrowDown={() =>
                         listRef.current
                           ?.querySelector<HTMLElement>(
-                            'li:not([data-leaving]) button',
+                            'li[data-card]:not([data-leaving]) button',
                           )
                           ?.focus()
                       }
@@ -509,8 +527,26 @@ export function OverviewScreen({
                     filter={filter}
                     onChange={setFilter}
                     unit="agent"
+                    labelled
                   />
                 </div>
+                {/* The dialogs to answer, whatever the filter or the search
+                  shows, then the cards of those agents */}
+                {summary.blocked > 0 && (
+                  <>
+                    <h3 className="mb-2 text-[13px] font-semibold text-fg">
+                      {t('tasks.overview.section.blocked', {
+                        count: summary.blocked,
+                      })}
+                    </h3>
+                    <NeedsMeQueue
+                      cards={queueCards}
+                      readOnly={readOnly}
+                      canAnswer={canAnswer}
+                      onOpen={onOpen}
+                    />
+                  </>
+                )}
                 {shown.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
                     {t('tasks.overview.noMatch')}
@@ -529,7 +565,25 @@ export function OverviewScreen({
                     ref={listRef}
                     className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
                   >
-                    {entries.map(({ item: { session, pane }, leaving }) => {
+                    {rows.map((row) => {
+                      if ('head' in row) {
+                        return (
+                          <li
+                            key={`section-${row.head}`}
+                            className="col-span-full pt-1"
+                          >
+                            <h3 className="text-[13px] font-semibold text-fg">
+                              {t(SECTION_WORDS[row.head], {
+                                count: sectionCount(row.head),
+                              })}
+                            </h3>
+                          </li>
+                        )
+                      }
+                      const {
+                        item: { session, pane },
+                        leaving,
+                      } = row.entry
                       const group = session.groupId
                         ? groupOf.get(session.groupId)
                         : undefined
@@ -572,6 +626,7 @@ export function OverviewScreen({
                           highlighted={!leaving && pane.id === highlighted}
                           canStop={!readOnly && canAnswer(pane)}
                           onStopFailed={setStopError}
+                          job={jobByPane.get(pane.id)?.title}
                           // Only Claude Code's subagents have a conversation
                           // to read, never on a view-only device
                           onOpenSubagent={
@@ -585,6 +640,7 @@ export function OverviewScreen({
                       return (
                         <li
                           key={pane.id}
+                          data-card
                           ref={ref(pane.id)}
                           inert={leaving}
                           aria-hidden={leaving || undefined}
@@ -684,5 +740,20 @@ export function OverviewScreen({
 }
 
 const cardKey = (c: OverviewCard) => c.pane.id
+
+type Section = 'blocked' | 'working' | 'done' | 'idle'
+
+// The Agents tab's section of an agent; one without a status is idle
+const sectionOf = (status?: AgentStatus): Section =>
+  status === 'blocked' || status === 'working' || status === 'done'
+    ? status
+    : 'idle'
+
+const SECTION_WORDS = {
+  blocked: 'tasks.overview.section.blocked',
+  working: 'tasks.overview.section.working',
+  done: 'tasks.overview.section.done',
+  idle: 'tasks.overview.section.idle',
+} as const satisfies Record<Section, MessageKey>
 
 const noNotify = () => {}

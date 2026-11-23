@@ -199,4 +199,21 @@ describe('AgentFilterBar', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /^Agents/ })).toBeNull()
   })
+
+  it('shows the words beside the counts when labelled, the icons alone else', () => {
+    renderBar({ unit: 'agent', labelled: true })
+    expect(
+      screen.getByRole('radio', { name: 'Needs you, 2 agents' }),
+    ).toHaveTextContent('Needs you · 2')
+    expect(
+      screen.getByRole('radio', { name: 'Working, 3 agents' }),
+    ).toHaveTextContent('Working · 3')
+  })
+
+  it('shows the counts alone by default', () => {
+    renderBar({ unit: 'agent' })
+    expect(
+      screen.getByRole('radio', { name: 'Needs you, 2 agents' }),
+    ).toHaveTextContent(/^2$/)
+  })
 })
