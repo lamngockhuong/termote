@@ -8,7 +8,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   succeeded, a peek of the snapshot, which makes nothing, every 2 s while that agent works, one
   loop for every followed pane, each let go once it stops working, shows no work within a minute,
   or after 2 h); the tracker never reads tmux, Herdr or Zellij itself and never runs a command, so
-  `/activity` costs no mux call. Each read takes a generation number before it starts and a read
+  `/activity` costs no mux call. The one change recorded without a read: after `agent/answer`
+  answered 204 (the screen moved on), `leftDialog` moves that pane, only if the tracker shows it
+  `blocked`, to `working` with a `blocked` → `working` event, and makes every read begun before
+  it stale, so the next read showing it blocked (the next question, another tab, a new dialog)
+  records a new dialog for `agents wait`; a refused answer records nothing. Each read takes a generation number before it starts and a read
   that finishes after a newer one changes nothing (no false change). `observe` copies the
   snapshot and gives every agent a new `AgentInfo` before setting `since`/`sinceFirstSeen`, so
   Herdr's cached view (shared with streams) is never written; the snapshot gains `serverNow`.

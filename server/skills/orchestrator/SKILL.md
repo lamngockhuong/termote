@@ -45,7 +45,9 @@ Status: `working` (busy), `blocked` (waits on a dialog), `done` (its turn ended,
 (ready). `wait` takes several panes and returns as soon as one of them ends a turn (exit 0),
 shows a dialog (3) or loses its agent (5) after its mark; every pane that ended is printed, the
 gravest exit wins. 4: the timeout passed; 6: no pane works and none ended, nothing to wait for;
-7: the history was reset, so `read` each pane.
+7: the history was reset, so `read` each pane. After an `answer`, `wait` returns 3 again while the
+dialog goes on (its next question, another tab, a box just ticked in a multi-choice question):
+look at it again with `answer <pane>` before the next answer.
 
 **The mark.** `send`, `start` and every `wait` print a mark: `--after <seq>`. Keep the latest
 one and pass it to the next `wait`, so a turn that ended while you were reading another pane is

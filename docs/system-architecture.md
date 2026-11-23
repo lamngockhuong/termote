@@ -1502,7 +1502,10 @@ chip is on or its sheet open; `termote status` asks once.
 `server/agent_activity.go` records, for each pane with an agent, its status and when it began,
 and keeps the last 500 status changes (an agent appearing has `from: ""`, going `to: ""`).
 It is fed only by the snapshot reads that already run: the snapshot route, a stream
-attaching and the push watcher's tick. With no page open and no push subscription nothing
+attaching and the push watcher's tick; besides those, a dialog answered through
+`agent/answer` moves its pane from `blocked` to `working`, so the next read that still shows
+it blocked (the next question of the same dialog, another tab) records a new dialog that
+`termote agents wait` reports. With no page open and no push subscription nothing
 is recorded, and a restart starts over: every agent is then first seen (`sinceFirstSeen`,
 shown as "≥"). Each read takes a generation before it starts; one finishing after a newer one
 changes nothing. The snapshot carries each agent's `since` and the server's `serverNow`, from
