@@ -29,7 +29,8 @@ type AgentActivity struct {
 	Tokens string `json:"tokens,omitempty"`
 	// Background: set only once the turn is done, what it left running as
 	// the line writes it ("2 shells", "1 shell, 1 monitor"); Label is then
-	// the turn's past-tense word and Elapsed its length. Also set while the
+	// the turn's past-tense word and Elapsed its length, or both empty when
+	// only the mode row under the input box names it ("· 1 shell"). Also set while the
 	// answer is written and the turn only waits on background agents
 	// ("1 background agent"; Label "Waiting", no Elapsed): the agent works
 	// on nothing Esc would stop
@@ -87,6 +88,13 @@ var (
 	// started (Claude Code 2.1.330): the session file still says busy, and
 	// Esc stops nothing.
 	claudeWaitingRe = regexp.MustCompile(`^[·✢*✶✻✽] (Waiting) for ([0-9]+ background .+?) to finish$`)
+	// claudeFooterWorkRe: what the mode row under the input box names as
+	// still running ("⏵⏵ auto mode on · 1 shell", Claude Code 2.1.330), in
+	// the words of the line that ends a turn: a count and a kind, several
+	// joined by ", ".
+	claudeFooterWorkRe = regexp.MustCompile(`^[0-9]+ (?:shells?|monitors?|subagents?|workflows?|teammates?|MCP tasks?|background (?:tasks?|agents?))(?:, [0-9]+ (?:shells?|monitors?|subagents?|workflows?|teammates?|MCP tasks?|background (?:tasks?|agents?)))*$`)
+	// claudeEditorModeRe: the vim mode at the start of the mode row
+	claudeEditorModeRe = regexp.MustCompile(`^-- [A-Z]+(?: [A-Z]+)* --\s*`)
 	// codexActivityRe: "• Working (3s • esc to interrupt) · Running hooks"
 	codexActivityRe = regexp.MustCompile(`^• (.+?) \(([0-9hms ]+) • esc to interrupt\)(?: · (.+))?$`)
 	// durationRe: "0s", "1m 14s", "1h 2m 3s"
@@ -179,6 +187,30 @@ func claudeDone(line string) *AgentActivity {
 		}
 	}
 	return nil
+}
+
+// claudeFooterWork reads the background work the rows under the input box's
+// bottom border name: Claude Code keeps it on the mode row for as long as it
+// runs ("⏵⏵ auto mode on · 1 shell"), also once the line that ends the turn
+// is off the screen (the transcript scrolled up, a later answer under it).
+// Only the row's last " · " item, or the whole row, is read, so the words of
+// a custom statusline in the middle of a row are not.
+func claudeFooterWork(below []screenLine) string {
+	for i := len(below) - 1; i >= 0; i-- {
+		row := strings.TrimSpace(below[i].text)
+		row = strings.TrimSpace(claudeEditorModeRe.ReplaceAllString(row, ""))
+		if row == "" {
+			continue
+		}
+		item := row
+		if k := strings.LastIndex(row, " · "); k >= 0 {
+			item = strings.TrimSpace(row[k+len(" · "):])
+		}
+		if claudeFooterWorkRe.MatchString(item) {
+			return clipActivity(item)
+		}
+	}
+	return ""
 }
 
 // readActivityItem files one " · "-separated item of a working line.

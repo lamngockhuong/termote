@@ -764,24 +764,28 @@ func TestAgentsRefuseOwnPane(t *testing.T) {
 // wait --job, as wait: an idle agent whose ended turn left a shell running
 // is still waited on, never "nothing to wait for" while the shell runs.
 func TestAgentsWaitJobBackgroundShell(t *testing.T) {
-	tc, f, _ := jobsCLI(t)
-	j := addJob(t, tc, "--title", "Tests", "--pane", "web/api")
-	if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil {
-		t.Fatal(err)
-	}
-	f.setScreen(shellScreen())
-	settle()
-	tc.stdout.Reset()
-	err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"})
-	if exitCode(err) != agentsExitTimeout ||
-		!strings.Contains(tc.stdout.String(), "web/api (%1) ended its turn and still runs in the background (1 shell); its next turn starts when that ends") {
-		t.Errorf("shell running: exit %d %s", exitCode(err), tc.stdout)
-	}
-	// The shell ends with no new turn: nothing to wait for.
-	f.setScreen(boxScreen(""))
-	settle()
-	tc.stdout.Reset()
-	if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitIdle {
-		t.Errorf("shell ended: exit %d %s", exitCode(err), tc.stdout)
+	// The line that ends the turn names the shell, or (Claude Code
+	// 2.1.330, that line off the screen) only the mode row under the box.
+	for name, screen := range map[string]string{"done line": shellScreen(), "mode row": footerShellScreen()} {
+		tc, f, _ := jobsCLI(t)
+		j := addJob(t, tc, "--title", "Tests", "--pane", "web/api")
+		if err := tc.dispatch("agents", []string{"read", "%1"}); err != nil {
+			t.Fatal(err)
+		}
+		f.setScreen(screen)
+		settle()
+		tc.stdout.Reset()
+		err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"})
+		if exitCode(err) != agentsExitTimeout ||
+			!strings.Contains(tc.stdout.String(), "web/api (%1) ended its turn and still runs in the background (1 shell); its next turn starts when that ends") {
+			t.Errorf("%s, shell running: exit %d %s", name, exitCode(err), tc.stdout)
+		}
+		// The shell ends with no new turn: nothing to wait for.
+		f.setScreen(boxScreen(""))
+		settle()
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", []string{"wait", "--job", j.ID, "--timeout", "300ms"}); exitCode(err) != agentsExitIdle {
+			t.Errorf("%s, shell ended: exit %d %s", name, exitCode(err), tc.stdout)
+		}
 	}
 }

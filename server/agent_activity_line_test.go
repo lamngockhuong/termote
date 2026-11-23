@@ -209,6 +209,63 @@ func TestClaudeActivityLines(t *testing.T) {
 	}
 }
 
+// Claude Code 2.1.330 names a shell the ended turn left running on the mode
+// row under the input box ("⏵⏵ auto mode on · 1 shell"), the only place on a
+// screen whose transcript is scrolled up (no line ends the turn in view).
+func TestClaudeFooterBackgroundScreen(t *testing.T) {
+	screen := fixtureScreen(t, "2.1.330-idle-shell-footer")
+	sc := readClaudeScreen(screen)
+	if sc.input != inputEmpty || sc.prompt != nil {
+		t.Fatalf("input %v, prompt %+v", sc.input, sc.prompt)
+	}
+	if sc.activity == nil || *sc.activity != (AgentActivity{Background: "1 shell"}) {
+		t.Errorf("activity = %+v, want background 1 shell", sc.activity)
+	}
+	// The shell ended: the mode row goes back to its hint.
+	ended := strings.Replace(screen, "\x1b[38;2;153;153;153m · \x1b[0m\x1b[38;2;0;204;204m1 shell", "\x1b[38;2;153;153;153m (shift+tab to cycle)", 1)
+	if ended == screen {
+		t.Fatal("fixture has no shell item")
+	}
+	if sc := readClaudeScreen(ended); sc.activity != nil {
+		t.Errorf("ended: activity = %+v", sc.activity)
+	}
+}
+
+func TestClaudeFooterBackground(t *testing.T) {
+	rule := strings.Repeat("─", 40)
+	for name, tc := range map[string]struct {
+		above, below string
+		want         *AgentActivity
+	}{
+		"auto mode, one shell":   {"● Done.", "  ⏵⏵ auto mode on · 1 shell", &AgentActivity{Background: "1 shell"}},
+		"vim mode, two shells":   {"● Done.", "  -- INSERT -- ⏵⏵ auto mode on · 2 shells", &AgentActivity{Background: "2 shells"}},
+		"shell and monitor":      {"● Done.", "  ⏵⏵ accept edits on · 1 shell, 1 monitor", &AgentActivity{Background: "1 shell, 1 monitor"}},
+		"alone on its row":       {"● Done.", "  1 background task", &AgentActivity{Background: "1 background task"}},
+		"under a statusline":     {"● Done.", "  📁 ~/proj  🌿 main\n  ⏵⏵ auto mode on · 1 shell", &AgentActivity{Background: "1 shell"}},
+		"blank rows under it":    {"● Done.", "  ⏵⏵ auto mode on · 1 shell\n\n", &AgentActivity{Background: "1 shell"}},
+		"nothing running":        {"● Done.", "  ⏵⏵ auto mode on (shift+tab to cycle)", nil},
+		"no footer":              {"● Done.", "", nil},
+		"statusline middle item": {"● Done.", "  1 shell · main · 68%", nil},
+		"another count":          {"● Done.", "  ⏵⏵ auto mode on · 3 errors", nil},
+		"no count":               {"● Done.", "  ⏵⏵ auto mode on · shells", nil},
+		// A turn that runs keeps its working line; the shell it started
+		// is no background work until the turn ends.
+		"working with a shell": {"✻ Pondering… (3s)", "  ⏵⏵ auto mode on · 1 shell", &AgentActivity{Label: "Pondering", Elapsed: 3}},
+		// The line that ends the turn says it first, with its length.
+		"done line and footer": {"✻ Baked for 5s · done 9:10 AM · 1 shell still running", "  ⏵⏵ auto mode on · 1 shell", &AgentActivity{Label: "Baked", Elapsed: 5, Background: "1 shell"}},
+	} {
+		sc := readClaudeScreen(tc.above + "\n" + rule + "\n❯ \n" + rule + "\n" + tc.below)
+		got := sc.activity
+		if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+			t.Errorf("%s: activity = %+v, want %+v", name, got, tc.want)
+		}
+	}
+	// A dialog has no input box, so no mode row is read.
+	if sc := readClaudeScreen(fixtureScreen(t, "2.1.286-permission-bash")); sc.activity != nil {
+		t.Errorf("dialog: activity = %+v", sc.activity)
+	}
+}
+
 func TestCodexActivityScreens(t *testing.T) {
 	for name, want := range map[string]AgentActivity{
 		"0.164.0-working-mcp-start": {Label: "Starting MCP servers (1/2): codex_apps"},

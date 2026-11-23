@@ -30,6 +30,15 @@ func shellScreen() string {
 		rule + "\n❯ \n" + rule + "\n  sonnet · main\n"
 }
 
+// footerShellScreen is the same once the line that ends the turn is off the
+// screen (Claude Code 2.1.330, its transcript scrolled up): only the mode row
+// under the input box still names the shell.
+func footerShellScreen() string {
+	rule := strings.Repeat("─", 40)
+	return "● Started the tests in the background.\n\n" +
+		rule + "\n❯ \n" + rule + "\n  sonnet · main\n  ⏵⏵ auto mode on · 1 shell\n"
+}
+
 func fixtureScreen(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile("testdata/claude/screens/" + name + ".txt")
