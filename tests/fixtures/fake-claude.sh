@@ -38,6 +38,8 @@
 #               one message.id, as Claude Code writes them) carrying a fixed
 #               model and usage: 1000 input, 200000 cache read, 5000 cache
 #               write, 2000 output tokens,
+#               "questions" runs a five-line command (folded to three in the
+#               Chat), then asks two numbered questions and one more message,
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -356,6 +358,13 @@ submit() {
       ;;
     *usage*)
       say_usage
+      set_status idle
+      ;;
+    *questions*)
+      entry assistant '[{"type":"tool_use","id":"toolu_q","name":"Bash","input":{"command":"echo one\necho two\necho three\necho four\necho hidden-five","description":"Print five lines"}}]'
+      entry user '[{"type":"tool_result","tool_use_id":"toolu_q","content":"one"}]'
+      say $'Before I go on:\n\n1. Which port should it listen on?\n2. Which user runs it?'
+      say 'Should the logs be kept?'
       set_status idle
       ;;
     *subagents*)

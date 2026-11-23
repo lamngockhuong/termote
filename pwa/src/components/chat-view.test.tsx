@@ -11,6 +11,12 @@ import type {
   TranscriptEntry,
 } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
+import {
+  chatSelection,
+  hasChatSelection,
+  resetChatSelections,
+  setChatSelection,
+} from '../utils/chat-selection'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { FILES_VIEW_ID } from '../view-ids'
 import { chatLayout } from './chat-transcript-list'
@@ -217,6 +223,65 @@ describe('ChatView', () => {
       source: 'chat.fill.from.chat',
     })
     sel.removeAllRanges()
+  })
+
+  it('keeps the text selected for a quote until touched again or left', () => {
+    resetChatSelections()
+    set({ entries: entries(2) })
+    const { rerender, unmount } = render(<ChatView {...props} />)
+    const pick = (text: string) => {
+      const range = document.createRange()
+      range.selectNodeContents(screen.getByText(text))
+      const sel = document.getSelection() as Selection
+      sel.removeAllRanges()
+      sel.addRange(range)
+      act(() => {
+        document.dispatchEvent(new Event('selectionchange'))
+      })
+    }
+    pick('message 1')
+    expect(chatSelection('0')).toBe('message 1')
+    // The DOM selection gone, a message in: still kept
+    document.getSelection()?.removeAllRanges()
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    set({ entries: entries(3) })
+    rerender(<ChatView {...props} />)
+    expect(chatSelection('0')).toBe('message 1')
+    // A click that keeps the text selected (on it) keeps it; one that
+    // leaves nothing selected forgets it
+    const region = screen.getByRole('region', { name: 'Conversation' })
+    pick('message 1')
+    fireEvent.click(region)
+    expect(chatSelection('0')).toBe('message 1')
+    document.getSelection()?.removeAllRanges()
+    fireEvent.click(region)
+    expect(hasChatSelection('0')).toBe(false)
+    // Another pane: the one left forgets its selection, the new one keeps its own
+    pick('message 2')
+    rerender(
+      <ChatView {...props} session={{ ...props.session, paneId: '1' }} />,
+    )
+    expect(hasChatSelection('0')).toBe(false)
+    pick('message 2')
+    expect(chatSelection('1')).toBe('message 2')
+    // The view closed
+    unmount()
+    expect(hasChatSelection('1')).toBe(false)
+    document.getSelection()?.removeAllRanges()
+  })
+
+  it('a pane without an id keeps no quote', () => {
+    resetChatSelections()
+    set({ entries: entries(1) })
+    render(
+      <ChatView {...props} session={{ ...props.session, paneId: undefined }} />,
+    )
+    setChatSelection('', 'x')
+    document.getSelection()?.removeAllRanges()
+    fireEvent.click(screen.getByRole('region', { name: 'Conversation' }))
+    expect(chatSelection('')).toBe('x')
   })
 
   it('names the session on a phone, with its hidden characters', () => {

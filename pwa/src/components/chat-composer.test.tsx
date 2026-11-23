@@ -9,6 +9,12 @@ import {
 } from '../hooks/use-mux-api'
 import { requestDraftInsert } from '../utils/chat-draft'
 import {
+  chatSelection,
+  hasChatSelection,
+  resetChatSelections,
+  setChatSelection,
+} from '../utils/chat-selection'
+import {
   onTemplateFill,
   type TemplateFill,
   takeTemplateFill,
@@ -1809,6 +1815,120 @@ describe('ChatComposer prompt templates', () => {
     requestDraftInsert('%3', { text: 'more' }, 'claude')
     render(<ChatComposer {...withTemplates()} />)
     expect(box()).toHaveValue('draft more')
+  })
+})
+
+describe('ChatComposer quotes', () => {
+  beforeEach(() => resetChatSelections())
+  const quoteButton = () =>
+    screen.queryByRole('button', { name: 'Quote selected text' })
+  const quote = (text: string) => {
+    act(() => setChatSelection('%3', text))
+    fireEvent.click(quoteButton() as HTMLElement)
+  }
+  const area = () => box() as HTMLTextAreaElement
+
+  it('shows the button only while the pane keeps a selection', () => {
+    render(<ChatComposer {...props()} />)
+    expect(quoteButton()).toBeNull()
+    act(() => setChatSelection('%4', 'other pane'))
+    expect(quoteButton()).toBeNull()
+    act(() => setChatSelection('%3', 'a'))
+    expect(quoteButton()).toHaveAttribute('title', 'Quote selected text')
+    act(() => setChatSelection('%3', null))
+    expect(quoteButton()).toBeNull()
+  })
+
+  it('quotes into an empty draft, then again in order, the caret under each', () => {
+    const clear = vi.spyOn(
+      document.getSelection() as Selection,
+      'removeAllRanges',
+    )
+    render(<ChatComposer {...props()} />)
+    quote('1. Which port?')
+    expect(box()).toHaveValue('> 1. Which port?\n\n')
+    expect(box()).toHaveFocus()
+    expect(area().selectionStart).toBe(area().value.length)
+    // Quoted: forgotten, the button gone, the page's selection cleared
+    expect(hasChatSelection('%3')).toBe(false)
+    expect(quoteButton()).toBeNull()
+    expect(clear).toHaveBeenCalled()
+    type(`${area().value}7680`)
+    quote('2. Which user?')
+    quote('3. Which [Image #1]?')
+    expect(box()).toHaveValue(
+      '> 1. Which port?\n\n7680\n\n> 2. Which user?\n\n> 3. Which [Image 1]?\n\n',
+    )
+    expect(area().selectionStart).toBe(area().value.length)
+    expect(mockSend).not.toHaveBeenCalled()
+  })
+
+  it('goes after the caret as a paragraph of its own, replacing nothing', () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    type('see [Image #1] here\nnext')
+    fireEvent.focus(box())
+    // What is selected in the box stays
+    area().setSelectionRange(4, 14)
+    quote('q')
+    expect(box()).toHaveValue('see [Image #1]\n\n> q\n\n\n\n here\nnext')
+    expect(area().selectionStart).toBe('see [Image #1]\n\n> q\n\n'.length)
+    // At the start of a line: one more line feed makes the blank line
+    type('one\n\n\ntwo')
+    area().setSelectionRange(4, 4)
+    quote('q')
+    expect(box()).toHaveValue('one\n\n> q\n\n\n\ntwo')
+  })
+
+  it('a draft ending on a blank line gets no more', () => {
+    sessionStorage.setItem('termote-chat-draft:%3', 'a\n\n')
+    render(<ChatComposer {...props()} />)
+    quote('q')
+    expect(box()).toHaveValue('a\n\n> q\n\n')
+  })
+
+  it('a selection of only whitespace offers no quote', () => {
+    render(<ChatComposer {...props()} />)
+    act(() => setChatSelection('%3', ' \u00a0\n'))
+    expect(quoteButton()).toBeNull()
+    expect(chatSelection('%3')).toBe('')
+  })
+
+  it('keeps the focus where it is on a press, and is off while sending', async () => {
+    let finish: (v: unknown) => void = () => {}
+    mockSend.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          finish = r
+        }),
+    )
+    render(<ChatComposer {...props()} />)
+    act(() => setChatSelection('%3', 'a'))
+    const down = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+    })
+    ;(quoteButton() as HTMLElement).dispatchEvent(down)
+    expect(down.defaultPrevented).toBe(true)
+    expect(fireEvent.pointerDown(quoteButton() as HTMLElement)).toBe(false)
+    type('hi')
+    await send()
+    expect(quoteButton()).toBeDisabled()
+    await act(async () => {
+      finish({ queued: false })
+    })
+    expect(quoteButton()).not.toBeDisabled()
+  })
+
+  it('has no button while the agent asks', () => {
+    promptStore.prompt = {
+      promptId: 'id1',
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    act(() => setChatSelection('%3', 'a'))
+    render(<ChatComposer {...props()} />)
+    expect(quoteButton()).toBeNull()
   })
 })
 

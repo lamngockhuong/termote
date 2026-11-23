@@ -1,4 +1,10 @@
-import { FileText, ImagePlus, SendHorizontal, Square } from 'lucide-react'
+import {
+  FileText,
+  ImagePlus,
+  SendHorizontal,
+  Square,
+  TextQuote,
+} from 'lucide-react'
 import {
   type ChangeEvent,
   type ClipboardEvent,
@@ -11,6 +17,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react'
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
@@ -43,6 +50,13 @@ import {
   messageWithImages,
   removeImageToken,
 } from '../utils/chat-image-tokens'
+import { quoteBlock } from '../utils/chat-quote'
+import {
+  chatSelection,
+  hasChatSelection,
+  onChatSelection,
+  setChatSelection,
+} from '../utils/chat-selection'
 import { matchTemplates } from '../utils/prompt-templates'
 import { isSendKey } from '../utils/send-key'
 import { serverErrorText } from '../utils/server-error'
@@ -190,6 +204,10 @@ export function ChatComposer({
   const waiting = status === 'blocked' && p.loaded && !p.prompt
   const [text, setText] = useState(() => loadDraft(paneId))
   const [sending, setSending] = useState(false)
+  // Text selected in the conversation, kept for the Quote button
+  const quotable = useSyncExternalStore(onChatSelection, () =>
+    hasChatSelection(paneId),
+  )
   const [notice, setNotice] = useState<Notice | null>(null)
   // A message waiting for the user to confirm it (/exit)
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -481,6 +499,57 @@ export function ChatComposer({
   const agentRef = useRef(session.agentName)
   agentRef.current = session.agentName
 
+  // Puts text in the draft where the caret was (in place of what is
+  // selected in the box), or in place of at's text when it is still there,
+  // or at the end before the box was ever focused; the caret after it.
+  // block: a paragraph of its own after the caret, nothing in the box
+  // replaced (an "[Image #n]" there would lose its image), a blank line
+  // after it for the answer and the caret there.
+  const insertText = (
+    text: string,
+    at?: { start: number; end: number; was: string },
+    block = false,
+  ) => {
+    const draft = textRef.current
+    const box = boxRef.current
+    let [start, end] =
+      at && draft.slice(at.start, at.end) === at.was
+        ? [at.start, at.end]
+        : box && focusedOnce.current
+          ? [box.selectionStart, box.selectionEnd]
+          : [draft.length, draft.length]
+    let before = draft.slice(0, start)
+    let after = draft.slice(end)
+    let add = text
+    if (block) {
+      start = end
+      before = draft.slice(0, end)
+      // A blank line before it, and one between the answer and the text after
+      if (before && !before.endsWith('\n\n')) {
+        add = (before.endsWith('\n') ? '\n' : '\n\n') + add
+      }
+      add += '\n\n'
+      const rest = after.replace(/^\n+/, '')
+      after = rest ? `\n\n${rest}` : ''
+    }
+    const next = { text: before + add + after, caret: start + add.length }
+    caretAfterPick.current = next
+    textRef.current = next.text
+    update(next.text)
+    setCaret(next.caret)
+  }
+
+  // The text selected in the conversation, quoted as a paragraph of its own
+  // with a line under it for the answer; nothing sent.
+  // (The store keeps no selection of only whitespace: never an empty quote.)
+  const quote = () => {
+    const block = quoteBlock(chatSelection(paneId))
+    document.getSelection()?.removeAllRanges()
+    setChatSelection(paneId, null)
+    insertText(block, undefined, true)
+    boxRef.current?.focus()
+  }
+
   // A command picked in the command palette goes in front of the draft, the
   // caret after it, nothing sent; the palette's Show Chat only focuses. A
   // filled template goes where the caret was (or in place of the "/name" it
@@ -491,22 +560,7 @@ export function ChatComposer({
       const c = takeDraftInsert(paneId, agentRef.current)
       if (c === undefined) return
       if (isTextInsert(c)) {
-        const draft = textRef.current
-        const box = boxRef.current
-        const [start, end] =
-          c.at && draft.slice(c.at.start, c.at.end) === c.at.was
-            ? [c.at.start, c.at.end]
-            : box && focusedOnce.current
-              ? [box.selectionStart, box.selectionEnd]
-              : [draft.length, draft.length]
-        const next = {
-          text: draft.slice(0, start) + c.text + draft.slice(end),
-          caret: start + c.text.length,
-        }
-        caretAfterPick.current = next
-        textRef.current = next.text
-        update(next.text)
-        setCaret(next.caret)
+        insertText(c.text, c.at)
       } else if (c) {
         const at = { trigger: c.trigger ?? '/', query: '', start: 0, end: 0 }
         const next = applyPick(textRef.current, at, c)
@@ -663,6 +717,19 @@ export function ChatComposer({
           onClick={() => setPickerOpen(true)}
         >
           <FileText size={18} aria-hidden="true" />
+        </IconButton>
+      )}
+      {quotable && (
+        <IconButton
+          aria-label={translate('chat.composer.quote')}
+          title={translate('chat.composer.quote')}
+          disabled={sending}
+          // The box keeps its caret: the quote goes where it is
+          onPointerDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={quote}
+        >
+          <TextQuote size={18} aria-hidden="true" />
         </IconButton>
       )}
     </>

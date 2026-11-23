@@ -279,6 +279,7 @@ export default {
     'Hộp thoại đã đóng trước khi kịp gửi câu trả lời.',
   'chat.composer.attach': 'Đính kèm ảnh',
   'chat.composer.templates': 'Mẫu',
+  'chat.composer.quote': 'Trích dẫn đoạn đã chọn',
   'chat.composer.messageTo': 'Tin nhắn gửi {agent}',
   'chat.composer.placeholder': 'Tin nhắn',
   'chat.composer.send': 'Gửi',

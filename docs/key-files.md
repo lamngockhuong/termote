@@ -435,7 +435,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/pane-selection.ts`                 | Latest selection per pane (memory), for `{{selection}}`        |
 | `pwa/src/utils/resolve-template-vars.ts`          | `{{file}}`, `{{selection}}`, `{{branch}}` for a pane           |
 | `pwa/src/utils/template-fill-request.ts`          | The template picked, waiting for the fill dialog               |
-| `pwa/src/hooks/use-dom-selection.ts`              | Text selected in a file shown or the Chat, for `{{selection}}` |
+| `pwa/src/hooks/use-dom-selection.ts`              | Text selected in a file or the Chat: `{{selection}}`, Quote    |
+| `pwa/src/utils/chat-quote.ts`                     | A Chat selection as shown, made a Markdown quote               |
+| `pwa/src/utils/chat-selection.ts`                 | The Chat selection kept per pane (memory) for Quote            |
 | `pwa/src/components/template-fill-dialog.tsx`     | Fills a template's variables, then into the Chat draft         |
 | `pwa/src/components/template-picker.tsx`          | Chat composer's Templates button: search and pick              |
 | `pwa/src/components/prompt-templates-section.tsx` | Settings > Prompt templates: list, delete, import, export      |

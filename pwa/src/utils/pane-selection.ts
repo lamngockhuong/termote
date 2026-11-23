@@ -19,11 +19,11 @@ const selections = new Map<string, PaneSelection>()
 // other panes under the same ids
 let server: string | null = null
 
-// text cut to MAX_TEMPLATE_TEXT bytes, never inside a character
-function cut(text: string): string {
-  if (templateBytes(text) <= MAX_TEMPLATE_TEXT) return text
+// text cut to max UTF-8 bytes, never inside a character
+export function cutBytes(text: string, max: number): string {
+  if (templateBytes(text) <= max) return text
   const bytes = new TextEncoder().encode(text)
-  let end = MAX_TEMPLATE_TEXT
+  let end = max
   // Back to the first byte of the character the cut falls in
   while ((bytes[end] & 0xc0) === 0x80) end--
   return new TextDecoder().decode(bytes.subarray(0, end))
@@ -33,7 +33,7 @@ function cut(text: string): string {
 // cleared) keeps the one before.
 export function recordSelection(paneId: string, text: string, source: string) {
   if (!text.trim()) return
-  selections.set(paneId, { text: cut(text), source })
+  selections.set(paneId, { text: cutBytes(text, MAX_TEMPLATE_TEXT), source })
 }
 
 // paneId's latest selection, or null

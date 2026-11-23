@@ -436,8 +436,11 @@ describe('ChatMessage', () => {
     )
     const box = screen.getByText(/a b c d/).parentElement as HTMLElement
     expect(box).toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+    // Folded, a quote takes only the 3 lines it shows
+    expect(box).toHaveAttribute('data-quote-clip', '3')
     fireEvent.click(screen.getByText('Show all 4 lines'))
     expect(box).not.toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+    expect(box).not.toHaveAttribute('data-quote-clip')
   })
 
   it('a command that wraps over its cut once the list narrows gets Show all', () => {

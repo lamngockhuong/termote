@@ -1,12 +1,18 @@
 import { act, render } from '@testing-library/react'
 import { useRef } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { useDomSelection } from './use-dom-selection'
 
-function Host({ paneId }: { paneId?: string }) {
+function Host({
+  paneId,
+  onSelect,
+}: {
+  paneId?: string
+  onSelect?: (range: Range) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
-  useDomSelection(ref, paneId, 'src/a.ts')
+  useDomSelection(ref, paneId, 'src/a.ts', onSelect)
   return (
     <div>
       <div ref={ref}>
@@ -78,5 +84,22 @@ describe('useDomSelection', () => {
     rerender(<Host paneId="1" />)
     select(getByTestId('text'))
     expect(paneSelection('1')?.text).toBe('some text')
+  })
+
+  it('tells the latest onSelect of each selection kept, not of others', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const { getByTestId, rerender } = render(
+      <Host paneId="1" onSelect={first} />,
+    )
+    rerender(<Host paneId="2" onSelect={second} />)
+    select(getByTestId('text').firstChild as Node)
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+    expect((second.mock.calls[0][0] as Range).toString()).toBe('some text')
+    // In the editor, or out of the element: not told
+    select(getByTestId('editor').firstChild as Node)
+    select(getByTestId('outside').firstChild as Node)
+    expect(second).toHaveBeenCalledTimes(1)
   })
 })
