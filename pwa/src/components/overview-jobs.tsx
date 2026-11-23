@@ -209,7 +209,7 @@ export function OverviewJobs({
   const selectedTitle = selected ? visibleUnsafe(selected.title) : ''
 
   return (
-    <section aria-labelledby={titleId} className="flex gap-5">
+    <section aria-labelledby={titleId} className="flex h-full gap-5">
       <div className="flex min-w-0 flex-1 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* The tab says Plan: its name is for a screen reader, and where a

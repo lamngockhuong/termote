@@ -86,7 +86,7 @@ export function OverviewTabs({
     <div
       role="tablist"
       aria-label={label}
-      className="grid min-w-0 grid-cols-2 gap-0.5 rounded-control bg-surface-raised p-0.5 sm:inline-flex ui-terminal:bg-bg"
+      className="grid min-w-0 grid-cols-2 gap-0.5 rounded-control bg-surface p-0.5 sm:inline-flex ui-terminal:bg-bg"
     >
       {tabs.map((tab, i) => {
         const selected = tab.id === value
@@ -108,7 +108,7 @@ export function OverviewTabs({
             onKeyDown={(e) => move(e, i)}
             className={`flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-[13px] tabular-nums transition-colors duration-(--duration-fast) ease-standard pointer-coarse:h-9 ${
               selected
-                ? 'bg-surface font-semibold text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                ? 'bg-surface-raised font-semibold text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'font-medium text-fg-muted hover:text-fg'
             } ${FOCUS_RING}`}
           >

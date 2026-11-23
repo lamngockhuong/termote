@@ -481,14 +481,14 @@ export function OverviewScreen({
         </div>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
           {overview.error && (
             <p role="status" className="mb-3 text-[12px] text-fg-muted">
               {t('tasks.overview.readFailed')}
             </p>
           )}
           {hasPlan && (
-            <div {...panel('plan')}>
+            <div {...panel('plan')} className="flex-1">
               {ready && (
                 <OverviewJobs
                   readOnly={readOnly}
