@@ -38,6 +38,31 @@ const value = (label: string) =>
   screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement
 
 describe('JobDetail', () => {
+  it('shows the pull requests only where the server follows them, and what a ci grant sent', () => {
+    const j = job({
+      agent,
+      ci: {
+        prs: [
+          { number: 12, repo: 'github.com/o/r', state: 'open', checks: 'fail' },
+        ],
+      },
+      grants: [
+        grant({
+          kind: 'ci',
+          prefix: undefined,
+          uses: [{ at: ago(3), command: '12@abc,15@def' }],
+        }),
+      ],
+      events: [{ at: ago(3), kind: 'ci_sent', text: 'sent CI failure of #12' }],
+    })
+    const { rerender } = render(<JobDetail job={j} now={NOW} />)
+    expect(screen.queryByTestId('job-ci')).toBeNull()
+    expect(screen.getByText('Sent on their own: #12, #15')).toBeVisible()
+    expect(screen.getByText('Failed checks sent to the agent')).toBeVisible()
+    rerender(<JobDetail job={j} now={NOW} ciAvailable />)
+    expect(screen.getByTestId('job-ci')).toBeVisible()
+  })
+
   it('shows every field a full client gets: prompt, note, folder, answers, history', () => {
     render(
       <JobDetail

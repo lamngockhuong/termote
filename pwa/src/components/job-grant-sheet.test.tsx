@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Job, type JobGrant, RequestError } from '../hooks/use-mux-api'
 import { JobGrantSheet } from './job-grant-sheet'
@@ -38,10 +45,16 @@ const job = (over: Partial<Job> = {}): Job => ({
   ...over,
 })
 
-function open(j: Job = job(), canGrant = true) {
+function open(j: Job = job(), canGrant = true, ciAvailable = false) {
   const onClose = vi.fn()
   render(
-    <JobGrantSheet job={j} canGrant={canGrant} now={NOW} onClose={onClose} />,
+    <JobGrantSheet
+      job={j}
+      canGrant={canGrant}
+      ciAvailable={ciAvailable}
+      now={NOW}
+      onClose={onClose}
+    />,
   )
   return { onClose }
 }
@@ -228,6 +241,38 @@ describe('JobGrantSheet', () => {
         "The job's agent works outside the job's worktree, so no grant to edit files can be given",
       ),
     ).toBeVisible()
+  })
+
+  it('gives a grant to send failed checks where the server follows pull requests', async () => {
+    open()
+    expect(
+      screen.queryByRole('radio', { name: 'Send failed checks' }),
+    ).toBeNull()
+    cleanup()
+    open(job(), true, true)
+    fireEvent.click(screen.getByRole('radio', { name: 'Send failed checks' }))
+    expect(screen.getByText(/up to 3 times/)).toBeVisible()
+    expect(screen.queryByRole('textbox', { name: 'Command prefix' })).toBeNull()
+    await give()
+    expect(store.grant).toHaveBeenCalledWith(job(), {
+      kind: 'ci',
+      prefix: undefined,
+      minutes: 1440,
+    })
+  })
+
+  it('counts the rounds a ci grant sent', () => {
+    open(
+      job({
+        grants: [
+          grant({ kind: 'ci', prefix: undefined, uses: [{ at: later(-1) }] }),
+        ],
+      }),
+      true,
+      true,
+    )
+    expect(screen.getByText(/sent 1 of 3 times/)).toBeVisible()
+    expect(screen.getByText('Send failed checks to the agent')).toBeVisible()
   })
 
   it('tells why the server refused', async () => {

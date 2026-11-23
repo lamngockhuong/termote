@@ -4,6 +4,7 @@ import { tFor } from '../i18n/i18n-context'
 import {
   activeGrants,
   grantLabel,
+  grantUsed,
   groupJobs,
   jobFinished,
   jobPaneRef,
@@ -83,6 +84,17 @@ describe('grantLabel', () => {
     expect(grantLabel(grant({ kind: 'edit' }), t)).toBe(
       t('jobs.grant.editLabel'),
     )
+    expect(grantLabel(grant({ kind: 'ci' }), t)).toBe(
+      'Send failed checks to the agent',
+    )
+  })
+
+  it('counts a ci grant in rounds', () => {
+    const used = [{ at: 'x' }, { at: 'y' }]
+    expect(grantUsed(grant({ kind: 'ci', uses: used }), t)).toBe(
+      'sent 2 of 3 times',
+    )
+    expect(grantUsed(grant({ uses: used }), t)).toBe('used 2 times')
   })
 })
 

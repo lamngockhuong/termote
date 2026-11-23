@@ -5,6 +5,7 @@ import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { activeGrants, jobPaneRef } from '../utils/jobs'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { JobPRChip } from './job-pr-chip'
 import { FOCUS_RING } from './ui/button'
 
 export const JOB_STATE_WORDS: Record<JobState, MessageKey> = {
@@ -95,12 +96,13 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
       </span>
       <span id={detailsId} className="contents">
         {status && live && <span className={LIVE_TONE[status]}>{live}</span>}
-        {(ref || branch) && (
-          <span className="flex min-w-0 flex-wrap gap-x-2.5 font-term text-[11px] text-fg-muted">
+        {(ref || branch || job.ciSummary) && (
+          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2.5 gap-y-1 font-term text-[11px] text-fg-muted">
             {ref && <span className="truncate">{ref}</span>}
             {branch && (
               <span className="truncate">{visibleUnsafe(branch)}</span>
             )}
+            <JobPRChip summary={job.ciSummary} />
           </span>
         )}
         {counts && <span className="text-[12px] text-fg-subtle">{counts}</span>}

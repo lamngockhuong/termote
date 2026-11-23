@@ -4,6 +4,7 @@ import {
   createJob,
   deleteJob,
   fetchJobs,
+  jobCI,
   RequestError,
   revokeGrant,
   updateJob,
@@ -50,12 +51,14 @@ describe('job requests', () => {
       readOnly: true,
       serverNow: 'now',
       canGrant: true,
+      ciAvailable: true,
     })
     expect(await fetchJobs()).toEqual({
       jobs: [JOB],
       readOnly: true,
       serverNow: 'now',
       canGrant: true,
+      ciAvailable: true,
     })
     expect(sent[0]).toEqual({ url: '/api/mux/jobs?all=1', method: 'GET' })
   })
@@ -67,6 +70,7 @@ describe('job requests', () => {
       readOnly: false,
       serverNow: '',
       canGrant: false,
+      ciAvailable: false,
     })
   })
 
@@ -133,6 +137,29 @@ describe('job requests', () => {
     expect(sent[0]).toEqual({
       url: '/api/mux/jobs/a1/grants/g%2F1',
       method: 'DELETE',
+    })
+  })
+
+  it('attaches pull requests, reads them again and sends their failures', async () => {
+    let sent = mockFetch({ job: JOB })
+    await updateJob('a', { addPrs: [12], removePrs: [3], updated: 'u1' })
+    expect(sent[0]).toEqual({
+      url: '/api/mux/jobs/a',
+      method: 'PATCH',
+      body: { addPrs: [12], removePrs: [3], updated: 'u1' },
+    })
+    sent = mockFetch({ job: JOB, queued: true })
+    expect(await jobCI('a', 'send')).toEqual({ job: JOB, queued: true })
+    expect(sent[0]).toEqual({
+      url: '/api/mux/jobs/a/ci',
+      method: 'POST',
+      body: { action: 'send' },
+    })
+    mockFetch({ job: JOB })
+    expect(await jobCI('a', 'refresh')).toEqual({ job: JOB, queued: false })
+    mockFetch({ code: 'ci_nothing_failed', error: 'x' }, 409)
+    await expect(jobCI('a', 'send')).rejects.toMatchObject({
+      code: 'ci_nothing_failed',
     })
   })
 })

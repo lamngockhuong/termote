@@ -17,8 +17,10 @@ import {
 } from '../utils/grant-prefix'
 import {
   activeGrants,
+  CI_ROUNDS,
   grantLabel,
   grantLeft,
+  grantUsed,
   jobFinished,
   jobPaneRef,
 } from '../utils/jobs'
@@ -33,6 +35,8 @@ interface Props {
   job: Job
   // This browser may give and end grants (JobList.canGrant)
   canGrant: boolean
+  // The server follows the jobs' pull requests: a ci grant can be given
+  ciAvailable?: boolean
   // Server time (ms)
   now: number
   onClose: () => void
@@ -55,7 +59,13 @@ const FIELD =
 // The grants of one job: those in force, each with the pane and folder it
 // is pinned to and a way to end it, and a form to give one more. The user
 // types the prefix: nothing fills it from what the agent asked.
-export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
+export function JobGrantSheet({
+  job: given,
+  canGrant,
+  ciAvailable,
+  now,
+  onClose,
+}: Props) {
   const { t } = useT()
   const job = useCurrentJob(given)
   const ids = useId()
@@ -182,9 +192,7 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
                       <p className="m-0 text-[12px] text-fg-muted">
                         {left(g.expires)}
                         {' · '}
-                        {t('jobs.grant.uses', {
-                          count: g.uses?.length ?? 0,
-                        })}
+                        {grantUsed(g, t)}
                       </p>
                     </div>
                     {canGrant && (
@@ -228,9 +236,16 @@ export function JobGrantSheet({ job: given, canGrant, now, onClose }: Props) {
               options={[
                 { value: 'bash', content: t('jobs.grant.kindBash') },
                 { value: 'edit', content: t('jobs.grant.kindEdit') },
+                ...(ciAvailable
+                  ? [{ value: 'ci' as const, content: t('jobs.grant.kindCI') }]
+                  : []),
               ]}
             />
-            {kind === 'bash' ? (
+            {kind === 'ci' ? (
+              <p className="m-0 text-[12px] text-fg-muted">
+                {t('jobs.grant.ciHint', { count: CI_ROUNDS })}
+              </p>
+            ) : kind === 'bash' ? (
               <>
                 <label
                   htmlFor={`${ids}-prefix`}

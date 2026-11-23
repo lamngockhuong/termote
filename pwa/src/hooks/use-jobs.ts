@@ -8,6 +8,7 @@ import {
   type GrantKind,
   type Job,
   type JobState,
+  jobCI,
   RequestError,
   revokeGrant,
   updateJob,
@@ -25,6 +26,8 @@ export interface JobsState {
   // This browser may give and end grants (signed in with the password or a
   // full paired device)
   canGrant: boolean
+  // The server follows the jobs' pull requests (never in a container)
+  ciAvailable: boolean
   // Server time minus this device's (ms), from the last read
   clockOffset: number
   loaded: boolean
@@ -39,6 +42,7 @@ const INITIAL: JobsState = {
   jobs: [],
   readOnly: false,
   canGrant: false,
+  ciAvailable: false,
   clockOffset: 0,
   loaded: false,
   error: false,
@@ -67,6 +71,7 @@ export async function reloadJobs(): Promise<void> {
       jobs: list.jobs,
       readOnly: list.readOnly,
       canGrant: list.canGrant,
+      ciAvailable: list.ciAvailable,
       clockOffset: Number.isNaN(server) ? 0 : server - Date.now(),
       loaded: true,
       error: false,
@@ -169,6 +174,31 @@ export function removeJob(job: Job): Promise<void> {
     await deleteJob(job.id, job.updated)
     readSeq++
     set({ jobs: state.jobs.filter((j) => j.id !== job.id) })
+  })
+}
+
+// Attaches and detaches pull requests of job by number. Throws
+// RequestError (job_invalid).
+export function pinJobPRs(
+  job: Job,
+  addPrs: number[],
+  removePrs: number[],
+): Promise<Job> {
+  return write(() =>
+    saved(updateJob(job.id, { addPrs, removePrs, updated: job.updated })),
+  )
+}
+
+// Reads job's pull requests again (refresh) or sends their failed checks
+// to its agent (send); queued: the agent was working. Throws RequestError.
+export function runJobCI(
+  job: Job,
+  action: 'refresh' | 'send',
+): Promise<{ job: Job; queued: boolean }> {
+  return write(async () => {
+    const r = await jobCI(job.id, action)
+    put(r.job)
+    return r
   })
 }
 

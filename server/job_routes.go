@@ -548,6 +548,9 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	all, ws := q.Get("all") == "1", q.Get("workspace")
 	snap, _ := a.activity.lastSnapshot()
 	viewOnly := isViewOnly(r)
+	// A server that does not follow pull requests (a container) shows none
+	// it read before.
+	ciOn := a.ci.available()
 	var full []jobView
 	var brief []jobBrief
 	for _, j := range list {
@@ -565,7 +568,7 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 			if j.Worktree != nil && !live.OutsideWorktree {
 				b.Branch = j.Worktree.Branch
 			}
-			if !live.branchHidden {
+			if !live.branchHidden && ciOn {
 				b.CISummary = ciSummary(j.CI)
 			}
 			brief = append(brief, b)
@@ -578,14 +581,14 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": a.ci.available()})
+		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": ciOn})
 		return
 	}
 	if full == nil {
 		full = []jobView{}
 	}
 	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r),
-		"ciAvailable": a.ci.available()})
+		"ciAvailable": ciOn})
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
@@ -594,7 +597,10 @@ func (a *agentAPI) viewJob(j job) jobView {
 }
 
 func (a *agentAPI) jobViewOf(j job, live jobLive) jobView {
-	v := jobView{job: j, Live: live, CISummary: ciSummary(j.CI)}
+	v := jobView{job: j, Live: live}
+	if a.ci.available() {
+		v.CISummary = ciSummary(j.CI)
+	}
 	if t := a.ci.checkedAt(j.ID); !t.IsZero() {
 		v.CIChecked = t.UTC().Format(activityTimeFormat)
 	}

@@ -168,6 +168,7 @@ func TestJobPRPins(t *testing.T) {
 
 func TestJobCIViews(t *testing.T) {
 	jt := newJobsTest(t)
+	jt.agent.ci = &ciPoller{a: jt.agent, now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
 	id := jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
 	jt.agent.jobs.setJobCI(id, func(j *job) bool {
 		j.CI = &jobCI{Repo: "github.com/o/r", Error: "ci_failed", PRs: []jobPR{
@@ -186,8 +187,8 @@ func TestJobCIViews(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("view list = %d", code)
 	}
-	if out["ciAvailable"] != false {
-		t.Errorf("ciAvailable without a poller: %v", out["ciAvailable"])
+	if out["ciAvailable"] != true {
+		t.Errorf("ciAvailable: %v", out["ciAvailable"])
 	}
 	b := out["jobs"].([]any)[0].(map[string]any)
 	ci, ok := b["ciSummary"].(map[string]any)
@@ -198,5 +199,14 @@ func TestJobCIViews(t *testing.T) {
 		if _, ok := ci[k]; ok {
 			t.Errorf("view-only sees %s: %v", k, ci)
 		}
+	}
+	// A server that does not follow pull requests (a container) shows none.
+	jt.agent.ci = nil
+	if full := jt.list()[0]; full["ciSummary"] != nil {
+		t.Errorf("summary without a poller: %v", full["ciSummary"])
+	}
+	_, out = jt.do("view", http.MethodGet, "/api/mux/jobs", nil)
+	if out["ciAvailable"] != false || out["jobs"].([]any)[0].(map[string]any)["ciSummary"] != nil {
+		t.Errorf("view-only without a poller: %v", out)
 	}
 }
