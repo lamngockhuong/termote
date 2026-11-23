@@ -583,24 +583,23 @@ export function OverviewScreen({
                   />
                 </div>
                 {/* The dialogs to answer, whatever the filter or the search
-                  shows, then the cards of those agents */}
+                  shows, then the cards of those agents. The queue stays
+                  mounted: its answered card outlasts the last wait. */}
                 {summary.blocked > 0 && (
-                  <>
-                    <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
-                      {t('tasks.overview.section.blocked', {
-                        count: summary.blocked,
-                      })}
-                    </h3>
-                    <NeedsMeQueue
-                      cards={queueCards}
-                      readOnly={readOnly}
-                      canAnswer={canAnswer}
-                      onOpen={onOpen}
-                      now={now}
-                      jobOf={jobTitleOf}
-                    />
-                  </>
+                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
+                    {t('tasks.overview.section.blocked', {
+                      count: summary.blocked,
+                    })}
+                  </h3>
                 )}
+                <NeedsMeQueue
+                  cards={queueCards}
+                  readOnly={readOnly}
+                  canAnswer={canAnswer}
+                  onOpen={onOpen}
+                  now={now}
+                  jobOf={jobTitleOf}
+                />
                 {shown.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
                     {t('tasks.overview.noMatch')}

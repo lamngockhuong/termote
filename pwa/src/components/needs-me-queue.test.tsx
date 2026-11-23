@@ -265,6 +265,33 @@ describe('NeedsMeQueue', () => {
     expect(screen.getByText('Run the tests of a?')).toBeInTheDocument()
   })
 
+  it('the next tab of a dialog, a new wait for the server, keeps the card', async () => {
+    const tab2: AgentPrompt = {
+      ...dialog('a'),
+      promptId: 'id-a2',
+      title: 'Which drink?',
+    }
+    let step = 0
+    mockFetchPrompt.mockImplementation(async (id: string) =>
+      id === 'a' ? [dialog('a'), tab2, null][step] : dialog(id),
+    )
+    mockAnswer.mockImplementation(async () => {
+      step++
+    })
+    const { update } = setup([card('a', 1), card('b', 2)])
+    await screen.findByText('Run the tests of a?')
+    await act(async () => fireEvent.click(yes()))
+    // The snapshot shows the pane blocked since the step was answered
+    update([card('a', 3), card('b', 2)])
+    await screen.findByText('Which drink?')
+    expect(screen.queryByText('Answered.')).toBeNull()
+    expect(screen.getByText('1 more waiting')).toBeInTheDocument()
+    await act(async () => fireEvent.click(yes()))
+    await answered()
+    await next('Next (1 left)')
+    await screen.findByText('Run the tests of b?')
+  })
+
   it('view-only: the dialog without buttons, and why', async () => {
     mockFetchPrompt.mockImplementation(async () => ({
       ...dialog('a'),
