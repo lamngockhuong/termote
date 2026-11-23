@@ -1135,6 +1135,11 @@ describe('OverviewScreen, the Plan', () => {
   })
   const openPlan = () =>
     fireEvent.click(screen.getByRole('tab', { name: /^Plan/ }))
+  // Opens a job's details (a sheet: the test's screen is narrow)
+  const pick = (title: string) =>
+    fireEvent.click(
+      within(screen.getByRole('article', { name: title })).getByRole('button'),
+    )
 
   it('reads the jobs with the overview, in their own tab', async () => {
     renderScreen()
@@ -1151,19 +1156,57 @@ describe('OverviewScreen, the Plan', () => {
   it("opens a job's pane as its card does", async () => {
     const { onOpen } = renderScreen()
     await act(async () => {})
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
     openPlan()
+    pick('job a')
     fireEvent.click(screen.getByRole('button', { name: 'Open pane web:t3' }))
     expect(onOpen).toHaveBeenLastCalledWith(
       SESSIONS[2],
       SESSIONS[2].panes![1],
       'chat',
     )
+    pick('job b')
     fireEvent.click(screen.getByRole('button', { name: 'Open pane web:t2' }))
     expect(onOpen).toHaveBeenLastCalledWith(
       SESSIONS[1],
       SESSIONS[1].panes![0],
       'terminal',
     )
+  })
+
+  it("gives the Activity's room to a job's details on a wide screen, and back", async () => {
+    const orig = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      ...orig(query),
+      matches: query === '(min-width: 1280px)',
+    })) as typeof window.matchMedia
+    try {
+      renderScreen()
+      await act(async () => {})
+      const activity = screen.getByRole('button', { name: 'Activity' })
+      fireEvent.click(activity)
+      expect(
+        screen.getByRole('complementary', { name: 'Activity' }),
+      ).toBeVisible()
+      openPlan()
+      pick('job a')
+      expect(screen.getByRole('complementary', { name: 'job a' })).toBeVisible()
+      expect(
+        screen.queryByRole('complementary', { name: 'Activity' }),
+      ).toBeNull()
+      expect(activity).toHaveAttribute('aria-pressed', 'false')
+      fireEvent.click(activity)
+      expect(
+        screen.getByRole('complementary', { name: 'Activity' }),
+      ).toBeVisible()
+      expect(screen.queryByRole('complementary', { name: 'job a' })).toBeNull()
+    } finally {
+      window.matchMedia = orig
+    }
   })
 
   it('offers the agents to give a job to', async () => {
@@ -1175,6 +1218,7 @@ describe('OverviewScreen, the Plan', () => {
     renderScreen()
     await act(async () => {})
     openPlan()
+    pick('job a')
     fireEvent.click(screen.getByRole('button', { name: 'Edit job a' }))
     const options = within(
       screen.getByRole('combobox', { name: 'Agent' }),
@@ -1396,6 +1440,10 @@ describe('OverviewScreen, the tabs', () => {
         name: /^Open chat: Claude Code, Working, web \/ t3/,
       }),
     ).toHaveFocus()
+    // No card asked for any more: the tab stays as it is
+    fireEvent.click(planTab())
+    rerender(<OverviewScreen {...props} />)
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
   })
 
   it('keeps an open History and a skipped dialog across a switch', async () => {

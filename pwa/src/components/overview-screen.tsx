@@ -245,9 +245,8 @@ export function OverviewScreen({
     focused.current = target
     const at = document.activeElement
     if (!fromPlan && at !== titleRef.current && at !== document.body) return
-    const card = targetRef.current
-    if (!card) return
-    card.focus()
+    // The target is shown, so its card holds the ref
+    targetRef.current?.focus()
     setHighlighted(target.paneId)
   }, [target, fromPlan])
   const showGroups = groups.length > 1
