@@ -453,6 +453,10 @@ type agentAPI struct {
 	// snapshot's caps.tasks, with caps.files). Set by buildServer.
 	userTasks bool
 	tasks     bool
+	// jobs is the job ledger, nil when it cannot be kept; wm makes and
+	// lists worktrees, for the directory of a job's. Set by buildServer.
+	jobs *jobStore
+	wm   worktreeMux
 	// instanceID: this server's id (the snapshot's instanceId); set by
 	// buildServer.
 	instanceID string
@@ -502,6 +506,7 @@ func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agent
 	mux.HandleFunc("/api/mux/panes/{id}/agent/image", a.handleImage)
 	mux.HandleFunc("/api/mux/overview", a.handleOverview)
 	a.registerInputRoutes(mux)
+	a.registerJobRoutes(mux)
 	return a
 }
 

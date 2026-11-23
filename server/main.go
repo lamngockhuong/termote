@@ -91,6 +91,7 @@ func runServe(args []string) int {
 	cfg.TemplatesDir = filepath.Join(c.stateDir(), "templates")
 	cfg.RecentGroupsDir = c.recentGroupsDir()
 	cfg.TasksDir = filepath.Join(c.stateDir(), "tasks")
+	cfg.JobsDir = filepath.Join(c.stateDir(), "jobs")
 	cfg.InstanceDir = c.stateDir()
 	if cfg.LocalSocketDir != "" {
 		sweepLoginFiles(cfg.LocalSocketDir)
