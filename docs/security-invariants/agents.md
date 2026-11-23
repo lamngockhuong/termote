@@ -643,7 +643,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   exists without one is refused; `busy` is retried for 90 s at most, a create that answered
   `unknown` or not at all is followed in the list for 60 s and never sent again; the agent starts
   only in the first pane of that workspace, once its directory is the worktree's; nothing it makes
-  is ever removed, and every failure after the worktree exists names it.
+  is ever removed, and every failure after the worktree exists names it (`worktreeStays`, then
+  `startTarget.note`): its branch with its directory, or, before the directory is read again, its
+  branch and the PWA's worktrees, whatever failed (an open refused, a 200 it cannot read, the list
+  read after it); a refusal before anything is made says nothing stays.
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or

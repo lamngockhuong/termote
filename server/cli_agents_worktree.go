@@ -83,21 +83,29 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 		// A run before this one made it: go on there.
 		var already bool
 		groupID, already, err = c.openWorktree(port, g.ID, branch)
+		if err != nil {
+			return startTarget{}, worktreeStays(err, b, wt.Path)
+		}
 		fresh = !already
 	case slices.Contains(list.Branches, branch):
 		return startTarget{}, fmt.Errorf("branch %s already exists; pick a new name or open it from the PWA", b)
 	default:
-		groupID, err = c.createWorktree(port, g.ID, branch, base, label)
+		var made bool
+		groupID, made, err = c.createWorktree(port, g.ID, branch, base, label)
+		if err != nil && made {
+			return startTarget{}, worktreeStays(err, b, "")
+		}
+		if err != nil {
+			return startTarget{}, err
+		}
 	}
-	if err != nil {
-		return startTarget{}, err
-	}
+	// From here the worktree exists: every failure names what stays.
 	if list, err = c.worktreeList(port, g.ID); err != nil {
-		return startTarget{}, err
+		return startTarget{}, worktreeStays(err, b, "")
 	}
 	wt, found := list.find(branch)
 	if !found {
-		return startTarget{}, fmt.Errorf("the worktree of branch %s is not in the list after it was made; see the PWA's worktrees", b)
+		return startTarget{}, worktreeStays(errors.New("the worktree is not in the list after it was made"), b, "")
 	}
 	t := startTarget{dir: wt.Path, used: !fresh, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
 	p, err := c.worktreePane(port, groupID, wt.Path)
@@ -107,6 +115,16 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	t.paneID = p.pane.ID
 	t.where = fmt.Sprintf("workspace %s, branch %s", plainText(p.group.Name), b)
 	return t, nil
+}
+
+// worktreeStays is err of a start that failed once branch's worktree exists,
+// with what stays named: its directory when known, else where to find it.
+// branch is already printable.
+func worktreeStays(err error, branch, dir string) error {
+	if dir != "" {
+		return fmt.Errorf("%w (branch %s, in %s stays)", err, branch, plainText(dir))
+	}
+	return fmt.Errorf("%w (branch %s and its worktree stay; see the PWA's worktrees)", err, branch)
 }
 
 // openWorktree opens branch's existing worktree, or names the workspace
@@ -138,7 +156,8 @@ func worktreeGroupID(r agentsReply) (string, bool, error) {
 // createWorktree makes branch's worktree and its workspace. Another change
 // running (busy) is waited for; a create that did not answer in time is
 // followed in the list, never made again.
-func (c *cli) createWorktree(port int, sourceID, branch, base, label string) (string, error) {
+// made: the worktree exists, even when err is set.
+func (c *cli) createWorktree(port int, sourceID, branch, base, label string) (id string, made bool, err error) {
 	body := map[string]string{"groupId": sourceID, "branch": branch, "base": base, "label": label}
 	until := time.Now().Add(agentsWorktreeBusyMost)
 	pause := agentsWorktreeEvery
@@ -148,15 +167,15 @@ func (c *cli) createWorktree(port int, sourceID, branch, base, label string) (st
 		case errors.Is(err, errAgentsMaybeSent):
 			return c.settleWorktree(port, sourceID, branch)
 		case err != nil:
-			return "", err
+			return "", false, err
 		case r.status == http.StatusOK:
 			id, _, err := worktreeGroupID(r)
-			return id, err
+			return id, true, err
 		}
 		switch r.failure().Code {
 		case "busy":
 			if time.Now().Add(pause).After(until) {
-				return "", agentsRefusal(r)
+				return "", false, agentsRefusal(r)
 			}
 			time.Sleep(pause)
 			pause = min(2*pause, 10*time.Second)
@@ -164,27 +183,28 @@ func (c *cli) createWorktree(port int, sourceID, branch, base, label string) (st
 		case "unknown":
 			return c.settleWorktree(port, sourceID, branch)
 		}
-		return "", agentsRefusal(r)
+		return "", false, agentsRefusal(r)
 	}
 }
 
 // settleWorktree reads the list until branch's worktree shows, for a create
 // whose end the server could not wait for.
-func (c *cli) settleWorktree(port int, sourceID, branch string) (string, error) {
+// made: the worktree showed, even when err is set.
+func (c *cli) settleWorktree(port int, sourceID, branch string) (string, bool, error) {
 	until := time.Now().Add(agentsWorktreeSettle)
 	for {
 		if list, err := c.worktreeList(port, sourceID); err == nil {
 			if wt, ok := list.find(branch); ok && wt.Linked {
 				// Opened by the create this command sent.
 				if wt.GroupID != "" {
-					return wt.GroupID, nil
+					return wt.GroupID, true, nil
 				}
 				id, _, err := c.openWorktree(port, sourceID, branch)
-				return id, err
+				return id, true, err
 			}
 		}
 		if time.Now().After(until) {
-			return "", fmt.Errorf("the worktree of branch %s did not show up; nothing was started (check the PWA's worktrees before trying again)", plainText(branch))
+			return "", false, fmt.Errorf("the worktree of branch %s did not show up; nothing was started (check the PWA's worktrees before trying again)", plainText(branch))
 		}
 		time.Sleep(agentsWorktreeEvery)
 	}
