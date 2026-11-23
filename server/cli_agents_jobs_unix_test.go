@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -704,6 +705,13 @@ func TestAgentsJobRemoveFailures(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"job", "remove", "j1"}); err == nil || !strings.Contains(err.Error(), "may have been made") {
 		t.Errorf("hang up: %v", err)
 	}
+	// A dry run's table that cannot be written is the command's failure.
+	out := tc.cli.out
+	tc.cli.out = writerFunc(func([]byte) (int, error) { return 0, errors.New("closed pipe") })
+	if err := tc.dispatch("agents", []string{"jobs", "prune", "--dry-run"}); err == nil || !strings.Contains(err.Error(), "closed pipe") {
+		t.Errorf("table write: %v", err)
+	}
+	tc.cli.out = out
 	tc.stdout.Reset()
 	if err := tc.dispatch("agents", []string{"jobs", "prune", "--older-than", "1d", "--dry-run", "--json"}); err != nil || !strings.Contains(strings.Join(strings.Fields(tc.stdout.String()), ""), `"wouldRemove":["j1"]`) {
 		t.Errorf("without serverNow: %v %s", err, tc.stdout)
