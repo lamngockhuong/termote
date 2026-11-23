@@ -467,7 +467,16 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   drafts (`sessionStorage` `termote-chat-draft:*`) are cleared on sign-out too. Limits: native and
   container keep separate templates; a name differing only by a look-alike character is another
   name (the import confirmation lists every name); with tmux, a selection in another split of the
-  window is kept for the pane shown
+  window is kept for the pane shown. The Chat's Quote button (`chat-quote.ts`, `chat-selection.ts`)
+  uses the text last selected in the transcript, built from the DOM as shown (a list keeps its
+  numbers; button labels, `select-none` marks and the hidden lines of a folded `data-quote-clip`
+  block stay out) and kept per pane in memory only, dropped once quoted, on a new touch in the
+  transcript, on leaving the pane or the view, on another server and on sign-out. The quote goes
+  through `revealHidden` (a hidden character shows as `⟨U+XXXX⟩`), its `[Image #N]` becomes
+  `[Image N]` so it never names an image of the draft, and it is cut to 60 lines or 4 KB (a longer
+  line on a character boundary). It is only put in the draft, after the caret and replacing nothing,
+  never sent; the button is off while sending and absent with a dialog open and for a view-only
+  client (no composer)
 - **Tasks** (`/api/mux/panes/{id}/tasks`, `/api/mux/panes/{id}/tasks/run`,
   `/api/mux/tasks/runs/{runId}`, `/api/mux/tasks[/{id}]`; `server/tasks.go`,
   `tasks_discover.go`, `tasks_tools.go`, `tasks_tools_toml.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,
