@@ -64,7 +64,10 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   passed over (at most `claudeBlankRows`, a screen not yet filled) and the nearest row at column 0
   deciding, so an earlier turn's line is never read; Codex's
   `esc to interrupt)` row over the composer; once a Claude Code turn is done, its end line only
-  while it names what still runs, read into `background`), `null` when there is none. It adds no capture and
+  while it names what still runs, read into `background`; with neither line in view, the mode row
+  under the input box's bottom border, only the item after its last `·` or the whole row, and only when that
+  is a count and a kind of background work (`claudeFooterWorkRe`: "1 shell", "1 shell, 1 monitor"),
+  read into `background` alone), `null` when there is none. It adds no capture and
   no write, takes nothing from the client, and holds only that line's own words (each field
   stripped of control characters and cut to 80 runes): a status line, no file content or
   command output, and less than the transcript and dialog card title a view-only client already

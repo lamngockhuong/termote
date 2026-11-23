@@ -337,6 +337,13 @@ func findInputBox(lines []screenLine) (agentScreen, bool) {
 			}
 			sc := readInputBox(lines[p:b])
 			sc.activity = claudeActivity(lines[:p-1])
+			if sc.activity == nil {
+				// No working line or end-of-turn line on the screen: the
+				// mode row still names what the ended turn left running.
+				if bg := claudeFooterWork(lines[b+1:]); bg != "" {
+					sc.activity = &AgentActivity{Background: bg}
+				}
+			}
 			return sc, true
 		}
 	}

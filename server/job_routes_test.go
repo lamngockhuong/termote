@@ -705,4 +705,10 @@ func TestJobLiveIdleBackground(t *testing.T) {
 	if l := live(jt.list()[0]); l["status"] != "idle" || l["background"] != nil {
 		t.Errorf("shell ended: %v", l)
 	}
+	// Only the mode row under the input box names it (Claude Code 2.1.330).
+	jt.f.setScreen(footerShellScreen())
+	jt.agent.input.captures = newTTLCache[string](0)
+	if l := live(jt.list()[0]); l["status"] != "idle" || l["background"] != "1 shell" {
+		t.Errorf("mode row: %v", l)
+	}
 }
