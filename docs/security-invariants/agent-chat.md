@@ -60,7 +60,9 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   twice. The cursor's file identity names every part with its cut: a part replaced since (another
   identity, or shorter than its cut) reads the fork as itself and starts over.
   `GET agent/prompt` also returns `activity`, the agent's working line read off the same capture
-  (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, Codex's
+  (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, blank rows
+  passed over (at most `claudeBlankRows`, a screen not yet filled) and the nearest row at column 0
+  deciding, so an earlier turn's line is never read; Codex's
   `esc to interrupt)` row over the composer; once a Claude Code turn is done, its end line only
   while it names what still runs, read into `background`), `null` when there is none. It adds no capture and
   no write, takes nothing from the client, and holds only that line's own words (each field

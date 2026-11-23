@@ -48,8 +48,8 @@ type ActivityRetry struct {
 // activityMaxText bounds every text field of an AgentActivity.
 const activityMaxText = 80
 
-// claudeActivityRows is how far above the input box's top border the working
-// line is looked for: it sits right on it, or over a blank row and the
+// claudeActivityRows is how many rows with text above the input box's top
+// border the working line is looked for in: it sits right on it, or over the
 // effort row (Claude Code 2.1.312). claudeTodoRows: each indented row with
 // text under it (a todo list, one row per item) moves that window up by
 // one, this many at most. Only blank and indented rows are passed over: the
@@ -59,10 +59,18 @@ const (
 	claudeTodoRows     = 20
 )
 
+// claudeBlankRows: blank rows take no place in those windows, this many at
+// most. A screen not yet filled (a new session, Claude Code 2.1.330) keeps
+// the input box at the bottom with blank rows between it and the last line
+// drawn, as many as the pane has left, so the bound is the tallest pane
+// recorded (herdr-core's headless 120 rows). An older line is not reached
+// over them while a turn draws: its prompt row is at column 0 and decides.
+const claudeBlankRows = 120
+
 // claudeRecapRows: the recap Claude Code (2.1.325) writes under the line
 // that ends a turn ("※ recap: …", its wrapped rows indented) is looked for
-// this far above the input box's top border; the working line is then looked
-// for above it.
+// this many rows with text above the input box's top border; the working
+// line is then looked for above it.
 const claudeRecapRows = 8
 
 var (
@@ -93,11 +101,18 @@ var (
 // top border, nearest first.
 func claudeActivity(above []screenLine) *AgentActivity {
 	above = aboveRecap(above)
-	limit := claudeActivityRows
-	for i := len(above) - 1; i >= 0 && i >= len(above)-limit; i-- {
+	limit, rows, blanks := claudeActivityRows, 0, 0
+	for i := len(above) - 1; i >= 0 && rows < limit; i-- {
+		if strings.TrimSpace(above[i].text) == "" {
+			if blanks++; blanks > claudeBlankRows {
+				return nil
+			}
+			continue
+		}
+		rows++
 		if !atColumnZero(above[i]) {
-			// blank, the right-aligned effort row, or a todo item
-			if strings.TrimSpace(above[i].text) != "" && limit < claudeActivityRows+claudeTodoRows {
+			// the right-aligned effort row, or a todo item
+			if limit < claudeActivityRows+claudeTodoRows {
 				limit++
 			}
 			continue
@@ -125,7 +140,15 @@ func claudeActivity(above []screenLine) *AgentActivity {
 // with the rows under it: the nearest row at column 0, when it starts the
 // recap.
 func aboveRecap(above []screenLine) []screenLine {
-	for i := len(above) - 1; i >= 0 && i >= len(above)-claudeRecapRows; i-- {
+	rows, blanks := 0, 0
+	for i := len(above) - 1; i >= 0 && rows < claudeRecapRows; i-- {
+		if strings.TrimSpace(above[i].text) == "" {
+			if blanks++; blanks > claudeBlankRows {
+				break
+			}
+			continue
+		}
+		rows++
 		if !atColumnZero(above[i]) {
 			continue
 		}
