@@ -80,6 +80,7 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 - Agents CLI
 - Job ledger
 - Dialog delegation
+- Job pull requests
 
 ## [Files: reading and previews](files-read.md)
 

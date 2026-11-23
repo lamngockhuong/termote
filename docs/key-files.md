@@ -464,6 +464,13 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/job_routes.go`                            | `/api/mux/jobs*`: roles, live status, unread from transcript   |
 | `server/job_identity.go`                          | A job's agent: activity key + pid and start time, or session   |
 | `server/job_grants.go`                            | Grants to answer dialogs: made only from a signed-in browser   |
+| `server/job_pr.go`                                | A job's pull requests: summary, failing set, pins              |
+| `server/gh_runner.go`                             | The only `gh` call: env, `--repo`, budget, error codes         |
+| `server/job_ci.go`                                | Poller of the jobs' pull requests, where they are asked, push  |
+| `server/job_ci_send.go`                           | Failed checks to the agent: message, ci grant, `/ci` route     |
+| `server/cli_agents_ci.go`                         | `termote agents job ci`, `job set --pr`                        |
+| `pwa/src/components/job-ci-section.tsx`           | A job's pull requests in its details: send, attach, done       |
+| `pwa/src/components/job-pr-chip.tsx`              | The pull request chip on a job's card                          |
 | `server/agent_delegate.go`                        | `answer --delegated`: dialog vs waiting tool call, grant check |
 | `server/agent_delegate_rules.go`                  | Command chars, interpreters, denied paths, links               |
 | `server/task_routes.go`                           | `/api/mux/tasks*`: list, save, delete                          |
