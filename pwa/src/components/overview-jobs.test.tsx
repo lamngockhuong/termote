@@ -202,6 +202,25 @@ describe('OverviewJobs', () => {
     ).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('keeps a column, and the focus on its card, when its count changes', () => {
+    const props = { readOnly: false, agents: AGENTS, onOpenPane: vi.fn() }
+    store.state = loaded()
+    const { rerender } = render(<OverviewJobs {...props} />)
+    const button = within(
+      screen.getByRole('article', { name: 'job r' }),
+    ).getByRole('button')
+    act(() => button.focus())
+    store.state = loaded({
+      jobs: [
+        ...JOBS,
+        job('r2', { state: 'active', live: { status: 'working' } }),
+      ],
+    })
+    rerender(<OverviewJobs {...props} />)
+    expect(titles('Running (2)')).toEqual(['job r', 'job r2'])
+    expect(button).toHaveFocus()
+  })
+
   it('opens a finished job from its row', () => {
     show()
     fireEvent.click(finished())

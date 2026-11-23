@@ -140,7 +140,9 @@ export function OverviewScreen({
   )
   // Without a job ledger there is no Plan, and no tabs
   const jobs = useJobs()
-  const hasPlan = !jobs.unavailable
+  // Known once the ledger was read (or failed to be): no tab flashes on a
+  // server without one
+  const hasPlan = !jobs.unavailable && (jobs.loaded || jobs.error)
   const shownTab = hasPlan ? tab : 'agents'
   const tabsId = useId()
   useEffect(() => {
@@ -149,6 +151,9 @@ export function OverviewScreen({
       if (!asksOverviewPlan(hash)) return
       setTab('plan')
       setPlanFocus({})
+      // As a tab chosen by hand: the Plan has no picking
+      setPicking(false)
+      setPicked(new Set())
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -249,6 +254,12 @@ export function OverviewScreen({
     targetRef.current?.focus()
     setHighlighted(target.paneId)
   }, [target, fromPlan])
+  // Leaving the Plan lets the card take the focus once, in the commit that
+  // shows Agents: a card shown later (a filter cleared, a pane come late)
+  // finds the user elsewhere
+  useEffect(() => {
+    if (asked.fromPlan) setAsked((a) => ({ ...a, fromPlan: false }))
+  }, [asked])
   const showGroups = groups.length > 1
   const placeOf = useCallback(
     (session: Session) => {
@@ -318,6 +329,8 @@ export function OverviewScreen({
   const chooseTab = (next: OverviewTab) => {
     setTab(next)
     writeOverviewTab(next)
+    // A Plan asked for by the address and not shown yet is not met later
+    setPlanFocus(undefined)
     if (next !== 'agents') stopPicking()
   }
   const jobGroups = groupJobs(jobs.jobs)
@@ -569,6 +582,8 @@ export function OverviewScreen({
                         return (
                           <li
                             key={`section-${row.head}`}
+                            // A heading, not one of the cards the list counts
+                            role="presentation"
                             className="col-span-full pt-1"
                           >
                             <h3 className="text-[13px] font-semibold text-fg">

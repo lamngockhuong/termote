@@ -133,8 +133,15 @@ export function OverviewJobs({
       />
     </li>
   )
-  const column = (heading: string, jobs: Job[], empty?: string) => (
-    <div key={heading} className="flex min-w-0 flex-col gap-1.5">
+  // Keyed by group, not by its heading: a count changing keeps the column,
+  // and the focus on its cards
+  const column = (
+    group: string,
+    heading: string,
+    jobs: Job[],
+    empty?: string,
+  ) => (
+    <div key={group} className="flex min-w-0 flex-col gap-1.5">
       <h4 className="m-0 text-[12px] font-semibold text-fg-muted">{heading}</h4>
       {jobs.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -219,6 +226,7 @@ export function OverviewJobs({
           <>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))]">
               {column(
+                'waiting',
                 t('jobs.group.waiting', { count: groups.waiting.length }),
                 groups.waiting,
                 t('jobs.waitingNone'),
@@ -227,6 +235,7 @@ export function OverviewJobs({
                 (g) =>
                   groups[g].length > 0 &&
                   column(
+                    g,
                     t(GROUP_WORDS[g], { count: groups[g].length }),
                     groups[g],
                   ),

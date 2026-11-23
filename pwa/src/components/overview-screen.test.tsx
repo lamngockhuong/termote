@@ -1446,6 +1446,78 @@ describe('OverviewScreen, the tabs', () => {
     expect(planTab()).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('lets a card asked for on the Plan take the focus once, not when it shows later', async () => {
+    const props = {
+      sessions: SESSIONS,
+      groups: GROUPS,
+      groupNoun: 'workspace',
+      ready: true,
+      pollInterval: 5000,
+      clockOffset: 0,
+      activePaneOnly: false,
+      opensChat: (p: SessionPane) => p.agentName === 'claude',
+      canAnswer: (p: SessionPane) => p.agentName === 'claude',
+      readOnly: false,
+      stuckMinutes: 10,
+      onOpen: vi.fn(),
+      onClose: vi.fn(),
+    }
+    const { rerender } = render(<OverviewScreen {...props} />)
+    await act(async () => {})
+    // The working agent filtered out, then the Plan
+    fireEvent.click(screen.getByRole('radio', { name: 'Needs you, 1 agent' }))
+    fireEvent.click(planTab())
+    act(() => planTab().focus())
+    rerender(<OverviewScreen {...props} focusPane={{ paneId: 'p-new' }} />)
+    expect(agentsTab()).toHaveAttribute('aria-selected', 'true')
+    // The user moves on, then shows every agent: the card takes nothing
+    const all = screen.getByRole('radio', { name: 'All agents' })
+    act(() => all.focus())
+    fireEvent.click(all)
+    expect(
+      screen.getByRole('button', { name: /^Open terminal: Codex,/ }),
+    ).not.toHaveFocus()
+    expect(all).toHaveFocus()
+  })
+
+  it('stops picking agents when the address opens the Plan', async () => {
+    renderScreen()
+    await act(async () => {})
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send a message to several agents' }),
+    )
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+    )
+    act(() => {
+      window.dispatchEvent(
+        new HashChangeEvent('hashchange', {
+          newURL: 'http://localhost/#/overview?plan=1',
+        }),
+      )
+    })
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(agentsTab())
+    expect(screen.queryByText('1 agent picked')).toBeNull()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+    ).toBeNull()
+  })
+
+  it('shows no tabs before the ledger was read', async () => {
+    localStorage.setItem('termote-overview-tab', 'plan')
+    let answer: (v: unknown) => void = () => {}
+    mockFetchJobs.mockReturnValue(new Promise((r) => (answer = r)))
+    renderScreen()
+    await act(async () => {})
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(cardNames()).toHaveLength(4)
+    await act(async () =>
+      answer({ jobs: [], readOnly: false, canGrant: false, serverNow: '' }),
+    )
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('keeps an open History and a skipped dialog across a switch', async () => {
     renderScreen()
     await act(async () => {})

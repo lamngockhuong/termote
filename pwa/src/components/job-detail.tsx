@@ -211,7 +211,7 @@ export function JobDetail({ job, now, onOpenPane, onEdit, onGrants }: Props) {
                 <span className="min-w-0 break-words">
                   {Object.hasOwn(EVENT_WORDS, e.kind)
                     ? t(EVENT_WORDS[e.kind])
-                    : e.kind}
+                    : visibleUnsafe(e.kind)}
                   {e.text && (
                     <span className="text-fg-muted">
                       {': '}
