@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"maps"
 	"runtime"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ func TestAgentsUsage(t *testing.T) {
 	}
 	tc := newTestCLI(t, runtime.GOOS)
 	tc.printHelp()
-	for _, want := range []string{"agents <cmd>", "Options of agents", "--workspace <id|name>", "--timeout <duration>", "--text <answer>"} {
+	for _, want := range []string{"agents <cmd>", "Options of agents", "--workspace <id|name>", "--timeout <duration>", "--after <seq>", "--text <answer>"} {
 		if !strings.Contains(tc.stdout.String(), want) {
 			t.Errorf("help misses %q", want)
 		}
@@ -153,4 +154,91 @@ func exitCode(err error) int {
 		return 1
 	}
 	return 0
+}
+
+func TestWaitVerdict(t *testing.T) {
+	snap := func(statuses map[string]string) Snapshot {
+		var panes []Pane
+		for _, id := range []string{"%1", "%2", "%3"} {
+			if st, ok := statuses[id]; ok {
+				panes = append(panes, Pane{ID: id, Agent: &AgentInfo{Name: "claude", Status: st}})
+			}
+		}
+		return Snapshot{Groups: []Group{{ID: "w", Tabs: []Tab{{ID: "w:0", Panes: panes}}}}}
+	}
+	ev := func(id, from, to string) activityEvent { return activityEvent{PaneID: id, From: from, To: to} }
+	ids := []string{"%1", "%2", "%3"}
+	for _, tc := range []struct {
+		name   string
+		events []activityEvent
+		now    map[string]string
+		want   map[string]waitEnd
+	}{
+		{"nothing after the mark", nil, map[string]string{"%1": "blocked", "%2": "done", "%3": "working"}, map[string]waitEnd{}},
+		{"a turn that ended before the read is reported", []activityEvent{ev("%2", "working", "done")},
+			map[string]string{"%1": "working", "%2": "done", "%3": "working"}, map[string]waitEnd{"%2": waitDone}},
+		{"two in one read", []activityEvent{ev("%1", "working", "idle"), ev("%3", "working", "blocked")},
+			map[string]string{"%1": "idle", "%2": "working", "%3": "blocked"}, map[string]waitEnd{"%1": waitDone, "%3": waitDialog}},
+		{"a dialog answered since is not one", []activityEvent{ev("%1", "working", "blocked"), ev("%1", "blocked", "working")},
+			map[string]string{"%1": "working", "%2": "working", "%3": "working"}, map[string]waitEnd{}},
+		{"a dialog cancelled ends the turn", []activityEvent{ev("%1", "working", "blocked"), ev("%1", "blocked", "idle")},
+			map[string]string{"%1": "idle", "%2": "working", "%3": "working"}, map[string]waitEnd{"%1": waitDone}},
+		{"working again after a turn", []activityEvent{ev("%1", "working", "idle"), ev("%1", "idle", "working")},
+			map[string]string{"%1": "working", "%2": "working", "%3": "working"}, map[string]waitEnd{"%1": waitDone}},
+		{"the agent went", []activityEvent{ev("%2", "working", "")},
+			map[string]string{"%1": "working", "%3": "working"}, map[string]waitEnd{"%2": waitGone}},
+		{"gone from the snapshot", nil, map[string]string{"%1": "working", "%2": "working"}, map[string]waitEnd{"%3": waitGone}},
+		{"another pane's change", []activityEvent{ev("%9", "working", "idle")},
+			map[string]string{"%1": "working", "%2": "working", "%3": "working"}, map[string]waitEnd{}},
+	} {
+		got := waitVerdict(tc.events, ids, snap(tc.now))
+		if !maps.Equal(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	for end, code := range map[waitEnd]int{waitDone: 0, waitDialog: agentsExitDialog, waitGone: agentsExitGone} {
+		if end.exit() != code {
+			t.Errorf("%s exits %d", end, end.exit())
+		}
+	}
+}
+
+func TestFormatDiff(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    diffResponse
+		want string
+	}{
+		{"sensitive", diffResponse{Sensitive: true}, "(sensitive file, diff not shown)\n"},
+		{"binary", diffResponse{Binary: true}, "(binary)\n"},
+		{"too large", diffResponse{Reason: "too-large"}, "(too-large)\n"},
+		{"mode only", diffResponse{}, "(no content change)\n"},
+		{"plain", diffResponse{Hunks: []diffHunk{{Header: "@@ -1 +1 @@", Lines: []diffLine{{Kind: "del", Text: "a"}, {Kind: "add", Text: "b", NoNewline: true}}}}},
+			"```diff\n@@ -1 +1 @@\n-a\n+b\n\\ No newline at end of file\n```\n"},
+		{"backticks inside", diffResponse{Hunks: []diffHunk{{Header: "@@ -0,0 +1 @@", Lines: []diffLine{{Kind: "add", Text: "```` x ``"}}}}},
+			"`````diff\n@@ -0,0 +1 @@\n+```` x ``\n`````\n"},
+		{"control characters", diffResponse{Truncated: true, Hunks: []diffHunk{{Header: "@@ -1 +1 @@\x1b[2J", Lines: []diffLine{{Kind: "ctx", Text: "a\x07b\u202ec"}}}}},
+			"```diff\n@@ -1 +1 @@[2J\n abc\n```\n(the diff is cut short: too large)\n"},
+	} {
+		if got := formatDiff(tc.d); got != tc.want {
+			t.Errorf("%s:\n%q\nwant\n%q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestClipDiff(t *testing.T) {
+	d := diffResponse{Truncated: true, Hunks: []diffHunk{{Header: "@@ -0,0 +3 @@", Lines: []diffLine{{Kind: "add", Text: "one"}, {Kind: "add", Text: "two"}, {Kind: "add", Text: "```"}}}}}
+	text := formatDiff(d)
+	for room, want := range map[int]string{
+		0:         "````diff\n````\n",
+		25:        "````diff\n@@ -0,0 +3 @@\n````\n",
+		len(text): "````diff\n@@ -0,0 +3 @@\n+one\n+two\n+```\n````\n",
+	} {
+		if got := clipDiff(text, room); got != want {
+			t.Errorf("room %d: %q, want %q", room, got, want)
+		}
+	}
+	if got := clipDiff("(binary)\n", 1); got != "(binary)\n" {
+		t.Errorf("note: %q", got)
+	}
 }

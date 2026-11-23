@@ -135,6 +135,21 @@ const message: Handler = ({ state, params, body }) => {
   return noContent()
 }
 
+// Stop: the turn running ends, as Esc would end it; a dialog is never
+// answered this way.
+const interrupt: Handler = ({ state, params }) => {
+  const ref = agentPane(state, params.id)
+  if (!ref) return noSession()
+  const turn = state.turns.get(params.id)
+  if (turn?.stage === 'asking')
+    return fail(409, 'agent_blocked', 'the agent waits for an answer')
+  if (!turn && ref.pane.agent?.status !== 'working')
+    return fail(409, 'agent_not_working', 'the agent is not working')
+  state.turns.delete(params.id)
+  setAgentStatus(state, ref, 'idle')
+  return noContent()
+}
+
 const prompt: Handler = ({ state, params }) => {
   const ref = agentPane(state, params.id)
   if (!ref) return noSession()
@@ -189,6 +204,7 @@ const commands: Handler = ({ state, params }) => {
 export const AGENT_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/agent/transcript': transcript,
   'POST /panes/{id}/agent/message': message,
+  'POST /panes/{id}/agent/interrupt': interrupt,
   'GET /panes/{id}/agent/prompt': prompt,
   'POST /panes/{id}/agent/answer': answer,
   'GET /panes/{id}/agent/commands': commands,

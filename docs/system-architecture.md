@@ -324,7 +324,7 @@ fetched then. A view-only device and a page whose caps are not in yet never keep
 
 ```bash
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},meta?,tabs:[{id,key,name,active,processes?,panes:[{id,active,title,name?,agent?:{name,status,since?,sinceFirstSeen?},process?,meta?:[{key,value}]}]}]}]}   (meta: Herdr, not to a view-only client)
-GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
+GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"],cursor?}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
 GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|stopped|error,statusGuessed?,startTs?,endTs?,lastTool?,tokens?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
@@ -357,6 +357,7 @@ GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sess
 GET    /api/mux/panes/{id}/agent/image?src=<part.image>          → the image bytes (PNG/JPEG/GIF/WebP) | 404 not_found | 429 busy
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?, at?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
+POST   /api/mux/panes/{id}/agent/interrupt body: {cursor} → 204 | 409 agent_not_working | agent_blocked | interrupt_pending | session_changed
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 POST   /api/mux/panes/{id}/agent/start    body: {kind, prompt?} → {ok, state: "starting", prompt} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
@@ -383,6 +384,8 @@ GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {r
 GET    /api/mux/panes/{id}/files/search?q=&root=&case=1&word=1&regex=1&files=&skip=&exclude=&fresh=1 → {root, isRepo, files, truncated, incomplete, skipped} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
+GET    /api/mux/panes/{id}/files/branch?base=&root=             → {root, isRepo, branch, base, mergeBase, commits, files, truncated} | 400 invalid_base | 404 base_not_found | 409 base_required | no_merge_base
+GET    /api/mux/panes/{id}/files/branch/diff?base=&path=&orig=&root=&reveal= → as files/diff, for one file between the merge base and HEAD
 GET    /api/mux/panes/{id}/files/blame?path=&hash=&root=&reveal= → {root, path, lines, commits, ranges, uncommitted} | {root, path, sensitive} | {error, code}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
 GET    /api/mux/panes/{id}/files/download?path=&root=&reveal=[&check=1] → file bytes (attachment) | {root, path, size} (check=1) | {error, code}

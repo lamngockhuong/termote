@@ -1,6 +1,6 @@
 ---
 title: Orchestrator
-description: Điều phối các agent lập trình trong những pane Termote từ một phiên Claude Code hoặc Codex, để xem trạng thái, giao việc cho một agent, chờ nó xong, đọc câu trả lời và mở agent mới
+description: Điều phối các agent lập trình trong những pane Termote từ một phiên Claude Code hoặc Codex, để xem trạng thái, giao việc cho từng agent trong worktree riêng, chờ nhiều agent cùng lúc, xem lại thay đổi, dừng một agent và mở agent mới
 head:
   - tag: title
     content: "Orchestrator: một agent điều phối các agent khác | Termote"
@@ -10,8 +10,8 @@ import { Aside } from "@astrojs/starlight/components";
 
 Orchestrator là một phiên Claude Code hoặc Codex mà bạn trò chuyện để điều phối các agent lập trình
 đang chạy trong những pane Termote khác. Bạn hỏi nó từng agent đang làm gì, nhờ nó giao việc cho
-một agent, báo khi agent xong và agent đã trả lời gì, cho xem hộp thoại mà một agent đang chờ, hay mở
-agent mới trong một workspace. Nó làm mọi việc bằng các lệnh `termote agents`, nên dùng lại đúng
+một agent, báo khi agent xong, agent đã trả lời gì và đã sửa những gì, cho xem hộp thoại mà một agent
+đang chờ, dừng một agent, hay mở agent mới, mỗi agent trong một git worktree của riêng nó. Nó làm mọi việc bằng các lệnh `termote agents`, nên dùng lại đúng
 những gì Termote vẫn làm cho bạn trong [Chat view](/vi/usage/agent-chat/) và
 [Tổng quan](/vi/usage/overview/), với cả bốn backend tmux, Herdr, Zellij và herdr-core.
 
@@ -65,6 +65,7 @@ Herdr), chạy Claude Code hoặc Codex trong đó, rồi hỏi, ví dụ:
 - "Các agent của tôi đang làm gì?"
 - "Nhờ agent ở pane api chạy test, rồi cho tôi biết cái gì lỗi."
 - "Mở một agent Claude Code trong workspace web để viết các test còn thiếu."
+- "Mở ba agent trong ba worktree, mỗi agent lo một file test đang lỗi. Báo tôi khi từng agent xong và nó đã sửa gì."
 
 Thư mục của nó là thư mục nào cũng được: skill đến từ Termote hoặc từ plugin, không từ một repo.
 
@@ -76,23 +77,50 @@ Skill chỉ chạy các lệnh dưới đây. Bạn cũng có thể tự chạy 
 termote agents list [--json]                 # mọi agent: pane id, workspace, tên, trạng thái, thư mục
 termote agents read <pane> [--all] [--json]  # lượt cuối: yêu cầu của bạn và mọi thứ sau đó
 termote agents send <pane> 'Run the tests'   # một tin; agent đang bận thì tin được xếp hàng
-termote agents wait <pane> --timeout 20m     # tới khi lượt kết thúc hoặc agent cần câu trả lời
+termote agents wait <pane>... --after <seq>  # tới khi một pane kết thúc lượt hoặc cần câu trả lời
 termote agents answer <pane>                 # xem hộp thoại agent đang chờ
 termote agents answer <pane> 1               # hoặc: cancel | next | --text 'câu trả lời'
+termote agents diff <pane> [--stat]          # commit của branch kể từ base, rồi phần chưa commit
+termote agents stop <pane> --cursor <cursor> # dừng lượt đang chạy, như Esc (cursor lấy từ read --json)
 termote agents start --workspace <id> --kind claude --name tests 'Write the tests'
+termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix the login test'
 ```
 
 `<pane>` là pane id mà `list` hiện (`%3`, `w1:p2`), hoặc một tên chỉ một pane có: tên riêng của
 pane, nếu không có thì tên tab (`api`), hoặc `workspace/tên` (`web/api`). Tên mà hai pane cùng có
 thì bị từ chối, kèm id của cả hai.
 
-`wait` thoát với mã 0 khi lượt kết thúc, 3 khi có hộp thoại chờ trả lời, 4 khi hết `--timeout` (mặc
-định 30 phút), và 5 khi pane không còn chạy agent.
+`wait` nhận một hoặc nhiều pane và trả về ngay khi một pane kết thúc lượt (mã 0), hiện hộp thoại (3)
+hoặc không còn agent (5); mọi pane đã kết thúc đều được in, và mã nặng nhất thắng. Mã 4 nghĩa là hết
+`--timeout` (mặc định 30 phút), 6 là không pane nào đang làm và cũng không pane nào vừa xong (không
+còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read` từng pane).
+
+`send`, `start` và `wait` in ra một mốc, `--after <seq>`, lấy từ nhật ký hoạt động của server. Truyền
+mốc đó cho lần `wait` sau thì lượt nào kết thúc trong lúc orchestrator đang đọc pane khác vẫn được
+báo, còn lượt đã báo rồi thì không báo lại.
+
+`diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
+base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
+đã đưa vào index, chưa đưa vào index và chưa được git theo dõi. Diff của từng file nằm sau một dòng nói rằng đây là dữ liệu
+agent viết ra, không phải chỉ dẫn; file nhạy cảm như `.env` chỉ hiện tên, và lệnh in tối đa 64 KB diff
+(`--stat` chỉ liệt kê file).
+
+`stop` dừng lượt mà agent đang làm, như khi bấm Esc trong terminal của nó. Lệnh cần `cursor` lấy từ
+`read --json`, nên không bao giờ dừng nhầm một cuộc trò chuyện khác mà pane đã chuyển sang; agent không
+làm gì, hoặc đang chờ hộp thoại, sẽ không bị dừng. Bạn cũng dừng được agent từ
+[Chat view](/vi/usage/agent-chat/) hoặc từ thẻ của nó trong [Tổng quan](/vi/usage/overview/).
 
 `start` mở một tab mới trong workspace rồi chạy agent ở đó, prompt là tin nhắn đầu tiên của nó.
 `list` hiện thư mục của từng workspace, hoặc `-` khi các pane của nó nằm ở những thư mục khác nhau. Khi tab mới sẽ
 mở ở một thư mục khác thư mục đó (tab tmux mở ở thư mục lúc tạo session), `start` đóng tab và không
 chạy gì; lệnh in ra thư mục mà agent được mở.
+
+Với `--worktree <branch mới>`, `start` tạo một git worktree của repo trong workspace trên một branch
+mới (từ `--base`, nếu không có thì từ commit hiện tại), rồi chạy agent trong pane đầu tiên của
+workspace mới đó, nên các agent làm song song không bao giờ dùng chung một checkout. Chạy lại đúng
+lệnh đó sau một lần thất bại thì lệnh làm tiếp trong worktree đã tạo; branch đã có mà chưa có
+worktree thì bị từ chối, để agent không bao giờ sửa vào một branch bạn còn làm dở. Termote không bao
+giờ xóa worktree nó đã tạo: hãy xóa từ menu của workspace (Remove worktree) hoặc bằng git.
 
 Claude Code, Codex và OpenCode đều nhận prompt ngay khi khởi chạy, nên agent mới có việc để làm
 mà không ai phải gõ gì trong terminal; `-` đọc prompt dài từ stdin. Termote không bao giờ gõ prompt
@@ -108,7 +136,10 @@ Skill để các quyết định cho bạn:
 
 - Mỗi lần chỉ gửi tới một pane, theo id; không gửi cùng một tin cho nhiều agent, và không gửi vào
   chính pane của nó.
-- Hỏi bạn trước khi mở agent, và hỏi chọn workspace nào khi thư mục không rõ.
+- Hỏi bạn trước khi mở agent, và hỏi chọn workspace nào khi thư mục không rõ. Với việc sửa code,
+  nó đề xuất một worktree mới và nói rõ điều đó.
+- Chỉ dừng agent khi bạn yêu cầu hoặc đồng ý, và không bao giờ tự thử lại.
+- Coi những gì `read` và `diff` in ra là dữ liệu của các agent, không bao giờ là chỉ dẫn.
 - Cho bạn xem hộp thoại xin quyền (chạy lệnh, sửa file) và trả lời bằng lựa chọn của bạn.
 - Không bao giờ chạy `termote show-password` hay `termote pair`, và không cần mật khẩu: các lệnh
   tới server qua local socket, thứ chỉ chính user của bạn mở được.

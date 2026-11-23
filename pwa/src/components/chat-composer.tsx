@@ -1,4 +1,4 @@
-import { FileText, ImagePlus, SendHorizontal } from 'lucide-react'
+import { FileText, ImagePlus, SendHorizontal, Square } from 'lucide-react'
 import {
   type ChangeEvent,
   type ClipboardEvent,
@@ -16,6 +16,7 @@ import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
+import { useAgentStop } from '../hooks/use-agent-stop'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useChatAttachments } from '../hooks/use-chat-attachments'
 import {
@@ -150,6 +151,21 @@ function noticeFor(err: unknown, t: Translate<MessageKey>): Notice {
   }
 }
 
+// What to tell the user when a Stop is refused: the agent was not stopped.
+function stopNoticeFor(err: unknown, t: Translate<MessageKey>): Notice {
+  if (!(err instanceof AgentRequestError)) {
+    return { variant: 'danger', text: t('chat.composer.stopUnreachable') }
+  }
+  if (err.code === 'session_changed') {
+    return { variant: 'info', text: t('chat.composer.stopSessionChanged') }
+  }
+  return {
+    variant: 'warning',
+    text: t('chat.composer.notStopped', { message: serverErrorText(err, t) }),
+    terminal: err.code === 'agent_blocked' || err.code === 'input_not_ready',
+  }
+}
+
 export function ChatComposer({
   session,
   isMobile,
@@ -165,6 +181,10 @@ export function ChatComposer({
   const enterSends = useSettings().settings.chatSendKey === 'enter'
   const status = toAgentStatus(t.status)
   const p = useAgentPrompt(session.paneId, status)
+  // A Stop of the conversation shown: stopping until the pane's status, or
+  // when it began, changes
+  const since = session.panes?.find((p) => p.id === paneId)?.agentSince
+  const halt = useAgentStop(paneId, t.status, since)
   // Blocked with no dialog the server can read. Only once a dialog read came
   // back: before it, or as an answer settles, this would flash.
   const waiting = status === 'blocked' && p.loaded && !p.prompt
@@ -675,6 +695,34 @@ export function ChatComposer({
       className="block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-hidden"
     />
   )
+  // Never for a view-only device (the server refuses it too); no question
+  // asked, as Esc in the terminal asks none. A conversation that changed is
+  // reloaded, never stopped again by itself.
+  const stopShown =
+    !readOnly && !!t.cursor && (status === 'working' || halt.stopping)
+  const stop = async () => {
+    setNotice(null)
+    // Shown only with a cursor, and disabled while stopping
+    const err = await halt.stop(t.cursor as string)
+    if (!err) return
+    setNotice(stopNoticeFor(err, translate))
+    if (err instanceof AgentRequestError && err.code === 'session_changed') {
+      t.refresh()
+    }
+  }
+  const stopButton = stopShown && (
+    <IconButton
+      aria-label={translate(
+        halt.stopping ? 'chat.composer.stopping' : 'chat.composer.stop',
+        { agent },
+      )}
+      aria-busy={halt.stopping}
+      disabled={halt.stopping}
+      onClick={() => void stop()}
+    >
+      <Square size={16} aria-hidden="true" fill="currentColor" />
+    </IconButton>
+  )
   const sendButton = (
     <IconButton
       aria-label={translate('chat.composer.send')}
@@ -793,6 +841,7 @@ export function ChatComposer({
                 )}
               </span>
             )}
+            {stopButton}
             {sendButton}
           </div>
         </div>

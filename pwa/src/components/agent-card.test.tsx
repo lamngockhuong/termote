@@ -1,13 +1,16 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { AgentRequestError } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 
-const { mockFetchSubagents } = vi.hoisted(() => ({
+const { mockFetchSubagents, mockInterrupt } = vi.hoisted(() => ({
   mockFetchSubagents: vi.fn(),
+  mockInterrupt: vi.fn(),
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchSubagents: (id: string) => mockFetchSubagents(id),
+  interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
 }))
 
 import type { Session, SessionPane } from '../types/session'
@@ -393,5 +396,136 @@ describe('AgentCard history', () => {
     expect(mockFetchSubagents).not.toHaveBeenCalled()
     expect(screen.queryByRole('list', { name: 'Subagents' })).toBeNull()
     expect(screen.getByText('No data yet')).toBeInTheDocument()
+  })
+})
+
+describe('AgentCard Stop', () => {
+  const ov = { paneId: 'w1:p1', key: 'w1:p1', cursor: 'c1' }
+  const stop = () =>
+    screen.queryByRole('button', { name: 'Stop Claude Code, api / build' })
+
+  it("shows for a working agent it may stop, with the card's cursor", async () => {
+    mockInterrupt.mockResolvedValueOnce(undefined)
+    const working = pane({ agentStatus: 'working' })
+    const { rerender } = renderCard({
+      pane: working,
+      overview: ov,
+      canStop: true,
+    })
+    expect(stop()).toHaveClass('top-12')
+    await act(async () => {
+      fireEvent.click(stop() as HTMLElement)
+    })
+    expect(mockInterrupt).toHaveBeenCalledWith('w1:p1', 'c1')
+    expect(
+      screen.getByRole('button', { name: 'Stopping Claude Code…' }),
+    ).toBeDisabled()
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane({ agentStatus: 'idle', agentSince: '2026-10-13T09:09:00Z' })}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat={false}
+        onOpen={vi.fn()}
+        overview={ov}
+        canStop
+      />,
+    )
+    expect(stop()).toBeNull()
+  })
+
+  it('none when not allowed, not working, or without a cursor', () => {
+    const working = pane({ agentStatus: 'working' })
+    const { rerender } = renderCard({ pane: working, overview: ov })
+    expect(stop()).toBeNull()
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane({ agentStatus: 'idle' })}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat
+        onOpen={vi.fn()}
+        overview={ov}
+        canStop
+      />,
+    )
+    expect(stop()).toBeNull()
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={working}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat
+        onOpen={vi.fn()}
+        overview={{ paneId: 'w1:p1', key: 'w1:p1' }}
+        canStop
+      />,
+    )
+    expect(stop()).toBeNull()
+  })
+
+  it('says why it was not stopped', async () => {
+    const working = pane({ agentStatus: 'working' })
+    mockInterrupt.mockRejectedValueOnce(
+      new AgentRequestError(409, 'agent_blocked', 'no'),
+    )
+    const { unmount } = renderCard({
+      pane: working,
+      overview: ov,
+      canStop: true,
+      opensChat: false,
+    })
+    expect(stop()).toHaveClass('top-2')
+    await act(async () => {
+      fireEvent.click(stop() as HTMLElement)
+    })
+    expect(
+      screen.getByText(
+        'Claude Code was not stopped: The agent waits for an answer to a dialog',
+      ),
+    ).toBeInTheDocument()
+    expect(stop()).not.toBeDisabled()
+    unmount()
+    mockInterrupt.mockRejectedValueOnce(new TypeError('offline'))
+    renderCard({ pane: working, overview: ov, canStop: true })
+    await act(async () => {
+      fireEvent.click(stop() as HTMLElement)
+    })
+    expect(
+      screen.getByText(/^Claude Code was not stopped: /),
+    ).toBeInTheDocument()
+  })
+
+  it('the refusal goes away by itself', async () => {
+    vi.useFakeTimers()
+    try {
+      mockInterrupt.mockRejectedValueOnce(
+        new AgentRequestError(409, 'interrupt_pending', 'no'),
+      )
+      renderCard({
+        pane: pane({ agentStatus: 'working' }),
+        overview: ov,
+        canStop: true,
+      })
+      await act(async () => {
+        fireEvent.click(stop() as HTMLElement)
+      })
+      expect(screen.getByText(/was not stopped/)).toBeInTheDocument()
+      await act(async () => {
+        vi.advanceTimersByTime(10_000)
+      })
+      expect(screen.queryByText(/was not stopped/)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

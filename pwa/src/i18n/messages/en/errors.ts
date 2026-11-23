@@ -6,10 +6,15 @@ export default {
   // A code this version does not know. The server's own unknown (Herdr did
   // not answer in time) is told by the worktree dialog, which owns it.
   'errors.unknown': 'The server could not finish this. Try again',
+  'errors.agent_blocked': 'The agent waits for an answer to a dialog',
+  'errors.agent_not_working':
+    'The agent is not working, so there is nothing to stop',
   'errors.agent_unavailable': "The agent's service did not answer. Try again",
   'errors.ambiguous': 'More than one worktree uses this branch',
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',
+  'errors.base_not_found': 'The base names no commit',
+  'errors.base_required': 'Name a base branch: this is the main worktree',
   'errors.branch_exists':
     'The branch exists, so it is checked out without a base',
   'errors.busy': 'Another change is still running. Try again',
@@ -47,9 +52,11 @@ export default {
   'errors.input_busy':
     'An earlier message to this pane is still being sent. Try again',
   'errors.input_not_ready': 'The agent cannot take input right now',
+  'errors.interrupt_pending': 'The agent was just stopped',
   'errors.invalid_action': 'This action is not known',
   'errors.invalid_after': 'The position asked for is not valid',
   'errors.invalid_amount': 'The amount is out of range',
+  'errors.invalid_base': 'The base is not a valid branch name',
   'errors.invalid_choice': 'That is not one of the options',
   'errors.invalid_cwd':
     'The directory must be an absolute path or ~/… on the host',
@@ -97,6 +104,7 @@ export default {
   'errors.no_client':
     'Open this Zellij session in a terminal (or in Termote) before adding a tab',
   'errors.no_layout': 'Open herdr-app on this machine first',
+  'errors.no_merge_base': 'The branch shares no history with the base',
   'errors.no_neighbor': 'No pane on that side',
   'errors.no_room': 'No room for another pane',
   'errors.no_start': 'No agent was started in this pane',

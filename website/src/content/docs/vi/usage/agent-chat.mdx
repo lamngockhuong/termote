@@ -102,6 +102,18 @@ phím nào:
 
 Lần từ chối nào cần bạn kiểm tra lại đều có nút **Open terminal**.
 
+### Dừng agent
+
+Khi Claude Code, Codex hoặc OpenCode đang làm việc, cạnh nút gửi có thêm nút **Stop**. Nút này dừng
+lượt agent đang chạy, như khi bấm Esc trong terminal của nó (OpenCode được dừng qua chính dịch vụ
+của nó, không qua phím nào). Nút không hỏi lại, và hiện trạng thái đang dừng cho tới khi trạng thái
+của agent đổi, lâu nhất 10 giây. Termote chỉ dừng cuộc trò chuyện mà Chat view đang hiện, chỉ khi agent
+đang làm việc, và không bao giờ dùng cách này để trả lời hộp thoại: agent đang chờ hộp thoại, đã dừng
+rồi, hoặc vừa bị dừng trước đó một chút thì bị từ chối mà không phím nào được gửi, còn cuộc trò chuyện
+đã đổi thì được tải lại thay vì bị dừng. Dừng giữa chừng có thể để lại một file sửa dở, giống như bấm
+Esc. Claude Code đưa các tin đang xếp hàng trở lại ô nhập; hãy gửi hoặc xóa chúng ở đó.
+[Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút Stop.
+
 ### Đính kèm ảnh
 
 Bấm nút ảnh cạnh ô nhập để chọn ảnh (trên điện thoại có thể chụp luôn), hoặc dán ảnh vào ô. Mỗi ảnh

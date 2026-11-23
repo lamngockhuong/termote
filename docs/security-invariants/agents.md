@@ -4,7 +4,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
 
 - **Agent activity** (`server/agent_activity.go`, `GET /api/mux/activity`): the tracker is fed
   only by snapshot reads that already run (the snapshot route, a stream attaching, the push
-  watcher's tick); it never reads tmux, Herdr or Zellij itself and never runs a command, so
+  watcher's tick, and `server/agent_activity_follow.go`: after `agent/message` or `agent/start`
+  succeeded, a peek of the snapshot, which makes nothing, every 2 s while that agent works, one
+  loop for every followed pane, each let go once it stops working, shows no work within a minute,
+  or after 2 h); the tracker never reads tmux, Herdr or Zellij itself and never runs a command, so
   `/activity` costs no mux call. Each read takes a generation number before it starts and a read
   that finishes after a newer one changes nothing (no false change). `observe` copies the
   snapshot and gives every agent a new `AgentInfo` before setting `since`/`sinceFirstSeen`, so
@@ -48,7 +51,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   and model id of the last settled answer, the window only when the service's `/api/model` lists
   that provider and model, for the session's directory or, when the session cannot be read, the
   service's own list; else no share), and a branch and
-  changed-file count; never a cwd, a root, a transcript path or a file name. The Claude window comes
+  changed-file count, and the signed `cursor` of the transcript read (the session the card sums
+  up, which its Stop sends to `agent/interrupt`; the same cursor the transcript route gives every
+  role); never a cwd, a root, a transcript path or a file name. The Claude window comes
   from the transcript's last model row (`claudeModels`: the same file `Locate` found, opened
   nonblocking, scanned forward from where the last scan ended, lines over 64 KiB skipped
   undecoded; only the model id is kept), else from the agent process's argv (`--model`),
@@ -148,7 +153,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   even when the command failed at once, and lets an expired one go only when it is read (this
   read does), so one still held → 409 `start_pending` with nothing sent; then `C-c` (clears half-typed text, a `PS2` line, a heredoc, a `read`),
   200 ms, the idle check again, polled like the first (the prompt it redraws can run `git`, a child that reads busy on Windows; 409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
-  A body with `newTab: true` (`termote agents start`, for the tab it made just before) gets no
+  A body with `newTab: true` (`termote agents start`, for the tab it made just before, or with
+  `--worktree` for the first pane of the worktree workspace the same command just opened) gets no
   `C-c` on any backend: a new shell may still run its rc files, and the `C-c` cut them short (zsh
   then lacked the `PATH` its `.zshrc` sets, and the agent was not found). Its shell is waited for
   as a task's new tab is (`waitNewTabShell`: `waitTaskShell` with settle, idle, a prompt shown,
@@ -610,14 +616,30 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   receiver is the pane's own agent (Claude Code, Codex), else the pane picked for its group
   (`termote-task-agent:<groupId>`, as Tasks). None of it is offered to a view-only client (which
   could not send it) or in a window of its own (which keeps nothing on the device)
-- **Agents CLI** (`termote agents list|read|send|wait|answer|start`, `server/cli_agents.go`): every
-  command calls a route the PWA uses (`snapshot`, `overview`, `agent/transcript`, `agent/message`,
-  `agent/prompt`, `agent/answer`, `tabs`, `agent/start`) over the local socket only (`socketRequestWithin`),
+- **Agents CLI** (`termote agents list|read|send|wait|answer|stop|diff|start`, `server/cli_agents*.go`):
+  every command calls a route the PWA uses (`snapshot`, `overview`, `activity`, `agent/transcript`,
+  `agent/message`, `agent/prompt`, `agent/answer`, `agent/interrupt`, `tabs`, `agent/start`,
+  `files/changes`, `files/diff`, `files/branch`, `files/branch/diff`, `worktrees`, `worktrees/open`)
+  over the local socket only (`socketRequestWithin`),
   never TCP: no password is read, sent or printed, and the routes keep every guard and check of their
   own entries (the request carries no `Origin` or `Sec-Fetch-Site`, so it is the CLI the guards
   already let through). In container mode it refuses before sending anything. A pane is named by its
   id or by a name (its own, else its tab's, or `workspace/name`) that exactly one pane has: a name two
-  panes share is refused with both ids, there is no pattern, and each command reaches one pane.
+  panes share is refused with both ids, there is no pattern, and a command that writes reaches one
+  pane; only `wait` reads several (32 at most, each name resolved before it starts). `wait` follows
+  the activity ring after a mark (`--after`, printed by `send`, `start` and `wait`), reading the
+  snapshot first so the changes are recorded with no page open; a status shown before the mark ends
+  nothing, a reset ring exits 7 rather than guess. `stop` sends the cursor `read --json` printed and
+  is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
+  is printed by name only; every file's text is printed after a fixed line saying it is data, in a
+  fence longer than any run of backticks inside it, through `cleanOut`, 64 KB at most; the `root`
+  the change list was read in goes with each later read, so a pane that moved is refused. `start
+  --worktree` checks `agentStart`, `agentStartCodex` for Codex and `worktrees` before any request
+  that makes something; a branch with a worktree is opened again (`worktrees/open`), one that
+  exists without one is refused; `busy` is retried for 90 s at most, a create that answered
+  `unknown` or not at all is followed in the list for 60 s and never sent again; the agent starts
+  only in the first pane of that workspace, once its directory is the worktree's; nothing it makes
+  is ever removed, and every failure after the worktree exists names it.
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or

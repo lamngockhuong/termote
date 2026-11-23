@@ -324,6 +324,7 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 		a.startError(w, err)
 		return
 	}
+	a.follower.follow(paneID)
 	// prompt tells a client that the prompt was taken (an older server
 	// starts the agent without it).
 	jsonOK(w, map[string]any{"ok": true, "state": startStarting, "prompt": prompt != ""})

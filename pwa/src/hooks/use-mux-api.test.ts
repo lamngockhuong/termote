@@ -57,6 +57,7 @@ import {
   findFiles,
   getPushKey,
   importTemplates,
+  interruptAgent,
   listRecentGroups,
   listWorktrees,
   logout,
@@ -987,6 +988,32 @@ describe('agent API client', () => {
       status: 502,
       code: '',
       message: 'request failed: 502',
+    })
+  })
+
+  it('interrupts with the cursor of the conversation shown', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return calls.length === 1
+          ? new Response(null, { status: 204 })
+          : new Response(
+              JSON.stringify({ error: 'no', code: 'agent_not_working' }),
+              { status: 409 },
+            )
+      }),
+    )
+    await expect(interruptAgent('w1:p1', 'cur')).resolves.toBeUndefined()
+    expect(calls[0].url).toBe('/api/mux/panes/w1%3Ap1/agent/interrupt')
+    expect(calls[0].init).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ cursor: 'cur' }),
+    })
+    await expect(interruptAgent('w1:p1', 'cur')).rejects.toMatchObject({
+      status: 409,
+      code: 'agent_not_working',
     })
   })
 

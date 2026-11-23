@@ -100,6 +100,18 @@ gets no key at all:
 
 Every refusal that leaves something to check offers **Open terminal**.
 
+### Stopping the Agent
+
+While Claude Code, Codex or OpenCode works, a **Stop** button sits beside the send button. It ends
+the turn the agent is running, as Esc does in its terminal (OpenCode is stopped through its own
+service, without a key). It asks nothing first, and shows as stopping until the agent's status
+changes, at most 10 seconds. Termote stops only the conversation the Chat view shows, only while
+the agent works, and never answers a dialog this way: an agent that waits on a dialog, has
+already stopped, or was stopped a moment ago is refused with nothing sent, and a conversation that
+changed is reloaded instead of stopped. A stop can leave a file half edited, as Esc would. Claude
+Code puts the messages it had queued back into its input box; send or clear them there. A
+[view-only device](/usage/devices/#view-only) has no Stop button.
+
 ### Attaching Images
 
 Tap the image button next to the box to pick a photo (or take one on a phone), or paste an image

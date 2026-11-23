@@ -213,10 +213,56 @@ func TestAgentsSendScripted(t *testing.T) {
 	}
 }
 
+// activityOf answers /api/mux/activity with latest and, after a mark, the
+// events past it.
+func activityOf(latest uint64, events ...activityEvent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := activityPage{Latest: latest, Events: []activityEvent{}}
+		after, err := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
+		if err != nil {
+			page.Reset = true
+		}
+		for _, e := range events {
+			if page.Reset || e.Seq > after {
+				page.Events = append(page.Events, e)
+			}
+		}
+		jsonAnswer(page)(w, r)
+	}
+}
+
 func TestAgentsWaitScripted(t *testing.T) {
 	shortWait(t)
 	tc, s := scriptedCLI(t)
 	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
+	// A server without the activity route.
+	if err := tc.dispatch("agents", []string{"wait", "%1"}); err == nil || !strings.Contains(err.Error(), "update it") {
+		t.Errorf("no activity: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
+	// The activity read keeps failing.
+	s.set("GET /api/mux/activity", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("after") {
+			answer(http.StatusInternalServerError, `{"error":"activity failed"}`)(w, r)
+			return
+		}
+		activityOf(1)(w, r)
+	})
+	if err := tc.dispatch("agents", []string{"wait", "%1"}); err == nil || !strings.Contains(err.Error(), "activity failed") {
+		t.Errorf("activity fails: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
+	// A pane named twice is waited on once; a pane without an agent is refused.
+	if err := tc.dispatch("agents", []string{"wait", "%1", "%2"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
+		t.Errorf("shell pane: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(3, activityEvent{Seq: 3, PaneID: "%1", From: "working", To: "idle"}))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "api", "--after", "2"}); err != nil ||
+		strings.Count(tc.stdout.String(), "is done") != 1 || !strings.Contains(tc.stdout.String(), "next wait starts after 3") {
+		t.Errorf("twice: %v %s", err, tc.stdout)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
 	n := 0
 	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		n++
@@ -521,20 +567,74 @@ func TestAgentsStartChecks(t *testing.T) {
 func TestAgentsWaitToleratesHiccups(t *testing.T) {
 	shortWait(t)
 	tc, s := scriptedCLI(t)
+	var mu sync.Mutex
 	n := 0
 	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		n++
+		k := n
+		mu.Unlock()
 		switch {
-		case n == 1:
+		case k == 1:
 			jsonAnswer(oneAgent("working"))(w, r)
-		case n <= 4:
+		case k <= 4:
 			answer(http.StatusInternalServerError, `{"error":"internal error"}`)(w, r)
 		default:
 			jsonAnswer(oneAgent("done"))(w, r)
 		}
 	})
+	// The turn's end is recorded once a snapshot read shows it.
+	s.set("GET /api/mux/activity", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		k := n
+		mu.Unlock()
+		if k <= 4 {
+			activityOf(1)(w, r)
+			return
+		}
+		activityOf(2, activityEvent{Seq: 2, PaneID: "%1", From: "working", To: "done"})(w, r)
+	})
 	if err := tc.dispatch("agents", []string{"wait", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "is done") {
 		t.Errorf("hiccups: %v %s", err, tc.stdout)
+	}
+}
+
+func TestAgentsStopScripted(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
+	for _, args := range [][]string{{"stop", "%1"}, {"stop", "--cursor", "c1"}, {"stop", "%1", "%2", "--cursor", "c1"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
+		t.Errorf("shell pane: %v", err)
+	}
+	s.set("POST /api/mux/panes/%1/agent/interrupt", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	if err := tc.dispatch("agents", []string{"stop", "api", "--cursor", "c1"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.posts) != 1 || s.posts[0] != `/api/mux/panes/%1/agent/interrupt {"cursor":"c1"}` {
+		t.Errorf("posts %v", s.posts)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Stopped the turn of w/api (%1)") || !strings.Contains(out, "input_has_draft") {
+		t.Errorf("out: %s", out)
+	}
+	for code, hint := range map[string]string{"agent_not_working": "nothing to stop", "agent_blocked": "agents answer", "interrupt_pending": "just stopped",
+		"session_changed": "termote agents list"} {
+		s.posts = nil
+		s.set("POST /api/mux/panes/%1/agent/interrupt", answer(http.StatusConflict, `{"error":"no","code":"`+code+`"}`))
+		if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), hint) {
+			t.Errorf("%s: %v", code, err)
+		}
+		// Never sent again, a changed session least of all.
+		if len(s.posts) != 1 {
+			t.Errorf("%s: %d posts", code, len(s.posts))
+		}
+	}
+	s.set("POST /api/mux/panes/%1/agent/interrupt", hangUp)
+	if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "may have been made") {
+		t.Errorf("hang up: %v", err)
 	}
 }
 

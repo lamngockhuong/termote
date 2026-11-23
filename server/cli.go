@@ -513,7 +513,7 @@ Commands:
   settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
                        propose <json|-> shows a change the user applies in the PWA
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
-                       (native only): list, read, send, wait, answer, start (see below)
+                       (native only): list, read, send, wait, answer, stop, diff, start
   skills <cmd>         The orchestrator skill for Claude Code and Codex, embedded here:
                        install, uninstall [--agent claude|codex|all], status [--json]
   version              Show version
@@ -587,13 +587,27 @@ Options of agents (a <pane> is its id or a name only one pane has):
   list [--json]              Every agent with its workspace, status and directory
   read <pane> [--all] [--json]  The last turn of its conversation (--all: every entry read)
   send <pane> <text | ->     Send one message; queued when the agent is working
-  wait <pane> [--timeout <duration>]  Until its turn ends (exit 0), a dialog waits (3),
-                             the timeout passes (4, default 30m) or it is gone (5)
+  wait <pane>... [--after <seq>] [--timeout <duration>]  Until one of the panes ends a turn
+                             (exit 0), shows a dialog (3) or loses its agent (5) after the mark
+                             send, start and wait print (--after; default: now); every pane that
+                             ended is printed, the gravest exit wins. 4: the timeout passed
+                             (default 30m); 6: nothing works, nothing to wait for; 7: the
+                             history was reset (read each pane)
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
+  stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
+                             refused for another session, an agent not working or one on a
+                             dialog; never sent twice within 3s)
+  diff <pane> [--stat] [--base <branch>]  What it changed: the branch's commits since it left
+                             the base (default: the main worktree's branch), then what is not
+                             committed; sensitive files by name only, 64 KB of diff at most
   start --workspace <id|name> --kind <claude|codex|opencode> [--name <tab name>] [<prompt> | -]
                              Open a tab in the workspace (refused when it would open in another
                              directory than list shows) and start the agent there, the prompt
                              as its first message (refused in a pwsh pane and on Windows)
+    --worktree <new branch> [--base <branch>]  Instead, make a git worktree of the workspace's
+                             repository on a new branch (from --base, default its HEAD) and start
+                             the agent in its new workspace (--name labels it); run again, it goes
+                             on in the worktree it made; a branch with no worktree is refused
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

@@ -3,9 +3,13 @@ import type { Translation } from '../types'
 
 export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
+  'errors.agent_blocked': 'Agent đang chờ trả lời một hộp thoại',
+  'errors.agent_not_working': 'Agent không làm gì nên không có gì để dừng',
   'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
+  'errors.base_not_found': 'Nhánh gốc không trỏ tới commit nào',
+  'errors.base_required': 'Hãy chọn nhánh gốc: đây là worktree chính',
   'errors.branch_exists':
     'Nhánh đã tồn tại nên được checkout, bỏ qua nhánh gốc',
   'errors.busy': 'Một thay đổi khác vẫn đang chạy. Hãy thử lại',
@@ -43,9 +47,11 @@ export default {
   'errors.input_busy':
     'Một tin nhắn trước đó tới pane này vẫn đang được gửi. Hãy thử lại',
   'errors.input_not_ready': 'Lúc này agent chưa nhận được nội dung nhập',
+  'errors.interrupt_pending': 'Agent vừa được dừng',
   'errors.invalid_action': 'Không rõ thao tác này',
   'errors.invalid_after': 'Vị trí yêu cầu không hợp lệ',
   'errors.invalid_amount': 'Mức thay đổi nằm ngoài giới hạn',
+  'errors.invalid_base': 'Tên nhánh gốc không hợp lệ',
   'errors.invalid_choice': 'Đó không phải một lựa chọn có sẵn',
   'errors.invalid_cwd':
     'Thư mục phải là đường dẫn tuyệt đối hoặc ~/… trên máy host',
@@ -93,6 +99,7 @@ export default {
   'errors.no_client':
     'Hãy mở phiên Zellij này trong một terminal (hoặc trong Termote) trước khi thêm tab',
   'errors.no_layout': 'Hãy mở herdr-app trên máy này trước',
+  'errors.no_merge_base': 'Nhánh này không có lịch sử chung với nhánh gốc',
   'errors.no_neighbor': 'Phía đó không có pane nào',
   'errors.no_room': 'Không còn chỗ cho pane mới',
   'errors.no_start': 'Chưa có agent nào được khởi động trong pane này',

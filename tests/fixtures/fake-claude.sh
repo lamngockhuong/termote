@@ -26,8 +26,10 @@
 #               "subagents" starts two background subagents (their meta and
 #               conversation files): one ends at once with the transcript's
 #               queue-operation notification, the other keeps running,
-#               "slow" works for a few seconds under the recorded working
-#               line before it answers (keys wait until then),
+#               "slow" works for a few seconds (FAKE_CLAUDE_SLOW, default 5)
+#               under the recorded working line before it answers; an Esc
+#               meanwhile interrupts it (a user entry "[Request interrupted
+#               by user]", then idle), other keys are dropped,
 #               "touch files" changes two files in its directory as tool
 #               calls: an Edit of touched-edit.txt (a line added) and a Write
 #               of touched-new.txt, each with its result, plus an Edit of
@@ -116,6 +118,20 @@ entry() { # type, content JSON
   printf '{"type":"%s","uuid":"%s-%04d","timestamp":"%s","cwd":%s,"message":{"role":"%s","content":%s}}\n' \
     "$1" "${sid:0:31}" "$seq_n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_str "$PWD")" "$1" "$2" >>"$journal"
 }
+# slow_turn works for $1 seconds, reading the keys meanwhile: false as soon
+# as an Escape comes (the turn interrupted), the others dropped.
+slow_turn() {
+  local end key
+  end=$(($(date +%s%N) + ${1%.*} * 1000000000))
+  while [ "$(date +%s%N)" -lt "$end" ]; do
+    if IFS= read -rsn1 -t 0.2 key && [ "$key" = $'\e' ]; then
+      # Alone, not the start of an arrow key's sequence
+      if ! IFS= read -rsn1 -t 0.05 key; then return 1; fi
+    fi
+  done
+  return 0
+}
+
 say() { entry assistant "[{\"type\":\"text\",\"text\":$(json_str "$1")}]"; }
 
 # A reply whose two blocks repeat one message's id, model and usage, as
@@ -325,8 +341,12 @@ submit() {
       # The recorded working line over the box, as a thinking turn draws it
       printf '\e[H\e[2J\e[3J'
       dialog 2.1.312-working-thinking.txt
-      sleep "${FAKE_CLAUDE_SLOW:-5}"
-      say 'Done thinking.'
+      if slow_turn "${FAKE_CLAUDE_SLOW:-5}"; then
+        say 'Done thinking.'
+      else
+        # Esc ends the turn, as Claude Code records it
+        entry user '[{"type":"text","text":"[Request interrupted by user]"}]'
+      fi
       set_status idle
       ;;
     *touch\ files*)

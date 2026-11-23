@@ -371,6 +371,7 @@ func sameAgent(a, b AgentSession) bool {
 
 func (a *agentAPI) registerInputRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/panes/{id}/agent/message", a.handleMessage)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/interrupt", a.handleInterrupt)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/prompt", a.handlePrompt)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/answer", a.handleAnswer)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/start", a.handleStart)
@@ -529,10 +530,12 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft); {
 	case errors.Is(err, errQueued):
 		// The agent took the message into its queue, to read when ready
+		a.follower.follow(paneID)
 		w.WriteHeader(http.StatusAccepted)
 	case err != nil:
 		a.writeFailure(w, err)
 	default:
+		a.follower.follow(paneID)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

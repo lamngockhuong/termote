@@ -86,6 +86,9 @@ type overviewPane struct {
 	SessionUsage *overviewSessionUsage `json:"sessionUsage,omitempty"`
 	AccountKey   string                `json:"accountKey,omitempty"`
 	Unavailable  []string              `json:"unavailable,omitempty"`
+	// Cursor: the signed cursor of the conversation the card sums up, which
+	// its Stop button names so it never reaches another session.
+	Cursor string `json:"cursor,omitempty"`
 	// change: the pane's directory as last read, for the role check of
 	// each request (a view-only client never sees a home dir's changes).
 	change *overviewChange
@@ -237,7 +240,7 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 			p := &panes[r.i]
 			switch {
 			case r.err == nil:
-				p.LastText, p.LastTS, p.Usage = r.sum.lastText, r.sum.lastTS, r.sum.usage
+				p.LastText, p.LastTS, p.Usage, p.Cursor = r.sum.lastText, r.sum.lastTS, r.sum.usage, r.sum.cursor
 				p.SessionUsage = r.usage
 				if r.usageFailed {
 					p.Unavailable = append(p.Unavailable, "sessionUsage")
@@ -317,6 +320,7 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 		s.ClaudeWindow = a.claudeWindow(s)
 	}
 	sum := summarizeTranscript(res.Entries, s)
+	sum.cursor = res.Cursor
 	if s.Agent == "opencode" && sum.usage != nil {
 		if w := opencodeWindow(s.ID, sum.provider, sum.usage.Model); w > 0 {
 			window, pct, exact := contextShare(s.Agent, sum.usage.ContextTokens, sum.usage.Model, 0, w)
@@ -359,6 +363,7 @@ func (a *agentAPI) claudeWindow(s AgentSession) int64 {
 // transcriptSummary is what a card shows of a transcript, and the rate
 // limits it recorded for the account of codexHome.
 type transcriptSummary struct {
+	cursor   string // the conversation read (transcriptResponse.Cursor)
 	lastText string
 	lastTS   string
 	usage    *overviewUsage

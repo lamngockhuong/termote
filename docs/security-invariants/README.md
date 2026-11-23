@@ -58,6 +58,7 @@ Covers tmux, psmux, Herdr, Zellij and herdr-core, panes, groups and worktrees. C
 Covers the Chat view of Claude Code, Codex and OpenCode. Code: `server/agent_*.go` behind the Chat routes, the Codex and OpenCode readers and the OpenCode service client.
 
 - Agent chat
+- Agent interrupt
 - Codex chat
 - OpenCode service client
 - OpenCode chat
@@ -83,6 +84,7 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 Covers Files/Changes, Places, previews, the editor, state kept on the device, downloads and opening files on Windows. Code: `server/files*.go` that read, `server/git_*.go`, the previews and editor in `pwa/src`.
 
 - Files/Changes
+- Branch since its base
 - Places
 - A file the agent named
 - `<details>` in a previewed Markdown file

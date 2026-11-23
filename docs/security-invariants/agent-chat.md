@@ -187,6 +187,20 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
+- **Agent interrupt** (`POST /api/mux/panes/{id}/agent/interrupt` `{cursor}`,
+  `server/agent_interrupt.go`): `requireMethod(POST)`, `requireWriteRole` before anything is read,
+  a 1 KB body, refusals through `fail()`/`writeFailure` only (no OS or service text). The cursor
+  must verify (`decodeCursor`, else `session_changed`), and its session must be the pane's, read
+  again bypassing every cache (`sessionNow`); under the pane's lock (`lockPane`), Claude Code and
+  Codex get exactly one `Escape`, and only when the pane is not in copy mode, the screen shows no
+  dialog (`agent_blocked`: Escape is a dialog's cancel) and the agent works by its status or its
+  screen (`agentWorking`, else 409 `agent_not_working`); the session is read once more right before
+  the key (`sameAgent`: same process, start time and session, else `session_changed`). A pane takes
+  no second interrupt for 3 s (409 `interrupt_pending`, nothing sent: a second Escape opens Claude
+  Code's rewind or Codex's backtrack); a key that failed does not count. OpenCode gets no key: the
+  route calls its service's `POST /api/session/{id}/interrupt` (OpenCode 2.3.2), whose
+  `interrupted: false` answers `agent_not_working`. It answers 204 once the key is sent, never
+  waiting for the status. Under `panes*`, it goes through the Machines proxy as every pane route.
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

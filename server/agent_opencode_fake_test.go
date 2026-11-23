@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -453,6 +454,14 @@ func (f *fakeOpencode) write(w http.ResponseWriter, r *http.Request, id, sub str
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(testOpencodeFixture(f.t, "prompt-response.json"))
+	case r.Method == http.MethodPost && sub == "interrupt":
+		// OpenCode 2.3.2: whether a turn of the session ran.
+		if _, ok := f.messages[id]; !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"interrupted":%v}`, slices.Contains(f.active, id))
 	case r.Method == http.MethodPost && sub == "command":
 		var cmd struct{ Name string }
 		json.Unmarshal(body, &cmd)

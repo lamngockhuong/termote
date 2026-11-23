@@ -290,6 +290,10 @@ func TestOverviewRoute(t *testing.T) {
 	if p.LastText != "API Error: overloaded" || p.Usage == nil || p.Usage.ContextTokens != 250 || p.LastTS == "" {
 		t.Errorf("summary = %+v", p)
 	}
+	// The card names its session, as a Stop sends it.
+	if c, ok := decodeCursor(p.Cursor); !ok || c.Session == "" {
+		t.Errorf("cursor %q", p.Cursor)
+	}
 	p = waitForChanges(t, mux, false)
 	if *p.Changed != 2 || p.Branch == "" || len(p.Unavailable) != 0 {
 		t.Errorf("changes = %+v", p)

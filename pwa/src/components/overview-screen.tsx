@@ -401,6 +401,7 @@ export function OverviewScreen({
                             : undefined
                         }
                         highlighted={!leaving && pane.id === highlighted}
+                        canStop={!readOnly && canAnswer(pane)}
                       />
                     )
                     const pick = selecting && canAnswer(pane)

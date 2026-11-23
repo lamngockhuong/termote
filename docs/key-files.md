@@ -284,6 +284,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped      |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads         |
 | `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)       |
+| `server/agent_activity_follow.go`                 | Reads the snapshot while a messaged or started agent works     |
 | `server/system.go`                                | Host stats types, scope (host, WSL VM, container)              |
 | `server/system_<os>.go`                           | Host stats per OS: CPU, load, memory, swap, disk, battery      |
 | `server/system_parse.go`                          | Pure parsers: /proc, power_supply, pmset, ps, sysctl           |
@@ -306,6 +307,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |
 | `server/agent_activity_line.go`                   | Claude Code/Codex working line on screen (`agent/prompt`)      |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)   |
+| `server/agent_interrupt.go`                       | `agent/interrupt`: one Escape (OpenCode: its service)          |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
 | `server/agent_start.go`                           | `agent/start`: starts an agent in an idle Herdr pane           |
 | `server/agent_start_shell.go`                     | `agent/start` on tmux, Zellij, hc: types the agent's line      |
@@ -334,6 +336,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_mentioned.go`                       | One file the pane's agent named, checked in its transcript     |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
 | `server/files_git_commit.go`                      | `files/commit`, `files/commit/diff`: HEAD and its file diffs   |
+| `server/files_git_branch.go`                      | `files/branch*`: the branch since its base, and file diffs     |
 | `server/files_git_blame.go`                       | `files/blame`: who last changed each line of a file            |
 | `server/files_git_apply.go`                       | `POST files/changes/apply`: stage, unstage, discard a change   |
 | `server/files_git_patch.go`                       | Hunk ids, the patch of one hunk, a hunk undone in Go           |
@@ -409,7 +412,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/pwa_settings_schema.json`                 | PWA settings an agent may propose; read by Go and PWA tests    |
 | `server/pwa_settings.go`                          | Proposal validator shared by the CLI and the server            |
 | `server/cli_settings.go`                          | `settings schema`, `settings propose` (local socket only)      |
-| `server/cli_agents.go`                            | `agents list/read/send/wait/answer/start` (local socket only)  |
+| `server/cli_agents.go`                            | `agents list/read/send/wait/answer/stop/start` (local socket)  |
+| `server/cli_agents_diff.go`                       | `agents diff`: branch commits and uncommitted changes as data  |
+| `server/cli_agents_worktree.go`                   | `agents start --worktree`: make or reuse a worktree            |
 | `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
 | `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
 | `scripts/termote-plugins.sh`                      | Writes the termote-plugins marketplace at each stable release  |

@@ -259,6 +259,18 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   count, runs of lines per commit hash (the all-zero hash goes to `uncommitted`) and per commit
   only author name, author time and a summary cut at 512 bytes: no e-mail, no line text. git
   applies the repo's `.mailmap` to the author name (a read, nothing runs).
+- **Branch since its base** (`GET files/branch?base=&root=`, `GET files/branch/diff?base=&path=&orig=&root=&reveal=`,
+  `server/files_git_branch.go`): read only, through `f.begin` (`requireMethod(GET)`,
+  `crossSiteRejection`, the pane's root, the view-only rules) and `gitRunner` only. `base` is a
+  branch name checked as a worktree branch is (`validBranchName`: no `-` start, no `..`, no `@{`,
+  never `HEAD`) and resolved with `rev-parse --verify --end-of-options`; every later git call gets
+  only full hashes (the merge base and HEAD). Without `base`, the branch the repo's main worktree has
+  checked out; detached, or the pane's own branch, answers `base_required`. A path must be one of
+  the range's `--name-status` list (with its `orig` for a rename), then passes the deny lists, and a
+  sensitive name answers `sensitive` without its text unless `reveal`; a view-only client sees only
+  the files it could open, never a deleted file's or a rename source's text, and never reveals.
+  Errors are codes (`invalid_base`, `base_not_found`, `base_required`, `no_merge_base`); git's text
+  is logged only.
 - **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
   operator names on the host with `termote start --allow-path <dir>` / `--remove-path <dir>`
   (saved like `--allow-host`, `TERMOTE_ALLOWED_PATHS` `:`-separated on Unix, refused by the Unix

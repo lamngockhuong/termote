@@ -126,6 +126,10 @@ export default {
   'tasks.card.history': 'History',
   'tasks.card.hideHistory': 'Hide history',
   'tasks.card.openTerminalOf': 'Open terminal: {name}, {place}',
+  // Ends a working agent's turn, as Esc in its terminal
+  'tasks.card.stop': 'Stop {name}, {place}',
+  'tasks.card.stopping': 'Stopping {name}…',
+  'tasks.card.notStopped': '{name} was not stopped: {message}',
   // The filters above the sidebar and the cards (components/agent-filter-bar.tsx)
   'tasks.filter.all': 'All',
   'tasks.filter.allSessions': 'All sessions',

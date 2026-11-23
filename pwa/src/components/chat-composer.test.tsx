@@ -82,9 +82,11 @@ vi.mock('../hooks/use-prompt-templates', () => ({
   }),
 }))
 const mockSend = vi.fn()
+const mockInterrupt = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   sendAgentMessage: (...a: unknown[]) => mockSend(...a),
+  interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
   answerAgentPrompt: (...a: unknown[]) => mockAnswerPrompt(...(a as [])),
 }))
 
@@ -142,6 +144,7 @@ beforeEach(() => {
   promptStore.loaded = true
   mockAnswerPrompt.mockResolvedValue(undefined)
   mockSend.mockResolvedValue({ queued: false })
+  mockInterrupt.mockResolvedValue(undefined)
   commandsStore.enabled = false
   commandsStore.list = []
   mockThumb.mockResolvedValue(null)
@@ -1892,5 +1895,102 @@ describe('ChatComposer over a draft in the terminal', () => {
     expect(
       screen.queryByRole('button', { name: 'Clear it and send' }),
     ).toBeNull()
+  })
+})
+
+describe('ChatComposer Stop', () => {
+  const stopButton = () =>
+    screen.queryByRole('button', { name: 'Stop Claude Code' })
+  const working = (over: Partial<ViewProps> = {}) => {
+    transcript.status = 'working'
+    const p = props(over)
+    p.session.panes = [
+      { id: '%3', label: 'claude', hasAgent: true, agentSince: 'a' },
+    ]
+    return p
+  }
+
+  it('shows only while the agent works, never view-only', () => {
+    const { rerender } = render(<ChatComposer {...props()} />)
+    expect(stopButton()).toBeNull()
+    rerender(<ChatComposer {...working({ readOnly: true })} />)
+    expect(stopButton()).toBeNull()
+    transcript.cursor = undefined
+    rerender(<ChatComposer {...working()} />)
+    expect(stopButton()).toBeNull()
+  })
+
+  it('stops the conversation shown, then waits for the status to change', async () => {
+    const p = working()
+    const { rerender } = render(<ChatComposer {...p} />)
+    await act(async () => {
+      fireEvent.click(stopButton() as HTMLElement)
+    })
+    expect(mockInterrupt).toHaveBeenCalledTimes(1)
+    expect(mockInterrupt).toHaveBeenCalledWith('%3', 'cur1')
+    const busy = screen.getByRole('button', { name: 'Stopping Claude Code…' })
+    expect(busy).toBeDisabled()
+    // Pressed again while stopping: nothing more is sent.
+    fireEvent.click(busy)
+    expect(mockInterrupt).toHaveBeenCalledTimes(1)
+    transcript.status = 'idle'
+    rerender(<ChatComposer {...p} />)
+    expect(stopButton()).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Stopping/ })).toBeNull()
+  })
+
+  it('says why it was not stopped', async () => {
+    const cases: [unknown, RegExp, boolean][] = [
+      [
+        new AgentRequestError(409, 'agent_not_working', 'no'),
+        /^Not stopped: The agent is not working/,
+        false,
+      ],
+      [
+        new AgentRequestError(409, 'agent_blocked', 'no'),
+        /^Not stopped: The agent waits for an answer to a dialog/,
+        true,
+      ],
+      [
+        new AgentRequestError(409, 'interrupt_pending', 'no'),
+        /^Not stopped: The agent was just stopped/,
+        false,
+      ],
+      [
+        new TypeError('offline'),
+        /^Could not reach the server; the agent/,
+        false,
+      ],
+    ]
+    for (const [err, text, terminal] of cases) {
+      mockInterrupt.mockRejectedValueOnce(err)
+      const { unmount } = render(<ChatComposer {...working()} />)
+      await act(async () => {
+        fireEvent.click(stopButton() as HTMLElement)
+      })
+      expect(screen.getByRole('status')).toHaveTextContent(text)
+      expect(!!screen.queryByRole('button', { name: /Open terminal/ })).toBe(
+        terminal,
+      )
+      // Refused: it can be pressed again.
+      expect(stopButton()).not.toBeDisabled()
+      unmount()
+    }
+    expect(transcript.refresh).not.toHaveBeenCalled()
+  })
+
+  it('a changed conversation is reloaded, never stopped by itself', async () => {
+    mockInterrupt.mockRejectedValueOnce(
+      new AgentRequestError(409, 'session_changed', 'no'),
+    )
+    render(<ChatComposer {...working()} />)
+    await act(async () => {
+      fireEvent.click(stopButton() as HTMLElement)
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'The conversation changed; it has been reloaded. Stop again',
+    )
+    expect(transcript.refresh).toHaveBeenCalled()
+    expect(mockInterrupt).toHaveBeenCalledTimes(1)
   })
 })
