@@ -125,7 +125,7 @@ cho một pane khác, còn lượt đã báo rồi thì không báo lại. `--af
 nêu mà không kèm mốc riêng; `list --json` có mốc mới nhất (`latest`) cho lần chờ đầu tiên, và nêu
 pane mà chính lệnh đang chạy trong đó (`self`) khi biến môi trường của tmux, Herdr hoặc Zellij cho
 biết chắc chắn. Khi đó `send` tới pane ấy bị từ chối, và `--pane` của một việc (`job add`, `job set`)
-trỏ vào nó cũng vậy: việc phải giao cho agent làm việc đó.
+trỏ vào nó cũng vậy: một việc phải giao cho agent trực tiếp làm.
 
 Orchestrator chạy trong Claude Code để `wait` chạy nền, dù chờ theo mốc hay theo `--job`, nên bạn
 vẫn nói chuyện với nó được trong lúc các agent làm việc: Claude Code báo cho nó khi `wait` thoát.
@@ -136,7 +136,7 @@ chạy nền không báo lại được, như Codex, vẫn chờ như cũ với 
 một lệnh của nó; Claude Code dừng một lệnh chạy thường sau tối đa 10 phút.
 
 `diff` cho thấy agent đã thay đổi gì trong thư mục của nó: các commit của branch kể từ lúc tách khỏi
-base (mặc định là branch mà checkout chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
+base (mặc định là branch mà thư mục repo chính của bạn đang dùng, hoặc `--base <branch>`), rồi những gì
 đã đưa vào index, chưa đưa vào index và chưa được git theo dõi. Diff của từng file nằm sau một dòng nói rằng đây là dữ liệu
 agent viết ra, không phải chỉ dẫn; file nhạy cảm như `.env` chỉ hiện tên, và lệnh in tối đa 64 KB diff
 (`--stat` chỉ liệt kê file).
