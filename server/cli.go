@@ -600,6 +600,11 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              orchestrator has not read (0, however long ago), shows a dialog not
                              reported yet (3), only waits on background work (0) or is gone (5);
                              next: names the jobs left. 4: the timeout passed (default 20m)
+  wait --mine [--timeout <duration>]  wait --job on every unfinished job made from this pane
+                             (jobs --mine), read again at each poll; a job without an agent, or
+                             whose lost agent was reported before, is skipped; 6 when none is
+                             left to wait for. Needs this pane known (not herdr-core, psmux,
+                             Windows): else name the jobs with --job
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it; an option
                              of a permission dialog that stops it asking (always, don't ask again,
                              a mode for the session) is refused: only the user picks one

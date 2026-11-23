@@ -764,7 +764,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   job's agent is idle with its last turn read and no `live.background` it exits 6 (after
   `agentsWaitGrace` from its start and from the last time one was busy, or at the timeout), and at the timeout it prints each job's state, never a guess; `jobs
   --mine` filters by the activity key of `self` and refuses when `self` is unknown rather than list
-  nothing. `start` without `--worktree` opens a tab in the
+  nothing. `wait --mine` adds no route: it is `wait --job` over the unfinished jobs whose
+  `createdBy` is that same activity key of `self` (`selfKey`, the lookup `jobs --mine` uses, made
+  once at its start), taken again from each poll's `GET /api/mux/jobs?all=1`; it refuses, naming
+  `wait --job`, when `self` is unknown, and refuses job ids, panes and `--after` beside it (usage,
+  exit 2), so a pane is never in two of its own waits. It skips a job with no agent, and one whose
+  agent is gone once it sent `reported` with `gone:<pane id>` (a new agent given to the job clears
+  `reported`); with nothing left to wait on it exits 6. `start` without `--worktree` opens a tab in the
   workspace (no directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
   not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
   to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab

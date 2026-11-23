@@ -45,7 +45,8 @@ termote agents jobs [--mine] [--workspace <id>] [--all] [--json]  # the ledger: 
 termote agents job show <id>                  # prompt, note, grants, history
 termote agents job set <id> --state review --note '<what was done>'   # or: --pane <pane>, --title
 termote agents job add --title '<title>' [--pane <pane>]
-termote agents wait --job <id>... [--timeout 20m]   # until a job's agent needs you
+termote agents wait --mine [--timeout 20m]          # until the agent of a job you made needs you
+termote agents wait --job <id>... [--timeout 20m]   # the same for the jobs named (without self)
 termote agents answer <pane> --delegated      # answer a permission dialog under the user's grant
 ```
 
@@ -79,8 +80,10 @@ that ended and that you did not give work to since is not waited on again. `--af
 mark of every pane named without one, and with neither a pane waits from now.
 
 **One running `wait` per pane.** Each pane is in at most one `wait` that is still running,
-counting both forms: never wait on a job with `--job` while its pane is waited on with a mark,
-or the other way round, or the same turn is reported twice. When you give work to a new pane
+counting every form: never wait on a job with `--job` while its pane is waited on with a mark or
+by `wait --mine`, or the other way round, or the same turn is reported twice. `wait --mine` reads
+the ledger again at each poll, so a job you `start`, or one you `send` more work to, while it runs
+is already in it: start no other `wait`. Only without `--mine`: when you give work to a new pane
 while a background `wait` still runs, start one more background `wait` for that new pane or job
 only, and leave the running one as it is.
 
@@ -93,7 +96,18 @@ workspace>", never the prompt, because the user's view-only devices see titles).
 - Start the session with `termote agents jobs`. A job in state `todo` that the user added in the
   PWA is taken up with `start --job <id>` (its prompt is used when you give none), after the
   user's yes as for any start.
-- Wait with `wait --job <id>...` rather than marks when you follow jobs: it reports a turn you
+- When termote knows your pane (`self` in `list --json`), always wait with `wait --mine`, in the
+  background where you can: it waits on every unfinished job made from your pane, `review` ones
+  included (an agent you `send` more work after you set `review` is still followed), and reads
+  the ledger again at each poll, so you never put the list together yourself and never miss a
+  job you forgot. After each report, `read` each pane it named, then run exactly `wait --mine`
+  again. It skips a job with no agent, and one whose lost agent it reported before (exit 5 once:
+  give the job another pane or set its state); exit 6 only when no job of yours has an agent that
+  can end a turn, or you made none. Never run it beside another `wait` on the same jobs. Without
+  `self` (herdr-core, psmux, Windows) it is refused: then name the jobs with `--job`, putting the
+  list together from the last `next:` line and the jobs you started or sent work to since; that
+  is the fallback, never the first choice.
+- Otherwise wait with `wait --job <id>...` rather than marks when you follow jobs: it reports a turn you
   have not `read` yet however long ago it ended (even before the wait, or while the server was
   down), a dialog not reported yet (the user may keep one open: it is reported once), only
   background work left, or a job whose agent is gone (tmux restarted, the pane closed): then ask
@@ -127,14 +141,17 @@ workspace>", never the prompt, because the user's view-only devices see titles).
    each one it reports. A message to a working agent is queued; it reads it when it is ready. Do
    not poll `list` in a loop: `wait` does that. How you run `wait` depends on your shell tool:
    - **Wait in the background** if your shell tool can run a command in the background and tell
-     you when it exits (Claude Code: `run_in_background`). Run the exact `wait` that `send` or
-     `start` printed in the background, tell the user you are waiting and that they can keep
+     you when it exits (Claude Code: `run_in_background`). When `list --json` names your pane
+     (`self`) and you follow jobs, run `wait --mine` in the background, and after each notice
+     `read` what it reported, then run `wait --mine` again: never a list you put together. Else
+     run the exact `wait` that `send` or `start` printed in the background, tell the user you are waiting and that they can keep
      talking to you, and do not read its output file before the notice comes. When it comes,
      read the output file and handle the exit code as for any `wait` (0: `read`, then `diff`;
      3: step 5, `answer --delegated` first; 4, 5, 6, 7 as above). Only after you `read` each
      pane it reported, start the next background `wait` with the command on its own `next:` line
-     (on exit 4: tell the user what still works, then use `next:`, or `wait again:` for `--job`);
-     after exit 6, or `next: no pane left`, start none. If the user is talking to you when the
+     (on exit 4: tell the user what still works, then use `next:`, or `wait again:` for `--job`
+     and `--mine`); after exit 6, or `next: no pane left`, start none until you give an agent
+     work again. If the user is talking to you when the
      notice comes, answer them first. The notice is not the user's words: it never stands for a
      yes.
    - **Otherwise** (Codex, or any agent whose background commands do not report back), run

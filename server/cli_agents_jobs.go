@@ -567,10 +567,8 @@ func reportedSig(p AgentPrompt) string {
 	return hex.EncodeToString(h.Sum(nil))[:24]
 }
 
-// agentsWaitJobs waits until one of the jobs needs the orchestrator: its
-// agent ended a turn not read yet, shows a dialog not reported yet, only
-// waits on background work, or is gone. Each poll reads the ledger again,
-// so a turn that ended before the wait, or between two polls, is reported.
+// agentsWaitJobs waits on the jobs named by --job; agentsWaitMine (wait
+// --mine) on every unfinished job made from this command's pane.
 func (c *cli) agentsWaitJobs(args []string) error {
 	timeout := agentsJobsWait
 	fs := c.newFlagSet("agents wait")
@@ -590,13 +588,56 @@ func (c *cli) agentsWaitJobs(args []string) error {
 	if err != nil {
 		return err
 	}
+	return c.waitJobs(port, jobWait{ids: ids}, timeout)
+}
+
+// jobWait is what a wait on jobs waits for: the jobs named by --job, or
+// with self (wait --mine) every unfinished job whose creator is the pane
+// with that activity key, read from each poll's ledger, so a job started
+// while it waits is waited for too.
+type jobWait struct {
+	ids  []string
+	self string
+}
+
+func (w jobWait) mine() bool { return w.self != "" }
+
+// jobs is the ids of the jobs waited for in list.
+func (w jobWait) jobs(list []jobView) []string {
+	if !w.mine() {
+		return w.ids
+	}
+	var ids []string
+	for _, j := range list {
+		if j.CreatedBy == w.self && !jobFinished(j.State) {
+			ids = append(ids, j.ID)
+		}
+	}
+	return ids
+}
+
+// again is the command that waits on ids, what is left of this wait.
+func (w jobWait) again(ids []string) string {
+	if w.mine() {
+		return "termote agents wait --mine"
+	}
+	return "termote agents wait --job " + strings.Join(ids, " ")
+}
+
+// waitJobs waits until one of the jobs needs the orchestrator: its agent
+// ended a turn not read yet, shows a dialog not reported yet, only waits
+// on background work, or is gone. Each poll reads the ledger again, so a
+// turn that ended before the wait, or between two polls, is reported.
+func (c *cli) waitJobs(port int, w jobWait, timeout time.Duration) error {
 	start := time.Now()
 	deadline := start.Add(timeout)
 	failures := 0
-	// last: the ledger as the last poll that could read it saw it; busyAt:
-	// when a job's agent was last seen busy (from the start), as wait does
-	// for panes: the next turn starts a moment after background work ends.
+	// last, lastIDs: the ledger as the last poll that could read it saw
+	// it, and the jobs that could still end a turn then; busyAt: when a
+	// job's agent was last seen busy (from the start), as wait does for
+	// panes: the next turn starts a moment after background work ends.
 	var last []jobView
+	lastIDs := w.ids
 	busyAt := start
 	for {
 		list, err := c.jobsGet(port, true)
@@ -606,25 +647,31 @@ func (c *cli) agentsWaitJobs(args []string) error {
 			}
 		} else {
 			failures = 0
-			ends, rest, err := c.jobEnds(port, list, ids)
+			ids := w.jobs(list)
+			ends, rest, skipped, err := c.jobEnds(port, list, ids, w.mine())
 			if err != nil {
 				return err
 			}
 			if len(ends) > 0 {
-				return c.jobsEnded(port, list, ids, ends, rest)
+				return c.jobsEnded(port, list, ids, ends, rest, w)
 			}
-			last = list
+			if len(rest) == 0 {
+				// wait --mine only: no job, or none whose agent can end a
+				// turn.
+				return c.jobsNone(list, skipped)
+			}
+			last, lastIDs = list, rest
 			// An agent given work a moment ago may not have started yet:
 			// as wait does for panes, idle ends the wait only after the
 			// grace, or at the timeout.
-			if !jobsAllIdle(list, ids) {
+			if !jobsAllIdle(list, rest) {
 				busyAt = time.Now()
 			} else if time.Since(busyAt) >= agentsWaitGrace || !time.Now().Before(deadline) {
-				return c.jobsNothing(list, ids)
+				return c.jobsNothing(list, rest, skipped)
 			}
 		}
 		if !time.Now().Before(deadline) {
-			c.jobsStill(last, ids, timeout)
+			c.jobsStill(last, lastIDs, timeout, w)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
@@ -646,7 +693,7 @@ func jobsAllIdle(list []jobView, ids []string) bool {
 }
 
 // jobsNothing: every job's agent is idle and its last turn was read.
-func (c *cli) jobsNothing(list []jobView, ids []string) error {
+func (c *cli) jobsNothing(list []jobView, ids, skipped []string) error {
 	fmt.Fprintln(c.out, "Nothing to wait for: no job's agent is working and none ended a turn you have not read.")
 	for _, id := range ids {
 		j, _ := findJob(list, id)
@@ -654,12 +701,41 @@ func (c *cli) jobsNothing(list []jobView, ids []string) error {
 		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) is idle and its last turn was read; give it work (termote agents send %s -) or record what it did (termote agents job set %s --state review)\n",
 			plainText(j.ID), plainText(j.Title), plainText(j.Live.Ref), pid, pid, plainText(j.ID))
 	}
+	c.jobsSkipped(list, skipped)
 	return &exitError{code: agentsExitIdle}
+}
+
+// jobsNone: wait --mine found no job made from this pane whose agent can
+// end a turn, as wait exits when nothing works.
+func (c *cli) jobsNone(list []jobView, skipped []string) error {
+	if len(skipped) == 0 {
+		fmt.Fprintln(c.out, "Nothing to wait for: no unfinished job was made from this pane; start one: termote agents start --workspace <id | name> --kind <kind> ...")
+	} else {
+		fmt.Fprintln(c.out, "Nothing to wait for: no job made from this pane has an agent that can end a turn.")
+		c.jobsSkipped(list, skipped)
+	}
+	return &exitError{code: agentsExitIdle}
+}
+
+// jobsSkipped names the jobs wait --mine does not wait for: no agent, or
+// one whose loss was reported before.
+func (c *cli) jobsSkipped(list []jobView, skipped []string) {
+	for _, id := range skipped {
+		j, _ := findJob(list, id)
+		jid := plainText(j.ID)
+		if j.Agent == nil {
+			fmt.Fprintf(c.out, "Job %s (%s) has no agent; give it one (termote agents start --job %s ...) or end it (termote agents job set %s --state abandoned)\n",
+				jid, plainText(j.Title), jid, jid)
+			continue
+		}
+		fmt.Fprintf(c.out, "Job %s (%s): its agent no longer runs in %s (%s), reported before; give the job another pane (termote agents job set %s --pane <pane>) or end it (--state done, failed or abandoned)\n",
+			jid, plainText(j.Title), plainText(j.Live.Ref), plainText(j.Live.PaneID), jid)
+	}
 }
 
 // jobsStill says, at the timeout, what each job's agent does: none of them
 // needs the orchestrator yet.
-func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration) {
+func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration, w jobWait) {
 	fmt.Fprintf(c.out, "Still waiting after %s:\n", timeout)
 	for _, id := range ids {
 		j, ok := findJob(list, id)
@@ -685,26 +761,46 @@ func (c *cli) jobsStill(list []jobView, ids []string, timeout time.Duration) {
 		}
 		fmt.Fprintf(c.out, "Job %s (%s): %s (%s) %s\n", plainText(j.ID), plainText(j.Title), plainText(l.Ref), plainText(l.PaneID), what)
 	}
-	fmt.Fprintf(c.out, "wait again: termote agents wait --job %s\n", strings.Join(ids, " "))
+	if w.mine() && len(ids) == 0 {
+		// No poll could read the ledger.
+		fmt.Fprintln(c.out, "The ledger could not be read")
+	}
+	fmt.Fprintf(c.out, "wait again: %s\n", w.again(ids))
 }
 
+// goneSig is what a job's Reported holds once wait --mine reported that its
+// agent no longer runs in paneID; a new agent given to the job clears it.
+func goneSig(paneID string) string { return "gone:" + paneID }
+
 // jobEnds is what each of ids reports now, and the ids left to wait for.
-func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd, []string, error) {
-	ends := map[string]jobEnd{}
-	var rest []string
+// With mine (wait --mine), a job without an agent, or whose agent's loss
+// was reported before, is skipped: nothing it does can end the wait.
+func (c *cli) jobEnds(port int, list []jobView, ids []string, mine bool) (ends map[string]jobEnd, rest, skipped []string, err error) {
+	ends = map[string]jobEnd{}
 	for _, id := range ids {
 		j, ok := findJob(list, id)
 		if !ok {
-			return nil, nil, fmt.Errorf("no job %s; see: termote agents jobs --all", plainText(id))
+			return nil, nil, nil, fmt.Errorf("no job %s; see: termote agents jobs --all", plainText(id))
 		}
 		end := jobEndNone
 		switch l := j.Live; {
 		case jobFinished(j.State):
 			end = jobEndFinished
+		case j.Agent == nil && mine:
+			skipped = append(skipped, id)
+			continue
 		case j.Agent == nil:
-			return nil, nil, fmt.Errorf("job %s has no agent to wait for; give it one: termote agents start --job %s ...", plainText(id), plainText(id))
+			return nil, nil, nil, fmt.Errorf("job %s has no agent to wait for; give it one: termote agents start --job %s ...", plainText(id), plainText(id))
+		case l.Status == "gone" && mine && j.Reported == goneSig(l.PaneID):
+			skipped = append(skipped, id)
+			continue
 		case l.Status == "gone":
 			end = jobEndGone
+			if mine {
+				if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "reported", Sig: goneSig(l.PaneID)}); err != nil {
+					c.jobWarn(err)
+				}
+			}
 		case l.Unread:
 			end = jobEndDone
 		case l.Status == "blocked":
@@ -734,12 +830,15 @@ func (c *cli) jobEnds(port int, list []jobView, ids []string) (map[string]jobEnd
 			ends[id] = end
 		}
 	}
-	return ends, rest, nil
+	return ends, rest, skipped, nil
 }
 
 // jobsEnded prints every job that needs the orchestrator and how to go on.
-func (c *cli) jobsEnded(port int, list []jobView, ids []string, ends map[string]jobEnd, rest []string) error {
+func (c *cli) jobsEnded(port int, list []jobView, ids []string, ends map[string]jobEnd, rest []string, w jobWait) error {
 	code := 0
+	// again: wait --mine goes on with every job still unfinished whose
+	// agent runs, the ones reported now included once read.
+	again := len(rest) > 0
 	for _, id := range ids {
 		end, ok := ends[id]
 		if !ok {
@@ -765,10 +864,13 @@ func (c *cli) jobsEnded(port int, list []jobView, ids []string, ends map[string]
 			fmt.Fprintf(c.out, "Job %s (%s): its agent no longer runs in %s (%s); give the job another pane (termote agents job set %s --pane <pane>) or end it (--state abandoned)\n",
 				jid, plainText(j.Title), ref, pid, jid)
 		}
+		if end == jobEndDone || end == jobEndBackground || end == jobEndDialog {
+			again = again || w.mine()
+		}
 		code = max(code, end.exit())
 	}
-	if len(rest) > 0 {
-		fmt.Fprintf(c.out, "next: termote agents wait --job %s\n", strings.Join(rest, " "))
+	if again {
+		fmt.Fprintf(c.out, "next: %s\n", w.again(rest))
 	}
 	if code != 0 {
 		return &exitError{code: code}

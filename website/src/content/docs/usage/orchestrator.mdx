@@ -92,6 +92,7 @@ termote agents jobs [--mine] [--all] [--json] # the job ledger: each job's pane,
 termote agents job show <id>                 # its prompt, note, grants and history
 termote agents job set <id> --state review --note 'What was done'
 termote agents wait --job <id>...            # until one of the jobs' agents needs the orchestrator
+termote agents wait --mine                   # the same, over every unfinished job made from its pane
 termote agents answer <pane> --delegated     # Yes, this once, under a grant you gave in the PWA
 ```
 
@@ -159,6 +160,15 @@ last turn was read and no shell it started still runs, it says there is nothing 
 one at the same pane address by its process, so an agent that took over a reused tmux pane id is
 never taken for it. When an agent is done the orchestrator sets the job to `review` with a note, and
 you get a push; it never marks a job `done` for you.
+
+When Termote knows the orchestrator's own pane (`self`), the orchestrator waits with `wait --mine`
+instead of naming jobs: every job made from its pane that is not finished, `review` ones included,
+read again from the ledger at each check. A job it starts while the `wait` runs, or one it gives
+more work after setting `review`, is followed without it having to remember to; after each report
+it reads the pane and runs `wait --mine` again. A job with no agent, or whose lost agent was already
+reported once, never holds up the others, and the `wait` says there is nothing to wait for only
+when no job left has an agent that can end a turn. Where Termote cannot tell its pane (`herdr-core`,
+psmux, Windows), `wait --mine` is refused and the orchestrator names the jobs with `--job`.
 
 You see the same ledger in the [Overview](/usage/overview/#plan)'s Plan tab, where you can also add
 a job for the orchestrator to take up (`start --job <id>`), and open a job's details to edit it or

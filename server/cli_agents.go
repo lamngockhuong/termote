@@ -29,6 +29,7 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents send <pane> <text | ->
        termote agents wait <pane>[@<seq>]... [--after <seq>] [--timeout <duration>]
        termote agents wait --job <id>... [--timeout <duration>]
+       termote agents wait --mine [--timeout <duration>]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer> | --delegated]
        termote agents stop <pane> --cursor <cursor>
        termote agents diff <pane> [--stat] [--base <branch>]
@@ -93,6 +94,9 @@ func (c *cli) cmdAgents(args []string) error {
 	case "send":
 		return c.agentsSend(args[1:])
 	case "wait":
+		if waitMineArg(args[1:]) {
+			return c.agentsWaitMine(args[1:])
+		}
 		if slices.Contains(args[1:], "--job") || slices.Contains(args[1:], "-job") {
 			return c.agentsWaitJobs(args[1:])
 		}
