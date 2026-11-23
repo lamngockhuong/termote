@@ -178,7 +178,7 @@ machine <cmd>        Machines reached over SSH: add <alias> [--label --print-key
 bridge               The forced command another termote's key runs here (never by hand)
 settings <cmd>       PWA settings an agent may propose: schema [--json], propose <json|-> (native only, the user applies it per browser)
 agents <cmd>         The agents in the panes, for an orchestrator agent (native only, local socket): list, read, send,
-                     wait <pane>@<seq>... | --job <id>..., answer [--delegated], stop --cursor, diff [--stat] [--base],
+                     wait <pane>@<seq>... | --job <id>... | --mine, answer [--delegated], stop --cursor, diff [--stat] [--base],
                      start --workspace <id> --kind <kind> [--worktree <branch> [--base <ref>]] [--title | --job <id>],
                      jobs [--mine], jobs prune [--older-than] [--dry-run], job add|show|set|remove
                      (the job ledger, server/job_store.go; remove and prune: finished jobs only)

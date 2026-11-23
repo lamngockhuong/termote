@@ -168,6 +168,7 @@ termote agents start --workspace <id> --kind claude 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-tests --title 'Fix the tests' 'Fix the failing tests'
 termote agents jobs                            # the job ledger: each job's pane, status, unread turn, branch, dir
 termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 4: timeout, 5: gone, 6: all idle and read
+termote agents wait --mine                     # the same over every unfinished job made from your pane (needs self)
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>                 # a finished job only; jobs prune [--older-than 7d] [--dry-run]: every finished one
 termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
@@ -180,8 +181,13 @@ view-only devices see titles; `--job <id>` takes up a job the user added in the 
 tool can run a command in the background and tell you when it exits (Claude Code), run `wait` that
 way so the user can keep talking to you: on the notice, handle its exit code, `read` each pane it
 reported, and only then start the next background `wait` from its `next:` (or `wait again:`) line;
-keep each pane in one running `wait`, whether by mark or by `--job`, and a notice is never the
-user's yes. Otherwise (Codex) run `wait` as before with a `--timeout` shorter than your command
+keep each pane in one running `wait`, whether by mark, by `--job` or by `--mine`, and a notice is
+never the user's yes. When `list --json` names your pane (`self`), always wait with `wait --mine`:
+it waits on every unfinished job made from your pane, `review` ones included, read from the ledger
+again at each poll (a job you start meanwhile is in it), so after each report you `read`, then run
+`wait --mine` again; it skips a job without an agent and one whose lost agent it reported before,
+and exits 6 when none is left. Without `self` (herdr-core, psmux, Windows) it is refused: name the
+jobs with `wait --job <id>...` instead. Otherwise (Codex) run `wait` as before with a `--timeout` shorter than your command
 limit (Claude Code stops an ordinary command after 10 minutes at most). `wait --job`
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
 is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,

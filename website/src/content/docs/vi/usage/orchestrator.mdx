@@ -93,6 +93,7 @@ termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>               # xóa một việc đã xong, thất bại hoặc bị bỏ khỏi sổ việc
 termote agents jobs prune --older-than 7d    # xóa mọi việc đã kết thúc không đổi trong 7 ngày (--dry-run chỉ liệt kê)
 termote agents wait --job <id>...            # tới khi agent của một việc cần orchestrator
+termote agents wait --mine                   # như trên, với mọi việc chưa xong do pane của nó tạo
 termote agents answer <pane> --delegated     # chọn Yes một lần, theo ủy quyền bạn đã cho trên PWA
 ```
 
@@ -160,6 +161,15 @@ cuối đã được đọc và không còn shell nào nó mở chạy nền, l�
 tiến trình của nó, nên một agent khác chiếm lại id pane tmux cũ không bao giờ bị nhầm là agent của
 việc. Khi agent làm xong, orchestrator chuyển việc sang `review` kèm ghi chú và bạn nhận được một
 thông báo đẩy; nó không bao giờ tự đánh dấu việc là `done` thay bạn.
+
+Khi Termote biết pane của chính orchestrator (`self`), orchestrator chờ bằng `wait --mine` chứ không
+kê tên từng việc: lệnh chờ mọi việc chưa xong do pane đó tạo, kể cả việc đang ở `review`, và đọc lại
+sổ việc ở mỗi lần kiểm tra. Nhờ vậy, việc orchestrator vừa `start` trong lúc `wait` đang chạy, hay
+việc nó giao thêm sau khi đã chuyển sang `review`, đều được theo dõi mà nó không phải nhớ; sau mỗi lần
+được báo, nó đọc pane rồi chạy lại `wait --mine`. Việc chưa có agent, hoặc việc có agent đã mất và đã
+được báo một lần, không bao giờ cản các việc khác, và lệnh chỉ báo không còn gì để chờ khi không việc
+nào còn agent có thể kết thúc lượt. Ở nơi Termote không xác định được pane của nó (`herdr-core`, psmux,
+Windows), `wait --mine` bị từ chối và orchestrator phải kê tên các việc bằng `--job`.
 
 Tab Kế hoạch trong [Tổng quan](/vi/usage/overview/#kế-hoạch) hiện đúng sổ việc ấy. Ở đó bạn còn
 thêm được việc để orchestrator nhận (`start --job <id>`), và mở chi tiết một việc để sửa hay cấp ủy
