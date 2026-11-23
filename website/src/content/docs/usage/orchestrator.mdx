@@ -43,7 +43,8 @@ It writes `~/.claude/skills/termote-orchestrator/` (or under `CLAUDE_CONFIG_DIR`
 directory exists. A folder of that name you made yourself is left alone. After `termote update`,
 Termote tells you when the installed skill is from another version; run `termote skills install`
 again. `termote skills status` compares the installed file with the one in the binary too, so a
-skill left from an earlier build of the same version is reported as out of date.
+skill left from an earlier build of the same version is reported as out of date; `--json` gives the
+SHA-256 of the skill this termote carries (`sha256`) and of each installed one.
 
 **As a plugin**, from the small `termote-plugins` marketplace (it never downloads the Termote
 repository):

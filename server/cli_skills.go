@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -292,6 +294,10 @@ type skillStatus struct {
 	// Differs: the version is this termote's but the text is not.
 	Differs bool `json:"differs,omitempty"`
 	Plugin  bool `json:"plugin"`
+	// SHA256: the hex SHA-256 of the installed SKILL.md (a regular file
+	// termote wrote), to compare with the top level sha256, the one this
+	// termote carries.
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 func (c *cli) skillsStatus(args []string) error {
@@ -307,13 +313,21 @@ func (c *cli) skillsStatus(args []string) error {
 	for _, a := range c.skillAgents() {
 		m, ok, exists := installedSkill(a)
 		sameVersion := ok && m.Version == c.version
-		sameText := ok && skillTextCurrent(a)
+		var text []byte
+		if ok {
+			text = installedSkillText(a)
+		}
+		sameText := text != nil && string(text) == orchestratorSkill
+		sum := ""
+		if text != nil {
+			sum = skillSHA256(text)
+		}
 		rows = append(rows, skillStatus{Agent: a.id, Configured: a.configured(), Installed: ok, Foreign: exists && !ok,
 			Path: a.skillDir(), Version: m.Version, Current: sameVersion && sameText, Differs: sameVersion && !sameText,
-			Plugin: c.termotePluginInstalled(a)})
+			Plugin: c.termotePluginInstalled(a), SHA256: sum})
 	}
 	if asJSON {
-		return writeJSON(c.out, map[string]any{"version": c.version, "agents": rows})
+		return writeJSON(c.out, map[string]any{"version": c.version, "sha256": skillSHA256([]byte(orchestratorSkill)), "agents": rows})
 	}
 	for i, r := range rows {
 		label := c.skillAgents()[i].label
@@ -338,16 +352,35 @@ func (c *cli) skillsStatus(args []string) error {
 	return nil
 }
 
-// skillTextCurrent: a's installed SKILL.md is the one embedded in this
-// binary, read up to a limit (a regular file only, never through a link).
-func skillTextCurrent(a skillAgent) bool {
+// skillTextMax bounds the installed SKILL.md status reads: far above the
+// embedded one, so a larger file is not termote's and is not read whole.
+const skillTextMax = 1 << 20
+
+// installedSkillText is a's installed SKILL.md: a regular file only, never
+// through a link, up to skillTextMax; nil otherwise.
+func installedSkillText(a skillAgent) []byte {
 	path := filepath.Join(a.skillDir(), "SKILL.md")
 	st, err := os.Lstat(path)
-	if err != nil || !st.Mode().IsRegular() || st.Size() != int64(len(orchestratorSkill)) {
-		return false
+	if err != nil || !st.Mode().IsRegular() || st.Size() > skillTextMax {
+		return nil
 	}
 	b, err := os.ReadFile(path)
-	return err == nil && string(b) == orchestratorSkill
+	if err != nil || len(b) > skillTextMax {
+		return nil
+	}
+	return b
+}
+
+// skillTextCurrent: a's installed SKILL.md is the one embedded in this
+// binary.
+func skillTextCurrent(a skillAgent) bool {
+	b := installedSkillText(a)
+	return b != nil && string(b) == orchestratorSkill
+}
+
+func skillSHA256(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // skillUpdateHint, after an update to version, names each agent whose

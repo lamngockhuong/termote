@@ -43,7 +43,8 @@ Lệnh này ghi vào `~/.claude/skills/termote-orchestrator/` (hoặc dưới `C
 trên máy. Thư mục cùng tên do bạn tự tạo thì được giữ nguyên. Sau `termote update`, Termote báo khi
 skill đã cài thuộc phiên bản khác; chạy lại `termote skills install` để cập nhật. `termote skills
 status` còn so file đã cài với bản đi kèm chương trình `termote`, nên skill còn sót lại từ một bản build cũ hơn
-của cùng phiên bản cũng được báo là cần cập nhật.
+của cùng phiên bản cũng được báo là cần cập nhật; `--json` có thêm mã SHA-256 của skill đi kèm
+termote này (`sha256`) và của từng bản đã cài.
 
 **Dưới dạng plugin**, từ marketplace nhỏ `termote-plugins` (không tải repo Termote về):
 
