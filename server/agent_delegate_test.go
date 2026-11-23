@@ -294,9 +294,12 @@ func TestCLINeverChoosesAlways(t *testing.T) {
 		if code != http.StatusForbidden || out["code"] != "answer_always_refused" || len(dt.keys()) != 0 {
 			t.Errorf("socket %v = %d %v", choice, code, out)
 		}
-		req := map[string]any{"promptId": dt.promptID(), "choice": choice}
-		if code, _ := dt.doMachine(req); code != http.StatusForbidden {
-			t.Errorf("bridge %v = %d", choice, code)
+		// Another termote's CLI (or one that names no origin) over the bridge.
+		for _, origin := range []string{"socket", "basic", ""} {
+			req := map[string]any{"promptId": dt.promptID(), "choice": choice}
+			if code, _ := dt.doMachine(req, origin); code != http.StatusForbidden {
+				t.Errorf("bridge %v from %q = %d", choice, origin, code)
+			}
 		}
 	}
 	for _, choice := range []any{1, 4, "cancel"} {
@@ -309,12 +312,19 @@ func TestCLINeverChoosesAlways(t *testing.T) {
 	if code, out := dt.do("full", http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", map[string]any{"promptId": dt.promptID(), "choice": 2}); code != http.StatusNoContent {
 		t.Errorf("browser 2 = %d %v", code, out)
 	}
+	// A browser on another termote, through Machines, as on this one.
+	for _, origin := range []string{"password", "device", "none"} {
+		dt := setup(t)
+		if code, out := dt.doMachine(map[string]any{"promptId": dt.promptID(), "choice": 2}, origin); code != http.StatusNoContent {
+			t.Errorf("browser via a machine (%s) 2 = %d %v", origin, code, out)
+		}
+	}
 }
 
-func (dt *delegateTest) doMachine(body any) (int, map[string]any) {
+func (dt *delegateTest) doMachine(body any, origin string) (int, map[string]any) {
 	b, _ := json.Marshal(body)
 	req := httptestRequest(http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", b)
-	req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authMachine, Role: roleFull}))
+	req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authMachine, Role: roleFull, OriginAuth: origin}))
 	rec := serve(dt.mux, req)
 	var out map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &out)

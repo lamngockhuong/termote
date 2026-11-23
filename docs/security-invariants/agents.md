@@ -812,10 +812,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
   the grant, job, pane, path and the command's SHA-256, never the command. Over the local socket and
   the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
-  before any key) every option of a permission dialog of any agent, a browser's answer
-  forwarded from another termote over the bridge included, except cancel, one whose label
+  before any key) every option of a permission dialog of any agent, also when another
+  termote forwards its own CLI's answer over the bridge (an origin other than `password`, `device`
+  or `none`, `browserOrigin`), except cancel, one whose label
   is `No` or starts with `No` and a comma or a space, and the first option when it reads exactly `Yes`, `Yes, proceed` or
-  `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers to
-  this server's own panes are unchanged. A grant revoked in the milliseconds between the grant check
+  `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
+  or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
   and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
   `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, by).

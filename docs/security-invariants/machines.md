@@ -9,8 +9,13 @@ Part of the [security invariants](README.md): other termote servers reached over
   type only), never the CLI's: `isLocalSocket` is false, so `basicAuth` never makes it `authLocal`.
   `bridgeAuth` sits outside `basicAuth` (applies with `--no-auth` too) and signs every bridge request in
   as `authMachine` with the role of `X-Termote-Role` (`full|view`; missing → `view`; anything else
-  400); the header is ignored on every other connection. `X-Termote-Origin-Auth` (`password|device`)
-  only reaches the audit `via` (`machine:<origin>`), never a grant. `isCLI` is false for
+  400); the header is ignored on every other connection. `X-Termote-Origin-Auth` (`password|device|none|basic|socket`,
+  anything else dropped; the forwarding termote sends `socket` for its local socket whatever its sign-in,
+  `none` for a client of a server without sign-in, `originAuth`) reaches the audit `via`
+  (`machine:<origin>`), never a grant, and decides one thing only: an answer to a permission dialog from
+  `password`, `device` or `none` (a browser there) may pick any option, every other origin (its CLI, or
+  an older termote that names none) is held to `cliMayChoose`. The forwarding termote already holds the
+  role and can type any key into the pane, so the header gives it nothing it lacks. `isCLI` is false for
   `authMachine`. On the bridge, sign-in and sign-out (`/login`, `/pair`, `/login/link`,
   `/api/mux/logout`), `login-links`, `devices*`, `signins*`, `push*`, `settings*` and a job's
   `grants*` (`/api/mux/jobs/{id}/grants...`, see Dialog delegation) answer 403
@@ -18,8 +23,9 @@ Part of the [security invariants](README.md): other termote servers reached over
   bridge carries no `settingsProposal` and `caps.settingsProposals` false, so a machine's settings
   proposal never reaches a browser open on it through another termote. `hostGuard` takes
   `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`. A
-  permission dialog answered over the bridge never takes an option that stops it asking
-  (`answer_always_refused`), and every such answer is an `audit: dialog_answer` line.
+  permission dialog answered over the bridge by another termote's CLI never takes an option that stops
+  it asking (`answer_always_refused`), and every answer to one over the bridge is an `audit:
+  dialog_answer` line.
   `termote bridge` (the forced command of the key `machine add` installs) takes only
   `--socket-dir <abs>`, reads the saved config for the port (none → error, nothing on stdout),
   dials the bridge with the owner check of `dialSocketOS`, writes `TERMOTE-BRIDGE 1 <version>\n`

@@ -1147,7 +1147,7 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	socket := isLocalSocket(r.Context())
 	auth, _ := authFrom(r.Context())
-	cli := socket || auth.Kind == authMachine
+	cli := socket || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
 	if body.Delegated && (!socket || (len(body.Choice) > 0 && string(body.Choice) != "null")) {
 		jsonErrorCode(w, "invalid_request", "only termote agents answers under a grant, and names no option", http.StatusBadRequest)
 		return
@@ -1196,8 +1196,16 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// errAnswerAlwaysRefused: the CLI or another termote chose an option of a
-// permission dialog that would stop it from asking again.
+// browserOrigin: a request another termote forwards came from a browser
+// there (signed in with the password or a paired device, or with no sign-in
+// at all), not from its CLI; an older termote names no CLI origin, so it
+// counts as one.
+func browserOrigin(origin string) bool {
+	return origin == "password" || origin == "device" || origin == "none"
+}
+
+// errAnswerAlwaysRefused: the CLI, or another termote's CLI, chose an option
+// of a permission dialog that would stop it from asking again.
 var errAnswerAlwaysRefused = fail(http.StatusForbidden, "answer_always_refused",
 	"an option that stops a permission dialog from asking again is never chosen from the command line; ask the user")
 

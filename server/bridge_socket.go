@@ -26,8 +26,9 @@ import (
 const bridgeGreeting = "TERMOTE-BRIDGE 1 "
 
 // bridgeRoleHeader carries the role of the request the other termote
-// forwards; bridgeOriginAuthHeader how that request signed in there (only
-// written to the audit log here).
+// forwards; bridgeOriginAuthHeader how that request signed in there (the
+// audit log, and browserOrigin). The other termote is trusted with its role
+// already: one it calls a browser gains nothing it could not type itself.
 const (
 	bridgeRoleHeader       = "X-Termote-Role"
 	bridgeOriginAuthHeader = "X-Termote-Origin-Auth"
@@ -128,7 +129,7 @@ func bridgeAuth(inner, next http.Handler) http.Handler {
 			return
 		}
 		switch v := r.Header.Get(bridgeOriginAuthHeader); v {
-		case "password", "device":
+		case "password", "device", "none", "basic", "socket":
 			a.OriginAuth = v
 		}
 		serveAs(inner, w, r, a)
