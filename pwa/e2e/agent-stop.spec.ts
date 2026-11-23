@@ -104,6 +104,14 @@ test.describe('agent stop', () => {
     await composer.fill('think slow please')
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await expect(stop).toBeVisible({ timeout: 15_000 })
+    // Stop shows once the session file says busy, but the server sends
+    // Escape to Claude Code only while its screen shows the working line
+    // (else 409 agent_no_turn), and the stand-in draws that line a moment
+    // later. The line read off its screen, as the Chat shows it:
+    await expect(conversation.getByRole('status')).toHaveText(
+      'Incubating… Thinking',
+      { timeout: 15_000 },
+    )
     await stop.click()
     // Pressed again while stopping: it is disabled, nothing more goes
     await expect(
@@ -112,7 +120,7 @@ test.describe('agent stop', () => {
     // The server shows Claude Code's interrupt line as a note
     await expect(conversation).toContainText('Interrupted', { timeout: 10_000 })
     await expect(stop).toHaveCount(0, { timeout: 10_000 })
-    expect(conversation.getByText('Done thinking.')).toHaveCount(0)
+    await expect(conversation.getByText('Done thinking.')).toHaveCount(0)
     expect(transcriptText(claudeDir).split(INTERRUPTED).length - 1).toBe(1)
   })
 })
