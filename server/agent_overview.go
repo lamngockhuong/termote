@@ -322,12 +322,20 @@ func gatherAccounts(limits []paneLimits) []overviewAccount {
 // off its screen through the capture cache the prompt route uses: empty when
 // a turn runs, a dialog is open, or the screen cannot be read.
 func (a *agentAPI) paneBackground(paneID string) string {
+	return a.screenBackground(paneID, true)
+}
+
+// screenBackground is the background work a Claude Code pane's screen
+// names: with working, only while its session works (what it only waits
+// for); else also once its turn ended ("1 shell still running"), never
+// while it is blocked.
+func (a *agentAPI) screenBackground(paneID string, working bool) string {
 	wr, ok := a.m.(agentWriter)
 	if !ok || a.loc == nil {
 		return ""
 	}
 	s, err := a.session(paneID)
-	if err != nil || s.Agent != "claude" || s.Status != "working" {
+	if err != nil || s.Agent != "claude" || (working && s.Status != "working") || s.Status == "blocked" {
 		return ""
 	}
 	screen, err := a.input.captures.do(paneID+"\x00"+s.Target, func() (string, error) {

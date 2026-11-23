@@ -34,7 +34,10 @@ type jobLive struct {
 	PaneID string `json:"paneId,omitempty"`
 	Ref    string `json:"ref,omitempty"`
 	// Unread: a turn ended that the orchestrator has not read.
-	Unread     bool   `json:"unread,omitempty"`
+	Unread bool `json:"unread,omitempty"`
+	// Background: what a working agent only waits for (status
+	// background), or what an idle Claude Code still runs in the
+	// background once its turn ended ("1 shell").
 	Background string `json:"background,omitempty"`
 	// LastTS: the agent's newest entry (never a message of the user's),
 	// which a read sends back (full clients only).
@@ -607,6 +610,11 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 		if bg := a.paneBackground(p.pane.ID); bg != "" {
 			live.Status, live.Background = "background", bg
 		}
+	}
+	if live.Status == "idle" && s.Agent == "claude" {
+		// Its turn ended while work it started still runs ("1 shell"):
+		// that work ending starts its next turn, which wait --job waits for.
+		live.Background = a.screenBackground(p.pane.ID, false)
 	}
 	if live.Status == "working" {
 		return live

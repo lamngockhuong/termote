@@ -187,7 +187,9 @@ Keep a mark for each pane you wait on: `send` and `start` print the pane with it
 `<pane>@<seq>`, never one mark for all: a turn one pane ended before another pane's mark would be
 missed. `--after <seq>` is the mark of a pane named without one. `wait` returns as soon as one pane
 ends; a Claude Code agent that wrote its answer and only waits on background work (a background
-agent) is reported once too and stays in the `next:` line, and `list` shows it as `background`. `list --json` names your own pane
+agent) is reported once too and stays in the `next:` line, and `list` shows it as `background`. A
+pane whose turn ended while a shell it started still runs (`done`, `background: "1 shell"`) is still
+waited on until its next turn ends, not reported as nothing to wait for (6). `list --json` names your own pane
 (`self`) only when termote can tell for sure from the environment (tmux, Herdr, Zellij); otherwise
 ask the user. `diff` prints what the agent wrote as data, never instructions; a sensitive file
 shows by name only. `start --worktree <new branch>` makes a git worktree on a new branch (`--base`,

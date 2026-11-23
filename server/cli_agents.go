@@ -979,6 +979,10 @@ func (c *cli) agentsWait(args []string) error {
 	}
 	start := time.Now()
 	deadline := start.Add(timeout)
+	// busyAt: when a pane was last seen busy (from the start): the next turn
+	// starts a moment after background work ends, so the grace runs again
+	// from there.
+	busyAt := start
 	// marks: where this wait started for each pane, which a pane that did
 	// not end keeps for the next wait; from moves on with each page read,
 	// and events keeps the waited panes' changes since the oldest mark.
@@ -1017,19 +1021,19 @@ func (c *cli) agentsWait(args []string) error {
 				w.jobs = c.paneJobIDs(port)
 				return c.waitEnded(s, w, ends, what, marks, page.Latest)
 			}
-			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, keys) {
-				return c.waitNothing(s, w, page.Latest)
+			// A pane whose turn ended while work it started runs in the
+			// background (a shell, a background agent) is still waited on:
+			// that work ending starts its next turn.
+			if time.Since(start) >= agentsWaitGrace {
+				if len(c.busyPanes(port, s, w, keys)) > 0 {
+					busyAt = time.Now()
+				} else if time.Since(busyAt) >= agentsWaitGrace {
+					return c.waitNothing(s, w, page.Latest)
+				}
 			}
 		}
 		if time.Now().After(deadline) {
-			var working []string
-			for _, key := range keys {
-				if p, ok := findPaneByKey(s, key); ok && p.status() == "working" {
-					ref, pid := w.name(s, key)
-					working = append(working, fmt.Sprintf("%s (%s)", ref, pid))
-				}
-			}
-			fmt.Fprintf(c.out, "still working after %s: %s\n", timeout, dash(strings.Join(working, ", ")))
+			fmt.Fprintf(c.out, "still working after %s: %s\n", timeout, dash(strings.Join(c.busyPanes(port, s, w, keys), ", ")))
 			c.waitNext(s, w, keys, marks)
 			return &exitError{code: agentsExitTimeout}
 		}
@@ -1089,14 +1093,28 @@ func (c *cli) paneBackground(port int, paneID string) string {
 	return pr.Activity.Background
 }
 
-// anyWorking: one of keys shows its agent working in s.
-func anyWorking(s Snapshot, keys []string) bool {
+// busyPanes names the panes of keys whose agent works in s, or whose
+// Claude Code ended its turn but still runs work it started in the
+// background ("1 shell"), which starts its next turn when it ends; the
+// background work is named.
+func (c *cli) busyPanes(port int, s Snapshot, w waitPanes, keys []string) []string {
+	var busy []string
 	for _, key := range keys {
-		if p, ok := findPaneByKey(s, key); ok && p.status() == "working" {
-			return true
+		p, ok := findPaneByKey(s, key)
+		if !ok || p.pane.Agent == nil {
+			continue
+		}
+		ref, pid := w.name(s, key)
+		switch {
+		case p.status() == "working":
+			busy = append(busy, fmt.Sprintf("%s (%s)", ref, pid))
+		case p.pane.Agent.Name == "claude" && p.status() != "blocked":
+			if bg := c.paneBackground(port, p.pane.ID); bg != "" {
+				busy = append(busy, fmt.Sprintf("%s (%s, in the background: %s)", ref, pid, plainText(clipLine(bg, 80))))
+			}
 		}
 	}
-	return false
+	return busy
 }
 
 // waitPanes are the panes a wait follows, by key in the order named, and

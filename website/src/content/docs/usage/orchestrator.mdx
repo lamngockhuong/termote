@@ -105,7 +105,10 @@ wait for), 7 that the server's history was reset (read each pane).
 
 A Claude Code agent that has written its answer and only waits on background work it started
 (a background agent) is reported once too, and stays in the `next:` line so the next `wait`
-reports when that work is done; `list` shows it as `background`.
+reports when that work is done; `list` shows it as `background`. An agent whose turn ended while
+a shell it started still runs (`done` with `background: "1 shell"`) is still waited on: the shell
+ending starts its next turn, and `wait` reports that turn's end rather than say there is nothing to
+wait for.
 
 Each pane is waited on from a mark of its own, taken from the server's activity log: `send` and
 `start` print the pane with its mark (`termote agents wait %3@41`), and `wait` prints a `next:` line

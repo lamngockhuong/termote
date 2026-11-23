@@ -104,7 +104,9 @@ còn gì để chờ), 7 là lịch sử trên server đã bị xóa (hãy `read
 
 Agent Claude Code đã viết xong câu trả lời và chỉ còn chờ việc chạy nền do nó mở (một subagent chạy
 nền) cũng được báo một lần, và vẫn nằm trong dòng `next:` để lần `wait` sau báo khi phần chạy nền đó
-xong; `list` ghi trạng thái của nó là `background`.
+xong; `list` ghi trạng thái của nó là `background`. Agent đã kết thúc lượt nhưng một shell nó chạy
+vẫn còn chạy nền (`done` kèm `background: "1 shell"`) vẫn được chờ tiếp: shell chạy xong thì agent
+bắt đầu lượt mới, và `wait` báo khi lượt đó kết thúc thay vì báo không còn gì để chờ.
 
 Mỗi pane được chờ từ mốc riêng của nó, lấy từ nhật ký hoạt động của server: `send` và `start` in ra
 pane kèm mốc (`termote agents wait %3@41`), còn `wait` in một dòng `next:` gồm từng pane chưa được
