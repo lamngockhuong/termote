@@ -164,12 +164,12 @@ func (c *cli) agentsDiff(args []string) error {
 		}
 		fmt.Fprintf(c.out, "\n## %s\n", title)
 		for _, it := range items {
-			name := plainText(it.path)
+			label, name := plainText(it.label), plainText(it.path)
 			if it.orig != "" {
 				name = plainText(it.orig) + " -> " + name
 			}
 			if stat {
-				fmt.Fprintf(c.out, "%s  %s\n", it.label, name)
+				fmt.Fprintf(c.out, "%s  %s\n", label, name)
 				continue
 			}
 			if used >= agentsDiffBudget {
@@ -177,7 +177,7 @@ func (c *cli) agentsDiff(args []string) error {
 				return false
 			}
 			left--
-			fmt.Fprintf(c.out, "\n### %s  %s\n", it.label, name)
+			fmt.Fprintf(c.out, "\n### %s  %s\n", label, name)
 			if it.query == nil {
 				continue
 			}

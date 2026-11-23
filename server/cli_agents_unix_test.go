@@ -538,7 +538,8 @@ func TestAgentsWaitSeveral(t *testing.T) {
 	err = tc.dispatch("agents", []string{"wait", "%1", "%2", "--after", strconv.FormatUint(m, 10)})
 	out = tc.stdout.String()
 	if exitCode(err) != agentsExitDialog || !strings.Contains(out, "web/api (%1) waits on a dialog") || !strings.Contains(out, "web/ui (%2) is done") ||
-		!strings.Contains(out, "next: no pane left to wait on") {
+		!strings.Contains(out, "next: termote agents wait %1@") || strings.Contains(out, "%2@") {
+		// The pane on a dialog stays, from the latest mark; the done one goes.
 		t.Errorf("both: %v\n%s", err, out)
 	}
 	// A mark from before a restart: the history is reset.

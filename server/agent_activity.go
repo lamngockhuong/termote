@@ -13,7 +13,8 @@ import (
 // fed by the snapshot reads that already run (the snapshot route, a stream
 // attaching, the push watcher's tick, the follower of an agent just given
 // a message or started), never by a read of its own: with no page open, no
-// push subscription and no agent followed, nothing is recorded.
+// push subscription and no agent followed, nothing is recorded. The one
+// change it records without a read is an answered dialog (leftDialog).
 
 // activityRingLen status changes are kept; past it the oldest goes.
 const activityRingLen = 500
@@ -225,6 +226,31 @@ func (t *activityTracker) observe(gen uint64, snap Snapshot) Snapshot {
 		t.last, t.hasLast = out, true
 	}
 	return out
+}
+
+// leftDialog records that the dialog pane showed was answered (or a wizard
+// moved to another tab): blocked to working, as the agent has the turn back.
+// The pane may stay blocked on the backend through the next question of the
+// same dialog, or work for less than one read before the next dialog; the
+// next read that shows it blocked then records the new dialog. A read begun
+// before this one shows the dialog answered and is not applied.
+func (t *activityTracker) leftDialog(paneID string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k, s := range t.states {
+		if s.paneID != paneID || s.status != "blocked" {
+			continue
+		}
+		now := t.now().UTC()
+		s.status, s.since, s.firstSeen, s.unseen = "working", now, false, false
+		t.states[k] = s
+		t.record(now, s, "blocked", "working")
+		t.applied = t.gen
+		return
+	}
 }
 
 // fold applies snap's statuses, with the rule of the push watcher

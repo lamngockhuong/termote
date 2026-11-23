@@ -103,7 +103,8 @@ xong; `list` ghi trạng thái của nó là `background`.
 
 Mỗi pane được chờ từ mốc riêng của nó, lấy từ nhật ký hoạt động của server: `send` và `start` in ra
 pane kèm mốc (`termote agents wait %3@41`), còn `wait` in một dòng `next:` gồm từng pane chưa được
-báo cùng mốc của pane đó (`next: termote agents wait %3@41 %5@48`), hoặc báo rằng không còn pane nào.
+báo cùng mốc của pane đó (`next: termote agents wait %3@41 %5@48`), hoặc báo rằng không còn pane nào. Pane đang chờ hộp thoại vẫn nằm trong dòng đó, nên lần chờ sau khi
+trả lời vẫn theo dõi nó.
 Muốn chờ nhiều agent, hãy gom `<pane>@<seq>` mới nhất của từng agent. Nhờ vậy, lượt nào kết thúc
 trong lúc orchestrator đang đọc pane khác vẫn được báo, kể cả khi lượt đó kết thúc trước mốc in ra
 cho một pane khác, còn lượt đã báo rồi thì không báo lại. `--after <seq>` là mốc cho mọi pane được

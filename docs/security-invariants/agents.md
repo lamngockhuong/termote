@@ -8,7 +8,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   succeeded, a peek of the snapshot, which makes nothing, every 2 s while that agent works, one
   loop for every followed pane, each let go once it stops working, shows no work within a minute,
   or after 2 h); the tracker never reads tmux, Herdr or Zellij itself and never runs a command, so
-  `/activity` costs no mux call. Each read takes a generation number before it starts and a read
+  `/activity` costs no mux call. The one change recorded without a read: after `agent/answer`
+  answered 204 (the screen moved on), `leftDialog` moves that pane, only if the tracker shows it
+  `blocked`, to `working` with a `blocked` → `working` event, and makes every read begun before
+  it stale, so the next read showing it blocked (the next question, another tab, a new dialog)
+  records a new dialog for `agents wait`; a refused answer records nothing. Each read takes a generation number before it starts and a read
   that finishes after a newer one changes nothing (no false change). `observe` copies the
   snapshot and gives every agent a new `AgentInfo` before setting `since`/`sinceFirstSeen`, so
   Herdr's cached view (shared with streams) is never written; the snapshot gains `serverNow`.
@@ -637,7 +641,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   oldest mark and counting for each pane only its changes after its own, the snapshot read first so
   the changes are recorded with no page open; a status shown before a pane's mark ends nothing, a
   reset ring exits 7 rather than guess. Its `next` line always names each pane left with its own
-  mark, or says none is left. A Claude Code pane that went to working after its mark and is still
+  mark, or says none is left; a pane reported on a dialog stays in it with the latest mark, so the
+  wait after an answer reports what follows (the next question, the turn's end). A Claude Code pane that went to working after its mark and is still
   working, but whose screen (`agent/prompt`'s activity) shows its answer written and only background
   work left ("Waiting for 1 background agent to finish"), ends the wait once (exit 0) and stays in
   the `next` line with the latest mark, past that start, so the next wait reports the turn's end

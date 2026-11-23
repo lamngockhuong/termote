@@ -184,7 +184,9 @@ default the workspace's HEAD) and starts the agent in a new workspace of its own
 until its dependencies are installed (`start` says so when there is a lockfile). Run again, it
 goes on in the worktree it made, or, while that worktree's agent still runs, it names its pane to
 `send` to instead; a branch that exists without a worktree is refused. Nothing it makes is removed
-for you.
+for you. After an `answer`, `wait` returns 3 again while the
+dialog goes on (its next question, another tab, a box just ticked): show it again with `answer
+<pane>`. A pane on a dialog stays in the `next:` line, so the wait after an answer follows it.
 
 A `<pane>` is a pane id or a name only one pane has: a name two panes share is refused, with
 both ids. Send to one pane at a time, never to your own. Ask the user before `start`; it refuses

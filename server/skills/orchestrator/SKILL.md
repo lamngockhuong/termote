@@ -52,7 +52,10 @@ or loses its agent (5) after its mark; every pane that ended is printed, the gra
 A pane that wrote its answer and only waits on background work is reported once too (exit 0,
 "only waits on background work") when it started that turn after its mark: `read` it; it stays
 in the `next:` line with a new mark, so the next `wait` tells you when its turn ends. 4: the timeout passed; 6: no pane works and none ended, nothing
-to wait for; 7: the history was reset, so `read` each pane.
+to wait for; 7: the history was reset, so `read` each pane. After an `answer`, `wait` returns 3 again while the
+dialog goes on (its next question, another tab, a box just ticked in a multi-choice question):
+look at it again with `answer <pane>` before the next answer. A pane that waits on a dialog stays
+in the `next:` line with a new mark, so after you answer it the next `wait` reports what follows.
 
 **The marks.** Keep a mark for each pane you wait on, never one mark for all: a mark from one
 pane would skip a turn another pane ended before it. `send` and `start` print the pane with its

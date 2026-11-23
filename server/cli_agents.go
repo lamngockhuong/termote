@@ -1105,9 +1105,11 @@ func (c *cli) waitEnded(s Snapshot, w waitPanes, ends map[string]waitEnd, what m
 			rest = append(rest, key)
 			continue
 		}
-		// A pane that only waits on background work is still in its turn:
-		// the next wait follows it from latest, past the start reported.
-		if end == waitBackground {
+		// A pane on a dialog or only waiting on background work is still
+		// in its turn: the next wait follows it from latest, past what was
+		// reported (after an answer: the dialog's next question, or the
+		// turn's end).
+		if end == waitBackground || end == waitDialog {
 			rest = append(rest, key)
 			next[key] = latest
 		}
