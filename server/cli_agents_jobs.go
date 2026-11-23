@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -37,11 +38,13 @@ var (
 // The usage of each job command, as agentsUsage lists it (a test checks),
 // printed with a refusal of that command instead of every agents command.
 const (
-	jobsUsage    = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
-	jobAddUsage  = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
-	jobShowUsage = "usage: termote agents job show <id> [--json]"
-	jobSetUsage  = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]"
-	waitJobUsage = "usage: termote agents wait --job <id>... [--timeout <duration>]"
+	jobsUsage      = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
+	jobAddUsage    = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
+	jobShowUsage   = "usage: termote agents job show <id> [--json]"
+	jobSetUsage    = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]"
+	jobRemoveUsage = "usage: termote agents job remove <id>"
+	jobsPruneUsage = "usage: termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]"
+	waitJobUsage   = "usage: termote agents wait --job <id>... [--timeout <duration>]"
 )
 
 // jobSelfPane refuses --pane naming the orchestrator's own pane.
@@ -58,6 +61,12 @@ type jobsListing struct {
 // server's last one, which nothing else may have read lately (no page
 // open).
 func (c *cli) jobsGet(port int, all bool) ([]jobView, error) {
+	l, err := c.jobsListingGet(port, all)
+	return l.Jobs, err
+}
+
+// jobsListingGet is jobsGet with the server's clock.
+func (c *cli) jobsListingGet(port int, all bool) (jobsListing, error) {
 	c.agentsSnapshot(port)
 	var l jobsListing
 	path := "/api/mux/jobs"
@@ -65,7 +74,7 @@ func (c *cli) jobsGet(port int, all bool) ([]jobView, error) {
 		path += "?all=1"
 	}
 	err := c.agentsGet(port, path, &l)
-	return l.Jobs, err
+	return l, err
 }
 
 // findJob is the job with id in list.
@@ -208,6 +217,9 @@ func (c *cli) selfKey(s Snapshot) string {
 }
 
 func (c *cli) agentsJobs(args []string) error {
+	if len(args) > 0 && args[0] == "prune" {
+		return c.agentsJobsPrune(args[1:])
+	}
 	var ws string
 	mine, all, asJSON := false, false, false
 	fs := c.newFlagSet("agents jobs")
@@ -218,6 +230,9 @@ func (c *cli) agentsJobs(args []string) error {
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
+	}
+	if slices.Contains(pos, "prune") {
+		return usageError("prune goes first, before its flags\n%s", jobsPruneUsage)
 	}
 	if len(pos) != 0 {
 		return usageError("jobs takes no arguments\n%s", jobsUsage)
@@ -318,7 +333,7 @@ func (c *cli) tildeDir(dir string) string {
 
 func (c *cli) agentsJob(args []string) error {
 	if len(args) == 0 {
-		return usageError("agents job needs add, show or set\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage)
+		return usageError("agents job needs add, show, set or remove\n%s\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage)
 	}
 	switch args[0] {
 	case "add":
@@ -327,8 +342,10 @@ func (c *cli) agentsJob(args []string) error {
 		return c.agentsJobShow(args[1:])
 	case "set":
 		return c.agentsJobSet(args[1:])
+	case "remove":
+		return c.agentsJobRemove(args[1:])
 	}
-	return usageError("unknown agents job command: %s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage)
+	return usageError("unknown agents job command: %s\n%s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage)
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
@@ -517,6 +534,160 @@ func (c *cli) agentsJobSet(args []string) error {
 	if ended := grantsEnded(before.job, j.job); ended > 0 {
 		c.infof("%d grant(s) of the job ended with this change; only the user can give new ones, from the PWA", ended)
 	}
+	return nil
+}
+
+// agentsJobRemove removes a finished job from the ledger, as read: one the
+// user or an agent changed since is refused by the server (job_conflict).
+// An unfinished one is refused here before anything is sent, and by the
+// server for any request over the local socket (job_unfinished).
+func (c *cli) agentsJobRemove(args []string) error {
+	fs := c.newFlagSet("agents job remove")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return flagErr(err)
+	}
+	if len(pos) != 1 {
+		return usageError("job remove takes one job id\n%s", jobRemoveUsage)
+	}
+	port, err := c.agentsPort()
+	if err != nil {
+		return err
+	}
+	list, err := c.jobsGet(port, true)
+	if err != nil {
+		return err
+	}
+	j, ok := findJob(list, pos[0])
+	if !ok {
+		return fmt.Errorf("no job %s; see: termote agents jobs --all", plainText(pos[0]))
+	}
+	if !jobFinished(j.State) {
+		return fmt.Errorf("job %s is %s; only a done, failed or abandoned job is removed. Finish it first: termote agents job set %s --state abandoned",
+			plainText(j.ID), plainText(j.State), plainText(j.ID))
+	}
+	if _, err := c.jobDelete(port, j); err != nil {
+		return err
+	}
+	c.infof("Removed job %s: %s", plainText(j.ID), plainText(j.Title))
+	return nil
+}
+
+// jobDelete deletes job j as read (its updated time); a refusal comes with
+// the server's code.
+func (c *cli) jobDelete(port int, j jobView) (string, error) {
+	path := "/api/mux/jobs/" + url.PathEscape(j.ID) + "?updated=" + url.QueryEscape(j.Updated.Format(time.RFC3339Nano))
+	r, err := c.agentsCall(port, http.MethodDelete, path, nil, agentsReadTimeout)
+	if err != nil {
+		return "", err
+	}
+	if r.status != http.StatusOK {
+		return r.failure().Code, agentsRefusal(r)
+	}
+	return "", nil
+}
+
+// parseOlderThan reads --older-than: a count of hours, days or weeks.
+func parseOlderThan(s string) (time.Duration, error) {
+	n, unit, ok := parseCountUnit(s)
+	switch {
+	case !ok || n == 0:
+		return 0, usageError("--older-than takes a count above 0 and h, d or w (12h, 7d, 2w)\n%s", jobsPruneUsage)
+	case n > int(time.Duration(math.MaxInt64)/unit):
+		return 0, usageError("--older-than is too long\n%s", jobsPruneUsage)
+	}
+	return time.Duration(n) * unit, nil
+}
+
+// agentsJobsPrune removes every finished job, or those not changed for
+// --older-than by the server's clock, each as read: a job changed or
+// removed meanwhile is skipped.
+func (c *cli) agentsJobsPrune(args []string) error {
+	var olderThan string
+	dryRun, asJSON := false, false
+	fs := c.newFlagSet("agents jobs prune")
+	fs.StringVar(&olderThan, "older-than", "", "")
+	fs.BoolVar(&dryRun, "dry-run", false, "")
+	fs.BoolVar(&asJSON, "json", false, "")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return flagErr(err)
+	}
+	if len(pos) != 0 {
+		return usageError("jobs prune takes no arguments\n%s", jobsPruneUsage)
+	}
+	var age time.Duration
+	if olderThan != "" {
+		if age, err = parseOlderThan(olderThan); err != nil {
+			return err
+		}
+	}
+	port, err := c.agentsPort()
+	if err != nil {
+		return err
+	}
+	l, err := c.jobsListingGet(port, true)
+	if err != nil {
+		return err
+	}
+	now, err := time.Parse(time.RFC3339Nano, l.ServerNow)
+	if err != nil {
+		now = time.Now()
+	}
+	var picked []jobView
+	for _, j := range l.Jobs {
+		// Without --older-than every finished job goes, however recent:
+		// serverNow is in milliseconds, a job's updated time is not.
+		if jobFinished(j.State) && (age == 0 || !j.Updated.After(now.Add(-age))) {
+			picked = append(picked, j)
+		}
+	}
+	ids := func(list []jobView) []string {
+		out := []string{}
+		for _, j := range list {
+			out = append(out, j.ID)
+		}
+		return out
+	}
+	if dryRun {
+		if asJSON {
+			return writeJSON(c.out, map[string]any{"wouldRemove": ids(picked)})
+		}
+		if len(picked) > 0 {
+			tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "JOB\tTITLE\tSTATE\tUPDATED")
+			for _, j := range picked {
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", plainText(j.ID), clipLine(plainText(j.Title), 48), plainText(j.State), sinceText(j.Updated.Format(time.RFC3339)))
+			}
+			if err := tw.Flush(); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintf(c.out, "Would remove %d job(s)\n", len(picked))
+		return nil
+	}
+	var removed, skipped []jobView
+	for _, j := range picked {
+		code, err := c.jobDelete(port, j)
+		if err == nil {
+			removed = append(removed, j)
+			continue
+		}
+		// Changed, reopened or removed elsewhere since it was read.
+		if code == "job_conflict" || code == "job_unfinished" || code == "job_not_found" {
+			skipped = append(skipped, j)
+			continue
+		}
+		return fmt.Errorf("removed %d job(s) %v, then: %w", len(removed), ids(removed), err)
+	}
+	if asJSON {
+		return writeJSON(c.out, map[string]any{"removed": ids(removed), "skipped": ids(skipped)})
+	}
+	if len(picked) == 0 {
+		c.infof("No finished job to remove")
+		return nil
+	}
+	c.infof("Removed %d job(s); skipped %d (changed meanwhile)", len(removed), len(skipped))
 	return nil
 }
 

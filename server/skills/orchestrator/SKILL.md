@@ -45,6 +45,8 @@ termote agents jobs [--mine] [--workspace <id>] [--all] [--json]  # the ledger: 
 termote agents job show <id>                  # prompt, note, grants, history
 termote agents job set <id> --state review --note '<what was done>'   # or: --pane <pane>, --title
 termote agents job add --title '<title>' [--pane <pane>]
+termote agents job remove <id>                # a done, failed or abandoned job only
+termote agents jobs prune [--older-than 7d] [--dry-run]   # every finished job, or those not changed for 7d
 termote agents wait --mine [--timeout 20m]          # until the agent of a job you made needs you
 termote agents wait --job <id>... [--timeout 20m]   # the same for the jobs named (without self)
 termote agents answer <pane> --delegated      # answer a permission dialog under the user's grant
@@ -124,6 +126,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   --note '<what was done>'`; the user gets a push. A turn that ends with a question for the user
   is not finished work: see step 4. Never set `done` yourself unless the user
   looked at it and said so.
+- The ledger is the user's history: remove jobs (`job remove`, `jobs prune`) only when the user
+  asks. Only finished ones go; an unfinished job is refused until `job set <id> --state abandoned`.
 - `jobs --mine` lists the jobs made from your pane; it needs termote to know your pane (not on
   herdr-core, psmux or Windows), and says so instead of an empty list.
 

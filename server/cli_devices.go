@@ -28,12 +28,10 @@ func parseValidity(s string) (time.Duration, error) {
 	if s == "never" {
 		return 0, nil
 	}
-	m := validityRe.FindStringSubmatch(s)
-	if m == nil {
+	n, unit, ok := parseCountUnit(s)
+	if !ok {
 		return 0, usageError("--expires takes a count and h, d or w (12h, 7d, 2w), or never")
 	}
-	n, _ := strconv.Atoi(m[1])
-	unit := map[string]time.Duration{"h": time.Hour, "d": 24 * time.Hour, "w": 7 * 24 * time.Hour}[m[2]]
 	// Compared before multiplying: a large count would wrap around.
 	if n > int(maxDeviceValidity/unit) {
 		return 0, usageError("--expires must be 1h to 400d, or never")
@@ -43,6 +41,17 @@ func parseValidity(s string) (time.Duration, error) {
 		return 0, usageError("--expires must be 1h to 400d, or never")
 	}
 	return d, nil
+}
+
+// parseCountUnit reads a count of hours, days or weeks (12h, 7d, 2w): the
+// count and its unit, multiplied by the caller, which bounds the count.
+func parseCountUnit(s string) (int, time.Duration, bool) {
+	m := validityRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n, map[string]time.Duration{"h": time.Hour, "d": 24 * time.Hour, "w": 7 * 24 * time.Hour}[m[2]], true
 }
 
 // validityLabel names how long a device stays signed in.

@@ -30,7 +30,8 @@ func TestAgentsUsage(t *testing.T) {
 func TestAgentsContainer(t *testing.T) {
 	tc := newTestCLI(t, runtime.GOOS)
 	tc.saveConfig(savedConfig{Port: 7680, Password: "secret", Container: &containerConfig{Port: 7680}})
-	for _, args := range [][]string{{"list"}, {"read", "%1"}, {"send", "%1", "hi"}, {"wait", "%1"}, {"answer", "%1"}, {"start", "--workspace", "w", "--kind", "claude"}} {
+	for _, args := range [][]string{{"list"}, {"read", "%1"}, {"send", "%1", "hi"}, {"wait", "%1"}, {"answer", "%1"}, {"start", "--workspace", "w", "--kind", "claude"},
+		{"job", "remove", "j1"}, {"jobs", "prune"}} {
 		if err := tc.dispatch("agents", args); err == nil || !strings.Contains(err.Error(), "not supported in container mode") {
 			t.Errorf("%v: %v", args, err)
 		}

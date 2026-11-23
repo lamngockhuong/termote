@@ -90,6 +90,8 @@ termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix th
 termote agents jobs [--mine] [--all] [--json] # sổ việc: pane, trạng thái, lượt chưa đọc, branch của từng việc
 termote agents job show <id>                 # prompt, ghi chú, ủy quyền và lịch sử của việc
 termote agents job set <id> --state review --note 'What was done'
+termote agents job remove <id>               # xóa một việc đã xong, thất bại hoặc bị bỏ khỏi sổ việc
+termote agents jobs prune --older-than 7d    # xóa mọi việc đã kết thúc không đổi trong 7 ngày (--dry-run chỉ liệt kê)
 termote agents wait --job <id>...            # tới khi agent của một việc cần orchestrator
 termote agents wait --mine                   # như trên, với mọi việc chưa xong do pane của nó tạo
 termote agents answer <pane> --delegated     # chọn Yes một lần, theo ủy quyền bạn đã cho trên PWA

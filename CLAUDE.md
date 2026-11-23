@@ -178,9 +178,10 @@ machine <cmd>        Machines reached over SSH: add <alias> [--label --print-key
 bridge               The forced command another termote's key runs here (never by hand)
 settings <cmd>       PWA settings an agent may propose: schema [--json], propose <json|-> (native only, the user applies it per browser)
 agents <cmd>         The agents in the panes, for an orchestrator agent (native only, local socket): list, read, send,
-                     wait <pane>@<seq>... | --job <id>..., answer [--delegated], stop --cursor, diff [--stat] [--base],
+                     wait <pane>@<seq>... | --job <id>... | --mine, answer [--delegated], stop --cursor, diff [--stat] [--base],
                      start --workspace <id> --kind <kind> [--worktree <branch> [--base <ref>]] [--title | --job <id>],
-                     jobs [--mine], job add|show|set (the job ledger, server/job_store.go)
+                     jobs [--mine], jobs prune [--older-than] [--dry-run], job add|show|set|remove
+                     (the job ledger, server/job_store.go; remove and prune: finished jobs only)
 skills <cmd>         The embedded orchestrator skill for Claude Code and Codex: install, uninstall [--agent], status
 pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
