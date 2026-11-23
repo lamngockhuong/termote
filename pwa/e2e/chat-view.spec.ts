@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 
 // A 1x1 PNG, attached in the composer.
@@ -286,5 +287,154 @@ test.describe('chat view', () => {
         .getByRole('tablist', { name: 'View' })
         .getByRole('tab', { name: 'Terminal' }),
     ).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+// Quoting text selected in the conversation into the composer, against a
+// stand-in of its own: "questions" makes it run a five-line command (folded
+// to three) and ask two numbered questions, then one more. Chromium only
+// (playwright.config.ts): iOS Safari and Android Chrome are checked by hand.
+test.describe('chat view quotes', () => {
+  test.skip(
+    !socket || process.platform !== 'linux',
+    'needs TMUX_SOCKET of the server under test (Linux)',
+  )
+  test.describe.configure({ mode: 'serial' })
+
+  let windowId = ''
+  let link = ''
+  const dirs: string[] = []
+
+  test.beforeAll(async ({ playwright }, testInfo) => {
+    const api = await playwright.request.newContext({
+      baseURL: testInfo.project.use.baseURL,
+      httpCredentials: testInfo.project.use.httpCredentials,
+    })
+    expect((await api.get('/api/mux/snapshot')).ok()).toBe(true)
+    const name = `fake-claude-quote-${Date.now()}`
+    const claudeDir = mkdtempSync(path.join(tmpdir(), 'termote-e2e-claude-'))
+    const cwd = mkdtempSync(path.join(tmpdir(), 'termote-e2e-cwd-'))
+    dirs.push(claudeDir, cwd)
+    windowId = tmux(
+      'new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${tmuxSession}:`, '-n', name, '-c', cwd,
+      'env', `CLAUDE_CONFIG_DIR=${claudeDir}`, 'bash', fakeClaude,
+    ).trim()
+    await expect(async () => {
+      const s = await (await api.get('/api/mux/snapshot')).json()
+      const group = s.groups.find((g: { tabs: { name: string }[] }) => g.tabs.some((t) => t.name === name))
+      const tab = group?.tabs.find((t: { name: string }) => t.name === name)
+      expect(tab?.panes?.[0]?.agent).toBeTruthy()
+      link = `/#/s/${encodeURIComponent(group.id)}/${encodeURIComponent(tab.id)}?view=chat`
+    }).toPass({ timeout: 15000 })
+    await api.dispose()
+  })
+
+  test.afterAll(() => {
+    try {
+      if (windowId) tmux('kill-window', '-t', windowId)
+    } catch {
+      // Already gone
+    }
+    for (const dir of dirs) rmSync(dir, { recursive: true, force: true, maxRetries: 5 })
+  })
+
+  const quoteButton = (page: Page) => page.getByRole('button', { name: 'Quote selected text' })
+  const composerOf = (page: Page) => page.getByRole('textbox', { name: 'Message to Claude Code' })
+
+  // Drags the mouse over el, from its first character to its end
+  async function drag(page: Page, el: Locator) {
+    const box = await el.boundingBox()
+    if (!box) throw new Error('not on screen')
+    await page.mouse.move(box.x + 1, box.y + 4)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 1, box.y + box.height - 4, { steps: 8 })
+    await page.mouse.up()
+  }
+
+  test('quotes the questions selected, each in turn, the caret under each', async ({ page }) => {
+    await page.goto(link)
+    const conversation = page.getByRole('region', { name: 'Conversation' })
+    await expect(conversation).toContainText('Fix the build please', { timeout: 15000 })
+    // Nothing selected: no button
+    await expect(quoteButton(page)).toHaveCount(0)
+
+    const composer = composerOf(page)
+    await composer.fill('questions')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    const list = conversation.locator('ol').filter({ hasText: 'Which port' })
+    await expect(list).toBeVisible()
+    await expect(conversation).toContainText('Should the logs be kept?')
+
+    await drag(page, list)
+    await quoteButton(page).click()
+    await expect(composer).toHaveValue('> 1. Which port should it listen on?\n> 2. Which user runs it?\n\n')
+    await expect(composer).toBeFocused()
+    expect(await composer.evaluate((el: HTMLTextAreaElement) => el.selectionStart === el.value.length)).toBe(true)
+    await expect(quoteButton(page)).toHaveCount(0)
+
+    await page.keyboard.type('7680')
+    await drag(page, conversation.getByText('Should the logs be kept?'))
+    await quoteButton(page).click()
+    await expect(composer).toHaveValue(
+      '> 1. Which port should it listen on?\n> 2. Which user runs it?\n\n7680\n\n> Should the logs be kept?\n\n',
+    )
+    await composer.fill('')
+  })
+
+  test('a folded command gives only the lines it shows', async ({ page }) => {
+    await page.goto(link)
+    const conversation = page.getByRole('region', { name: 'Conversation' })
+    await expect(conversation).toContainText('Should the logs be kept?', { timeout: 15000 })
+    // The run of the "questions" command, opened (a run seen working is
+    // open already)
+    const command = conversation.locator('pre').filter({ hasText: 'echo hidden-five' })
+    if (!(await command.isVisible())) {
+      await conversation.getByRole('button', { name: /1 command/, expanded: false }).last().click()
+    }
+    await expect(command).toBeVisible()
+    await expect(conversation.getByText('Show all 5 lines')).toBeVisible()
+    // From the command to the end of the questions
+    await page.evaluate(() => {
+      const pres = [...document.querySelectorAll('pre')]
+      const pre = pres.find((p) => p.textContent?.includes('echo hidden-five')) as HTMLElement
+      const ol = [...document.querySelectorAll('ol')].find((o) => o.textContent?.includes('Which port')) as HTMLElement
+      const r = document.createRange()
+      r.setStart(pre, 0)
+      r.setEnd(ol, ol.childNodes.length)
+      const sel = document.getSelection() as Selection
+      sel.removeAllRanges()
+      sel.addRange(r)
+    })
+    await quoteButton(page).click()
+    const value = await composerOf(page).inputValue()
+    expect(value).toContain('> echo one\n> echo two\n> echo three\n> …\n')
+    expect(value).toContain('> 2. Which user runs it?')
+    expect(value).not.toContain('hidden-five')
+    expect(value).not.toContain('echo four')
+    expect(value).not.toContain('Show all')
+    await composerOf(page).fill('')
+  })
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+    test('a tap quotes the selection kept after the page lost it', async ({ page }) => {
+      await page.goto(link)
+      const conversation = page.getByRole('region', { name: 'Conversation' })
+      const asked = conversation.getByText('Should the logs be kept?')
+      await expect(asked).toBeVisible({ timeout: 15000 })
+      await asked.selectText()
+      await expect(quoteButton(page)).toBeVisible()
+      // A tap on a phone can drop the selection before the button's click
+      await page.evaluate(() => document.getSelection()?.removeAllRanges())
+      await quoteButton(page).tap()
+      await expect(composerOf(page)).toHaveValue('> Should the logs be kept?\n\n')
+      await expect(quoteButton(page)).toHaveCount(0)
+      // A touch in the conversation forgets a selection
+      await asked.selectText()
+      await expect(quoteButton(page)).toBeVisible()
+      await conversation.tap({ position: { x: 5, y: 5 } })
+      await expect(quoteButton(page)).toHaveCount(0)
+    })
   })
 })
