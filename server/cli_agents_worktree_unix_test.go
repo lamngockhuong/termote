@@ -186,6 +186,15 @@ func TestAgentsStartWorktreeRefusals(t *testing.T) {
 		t.Errorf("no worktrees: %v", err)
 	}
 	newWorktreeScript(t, s, worktreeCaps)
+	// A prompt on Windows, which the server refuses in any shell: refused
+	// before the worktree or a tab is made for it.
+	goos := startPromptGOOS
+	startPromptGOOS = "windows"
+	err := start("claude", "feat")
+	startPromptGOOS = goos
+	if err == nil || !strings.Contains(err.Error(), "at its start on Windows") {
+		t.Errorf("prompt on Windows: %v", err)
+	}
 	for branch, want := range map[string]string{"old": "already exists; pick a new name", "main": "is the main worktree's"} {
 		if err := start("claude", branch); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", branch, err)

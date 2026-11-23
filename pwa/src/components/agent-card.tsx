@@ -27,7 +27,6 @@ import { AgentStatusBadge } from './agent-status-badge'
 import { SessionUsageLine } from './session-usage-line'
 import { StatusTimeline } from './status-timeline'
 import { formatTokens, SubagentTree, subagentSummary } from './subagent-tree'
-import { Toast } from './toast'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Skeleton } from './ui/skeleton'
 import { UsageMeter } from './usage-meter'
@@ -138,6 +137,9 @@ interface Props {
   // A Stop for the agent while it works: one the server takes a message
   // for, never on a view-only device
   canStop?: boolean
+  // Why a Stop was refused, for the overview's one toast: a refusal from
+  // another card replaces it rather than stacking a second one
+  onStopFailed?: (message: string) => void
 }
 
 // What a card calls its agent: the product's name, else what the server
@@ -172,10 +174,10 @@ export const AgentCard = memo(function AgentCard({
   openRef,
   highlighted,
   canStop,
+  onStopFailed,
 }: Props) {
   const { t } = useT()
   const halt = useAgentStop(pane.id, pane.agentStatus, pane.agentSince)
-  const [stopError, setStopError] = useState<string | null>(null)
   const detailsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
@@ -201,14 +203,13 @@ export const AgentCard = memo(function AgentCard({
   const stopShown =
     !!canStop && !!cursor && (status === 'working' || halt.stopping)
   const stop = async (c: string) => {
-    setStopError(null)
     const err = await halt.stop(c)
     if (!err) return
     const message =
       err instanceof AgentRequestError
         ? serverErrorText(err, t)
         : t('errors.unknown')
-    setStopError(t('tasks.card.notStopped', { name, message }))
+    onStopFailed?.(t('tasks.card.notStopped', { name, message }))
   }
   return (
     <div
@@ -384,13 +385,6 @@ export const AgentCard = memo(function AgentCard({
         >
           <Square size={14} aria-hidden="true" fill="currentColor" />
         </IconButton>
-      )}
-      {stopError && (
-        <Toast
-          variant="warning"
-          message={stopError}
-          onClose={() => setStopError(null)}
-        />
       )}
     </div>
   )

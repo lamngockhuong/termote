@@ -453,6 +453,40 @@ func TestAgentsWait(t *testing.T) {
 	}
 }
 
+// A tab that moves while a wait follows its pane is still the same agent
+// (tmux without pane ids: the pane's id is its window's, which a move
+// renumbers), and the id printed is the one it has now.
+func TestAgentsWaitTabMoved(t *testing.T) {
+	shortWait(t)
+	tc, f := agentsTest(t, lines(0, 1))
+	claude := func(status string) *AgentInfo { return &AgentInfo{Name: "claude", Status: status} }
+	f.snapMu.Lock()
+	f.snapNow = Snapshot{Groups: []Group{{ID: "$1", Name: "web", Tabs: []Tab{
+		{ID: "$1:0", Key: "@11", Name: "api", Panes: []Pane{{ID: "$1:0", Agent: claude("working")}}},
+		{ID: "$1:1", Key: "@12", Name: "ui", Panes: []Pane{{ID: "$1:1", Agent: claude("working")}}},
+	}}}}
+	f.snapMu.Unlock()
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		f.snapMu.Lock()
+		g := &f.snapNow.Groups[0]
+		g.Tabs[0], g.Tabs[1] = g.Tabs[1], g.Tabs[0]
+		for i := range g.Tabs {
+			id := "$1:" + strconv.Itoa(i)
+			g.Tabs[i].ID, g.Tabs[i].Panes[0].ID = id, id
+		}
+		f.snapMu.Unlock()
+		time.Sleep(60 * time.Millisecond)
+		f.setStatus("$1:0", "done") // ui, now first
+	}()
+	err := tc.dispatch("agents", []string{"wait", "web/ui", "web/api"})
+	out := tc.stdout.String()
+	if err != nil || !strings.Contains(out, "web/ui ($1:0) is done") || strings.Contains(out, "no longer runs an agent") ||
+		!strings.Contains(out, "next: termote agents wait $1:1 --after ") {
+		t.Errorf("moved: %v\n%s", err, out)
+	}
+}
+
 // A turn that ended while the caller was busy elsewhere is still reported
 // by a wait from the mark before it, beside the panes that still work.
 func TestAgentsWaitSeveral(t *testing.T) {

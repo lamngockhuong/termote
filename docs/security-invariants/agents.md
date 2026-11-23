@@ -629,13 +629,17 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   pane; only `wait` reads several (32 at most, each name resolved before it starts). `wait` follows
   the activity ring after a mark (`--after`, printed by `send`, `start` and `wait`), reading the
   snapshot first so the changes are recorded with no page open; a status shown before the mark ends
-  nothing, a reset ring exits 7 rather than guess. `stop` sends the cursor `read --json` printed and
+  nothing, a reset ring exits 7 rather than guess. It follows each pane by its activity key
+  (`activityKey`, computed from the snapshot's tab `key`), not its id, so a tmux tab that moves
+  (a pane whose id is its window's) is still the same agent, and prints the id the pane has now. `stop` sends the cursor `read --json` printed and
   is never retried, a `session_changed` least of all. `diff` never sends `reveal`: a sensitive file
   is printed by name only; every file's text is printed after a fixed line saying it is data, in a
   fence longer than any run of backticks inside it, through `cleanOut`, 64 KB at most; the `root`
   the change list was read in goes with each later read, so a pane that moved is refused. `start
   --worktree` checks `agentStart`, `agentStartCodex` for Codex and `worktrees` before any request
-  that makes something; a branch with a worktree is opened again (`worktrees/open`), one that
+  that makes something, and refuses a prompt on Windows there (every shell is refused one,
+  `startShellOK`; the local socket puts the server on the CLI's OS), before a worktree or a tab is
+  made; a pane's shell (pwsh) is known only once its pane is open; a branch with a worktree is opened again (`worktrees/open`), one that
   exists without one is refused; `busy` is retried for 90 s at most, a create that answered
   `unknown` or not at all is followed in the list for 60 s and never sent again; the agent starts
   only in the first pane of that workspace, once its directory is the worktree's; nothing it makes
