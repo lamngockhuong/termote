@@ -1613,7 +1613,7 @@ those of an `upstream` remote for a fork, and any attached by number, every 20 s
 and keeps a summary on the job. A new set of failed checks or every pull request merged is
 pushed by the job's id. `POST /api/mux/jobs/{id}/ci` reads them again or sends the failed checks'
 names to the job's agent (`server/job_ci_send.go`); a `ci` grant given in the PWA lets the server
-send them on its own, at most three times. termote never writes to GitHub. The checks are the Job
+send them on its own, at most three times, without the checks' names. termote never writes to GitHub. The checks are the Job
 pull requests entry of [`security-invariants/agents.md`](security-invariants/agents.md).
 
 ### Agent tokens and estimated cost (`/agent/usage`, `/agent/usage/summary`, `/usage`)

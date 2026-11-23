@@ -178,7 +178,7 @@ export default {
   'jobs.grant.kindCI': 'Send failed checks',
   'jobs.grant.ciLabel': 'Send failed checks to the agent',
   'jobs.grant.ciHint':
-    'When a pull request of the job fails its checks on a new commit, the server sends the agent its number and the failed checks’ names while the agent is at rest, up to {count} times. A pull request from another repository is never sent.',
+    'When a pull request of the job fails its checks on a new commit, the server tells the agent its number and how to read the failed checks while the agent is at rest, up to {count} times. It never sends a check’s name, which someone else may have written, and never a pull request from another repository.',
   'jobs.grant.rounds': 'sent {used} of {most} times',
   'jobs.ci.title': 'Pull requests',
   'jobs.ci.none': 'No pull request for the job’s branch yet',

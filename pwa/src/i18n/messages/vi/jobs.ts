@@ -160,7 +160,7 @@ export default {
   'jobs.grant.kindCI': 'Gửi check lỗi',
   'jobs.grant.ciLabel': 'Gửi check lỗi cho agent',
   'jobs.grant.ciHint':
-    'Khi pull request của việc có check lỗi trên một commit mới, máy chủ gửi cho agent số pull request và tên các check lỗi lúc agent đang nghỉ, tối đa {count} lần. Pull request từ repo khác không bao giờ được gửi.',
+    'Khi pull request của việc có check lỗi trên một commit mới, máy chủ báo cho agent số pull request và cách đọc các check lỗi lúc agent đang nghỉ, tối đa {count} lần. Tên check không bao giờ được gửi, vì có thể do người khác đặt, và pull request từ repo khác cũng vậy.',
   'jobs.grant.rounds': 'đã gửi {used}/{most} lần',
   'jobs.ci.title': 'Pull request',
   'jobs.ci.none': 'Branch của việc chưa có pull request nào',

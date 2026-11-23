@@ -226,8 +226,9 @@ pull request's number, the failed checks' names, and the `gh pr checks` and `gh 
 --log-failed` commands to read them. It never sends a log: the agent reads it with `gh` itself.
 The orchestrator does the same with `termote agents job ci <id> --send`, after asking you. To let
 the server send them on its own, give the job a **Send failed checks** grant: it sends each new
-set of failures once, while the agent is at rest, at most three times, and never for a pull
-request from another repository. Once every pull request is merged, the details offer **Set
+set of failures once, while the agent is at rest, at most three times, with the pull request
+numbers and the commands but not the checks' names, which someone else may have written, and
+never for a pull request from another repository. Once every pull request is merged, the details offer **Set
 done**; removing the worktree stays yours.
 
 <Aside type="note">

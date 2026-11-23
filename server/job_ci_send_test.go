@@ -18,13 +18,19 @@ func TestCIMessage(t *testing.T) {
 	}
 	want := `CI failed on PR #12: "lint", "e2e ?x?"; PR #15: "a", "b", "c", "d", "e", (2 more). ` +
 		`Read the failures with gh pr checks 12 and gh run view 456 --log-failed; gh pr checks 15 --repo github.com/up/r, fix them and push.`
-	if got := ciMessage(prs, false, "github.com/o/r"); got != want {
+	if got := ciMessage(prs, false, true, "github.com/o/r"); got != want {
 		t.Errorf("message\n got %s\nwant %s", got, want)
 	}
-	if got := ciMessage(prs, true, "github.com/o/r"); !strings.Contains(got, "PR #14") {
+	if got := ciMessage(prs, true, true, "github.com/o/r"); !strings.Contains(got, "PR #14") {
 		t.Errorf("with foreign: %s", got)
 	}
-	if ciMessage(prs[1:2], true, "") != "" {
+	// Under a grant: no check name, which a third party may have written.
+	wantAuto := `CI failed on PR #12; PR #15. Read the failures with gh pr checks 12 and gh run view 456 --log-failed; ` +
+		`gh pr checks 15 --repo github.com/up/r, fix them and push.`
+	if got := ciMessage(prs, false, false, "github.com/o/r"); got != wantAuto {
+		t.Errorf("auto message\n got %s\nwant %s", got, wantAuto)
+	}
+	if ciMessage(prs[1:2], true, true, "") != "" {
 		t.Error("message without a failure")
 	}
 	if ciKeyPRs("fail:12@aaa,15@bbb") != "#12, #15" {
@@ -182,8 +188,8 @@ func TestJobCIGrantAutoSend(t *testing.T) {
 		t.Errorf("rounds: sent %d, grant %+v", len(jt.f.pasted), g)
 	}
 	for _, s := range jt.f.pasted {
-		if strings.Contains(s, "#30") {
-			t.Errorf("foreign pull request sent: %s", s)
+		if strings.Contains(s, "#30") || strings.Contains(s, "lint") {
+			t.Errorf("foreign pull request or a check name sent on its own: %s", s)
 		}
 	}
 	// A new grant replaces the old one; revoking it stops the sends.

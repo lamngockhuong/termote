@@ -919,7 +919,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   is `https://<host>/<owner>/<repo>/pull/<n>` of that repo, a failed run's id only from a link of
   that repo, check names (written by whoever wrote the workflow, a fork's author for a fork's pull
   request: a prompt-injection surface) in `[A-Za-z0-9 ._:/()[]#+-]` (anything else `?`), 100
-  runes, 10 per pull request, and quoted in the message; a pull request whose head is not the
+  runes, 10 per pull request, quoted in a message the user sends and left out of one the server sends under a grant; a pull request whose head is not the
   job's pushed repo is `foreign`. The poller (`ciPoller`, native only: not in a container, where
   the list says `ciAvailable: false` and no summary is shown) reads each unfinished job every 20 s
   to 5 minutes, one read per job at a time, and writes it in one change under `jobs.lock`
@@ -936,7 +936,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   when the agent refuses it; the message is the fixed English text with the numbers, the check
   names and the `gh` commands to read them, never a log. The server sends on its own only under a
   `ci` grant (made in the PWA alone, as every grant), to an agent at rest (idle, no background
-  work), for a set of failures not sent before, never a `foreign` pull request, at most 3 times per
+  work), for a set of failures not sent before, with the pull requests' numbers and the `gh` commands but no check name, never a `foreign` pull request, at most 3 times per
   grant, backing off while the agent refuses (5 tries a set); one `ci` grant per job, a new one
   ends the last. Every send is logged as `audit: ci_sent` (job, pull requests, by: the user, `cli`
   or the grant) and noted on the job (`ci_sent`, `ci_failed_send`).

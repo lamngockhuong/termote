@@ -44,8 +44,13 @@ var (
 )
 
 // ciMessage is the message for the failing pull requests of prs (foreign
-// ones too when foreign), or "".
-func ciMessage(prs []jobPR, foreign bool, workRepo string) string {
+// ones too when foreign), or "". withNames names the failed checks: a send
+// the user makes, who saw the names first. A send under a ci grant names
+// none, since a check's name is written by whoever wrote the workflow or
+// the app that posts it, a third party for an upstream repo or an
+// installed app, and would reach the agent with nobody reading it; the
+// agent reads them with gh pr checks.
+func ciMessage(prs []jobPR, foreign, withNames bool, workRepo string) string {
 	var failing []jobPR
 	for _, p := range prs {
 		if p.State == prOpen && p.Checks == ciFail && (foreign || !p.Foreign) {
@@ -63,6 +68,9 @@ func ciMessage(prs []jobPR, foreign bool, workRepo string) string {
 		}
 		var names []string
 		for k, n := range p.Failing {
+			if !withNames {
+				break
+			}
 			if k == ciMessageNames {
 				names = append(names, fmt.Sprintf("(%d more)", len(p.Failing)-k))
 				break
@@ -119,7 +127,7 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 	}
 	text := ""
 	if j.CI != nil {
-		text = ciMessage(j.CI.PRs, !auto, workRepo)
+		text = ciMessage(j.CI.PRs, !auto, !auto, workRepo)
 	}
 	if text == "" {
 		return false, j, errCINothingFailed

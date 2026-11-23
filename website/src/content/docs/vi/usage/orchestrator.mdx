@@ -225,7 +225,8 @@ mọi pull request đã merge hay đóng.
 lỗi, và hai lệnh `gh pr checks` và `gh run view --log-failed` để đọc chúng. Tin này không bao giờ
 chứa log: agent tự đọc log bằng `gh`. Orchestrator làm việc tương tự bằng `termote agents job ci
 <id> --send`, sau khi hỏi bạn. Muốn server tự gửi, hãy cấp cho việc ủy quyền **Gửi check lỗi**: mỗi
-lượt lỗi mới được gửi một lần, lúc agent đang nghỉ, tối đa ba lần, và không bao giờ gửi cho pull
+lượt lỗi mới được gửi một lần, lúc agent đang nghỉ, tối đa ba lần, chỉ gồm số pull request và các
+lệnh để đọc, không kèm tên check vì tên đó có thể do người khác đặt, và không bao giờ gửi cho pull
 request đến từ repo khác. Khi mọi pull request đã merge, phần chi tiết có nút **Đặt là xong**; xoá
 worktree vẫn là việc của bạn.
 
