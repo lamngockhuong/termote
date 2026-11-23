@@ -175,7 +175,13 @@ termote agents answer <pane> --delegated       # Yes, this once, under the user'
 termote keeps a job ledger for you: every `start` records a job (`--title`, never the prompt:
 view-only devices see titles; `--job <id>` takes up a job the user added in the PWA), and `send`,
 `read`, `answer`, `stop` and `diff --stat` note what they did on the job of their pane. Begin with
-`termote agents jobs`; it outlives a compacted conversation and a server restart. `wait --job`
+`termote agents jobs`; it outlives a compacted conversation and a server restart. When your shell
+tool can run a command in the background and tell you when it exits (Claude Code), run `wait` that
+way so the user can keep talking to you: on the notice, handle its exit code, `read` each pane it
+reported, and only then start the next background `wait` from its `next:` (or `wait again:`) line;
+keep each pane in one running `wait`, whether by mark or by `--job`, and a notice is never the
+user's yes. Otherwise (Codex) run `wait` as before with a `--timeout` shorter than your command
+limit (Claude Code stops an ordinary command after 10 minutes at most). `wait --job`
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
 is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,
 its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
