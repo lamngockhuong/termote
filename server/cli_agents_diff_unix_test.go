@@ -139,3 +139,32 @@ func TestAgentsDiffNotRepo(t *testing.T) {
 		t.Errorf("plain dir: %v %s", err, tc.stdout)
 	}
 }
+
+// A status letter is server text like a path: printed without control
+// characters, in --stat and in the full diff.
+func TestAgentsDiffStatusLabelPlain(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("idle")))
+	s.set("GET /api/mux/panes/%1/files/changes", jsonAnswer(changesResponse{Root: "/repo", IsRepo: true,
+		Entries: []changeEntry{{Path: "b.txt", Staged: "M\x1b[2J", Unstaged: "D\u202e"}}}))
+	s.set("GET /api/mux/panes/%1/files/branch", jsonAnswer(branchResponse{Root: "/repo", IsRepo: true, Branch: "feat",
+		Base: "trunk", MergeBase: "abc", Commits: 1, Files: []commitFile{{Path: "a.txt", Status: "M\x1b]0;x\x07"}}}))
+	noChange := jsonAnswer(diffResponse{Root: "/repo", Path: "a.txt"})
+	s.set("GET /api/mux/panes/%1/files/diff", noChange)
+	s.set("GET /api/mux/panes/%1/files/branch/diff", noChange)
+	for _, args := range [][]string{{"diff", "%1", "--stat"}, {"diff", "%1"}} {
+		tc.stdout.Reset()
+		if err := tc.dispatch("agents", args); err != nil {
+			t.Fatalf("%v: %v (%s)", args, err, tc.stderr)
+		}
+		out := tc.stdout.String()
+		if strings.ContainsAny(out, "\x1b\x07\u202e") {
+			t.Errorf("%v printed a control or bidi character:\n%q", args, out)
+		}
+		for _, want := range []string{"M]0;x  a.txt", "staged M[2J  b.txt", "unstaged D  b.txt"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%v misses %q:\n%q", args, want, out)
+			}
+		}
+	}
+}
