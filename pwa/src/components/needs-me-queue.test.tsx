@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPrompt } from '../hooks/use-mux-api'
@@ -119,6 +120,36 @@ describe('NeedsMeQueue', () => {
         name: 'Needs you: Claude Code, w⟨U+202E⟩ / a',
       }),
     ).toBeInTheDocument()
+  })
+
+  it('says how long the agent on top has waited and the job it works on', async () => {
+    render(
+      <NeedsMeQueue
+        cards={[card('a', 1)]}
+        readOnly={false}
+        canAnswer={() => true}
+        onOpen={vi.fn()}
+        now={Date.parse('2026-10-13T09:06:00Z')}
+        jobOf={(id) => (id === 'a' ? 'Fix the lo\u202egin' : undefined)}
+      />,
+    )
+    const queue = screen.getByRole('region', {
+      name: 'Needs you: Claude Code, w / a',
+    })
+    expect(queue).toHaveTextContent('· 5 min ago')
+    expect(queue).toHaveTextContent('Job · Fix the lo⟨U+202E⟩gin')
+    // The answers beside the question on a wide screen
+    const dialog = await within(queue).findByRole('alertdialog')
+    expect(dialog.firstElementChild).toHaveClass('md:grid')
+  })
+
+  it('names no time or job without them', () => {
+    setup([card('a', 1)])
+    const queue = screen.getByRole('region', {
+      name: 'Needs you: Claude Code, w / a',
+    })
+    expect(queue).not.toHaveTextContent('ago')
+    expect(queue).not.toHaveTextContent('Job ·')
   })
 
   it('shows the one waiting longest, and reads only its dialog', async () => {

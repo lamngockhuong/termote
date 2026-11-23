@@ -231,6 +231,10 @@ export function OverviewScreen({
     shown.filter((c) => sectionOf(c.pane.agentStatus) === section).length
   // The job each card's pane works on
   const jobByPane = useMemo(() => jobOfPane(jobs.jobs), [jobs.jobs])
+  const jobTitleOf = useCallback(
+    (paneId: string) => jobByPane.get(paneId)?.title,
+    [jobByPane],
+  )
   // The card asked for takes focus once it is shown (the cards are drawn
   // only when ready), over the title, and keeps an accent border until focus
   // leaves it. A card shown after the user moved on takes nothing.
@@ -563,6 +567,8 @@ export function OverviewScreen({
                       readOnly={readOnly}
                       canAnswer={canAnswer}
                       onOpen={onOpen}
+                      now={now}
+                      jobOf={jobTitleOf}
                     />
                   </>
                 )}

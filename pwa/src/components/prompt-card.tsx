@@ -58,6 +58,9 @@ interface Props {
   onSent?: () => void
   // The server refused with the dialog now on screen (or none)
   onChanged: (prompt: AgentPrompt | null) => void
+  // wide: from a medium screen on, the answers beside the question rather
+  // than under it (the overview's queue, as wide as the page)
+  layout?: 'stack' | 'wide'
 }
 
 export function PromptCard({
@@ -68,6 +71,7 @@ export function PromptCard({
   showView,
   onAnswered,
   onSending,
+  layout = 'stack',
   onSent,
   onChanged,
 }: Props) {
@@ -266,107 +270,122 @@ export function PromptCard({
   }
   const content = (
     <>
-      <div className="min-h-0 space-y-2 overflow-y-auto">
-        {prompt.steps && prompt.steps.length > 0 && (
-          <ol
-            aria-label={t('chat.prompt.questions')}
-            className="flex flex-wrap gap-1.5"
+      <div
+        className={`min-h-0 space-y-2 overflow-y-auto ${
+          layout === 'wide'
+            ? 'md:grid md:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] md:items-start md:gap-x-5 md:space-y-0'
+            : ''
+        }`}
+      >
+        {/* The question */}
+        <div className="min-w-0 space-y-2">
+          {prompt.steps && prompt.steps.length > 0 && (
+            <ol
+              aria-label={t('chat.prompt.questions')}
+              className="flex flex-wrap gap-1.5"
+            >
+              {prompt.steps.map((s, i) => (
+                <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
+                  key={i}
+                  aria-current={s.current ? 'step' : undefined}
+                  className="flex"
+                >
+                  {answerable && !s.current ? (
+                    // Another tab: the server moves there one arrow at a time
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => answer({ step: i })}
+                      className={`${STEP} border-border text-fg-muted hover:text-fg disabled:opacity-50`}
+                    >
+                      <StepLabel step={s} />
+                    </button>
+                  ) : (
+                    <span
+                      className={`${STEP} ${s.current ? 'border-accent text-fg' : 'border-border text-fg-muted'}`}
+                    >
+                      <StepLabel step={s} />
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+          <p id={titleId} className="font-medium text-fg">
+            {visibleUnsafe(title) ||
+              t('chat.prompt.asking', { agent: agentLabel(agentName) })}
+          </p>
+          {prompt.body && (
+            // A new body is read from its start, shut again
+            <PromptBody
+              key={prompt.body}
+              id={bodyId}
+              body={prompt.body}
+              onSeen={setBodySeen}
+            />
+          )}
+          {prompt.autoBlock && (
+            <p className="text-[12px] text-warning">
+              {t('chat.prompt.autoBlock')}
+            </p>
+          )}
+          {locked && answerable && (
+            <p id={lockedId} className="text-[12px] text-warning">
+              {t('chat.prompt.readWhole')}
+            </p>
+          )}
+          <p
+            aria-live="polite"
+            className="text-[13px] text-warning empty:hidden"
           >
-            {prompt.steps.map((s, i) => (
-              <li
-                // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
-                key={i}
-                aria-current={s.current ? 'step' : undefined}
-                className="flex"
-              >
-                {answerable && !s.current ? (
-                  // Another tab: the server moves there one arrow at a time
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => answer({ step: i })}
-                    className={`${STEP} border-border text-fg-muted hover:text-fg disabled:opacity-50`}
-                  >
-                    <StepLabel step={s} />
-                  </button>
-                ) : (
-                  <span
-                    className={`${STEP} ${s.current ? 'border-accent text-fg' : 'border-border text-fg-muted'}`}
-                  >
-                    <StepLabel step={s} />
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-        <p id={titleId} className="font-medium text-fg">
-          {visibleUnsafe(title) ||
-            t('chat.prompt.asking', { agent: agentLabel(agentName) })}
-        </p>
-        {prompt.body && (
-          // A new body is read from its start, shut again
-          <PromptBody
-            key={prompt.body}
-            id={bodyId}
-            body={prompt.body}
-            onSeen={setBodySeen}
-          />
-        )}
-        {prompt.autoBlock && (
-          <p className="text-[12px] text-warning">
-            {t('chat.prompt.autoBlock')}
+            {notice ??
+              (prompt.kind === 'unsupported' && !readOnly
+                ? t('chat.prompt.inTerminal')
+                : '')}
           </p>
-        )}
-        {locked && answerable && (
-          <p id={lockedId} className="text-[12px] text-warning">
-            {t('chat.prompt.readWhole')}
-          </p>
-        )}
-        <p aria-live="polite" className="text-[13px] text-warning empty:hidden">
-          {notice ??
-            (prompt.kind === 'unsupported' && !readOnly
-              ? t('chat.prompt.inTerminal')
-              : '')}
-        </p>
-        {prompt.fields && !answerable && (
-          // A form shown only: what it asks
-          <ul className="list-inside list-disc text-[13px] text-fg-muted">
-            {prompt.fields.map((f) => (
-              <li key={f.key}>{visibleUnsafe(f.title || f.key)}</li>
-            ))}
-          </ul>
-        )}
-        {answerable && prompt.fields && (
-          <PromptForm
-            // Another form, or the same asked again, starts afresh
-            key={prompt.promptId}
-            fields={prompt.fields}
-            busy={busy}
-            onSend={(a) => answer({ answer: a })}
-          />
-        )}
-        {answerable && !prompt.fields && (
-          <div className="flex flex-col gap-1.5">
-            {/* "Type something" sits where the terminal draws it, above
+          {prompt.fields && !answerable && (
+            // A form shown only: what it asks
+            <ul className="list-inside list-disc text-[13px] text-fg-muted">
+              {prompt.fields.map((f) => (
+                <li key={f.key}>{visibleUnsafe(f.title || f.key)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {/* The answers: under the question, or beside it when wide */}
+        <div className="min-w-0 empty:hidden">
+          {answerable && prompt.fields && (
+            <PromptForm
+              // Another form, or the same asked again, starts afresh
+              key={prompt.promptId}
+              fields={prompt.fields}
+              busy={busy}
+              onSend={(a) => answer({ answer: a })}
+            />
+          )}
+          {answerable && !prompt.fields && (
+            <div className="flex flex-col gap-1.5">
+              {/* "Type something" sits where the terminal draws it, above
               "Chat about this" */}
-            {prompt.options
-              ?.filter((o) => !free || o.index < free.index)
-              .map(option)}
-            {free && other(free)}
-            {free &&
-              prompt.options?.filter((o) => o.index > free.index).map(option)}
-            {multi && (
-              <Button
-                variant="primary"
-                disabled={busy}
-                onClick={() => answer('next')}
-              >
-                {t('common.next')}
-              </Button>
-            )}
-          </div>
-        )}
+              {prompt.options
+                ?.filter((o) => !free || o.index < free.index)
+                .map(option)}
+              {free && other(free)}
+              {free &&
+                prompt.options?.filter((o) => o.index > free.index).map(option)}
+              {multi && (
+                <Button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => answer('next')}
+                >
+                  {t('common.next')}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {answerable ? (
         <div className="flex shrink-0 gap-2">
