@@ -71,6 +71,11 @@ type ciJobState struct {
 	checked time.Time
 	// running is closed when the job's read in flight ends.
 	running chan struct{}
+	// sendKey, sendTries, sendNext: the set of failures an automatic send
+	// tries, how often the agent refused it, and when to try again.
+	sendKey   string
+	sendTries int
+	sendNext  time.Time
 }
 
 type ciDefault struct {
@@ -81,6 +86,7 @@ type ciDefault struct {
 func newCIPoller(a *agentAPI, files *filesAPI, dir string) *ciPoller {
 	p := &ciPoller{a: a, gh: newGhRunner(dir), git: files.git, resolve: files.roots.resolve, now: time.Now,
 		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}}
+	p.afterRead = p.autoSend
 	return p
 }
 

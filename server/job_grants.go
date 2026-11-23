@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -153,6 +154,14 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 			}
 			g.Dir = j.Worktree.Dir
 		}
+		if g.Kind == "ci" {
+			// One ci grant per job: a new one ends the one before.
+			for i := range j.Grants {
+				if j.Grants[i].Kind == "ci" && j.Grants[i].Revoked == "" {
+					j.Grants[i].Revoked = now.UTC().Format(activityTimeFormat)
+				}
+			}
+		}
 		j.Grants = append(j.Grants, g)
 		trimGrants(j, now)
 		a.jobs.addEvent(j, "grant", grantText(g))
@@ -181,12 +190,12 @@ func newGrant(in grantInput, now time.Time) (grant, error) {
 			return grant{}, invalidGrant(code)
 		}
 		g.Prefix = p
-	case "edit":
+	case "edit", "ci":
 		if in.Prefix != "" {
 			return grant{}, invalidGrant("chars")
 		}
 	default:
-		return grant{}, invalidJob("a grant is to run a command (bash) or edit files (edit)")
+		return grant{}, invalidJob("a grant is to run a command (bash), edit files (edit) or send failed checks (ci)")
 	}
 	minutes := in.Minutes
 	if minutes == 0 {
@@ -216,8 +225,11 @@ func trimGrants(j *job, now time.Time) {
 }
 
 func grantText(g grant) string {
-	if g.Kind == "bash" {
+	switch g.Kind {
+	case "bash":
 		return "run " + g.Prefix
+	case "ci":
+		return fmt.Sprintf("send failed checks to the agent (up to %d times)", maxCIRounds)
 	}
 	return "edit files in the worktree"
 }

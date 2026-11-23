@@ -25,6 +25,15 @@ export default {
     'Another branch is named like a folder of this one, or this one of it (test and test/x cannot both exist). Pick another name',
   'errors.busy': 'Another change is still running. Try again',
   'errors.changed': 'It changed since it was read. Look again',
+  'errors.ci_busy': 'Too many GitHub reads right now. Try again in a minute',
+  'errors.ci_failed': 'gh on the server could not read the pull requests',
+  'errors.ci_gh_auth':
+    'gh is not signed in on the server: run gh auth login there',
+  'errors.ci_gh_missing': 'gh, the GitHub CLI, is not installed on the server',
+  'errors.ci_no_repo':
+    "The job's branch is not on a GitHub repository gh is signed in to",
+  'errors.ci_nothing_failed': "No check of the job's pull requests failed",
+  'errors.ci_unavailable': 'This server does not follow pull requests',
   'errors.cli_only': 'Only the termote CLI on that machine can do this',
   'errors.conflict': 'It was changed somewhere else',
   'errors.create_failed': 'Git could not create the worktree',

@@ -3227,6 +3227,8 @@ export interface Job {
   ci?: JobCI
   // What the card shows of them (every client)
   ciSummary?: JobCISummary
+  // When they were last read or tried (full clients)
+  ciChecked?: string
   grants?: JobGrant[]
   events?: JobEvent[]
   created?: string
@@ -3241,6 +3243,8 @@ export interface JobList {
   // This browser may give and end grants: signed in with the password or a
   // full paired device (never without sign-in, nor with Basic auth)
   canGrant: boolean
+  // The server follows the jobs' pull requests (never in a container)
+  ciAvailable: boolean
 }
 
 async function jobRequest(
@@ -3263,6 +3267,7 @@ export async function fetchJobs(): Promise<JobList> {
     readOnly: body.readOnly === true,
     serverNow: typeof body.serverNow === 'string' ? body.serverNow : '',
     canGrant: body.canGrant === true,
+    ciAvailable: body.ciAvailable === true,
   }
 }
 
@@ -3328,6 +3333,29 @@ export async function createGrant(
     )
   ).job
 }
+
+// Reads the job's pull requests again (refresh), answered once that read
+// ended, its ci_* error on the job; or sends their failed checks to the
+// job's agent (send), queued when the agent was working. Throws
+// RequestError (ci_nothing_failed, job_no_agent, ci_unavailable, ci_busy,
+// input_has_draft...).
+export async function jobCI(
+  id: string,
+  action: 'refresh' | 'send',
+): Promise<{ job: Job; queued: boolean }> {
+  const res = await fetch(`${apiBase()}/jobs/${encodeURIComponent(id)}/ci`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+    signal: AbortSignal.timeout(CI_REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return { job: body.job, queued: body.queued === true }
+}
+
+// A refresh runs several gh calls on the server, a send pastes a message
+export const CI_REQUEST_TIMEOUT_MS = 60_000
 
 // Ends a grant at once. Throws RequestError (grant_not_found,
 // grant_pwa_only).

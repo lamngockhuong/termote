@@ -1,4 +1,11 @@
-import type { Job, JobGrant, JobLive } from '../hooks/use-mux-api'
+import type {
+  Job,
+  JobCI,
+  JobCISummary,
+  JobGrant,
+  JobLive,
+  JobPR,
+} from '../hooks/use-mux-api'
 import { grantPrefixProblem } from '../utils/grant-prefix'
 import { jobFinished } from '../utils/jobs'
 import type { DemoJob } from './fixtures/jobs'
@@ -32,9 +39,48 @@ function liveOf(state: DemoState, j: DemoJob): JobLive {
   return live
 }
 
+// What a card shows of the pull requests, as server/job_pr.go's ciSummary
+function ciSummary(ci?: JobCI): JobCISummary | undefined {
+  const prs = ci?.prs ?? []
+  if (prs.length === 0) return undefined
+  const rank = (p: JobPR): [number, JobCISummary['worst']] => {
+    if (p.state !== 'open') return [0, 'merged']
+    if (p.draft) return [1, 'draft']
+    if (p.checks === 'fail') return [4, 'fail']
+    if (p.checks === 'pending') return [3, 'pending']
+    return [2, 'open']
+  }
+  let best = -1
+  let worst: JobCISummary['worst']
+  for (const p of prs) {
+    const [r, w] = rank(p)
+    if (r > best) [best, worst] = [r, w]
+  }
+  return {
+    worst,
+    count: prs.length,
+    allMerged: prs.every((p) => p.state !== 'open') || undefined,
+    numbers: prs.map((p) => p.number),
+  }
+}
+
+// The failing set's key, as server/job_pr.go's ciFailKey
+function ciFailKey(prs: JobPR[]): string {
+  const parts = prs
+    .filter((p) => p.state === 'open' && p.checks === 'fail')
+    .map((p) => `${p.number}@${p.head ?? ''}`)
+    .sort()
+  return parts.length ? `fail:${parts.join(',')}` : ''
+}
+
 function view(state: DemoState, j: DemoJob): Job {
   const { unread: _, ...job } = j
-  return { ...job, live: liveOf(state, j) }
+  return {
+    ...job,
+    live: liveOf(state, j),
+    ciSummary: ciSummary(j.ci),
+    ciChecked: j.ci ? iso(state, -40_000) : undefined,
+  }
 }
 
 const find = (req: DemoRequest) =>
@@ -65,6 +111,7 @@ const list: Handler = (req) => {
     readOnly: false,
     serverNow: iso(req.state),
     canGrant: true,
+    ciAvailable: true,
   })
 }
 
@@ -115,6 +162,28 @@ const update: Handler = (req) => {
       event(req, j, 'agent', j.agent.ref)
     }
   }
+  const add: unknown[] = Array.isArray(b.addPrs) ? b.addPrs : []
+  const drop: unknown[] = Array.isArray(b.removePrs) ? b.removePrs : []
+  if (
+    [...add, ...drop].some(
+      (n) => !Number.isInteger(n) || (n as number) < 1 || (n as number) > 1e9,
+    )
+  )
+    return invalid('a pull request number is 1 or more')
+  if (add.length || drop.length) {
+    j.ci ??= {}
+    const ci = j.ci
+    let pins = (ci.pins ?? []).filter((n) => !drop.includes(n))
+    for (const n of add as number[]) if (!pins.includes(n)) pins = [...pins, n]
+    if (pins.length > 10)
+      return invalid('up to 10 pull requests can be attached')
+    ci.pins = pins
+    ci.prs = (ci.prs ?? []).filter((p) => !p.pinned || pins.includes(p.number))
+    if (add.length)
+      event(req, j, 'pr', `pinned ${add.map((n) => `#${n}`).join(', ')}`)
+    if (drop.length)
+      event(req, j, 'pr', `unpinned ${drop.map((n) => `#${n}`).join(', ')}`)
+  }
   if (b.title !== undefined) j.title = b.title.trim()
   if (typeof b.prompt === 'string') j.prompt = b.prompt
   if (typeof b.note === 'string') {
@@ -142,11 +211,13 @@ const grant: Handler = (req) => {
   const j = find(req)
   if (!j) return notFound()
   const kind = req.body?.kind
-  if (kind !== 'bash' && kind !== 'edit')
-    return invalid('a grant is to run a command (bash) or edit files (edit)')
+  if (kind !== 'bash' && kind !== 'edit' && kind !== 'ci')
+    return invalid(
+      'a grant is to run a command (bash), edit files (edit) or send failed checks (ci)',
+    )
   const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : ''
   const problem = kind === 'bash' ? grantPrefixProblem(prefix) : null
-  if (problem || (kind === 'edit' && prefix))
+  if (problem || (kind !== 'bash' && prefix))
     return fail(400, 'grant_invalid', 'the command prefix is refused')
   const minutes = req.body?.minutes ?? MOST_MINUTES
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > MOST_MINUTES)
@@ -166,8 +237,20 @@ const grant: Handler = (req) => {
     created: iso(req.state),
     expires: iso(req.state, minutes * 60_000),
   }
+  if (kind === 'ci')
+    for (const old of j.grants ?? [])
+      if (old.kind === 'ci') old.revoked ??= iso(req.state)
   j.grants = [...(j.grants ?? []), g]
-  event(req, j, 'grant', kind === 'bash' ? `run ${g.prefix}` : 'edit files')
+  event(
+    req,
+    j,
+    'grant',
+    kind === 'bash'
+      ? `run ${g.prefix}`
+      : kind === 'ci'
+        ? 'send failed checks to the agent (up to 3 times)'
+        : 'edit files',
+  )
   return json({ job: view(req.state, j), grant: g.id }, 201)
 }
 
@@ -183,6 +266,33 @@ const revoke: Handler = (req) => {
   return json({ job: view(req.state, j) })
 }
 
+// The job's pull requests read again, or its failed checks sent to its
+// agent, as server/job_ci_send.go's handleJobCI
+const ci: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  const action = req.body?.action
+  if (action === 'refresh') return json({ job: view(req.state, j) })
+  if (action !== 'send') return invalid('action is refresh or send')
+  const key = ciFailKey(j.ci?.prs ?? [])
+  if (!j.ci || !key)
+    return fail(
+      409,
+      'ci_nothing_failed',
+      "no check of the job's pull requests failed",
+    )
+  if (!j.agent || liveOf(req.state, j).status === 'gone')
+    return fail(409, 'job_no_agent', "the job's agent does not run")
+  j.ci.sent = key
+  const prs = key
+    .slice(5)
+    .split(',')
+    .map((p) => `#${p.split('@')[0]}`)
+    .join(', ')
+  event(req, j, 'ci_sent', `sent CI failure of ${prs}`)
+  return json({ job: view(req.state, j), queued: false })
+}
+
 export const JOB_ROUTES: Record<string, Handler> = {
   'GET /jobs': list,
   'POST /jobs': create,
@@ -190,4 +300,5 @@ export const JOB_ROUTES: Record<string, Handler> = {
   'DELETE /jobs/{id}': remove,
   'POST /jobs/{id}/grants': grant,
   'DELETE /jobs/{id}/grants/{gid}': revoke,
+  'POST /jobs/{id}/ci': ci,
 }

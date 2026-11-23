@@ -1,6 +1,7 @@
 // The demo's plan: three jobs an orchestrator handed out, one running in
 // web's Claude Code with a grant to run its tests, one done in acme-api's
-// with its turn not read yet, and one waiting for the user's review.
+// with its turn not read yet, and one waiting for the user's review whose
+// pull request's docs check failed.
 import type { Job } from '../../hooks/use-mux-api'
 import { ACME_ROOT, DEMO_HOME } from './workspace'
 
@@ -85,6 +86,24 @@ export function demoJobs(now: number): DemoJob[] {
       createdBy: 'claude',
       workspace: 'w1',
       diff: { commits: 3, files: 5, head: '9b8c7d6', at: at(90) },
+      // Its pull request, whose docs check failed
+      ci: {
+        repo: 'github.com/acme/api',
+        push: 'github.com/acme/api',
+        prs: [
+          {
+            number: 128,
+            repo: 'github.com/acme/api',
+            state: 'open',
+            checks: 'fail',
+            failing: ['docs-links'],
+            failRun: 7351,
+            head: '9b8c7d6e5f40',
+            url: 'https://github.com/acme/api/pull/128',
+          },
+        ],
+        notified: 'fail:128@9b8c7d6e5f40',
+      },
       worktree: {
         branch: 'docs/api-v2',
         base: 'main',

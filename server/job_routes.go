@@ -126,6 +126,7 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs", a.handleJobs)
 	mux.HandleFunc("/api/mux/jobs/{id}", a.handleJob)
 	mux.HandleFunc("/api/mux/jobs/{id}/event", a.handleJobEvent)
+	mux.HandleFunc("/api/mux/jobs/{id}/ci", a.handleJobCI)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
 }
