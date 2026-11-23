@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"slices"
 	"time"
@@ -107,14 +108,57 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	if !found {
 		return startTarget{}, worktreeStays(errors.New("the worktree is not in the list after it was made"), b, "")
 	}
-	t := startTarget{dir: wt.Path, used: !fresh, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
+	t := startTarget{dir: wt.Path, used: !fresh, worktree: true, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
 	p, err := c.worktreePane(port, groupID, wt.Path)
 	if err != nil {
 		return startTarget{}, t.note(err)
 	}
+	// Run again while the agent a run before started there still runs:
+	// the task goes to that agent, not to a second one.
+	if !fresh && p.pane.Agent != nil {
+		return startTarget{}, t.note(agentStillRuns(p))
+	}
 	t.paneID = p.pane.ID
 	t.where = fmt.Sprintf("workspace %s, branch %s", plainText(p.group.Name), b)
 	return t, nil
+}
+
+// agentStillRuns says that the worktree's first pane p already runs this
+// task's agent, and how to give it the task.
+func agentStillRuns(p snapPane) error {
+	id := plainText(p.pane.ID)
+	return fmt.Errorf("the agent of this task still runs in pane %s (%s, %s); nothing was started: give it the task there: termote agents send %s -",
+		id, plainText(p.ref()), plainText(p.pane.Agent.Name), id)
+}
+
+// worktreeLockfiles are the lockfiles whose dependencies a new worktree
+// does not have yet (no node_modules), with the command that installs them.
+var worktreeLockfiles = []struct{ file, install string }{
+	{"pnpm-lock.yaml", "pnpm install"},
+	{"package-lock.json", "npm install"},
+	{"yarn.lock", "yarn install"},
+	{"bun.lock", "bun install"},
+	{"bun.lockb", "bun install"},
+}
+
+// worktreeDepsHint is the line that reminds the caller to install the
+// dependencies of the worktree at dir: its git hooks (lefthook, husky) and
+// scripts are skipped until then. Empty when dir has no lockfile, or has
+// node_modules already.
+func worktreeDepsHint(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "node_modules")); err == nil {
+		return ""
+	}
+	for _, l := range worktreeLockfiles {
+		if st, err := os.Lstat(filepath.Join(dir, l.file)); err == nil && st.Mode().IsRegular() {
+			return fmt.Sprintf("The worktree has no node_modules yet, so its git hooks and scripts are skipped: install its dependencies there first (%s in %s)",
+				l.install, plainText(dir))
+		}
+	}
+	return ""
 }
 
 // worktreeStays is err of a start that failed once branch's worktree exists,

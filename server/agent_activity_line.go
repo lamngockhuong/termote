@@ -29,7 +29,10 @@ type AgentActivity struct {
 	Tokens string `json:"tokens,omitempty"`
 	// Background: set only once the turn is done, what it left running as
 	// the line writes it ("2 shells", "1 shell, 1 monitor"); Label is then
-	// the turn's past-tense word and Elapsed its length
+	// the turn's past-tense word and Elapsed its length. Also set while the
+	// answer is written and the turn only waits on background agents
+	// ("1 background agent"; Label "Waiting", no Elapsed): the agent works
+	// on nothing Esc would stop
 	Background string `json:"background,omitempty"`
 	// Retry: the provider refused and the agent tries again (OpenCode)
 	Retry *ActivityRetry `json:"retry,omitempty"`
@@ -47,8 +50,14 @@ const activityMaxText = 80
 
 // claudeActivityRows is how far above the input box's top border the working
 // line is looked for: it sits right on it, or over a blank row and the
-// effort row (Claude Code 2.1.312).
-const claudeActivityRows = 4
+// effort row (Claude Code 2.1.312). claudeTodoRows: each indented row with
+// text under it (a todo list, one row per item) moves that window up by
+// one, this many at most. Only blank and indented rows are passed over: the
+// first row at column 0 decides, so an answer's line is never taken for it.
+const (
+	claudeActivityRows = 4
+	claudeTodoRows     = 20
+)
 
 // claudeRecapRows: the recap Claude Code (2.1.325) writes under the line
 // that ends a turn ("※ recap: …", its wrapped rows indented) is looked for
@@ -65,6 +74,11 @@ var (
 	// still running", the line that ends a turn while background tasks it
 	// started still run (Claude Code 2.1.312). Its items are read apart.
 	claudeDoneRe = regexp.MustCompile(`^[·✢*✶✻✽] (\S.*?) for ([0-9hms ]+?)((?: · .+)*)$`)
+	// claudeWaitingRe: "✻ Waiting for 1 background agent to finish", the
+	// line under an answer while the turn waits on background agents it
+	// started (Claude Code 2.1.330): the session file still says busy, and
+	// Esc stops nothing.
+	claudeWaitingRe = regexp.MustCompile(`^[·✢*✶✻✽] (Waiting) for ([0-9]+ background .+?) to finish$`)
 	// codexActivityRe: "• Working (3s • esc to interrupt) · Running hooks"
 	codexActivityRe = regexp.MustCompile(`^• (.+?) \(([0-9hms ]+) • esc to interrupt\)(?: · (.+))?$`)
 	// durationRe: "0s", "1m 14s", "1h 2m 3s"
@@ -79,13 +93,21 @@ var (
 // top border, nearest first.
 func claudeActivity(above []screenLine) *AgentActivity {
 	above = aboveRecap(above)
-	for i := len(above) - 1; i >= 0 && i >= len(above)-claudeActivityRows; i-- {
+	limit := claudeActivityRows
+	for i := len(above) - 1; i >= 0 && i >= len(above)-limit; i-- {
 		if !atColumnZero(above[i]) {
-			continue // blank, or the right-aligned effort row
+			// blank, the right-aligned effort row, or a todo item
+			if strings.TrimSpace(above[i].text) != "" && limit < claudeActivityRows+claudeTodoRows {
+				limit++
+			}
+			continue
 		}
 		line := strings.TrimRight(above[i].text, " ")
 		m := claudeActivityRe.FindStringSubmatch(line)
 		if m == nil {
+			if w := claudeWaitingRe.FindStringSubmatch(line); w != nil {
+				return &AgentActivity{Label: w[1], Background: clipActivity(w[2])}
+			}
 			return claudeDone(line)
 		}
 		a := &AgentActivity{Label: clipActivity(m[1])}

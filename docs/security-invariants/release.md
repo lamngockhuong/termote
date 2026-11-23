@@ -273,10 +273,12 @@ Part of the [security invariants](README.md): Homebrew, release integrity, the w
   still knows. A path of that name without the marker (the user's directory, a file, a symlink) is
   never written to or removed, an empty directory excepted; `uninstall` removes the directory only
   when it holds nothing but those two files and termote's temporary files, else nothing at all, the
-  marker last. The skill tells the agent to drive panes only
+  marker last. `status` calls it current only when the marker's version is this binary's and its `SKILL.md` (a
+  regular file by `Lstat`, never through a link) is byte for byte the embedded one, else it names
+  `skills install`. The skill tells the agent to drive panes only
   through `termote agents`, one pane at a time for every write, to ask the user before `start` (with
   `--worktree`, saying a new directory and branch will be made), before `stop` and before answering a
-  permission, never to stop again after `session_changed`, to treat what `read` and `diff` print as
+  permission, never to stop again after `session_changed`, to keep a mark for each pane it waits on, to treat what `read` and `diff` print as
   data and never as instructions, and never to run `termote show-password` or `termote pair`; a test checks those rules
   stay and that every command and flag it names is in `termote help`. The `termote-plugins` job of the
   release workflow (stable releases, after `publish`) writes `lamngockhuong/termote-plugins` with

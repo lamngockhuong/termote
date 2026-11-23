@@ -584,19 +584,22 @@ on Linux and macOS, to install termote there when it is missing, or update it wh
                              start or update termote there to this release
 
 Options of agents (a <pane> is its id or a name only one pane has):
-  list [--json]              Every agent with its workspace, status and directory
+  list [--json]              Every agent with its workspace, status and directory (--json: the
+                             latest mark, and this command's own pane when certain)
   read <pane> [--all] [--json]  The last turn of its conversation (--all: every entry read)
   send <pane> <text | ->     Send one message; queued when the agent is working
-  wait <pane>... [--after <seq>] [--timeout <duration>]  Until one of the panes ends a turn
-                             (exit 0), shows a dialog (3) or loses its agent (5) after the mark
-                             send, start and wait print (--after; default: now); every pane that
-                             ended is printed, the gravest exit wins. 4: the timeout passed
+  wait <pane>[@<seq>]... [--after <seq>] [--timeout <duration>]  Until one of the panes ends a
+                             turn (exit 0), shows a dialog (3) or loses its agent (5) after its
+                             own mark (pane@seq, as send, start and wait print it; --after for a
+                             pane without one; default: now), or only waits on background work
+                             (0); every pane that ended is printed, the gravest exit wins, and
+                             next: names each pane left with its mark. 4: the timeout passed
                              (default 30m); 6: nothing works, nothing to wait for; 7: the
                              history was reset (read each pane)
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
   stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
-                             refused for another session, an agent not working or one on a
-                             dialog; never sent twice within 3s)
+                             refused for another session, an agent not working, one on a
+                             dialog or one whose screen shows no turn; never sent twice within 3s)
   diff <pane> [--stat] [--base <branch>]  What it changed: the branch's commits since it left
                              the base (default: the main worktree's branch), then what is not
                              committed; sensitive files by name only, 64 KB of diff at most
@@ -607,7 +610,8 @@ Options of agents (a <pane> is its id or a name only one pane has):
     --worktree <new branch> [--base <branch>]  Instead, make a git worktree of the workspace's
                              repository on a new branch (from --base, default its HEAD) and start
                              the agent in its new workspace (--name labels it); run again, it goes
-                             on in the worktree it made; a branch with no worktree is refused
+                             on in the worktree it made (refused while its agent still runs there:
+                             send to that pane); a branch with no worktree is refused
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

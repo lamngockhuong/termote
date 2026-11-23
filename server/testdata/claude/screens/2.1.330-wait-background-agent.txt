@@ -1,0 +1,50 @@
+
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude Code[0m [38;5;246mv2.1.330[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku 5.5 · Claude Team[39m
+[38;5;174m ▝▝   ▝▝ [39m  [38;5;246m/tmp/claude-1000/ork/repo[39m
+
+  Fable 5.2 is here for your longest and toughest coding tasks. It draws down usage faster than Opus 5.5. Switch with [38;5;153m/model[39m.
+
+[38;5;246m●[39m [38;5;246mYour organization may apply global configuration to Claude Code. These settings are centrally managed by your IT administrator.[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mUse the Agent tool with run_in_background set to true to launch one general-purpose subagent whose task is: run the Bash command "sleep 150" and then answer "bg done". Do not wait for it. Right [39m
+  [38;5;231mafter launching it, reply with the single word "launched" and end your turn.[39m
+
+[38;5;114m[49m●[39m [1mAgent[0m(Run sleep 150 in background)
+[38;5;246m  ⎿  [39mBackgrounded agent[38;5;246m (↓ to manage · ctrl+o to expand)[39m
+
+[38;5;231m●[39m launched
+
+[38;5;246m✻[39m [38;5;246mWaiting for [1m1[0m[38;5;246m background agent to finish[39m
+
+[38;5;114m●[39m Agent "Run sleep 150 in background" is waiting on its own background work[38;5;246m · 5s[39m
+
+[38;5;231m●[39m The background agent replied "bg done," but its report is interim. It says the foreground [38;5;153msleep 150[39m was blocked by the harness, so it ran the sleep as a background command (ID [38;5;153mbdkswi9up[39m) that had
+  not finished when the agent reported. It will notify again when that completes.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 9s · done 2:59 AM[39m
+
+[38;5;114m●[39m Agent "Run sleep 150 in background" finished[38;5;246m · 2m 35s[39m
+
+[38;5;231m●[39m The background [38;5;153msleep 150[39m finished with exit code 0, so the agent's work is complete.
+
+[38;5;246m✻[39m [38;5;246mBaked for 0s · done 3:02 AM[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mNew task. Use the Agent tool with run_in_background set to true to launch one general-purpose subagent with this task: run the Bash command python3 -c "import time; time.sleep(100)" in the [39m
+  [38;5;231mforeground with a timeout of 200000 ms (not in the background), then answer "bg2 done". Do not wait for it. Right after launching it, reply with the single word "launched2" and end your turn.[39m
+
+[38;5;114m[49m●[39m [1mAgent[0m(Run python sleep 100 in foreground)
+[38;5;246m  ⎿  [39mBackgrounded agent[38;5;246m (↓ to manage · ctrl+o to expand)[39m
+
+[38;5;231m●[39m launched2
+
+[38;5;246m✻[39m [38;5;246mWaiting for [1m1[0m[38;5;246m background agent to finish[39m
+
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle) · ↓ to manage[39m
+
+  [1m● main[0m
+  [38;5;246m◯ general-purpose[39m  [38;5;246mSleeping 100 seconds in foreground[39m                                                                                                                        [38;5;246m1m 27s · ↓ 30.2k tokens[39m

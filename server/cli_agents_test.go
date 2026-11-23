@@ -166,7 +166,11 @@ func TestWaitVerdict(t *testing.T) {
 		}
 		return Snapshot{Groups: []Group{{ID: "w", Tabs: []Tab{{ID: "w:0", Panes: panes}}}}}
 	}
-	ev := func(id, from, to string) activityEvent { return activityEvent{Key: id, PaneID: id, From: from, To: to} }
+	seq := uint64(0)
+	ev := func(id, from, to string) activityEvent {
+		seq++
+		return activityEvent{Seq: seq, Key: id, PaneID: id, From: from, To: to}
+	}
 	ids := []string{"%1", "%2", "%3"}
 	for _, tc := range []struct {
 		name   string
@@ -191,10 +195,19 @@ func TestWaitVerdict(t *testing.T) {
 		{"another pane's change", []activityEvent{ev("%9", "working", "idle")},
 			map[string]string{"%1": "working", "%2": "working", "%3": "working"}, map[string]waitEnd{}},
 	} {
-		got := waitVerdict(tc.events, ids, snap(tc.now))
+		got := waitVerdict(tc.events, ids, map[string]uint64{}, snap(tc.now))
 		if !maps.Equal(got, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
 		}
+	}
+	// Each pane counts the changes after its own mark only: %1 ended at 2,
+	// after its mark 1 and before %2's mark 3, which a send to %2 printed;
+	// %2's turn that ended at 2 too is before its mark.
+	events := []activityEvent{{Seq: 2, Key: "%1", From: "working", To: "done"}, {Seq: 2, Key: "%2", From: "working", To: "idle"}}
+	got := waitVerdict(events, []string{"%1", "%2"}, map[string]uint64{"%1": 1, "%2": 3},
+		snap(map[string]string{"%1": "done", "%2": "working"}))
+	if !maps.Equal(got, map[string]waitEnd{"%1": waitDone}) {
+		t.Errorf("own marks: %v", got)
 	}
 	// A pane whose id is its tab's (tmux without pane ids) is followed by
 	// its tab's key: after a move its id is another tab's old one.
@@ -202,8 +215,8 @@ func TestWaitVerdict(t *testing.T) {
 		{ID: "w:0", Key: "@13", Panes: []Pane{{ID: "w:0", Agent: &AgentInfo{Name: "claude", Status: "working"}}}},
 		{ID: "w:1", Key: "@12", Panes: []Pane{{ID: "w:1", Agent: &AgentInfo{Name: "claude", Status: "done"}}}},
 	}}}}
-	events := []activityEvent{{Key: "@12", PaneID: "w:0", From: "working", To: "done"}}
-	if got := waitVerdict(events, []string{"@12", "@13"}, moved); !maps.Equal(got, map[string]waitEnd{"@12": waitDone}) {
+	events = []activityEvent{{Seq: 1, Key: "@12", PaneID: "w:0", From: "working", To: "done"}}
+	if got := waitVerdict(events, []string{"@12", "@13"}, map[string]uint64{}, moved); !maps.Equal(got, map[string]waitEnd{"@12": waitDone}) {
 		t.Errorf("moved tab: %v", got)
 	}
 	for end, code := range map[waitEnd]int{waitDone: 0, waitDialog: agentsExitDialog, waitGone: agentsExitGone} {
@@ -250,5 +263,49 @@ func TestClipDiff(t *testing.T) {
 	}
 	if got := clipDiff("(binary)\n", 1); got != "(binary)\n" {
 		t.Errorf("note: %q", got)
+	}
+}
+
+// The pane a command runs in is named only when its backend's variables
+// match the snapshot of the server reached.
+func TestSelfPaneID(t *testing.T) {
+	agent := &AgentInfo{Name: "claude", Status: "working"}
+	herdr := Snapshot{Backend: "herdr", Groups: []Group{{ID: "w1", Tabs: []Tab{{ID: "w1:t1", Panes: []Pane{{ID: "w1:p1", Agent: agent}, {ID: "w1:p2"}}}}}}}
+	zg := zellijGroupID("main")
+	zellij := Snapshot{Backend: "zellij", Groups: []Group{{ID: zg, Name: "main", Tabs: []Tab{{ID: zg + ":t0", Panes: []Pane{{ID: zellijPaneID("main", 3), Agent: agent}}}}}}}
+	tmux := Snapshot{Backend: "tmux", Groups: []Group{{ID: "termote", Name: "termote", Tabs: []Tab{{ID: "termote:1", Key: "@4", Panes: []Pane{{ID: "%7", Agent: agent}}}}}}}
+	for _, tc := range []struct {
+		name string
+		goos string
+		snap Snapshot
+		env  map[string]string
+		tmux string // what tmux display-message prints, "" for a failure
+		want string
+	}{
+		{"herdr", "linux", herdr, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t1", "HERDR_PANE_ID": "w1:p1"}, "", "w1:p1"},
+		{"herdr, another tab", "linux", herdr, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t9", "HERDR_PANE_ID": "w1:p1"}, "", ""},
+		{"herdr, no tab", "linux", herdr, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": "w1:p1"}, "", ""},
+		{"herdr variables, tmux server", "linux", tmux, map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_TAB_ID": "w1:t1", "HERDR_PANE_ID": "w1:p1"}, "", ""},
+		{"zellij", "linux", zellij, map[string]string{"ZELLIJ_SESSION_NAME": "main", "ZELLIJ_PANE_ID": "3"}, "", zellijPaneID("main", 3)},
+		{"zellij, another session", "linux", zellij, map[string]string{"ZELLIJ_SESSION_NAME": "other", "ZELLIJ_PANE_ID": "3"}, "", ""},
+		{"zellij, no number", "linux", zellij, map[string]string{"ZELLIJ_SESSION_NAME": "main", "ZELLIJ_PANE_ID": "x"}, "", ""},
+		{"tmux", "linux", tmux, map[string]string{"TMUX": "/tmp/tmux-1000/default,1,0", "TMUX_PANE": "%7"}, "@4\ttermote\n", "%7"},
+		{"tmux, another server's window", "linux", tmux, map[string]string{"TMUX": "/tmp/other,1,0", "TMUX_PANE": "%7"}, "@1\twork\n", ""},
+		{"tmux, another session name", "linux", tmux, map[string]string{"TMUX": "/tmp/other,1,0", "TMUX_PANE": "%7"}, "@4\twork\n", ""},
+		{"tmux does not answer", "linux", tmux, map[string]string{"TMUX": "/tmp/tmux-1000/default,1,0", "TMUX_PANE": "%7"}, "", ""},
+		{"tmux, an answer of another shape", "linux", tmux, map[string]string{"TMUX": "/tmp/tmux-1000/default,1,0", "TMUX_PANE": "%7"}, "@4\n", ""},
+		{"tmux, no TMUX", "linux", tmux, map[string]string{"TMUX_PANE": "%7"}, "@4\ttermote\n", ""},
+		{"tmux, a pane not in the snapshot", "linux", tmux, map[string]string{"TMUX": "/tmp/tmux-1000/default,1,0", "TMUX_PANE": "%8"}, "@4\ttermote\n", ""},
+		{"psmux", "windows", tmux, map[string]string{"TMUX": "x", "TMUX_PANE": "%7"}, "@4\ttermote\n", ""},
+		{"herdr-core", "linux", Snapshot{Backend: "hc"}, map[string]string{"HERDR_PANE_ID": "w1:p1"}, "", ""},
+	} {
+		c := newTestCLI(t, tc.goos)
+		maps.Copy(c.env, tc.env)
+		if tc.tmux != "" {
+			c.runner.outputs["tmux display-message -p -t "+tc.env["TMUX_PANE"]+" #{window_id}\t#{session_name}"] = tc.tmux
+		}
+		if got := c.selfPaneID(tc.snap); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }

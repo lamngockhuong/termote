@@ -15,7 +15,10 @@ import (
 // OpenCode is interrupted through its service, never with a key. Only the
 // session the caller saw (its cursor) is interrupted, only while it works and
 // shows no dialog: Escape is a dialog's "cancel", and the route never answers
-// one. It answers once the key is sent; the caller follows the status.
+// one. Claude Code gets it only while its screen shows the working line: a
+// turn whose answer is written and that waits on background agents is busy
+// in its session file, and Escape stops nothing there. It answers once the
+// key is sent; the caller follows the status.
 
 // agentInterruptBody bounds the request: a cursor and nothing else.
 const agentInterruptBody = 1 << 10
@@ -26,8 +29,12 @@ const agentInterruptBody = 1 << 10
 var agentInterruptGap = 3 * time.Second
 
 var (
-	errAgentNotWorking   = fail(http.StatusConflict, "agent_not_working", "the agent is not working")
-	errAgentBlocked      = fail(http.StatusConflict, "agent_blocked", "the agent waits for an answer to a dialog")
+	errAgentNotWorking = fail(http.StatusConflict, "agent_not_working", "the agent is not working")
+	errAgentBlocked    = fail(http.StatusConflict, "agent_blocked", "the agent waits for an answer to a dialog")
+	// errAgentNoTurn: Claude Code's session says busy, but its screen
+	// shows no working line, only an answer written and a turn waiting on
+	// background agents, which Esc does not stop.
+	errAgentNoTurn       = fail(http.StatusConflict, "agent_no_turn", "the agent runs no turn that Esc would stop; it may only wait for background work")
 	errInterruptPending  = fail(http.StatusConflict, "interrupt_pending", "the agent was just interrupted")
 	agentInterruptWork   = muxTimeout + agentConfirmWait
 	agentInterruptLastMu sync.Mutex
@@ -134,6 +141,11 @@ func (a *agentAPI) interrupt(ctx context.Context, wr agentWriter, paneID, sessio
 		return errAgentBlocked
 	case !agentWorking(s, sc):
 		return errAgentNotWorking
+	case s.Agent == "claude" && (sc.activity == nil || sc.activity.Background != ""):
+		// Escape goes only to a turn the screen shows running: with its
+		// answer written and only background agents left, Claude Code
+		// stays busy and Escape changes nothing.
+		return errAgentNoTurn
 	}
 	// The same agent still, right before the key: the capture took time.
 	now, err := sessionNow(ctx, wr, paneID)

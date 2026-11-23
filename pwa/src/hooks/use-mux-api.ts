@@ -1428,8 +1428,8 @@ export async function sendAgentMessage(
 // Ends the turn the agent in a pane is running, as Esc in its terminal,
 // only in the session cursor names (the conversation shown) and only while
 // it works with no dialog open. Throws AgentRequestError when the server
-// refuses (agent_not_working, agent_blocked, interrupt_pending,
-// session_changed); it answers once the key is sent, not once the agent
+// refuses (agent_not_working, agent_no_turn, agent_blocked,
+// interrupt_pending, session_changed); it answers once the key is sent, not once the agent
 // stopped.
 export async function interruptAgent(
   paneId: string,

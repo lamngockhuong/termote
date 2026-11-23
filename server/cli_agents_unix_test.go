@@ -313,9 +313,16 @@ func TestAgentsStopOverLocalSocket(t *testing.T) {
 		Cursor string `json:"cursor"`
 	}
 	json.Unmarshal(tc.stdout.Bytes(), &r)
+	// Busy, its answer written, waiting on a background agent: no key.
 	f.mu.Lock()
 	f.session.Status = "working"
+	f.screen = fixtureScreen(t, "2.1.330-wait-background-agent")
 	f.mu.Unlock()
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err == nil || !strings.Contains(err.Error(), "(agent_no_turn); its answer may be written already") || len(f.keys) != 0 {
+		t.Errorf("background only: %v, keys %v", err, f.keys)
+	}
+	f.setScreen(fixtureScreen(t, "2.1.310-working"))
+	time.Sleep(agentCacheTTL) // the screen read last
 	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err != nil {
 		t.Fatalf("%v (%s)", err, tc.stdout)
 	}
@@ -346,7 +353,7 @@ func TestAgentsSend(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"send", "ui", "hello\x1b[2J there"}); err != nil {
 		t.Fatalf("%v (%s)", err, tc.stderr)
 	}
-	if len(f.pasted) != 1 || f.pasted[0] != "hello[2J there" || !strings.Contains(tc.stdout.String(), "Sent to web/ui (%2); wait for it: termote agents wait %2 --after ") {
+	if len(f.pasted) != 1 || f.pasted[0] != "hello[2J there" || !strings.Contains(tc.stdout.String(), "Sent to web/ui (%2); wait for it: termote agents wait %2@") {
 		t.Errorf("pasted %q, out %s", f.pasted, tc.stdout)
 	}
 	// From standard input.
@@ -393,14 +400,19 @@ func shortWait(t *testing.T) {
 	t.Cleanup(func() { agentsWaitEvery, agentsWaitGrace = every, grace })
 }
 
-// waitMark is the mark a wait that found nothing to wait for printed.
+// waitMark is the mark of the first pane the last wait's next line names.
 func waitMark(t *testing.T, out string) string {
 	t.Helper()
-	i := strings.LastIndex(out, "next wait starts after ")
+	const next = "next: termote agents wait "
+	i := strings.LastIndex(out, next)
 	if i < 0 {
 		t.Fatalf("no mark in %q", out)
 	}
-	return strings.Fields(out[i+len("next wait starts after "):])[0]
+	_, mark, ok := splitWaitMark(strings.Fields(out[i+len(next):])[0])
+	if !ok {
+		t.Fatalf("no pane@seq in %q", out)
+	}
+	return strconv.FormatUint(mark, 10)
 }
 
 func TestAgentsWait(t *testing.T) {
@@ -482,7 +494,7 @@ func TestAgentsWaitTabMoved(t *testing.T) {
 	err := tc.dispatch("agents", []string{"wait", "web/ui", "web/api"})
 	out := tc.stdout.String()
 	if err != nil || !strings.Contains(out, "web/ui ($1:0) is done") || strings.Contains(out, "no longer runs an agent") ||
-		!strings.Contains(out, "next: termote agents wait $1:1 --after ") {
+		!strings.Contains(out, "next: termote agents wait $1:1@") {
 		t.Errorf("moved: %v\n%s", err, out)
 	}
 }
@@ -506,7 +518,7 @@ func TestAgentsWaitSeveral(t *testing.T) {
 		t.Fatalf("%v %s", err, tc.stdout)
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "web/ui (%2) is done") || strings.Contains(out, "(%1) is done") || !strings.Contains(out, "next: termote agents wait %1 --after ") {
+	if !strings.Contains(out, "web/ui (%2) is done") || strings.Contains(out, "(%1) is done") || !strings.Contains(out, "next: termote agents wait %1@"+mark+"\n") {
 		t.Errorf("one done:\n%s", out)
 	}
 	// Both end before the wait reads: both are printed, the gravest exit
@@ -526,7 +538,7 @@ func TestAgentsWaitSeveral(t *testing.T) {
 	err = tc.dispatch("agents", []string{"wait", "%1", "%2", "--after", strconv.FormatUint(m, 10)})
 	out = tc.stdout.String()
 	if exitCode(err) != agentsExitDialog || !strings.Contains(out, "web/api (%1) waits on a dialog") || !strings.Contains(out, "web/ui (%2) is done") ||
-		!strings.Contains(out, "next wait starts after") {
+		!strings.Contains(out, "next: no pane left to wait on") {
 		t.Errorf("both: %v\n%s", err, out)
 	}
 	// A mark from before a restart: the history is reset.
