@@ -38,7 +38,8 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]
        termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]
        termote agents job show <id> [--json]
-       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]
+       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]...
+       termote agents job ci <id> [--refresh] [--send] [--json]
        termote agents job remove <id>
        termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]`
 
@@ -56,6 +57,10 @@ const (
 	// agentsExitNotDelegated: answer --delegated found no grant that covers
 	// the dialog; the user answers it
 	agentsExitNotDelegated = 9
+	// agentsExitNothingFailed: job ci --send found no failed check
+	agentsExitNothingFailed = 10
+	// agentsExitNoAgent: job ci --send found the job's agent gone
+	agentsExitNoAgent = 11
 )
 
 // The longest each kind of request may take. A message can wait minutes for
@@ -226,6 +231,14 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; only the user picks an option that stops it asking: ask the user, or answer Yes (this once) or No"
 	case "grant_pwa_only":
 		hint = "; only the user gives a grant, from the PWA"
+	case "ci_gh_auth":
+		hint = "; the user runs gh auth login on the server's machine"
+	case "ci_gh_missing":
+		hint = "; the user installs the GitHub CLI (gh) on the server's machine"
+	case "ci_no_repo":
+		hint = "; attach the pull request's number with termote agents job set <id> --pr <number> once the job's branch is on GitHub"
+	case "ci_busy":
+		hint = "; try again in a minute"
 	case "interrupt_pending":
 		hint = "; it was just stopped: check it with termote agents list"
 	case "busy":

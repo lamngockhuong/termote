@@ -513,7 +513,8 @@ Commands:
   settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
                        propose <json|-> shows a change the user applies in the PWA
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
-                       (native only): list, read, send, wait, answer, stop, diff, start
+                       (native only): list, read, send, wait, answer, stop, diff, start,
+                       jobs, job add|show|set [--pr <n>]|ci [--refresh] [--send]
   skills <cmd>         The orchestrator skill for Claude Code and Codex, embedded here:
                        install, uninstall [--agent claude|codex|all], status [--json]
   version              Show version

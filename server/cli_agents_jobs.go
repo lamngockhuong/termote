@@ -41,7 +41,8 @@ const (
 	jobsUsage      = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
 	jobAddUsage    = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
 	jobShowUsage   = "usage: termote agents job show <id> [--json]"
-	jobSetUsage    = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>]"
+	jobSetUsage    = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]..."
+	jobCIUsage     = "usage: termote agents job ci <id> [--refresh] [--send] [--json]"
 	jobRemoveUsage = "usage: termote agents job remove <id>"
 	jobsPruneUsage = "usage: termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]"
 	waitJobUsage   = "usage: termote agents wait --job <id>... [--timeout <duration>]"
@@ -287,7 +288,7 @@ func (c *cli) agentsJobs(args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "JOB\tTITLE\tSTATE\tPANE\tAGENT\tUNREAD\tBRANCH\tDIR\tUPDATED")
+	fmt.Fprintln(tw, "JOB\tTITLE\tSTATE\tPANE\tAGENT\tUNREAD\tBRANCH\tPR\tDIR\tUPDATED")
 	for _, j := range list {
 		pane, branch, dir := "-", "-", "-"
 		if j.Live.PaneID != "" {
@@ -304,8 +305,8 @@ func (c *cli) agentsJobs(args []string) error {
 		if j.Live.Unread {
 			unread = "yes"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", plainText(j.ID), clipLine(plainText(j.Title), 48), plainText(j.State), pane,
-			dash(c.liveText(j.Live)), dash(unread), branch, dir, sinceText(j.Updated.Format(time.RFC3339)))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", plainText(j.ID), clipLine(plainText(j.Title), 48), plainText(j.State), pane,
+			dash(c.liveText(j.Live)), dash(unread), branch, dash(ciShort(j.CISummary)), dir, sinceText(j.Updated.Format(time.RFC3339)))
 	}
 	return tw.Flush()
 }
@@ -333,7 +334,7 @@ func (c *cli) tildeDir(dir string) string {
 
 func (c *cli) agentsJob(args []string) error {
 	if len(args) == 0 {
-		return usageError("agents job needs add, show, set or remove\n%s\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage)
+		return usageError("agents job needs add, show, set, ci or remove\n%s\n%s\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage)
 	}
 	switch args[0] {
 	case "add":
@@ -342,10 +343,12 @@ func (c *cli) agentsJob(args []string) error {
 		return c.agentsJobShow(args[1:])
 	case "set":
 		return c.agentsJobSet(args[1:])
+	case "ci":
+		return c.agentsJobCI(args[1:])
 	case "remove":
 		return c.agentsJobRemove(args[1:])
 	}
-	return usageError("unknown agents job command: %s\n%s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage, jobRemoveUsage)
+	return usageError("unknown agents job command: %s\n%s\n%s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage)
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
@@ -451,6 +454,9 @@ func (c *cli) agentsJobShow(args []string) error {
 	if d := j.Diff; d != nil {
 		fmt.Fprintf(c.out, "Last diff: %d commits, %d files (%s)\n", d.Commits, d.Files, sinceText(d.At))
 	}
+	if line := ciLine(j.CI); line != "" {
+		fmt.Fprintf(c.out, "PRs: %s (termote agents job ci %s)\n", line, plainText(j.ID))
+	}
 	for _, g := range j.Grants {
 		state := "in force until " + plainText(g.Expires)
 		if g.Revoked != "" {
@@ -475,12 +481,15 @@ func (c *cli) agentsJobShow(args []string) error {
 
 func (c *cli) agentsJobSet(args []string) error {
 	var state, pane, title, note string
+	var addPRs, removePRs []int
 	hasNote := false
 	fs := c.newFlagSet("agents job set")
 	fs.StringVar(&state, "state", "", "")
 	fs.StringVar(&pane, "pane", "", "")
 	fs.StringVar(&title, "title", "", "")
 	fs.Func("note", "", func(s string) error { note, hasNote = s, true; return nil })
+	fs.Func("pr", "", prNumberFlag(&addPRs))
+	fs.Func("no-pr", "", prNumberFlag(&removePRs))
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
@@ -488,8 +497,8 @@ func (c *cli) agentsJobSet(args []string) error {
 	switch {
 	case len(pos) != 1:
 		return usageError("job set takes one job id\n%s", jobSetUsage)
-	case state == "" && pane == "" && title == "" && !hasNote:
-		return usageError("job set needs --state, --title, --note or --pane\n%s", jobSetUsage)
+	case state == "" && pane == "" && title == "" && !hasNote && len(addPRs) == 0 && len(removePRs) == 0:
+		return usageError("job set needs --state, --title, --note, --pane, --pr or --no-pr\n%s", jobSetUsage)
 	}
 	if state != "" && (!slices.Contains(jobStates, state) || state == "todo") {
 		return usageError("--state is active, review, done, failed or abandoned")
@@ -518,6 +527,12 @@ func (c *cli) agentsJobSet(args []string) error {
 			return err
 		}
 		body["note"] = note
+	}
+	if len(addPRs) > 0 {
+		body["addPrs"] = addPRs
+	}
+	if len(removePRs) > 0 {
+		body["removePrs"] = removePRs
 	}
 	if pane != "" {
 		p, err := c.agentsOtherPane(port, pane, jobSelfPane)

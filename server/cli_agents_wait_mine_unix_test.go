@@ -50,7 +50,7 @@ func mineJob(id, title, state, creator, pane string, live jobLive) jobView {
 		j.Agent = &jobAgent{Key: pane, PaneID: pane, Kind: "claude", Ref: "w/" + pane}
 		live.PaneID, live.Ref = pane, "w/"+pane
 	}
-	return jobView{j, live}
+	return jobView{job: j, Live: live}
 }
 
 func waitMine(t *testing.T, tc *testCLI, args ...string) (int, string) {
