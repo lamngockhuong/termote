@@ -76,6 +76,7 @@ var (
 	errJobNotFound     = &codedError{"job_not_found", "no such job", http.StatusNotFound}
 	errTooManyJobs     = &codedError{"too_many_jobs", fmt.Sprintf("up to %d jobs", maxJobs), http.StatusConflict}
 	errJobsTooLarge    = &codedError{"too_large", "request body too large", http.StatusRequestEntityTooLarge}
+	errJobUnfinished   = &codedError{"job_unfinished", "only a done, failed or abandoned job can be removed here", http.StatusConflict}
 )
 
 func invalidJob(msg string) *codedError {
@@ -449,7 +450,9 @@ func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) 
 // setOnReview has f told of every job that moves to review.
 func (s *jobStore) setOnReview(f func(id string)) { s.onReview.Store(&f) }
 
-func (s *jobStore) remove(id, updated string) error {
+// remove deletes job id; finishedOnly refuses one that is not finished,
+// checked under the lock that deletes it.
+func (s *jobStore) remove(id, updated string, finishedOnly bool) error {
 	return s.change(func(list []job) ([]job, error) {
 		i := slices.IndexFunc(list, func(j job) bool { return j.ID == id })
 		if i < 0 {
@@ -457,6 +460,9 @@ func (s *jobStore) remove(id, updated string) error {
 		}
 		if updated != "" && list[i].Updated.Format(time.RFC3339Nano) != updated {
 			return nil, &jobConflict{codedError{"job_conflict", "the job was changed elsewhere", http.StatusConflict}, list[i]}
+		}
+		if finishedOnly && !jobFinished(list[i].State) {
+			return nil, errJobUnfinished
 		}
 		return slices.Delete(list, i, i+1), nil
 	})

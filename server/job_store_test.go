@@ -74,13 +74,13 @@ func TestJobStoreUpdateConflict(t *testing.T) {
 	if _, err := s.update(j.ID, stamp, func(*job) error { return nil }); !errors.As(err, &conflict) || conflict.job.Note != "n" {
 		t.Errorf("stale: %v", err)
 	}
-	if err := s.remove(j.ID, stamp); !errors.As(err, &conflict) {
+	if err := s.remove(j.ID, stamp, false); !errors.As(err, &conflict) {
 		t.Errorf("stale remove: %v", err)
 	}
 	if _, err := s.update("nope", "", func(*job) error { return nil }); !errors.Is(err, errJobNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
-	if err := s.remove("nope", ""); !errors.Is(err, errJobNotFound) {
+	if err := s.remove("nope", "", false); !errors.Is(err, errJobNotFound) {
 		t.Errorf("unknown remove: %v", err)
 	}
 	// A failed op changes nothing.
@@ -92,6 +92,31 @@ func TestJobStoreUpdateConflict(t *testing.T) {
 	}
 	if _, ok := s.job("nope"); ok {
 		t.Error("found nothing")
+	}
+}
+
+// finishedOnly refuses a job that is not finished and keeps it; without it
+// any job goes.
+func TestJobStoreRemoveFinishedOnly(t *testing.T) {
+	s, _ := newTestJobStore(t)
+	active, _ := s.create(job{Title: "a", State: "active"})
+	if err := s.remove(active.ID, "", true); !errors.Is(err, errJobUnfinished) {
+		t.Errorf("active: %v", err)
+	}
+	if _, ok := s.job(active.ID); !ok {
+		t.Error("an unfinished job was removed")
+	}
+	for _, state := range []string{"done", "failed", "abandoned"} {
+		j, _ := s.create(job{Title: state, State: state})
+		if err := s.remove(j.ID, j.Updated.Format(time.RFC3339Nano), true); err != nil {
+			t.Errorf("%s: %v", state, err)
+		}
+	}
+	if err := s.remove(active.ID, "", false); err != nil {
+		t.Errorf("active without the limit: %v", err)
+	}
+	if _, ok := s.job(active.ID); ok {
+		t.Error("still there")
 	}
 }
 
