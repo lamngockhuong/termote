@@ -1,4 +1,4 @@
-import { MessageCircleQuestion } from 'lucide-react'
+import { ChevronDown, ChevronUp, MessageCircleQuestion } from 'lucide-react'
 import { type FormEvent, useEffect, useId, useState } from 'react'
 import { answerQuestion } from '../hooks/use-jobs'
 import { type Ask, RequestError } from '../hooks/use-mux-api'
@@ -23,6 +23,10 @@ interface Props {
   onOpenJob?: (jobId: string) => void
   // The job ids onOpenJob can open
   openableJobs?: ReadonlySet<string>
+  // Shows only the oldest open ask, the others behind a toggle: a chat's
+  // composer has little height to spare, and a second scrolled list above
+  // it hides the conversation
+  collapsible?: boolean
 }
 
 // How long the note that an answer went out stays (ms)
@@ -43,11 +47,13 @@ export function OverviewAsks({
   now,
   onOpenJob,
   openableJobs,
+  collapsible = false,
 }: Props) {
   const { t } = useT()
   const titleId = useId()
   // What the last answer sent says, kept a moment after its ask is gone
   const [notice, setNotice] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     if (!notice) return
@@ -56,24 +62,56 @@ export function OverviewAsks({
   }, [notice])
 
   const open = asks.filter((a) => a.state === 'open')
+  const folds = collapsible && open.length > 1
+  // Folds again once only one is left, so the next batch starts folded
+  useEffect(() => {
+    if (!folds) setExpanded(false)
+  }, [folds])
   if (open.length === 0 && !notice && !outdated) return null
+  const shown = folds && !expanded ? open.slice(0, 1) : open
 
   return (
     <section
       aria-labelledby={titleId}
       className="flex flex-col gap-2 rounded-panel border border-danger/40 bg-surface p-3 ui-terminal:bg-bg"
     >
-      <h4
-        id={titleId}
-        className="m-0 flex items-center gap-1.5 text-[12px] font-semibold text-fg-muted"
+      {/* The toggle sits by the title, which stays at the top of a scrolled
+          chat box, so folding again never needs a scroll to the end. It
+          sticks over the box's top padding (ChatAsks' py-2), or the cards
+          would show through that strip above it */}
+      <div
+        className={`flex items-center justify-between gap-2 ${folds ? 'sticky -top-2 z-10 -my-2 bg-surface py-2 ui-terminal:bg-bg' : ''}`}
       >
-        <MessageCircleQuestion
-          size={14}
-          aria-hidden="true"
-          className="text-danger"
-        />
-        {t('jobs.asks.title')}
-      </h4>
+        <h4
+          id={titleId}
+          className="m-0 flex items-center gap-1.5 text-[12px] font-semibold text-fg-muted"
+        >
+          <MessageCircleQuestion
+            size={14}
+            aria-hidden="true"
+            className="text-danger"
+          />
+          {t('jobs.asks.title')}
+          {folds && <span>· {open.length}</span>}
+        </h4>
+        {!readOnly && folds && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+            className={`flex shrink-0 items-center gap-1 rounded-control text-[12px] text-accent hover:underline ${FOCUS_RING}`}
+          >
+            {expanded ? (
+              <ChevronUp size={14} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={14} aria-hidden="true" />
+            )}
+            {expanded
+              ? t('jobs.asks.less')
+              : t('jobs.asks.more', { count: open.length - 1 })}
+          </button>
+        )}
+      </div>
       {outdated && (
         <p className="m-0 text-[13px] text-fg-muted">
           {t('jobs.asks.outdated')}
@@ -99,7 +137,7 @@ export function OverviewAsks({
           )
         : open.length > 0 && (
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
-              {open.map((a) => (
+              {shown.map((a) => (
                 <li key={a.id}>
                   <AskCard
                     ask={a}
