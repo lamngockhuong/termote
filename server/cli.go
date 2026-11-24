@@ -514,7 +514,9 @@ Commands:
                        propose <json|-> shows a change the user applies in the PWA
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
                        (native only): list, read, send, wait, answer, stop, diff, start,
-                       jobs, job add|show|set [--pr <n>]|ci [--refresh] [--send],
+                       jobs [--ready], job add|show|set [--pr <n>]|ci [--refresh] [--send],
+                       job add|set [--priority] [--after <job>] [--no-after <job>]
+                       [--workspace] [--no-workspace] (the order and workspace of a job),
                        job finish <id> [--close] [--remove-worktree] (after the user's yes),
                        ask add --text [--choice]... [--job], ask list [--all],
                        ask close <Qn> [--answer] (your questions for the user)

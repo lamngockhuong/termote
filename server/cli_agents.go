@@ -35,10 +35,10 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents diff <pane> [--stat] [--base <branch>]
        termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>]
                             [--worktree <new branch> [--base <branch>]] [--title <title> | --job <id>] [<prompt> | -]
-       termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]
-       termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]
+       termote agents jobs [--workspace <id | name>] [--mine] [--ready] [--all] [--json]
+       termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--priority high|normal|low] [--after <job>]... [--workspace <id | name>] [--json]
        termote agents job show <id> [--json]
-       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]...
+       termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]... [--priority high|normal|low] [--after <job>]... [--no-after <job>]... [--workspace <id | name> | --no-workspace]
        termote agents job ci <id> [--refresh] [--send] [--json]
        termote agents job remove <id>
        termote agents job finish <id> [--close] [--remove-worktree] [--json]
@@ -245,6 +245,14 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; attach the pull request's number with termote agents job set <id> --pr <number> once the job's branch is on GitHub"
 	case "ci_busy":
 		hint = "; try again in a minute"
+	case "job_workspace_bound":
+		hint = "; its workspace is the one it was started in"
+	case "job_cycle":
+		hint = "; see the order: termote agents job show <id>"
+	case "job_after_missing":
+		hint = "; see the jobs: termote agents jobs --all"
+	case "job_workspace_unknown":
+		hint = "; see the workspaces: termote agents list"
 	case "interrupt_pending":
 		hint = "; it was just stopped: check it with termote agents list"
 	case "busy":
@@ -1640,6 +1648,9 @@ func (c *cli) agentsStart(args []string) error {
 			return fmt.Errorf("no job %s; see: termote agents jobs", plainText(jobID))
 		case j.State != "todo" || j.Agent != nil:
 			return fmt.Errorf("job %s is %s, not a job waiting for an agent (todo); see: termote agents job show %s", plainText(jobID), plainText(j.State), plainText(jobID))
+		case len(j.WaitsOn) > 0:
+			return fmt.Errorf("job %s waits on %s; start it when they are done, or drop them: termote agents job set %s --no-after %s",
+				plainText(jobID), waitsText(list, j.WaitsOn, j.WaitsOnFailed), plainText(jobID), plainText(j.WaitsOn[0]))
 		}
 		todo = &j
 		if prompt == "" {

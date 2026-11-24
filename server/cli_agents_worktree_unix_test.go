@@ -157,7 +157,9 @@ func TestAgentsStartWorktree(t *testing.T) {
 		t.Errorf("posts:\n%s", posts)
 	}
 	// The job says the start made its worktree (job finish may remove it).
-	if job := lastPost(s, "/api/mux/jobs "); !strings.Contains(job, `"worktree":{"base":"main","branch":"feat","made":true,"source":"w"}`) {
+	// It records the workspace it ran from; its pane is in the worktree's.
+	if job := lastPost(s, "/api/mux/jobs "); !strings.Contains(job, `"worktree":{"base":"main","branch":"feat","made":true,"source":"w"}`) ||
+		!strings.Contains(job, `"pane":"%7"`) || !strings.Contains(job, `"workspace":"w"`) {
 		t.Errorf("job: %s", job)
 	}
 	// Run again: the worktree is there, so it is opened, not made again.

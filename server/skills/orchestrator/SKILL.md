@@ -42,10 +42,12 @@ termote agents start --workspace <id> --kind <claude|codex|opencode> [--name <ta
 termote agents start --workspace <id> --kind <kind> --worktree <new branch> [--base <branch>] '<prompt>'
 termote agents start ... --title '<short title>'   # every start records a job; the title is what the user sees
 termote agents start --workspace <id> --kind <kind> --job <id>   # take up a job the user added in the PWA
-termote agents jobs [--mine] [--workspace <id>] [--all] [--json]  # the ledger: pane, status, unread, branch, dir
+termote agents jobs [--mine] [--workspace <id>] [--ready] [--all] [--json]  # the ledger by priority: pane, status, unread, branch, dir
+termote agents jobs --ready --mine            # the jobs to do that wait on nothing: the next one to start
 termote agents job show <id>                  # prompt, note, grants, history
 termote agents job set <id> --state review --note '<what was done>'   # or: --pane <pane>, --title
-termote agents job add --title '<title>' [--pane <pane>]
+termote agents job add --title '<title>' [--pane <pane>] [--priority high|normal|low] [--after <job>]... [--workspace <id>]
+termote agents job set <id> --priority <p> | --after <job> | --no-after <job> | --workspace <id> | --no-workspace
 termote agents job remove <id>                # a done, failed or abandoned job only
 termote agents job finish <id> --close [--remove-worktree]   # after the user's yes: close its tab, remove its worktree
 termote agents jobs prune [--older-than 7d] [--dry-run]   # every finished job, or those not changed for 7d
@@ -130,6 +132,15 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   nothing would end the wait: give one work or set
   its state; 4: the timeout passed while one still works, or still waits on a dialog or background
   work reported before (each job's line says which).
+- Order: record the work you split up with `job add --priority` and `--after <job>` so the user
+  sees the order (`job --after` names jobs, unlike `wait <pane>@<seq>` marks), and `--workspace`
+  when you add a job: once it has an agent or a worktree its workspace is fixed. At the start of a
+  session, after each job reaches `review` and after each `job finish` (the usual way a job becomes
+  `done`, which can make the jobs after it ready), pick the next job with `jobs --ready --mine` (or
+  `--workspace <id>`), highest priority first. Never `start --job` a job that still waits: it is
+  refused. A job waiting on a failed or abandoned one is the user's call: ask with `ask add --job
+  <id>`, never drop the dependency yourself. `--after` on a running or finished job only notes the
+  order; it never holds up a state change or `job finish`.
 - When an agent finished, review its work (`diff --stat`), then `job set <id> --state review
   --note '<what was done>'`; the user gets a push. A turn that ends with a question for the user
   is not finished work: see step 4. Never set `done` yourself unless the user
