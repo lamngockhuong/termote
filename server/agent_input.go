@@ -695,7 +695,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 	default:
 		if sc.prompt != nil {
-			return fail(http.StatusConflict, "input_not_ready", "a dialog is open")
+			return errDialogOpen
 		}
 		return fail(http.StatusConflict, "input_not_ready", "the screen is not the input box")
 	}
@@ -704,6 +704,20 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	stillReady := func() bool {
 		now, err := sessionNow(ctx, wr, paneID)
 		return err == nil && sameAgent(now, s) && agentReady(now, true) == nil
+	}
+	// noDialog reads the screen again right before each paste, under the
+	// pane's lock: a dialog that opened since the last read would take the
+	// pasted text as its answer (a digit picks an option of a permission
+	// dialog, past the options the CLI may choose).
+	noDialog := func() error {
+		screen, err := wr.Capture(ctx, s.Target)
+		if err != nil {
+			return err
+		}
+		if readAgentScreen(s.Agent, screen).prompt != nil {
+			return errDialogOpen
+		}
+		return nil
 	}
 	// box: what the box shows once the pastes so far land, its text before
 	// each image token and after the last; tried: every such state, the
@@ -715,6 +729,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	pasteText := func(part string) error {
 		if pastes > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
+		}
+		if err := noDialog(); err != nil {
+			if pastes == 0 {
+				return err
+			}
+			return a.abandon(ctx, wr, paneID, s, tried, err)
 		}
 		next := append(slices.Clone(box[:len(box)-1]), part)
 		tried = append(tried, next)
@@ -761,6 +781,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		if pastes > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
 		}
+		if err := noDialog(); err != nil {
+			if pastes == 0 {
+				return err
+			}
+			return a.abandon(ctx, wr, paneID, s, tried, err)
+		}
 		next := append(slices.Clone(box), "")
 		tried = append(tried, next)
 		if err := wr.Paste(ctx, s.Target, pasteablePath(p)); err != nil {
@@ -792,6 +818,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if pasted != "" && !resend {
 		if n > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
+		}
+		if err := noDialog(); err != nil {
+			if n > 0 {
+				return a.abandon(ctx, wr, paneID, s, tried, err)
+			}
+			return err
 		}
 		tried = append(tried, final)
 		if err := wr.Paste(ctx, s.Target, pasted); err != nil {
@@ -1218,6 +1250,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 func browserOrigin(origin string) bool {
 	return origin == "password" || origin == "device" || origin == "none"
 }
+
+// errDialogOpen: a dialog is on the screen where a message would go.
+var errDialogOpen = fail(http.StatusConflict, "input_not_ready", "a dialog is open")
 
 // errAnswerAlwaysRefused: the CLI, or another termote's CLI, chose an option
 // of a permission dialog that would stop it from asking again.
