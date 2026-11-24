@@ -88,7 +88,10 @@ termote agents diff <pane> [--stat]          # its commits since the base, then 
 termote agents stop <pane> --cursor <cursor> # end the turn it runs, as Esc (cursor from read --json)
 termote agents start --workspace <id> --kind claude --name tests 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix the login test'
-termote agents jobs [--mine] [--all] [--json] # the job ledger: each job's pane, status, unread turn, branch
+termote agents jobs [--mine] [--all] [--json] # the job ledger by priority: each job's pane, status, unread turn, branch
+termote agents jobs --ready                  # the jobs to do that wait on nothing: what to start next
+termote agents job add --title 'Docs' --priority high --after <job> --workspace <id>
+termote agents job set <id> --priority low --no-after <job>   # also --after <job>, --workspace, --no-workspace
 termote agents job show <id>                 # its prompt, note, grants and history
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>               # remove a done, failed or abandoned job from the ledger
@@ -172,6 +175,26 @@ it reads the pane and runs `wait --mine` again. A job with no agent, or whose lo
 reported once, never holds up the others, and the `wait` says there is nothing to wait for only
 when no job left has an agent that can end a turn. Where Termote cannot tell its pane (`herdr-core`,
 psmux, Windows), `wait --mine` is refused and the orchestrator names the jobs with `--job`.
+
+### Priority, order and workspace
+
+A job has a priority (`high`, `normal` or `low`, set with `--priority`), and may wait on other jobs
+(`--after <job>`, a job id: unlike the `<pane>@<seq>` marks of `wait`, it names jobs). `jobs` lists
+them by priority, the jobs to do oldest first, with what each still waits on (marked `!` when that
+job failed or was abandoned) and its workspace. `jobs --ready` keeps the jobs to do that wait on
+nothing: the orchestrator picks the next job there at the start of a session, after each job reaches
+review and after each `job finish`, since finishing a job can make the jobs after it ready. Only a
+`done` job lets the ones after it start; one that failed or was abandoned keeps them waiting until
+you decide (drop it with `job set <id> --no-after <job>`, or abandon the job). `start --job` refuses a
+job that still waits, naming what it waits on. A job cannot wait on itself, on a job that no longer
+exists, or round in a circle; a job removed from the ledger is dropped from the jobs that waited on
+it. `--after` on a job already running, in review or finished only notes the order: it never holds
+up a state change or `job finish`.
+
+A job's workspace (`--workspace <id | name>`) can be set while no agent has it; once it has an
+agent or a worktree it is the workspace it was started in (for a worktree, the one the worktree was
+made from) and is no longer changed by hand. When that workspace is closed and opened again on the
+same repository under a new id, the job is shown under the new one.
 
 You see the same ledger in the [Overview](/usage/overview/#plan)'s Plan tab, where you can also add
 a job for the orchestrator to take up (`start --job <id>`), and open a job's details to edit it or
@@ -301,7 +324,7 @@ termote agents job finish <id> --close --remove-worktree   # --close alone for a
 ```
 
 It closes the job's tab and removes the worktree, through the same calls as the PWA's close and
-remove, and moves the job from review to done. Termote checks everything first and closes nothing
+remove, and moves the job from review to done, which can make the jobs waiting on it ready. Termote checks everything first and closes nothing
 when one check fails:
 
 - the job was started from the orchestrator's own pane, and is in review or finished;

@@ -83,8 +83,13 @@ again to stop picking. A [view-only device](/usage/devices/#view-only) has no ch
 When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger
 in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then
 done and not read yet, running, to review and to do. The line above the columns counts the open
-jobs and names the groups with no job. On a phone the columns stack. A job's card shows its title and state, what its
-agent does, its pane and branch, and its last diff and grants in force. **Finished** unfolds the
+jobs and names the groups with no job. On a phone the columns stack. Each column is sorted by
+priority; in **To do** the jobs that wait on nothing come first. A job's card shows its title and state, what its
+agent does, its pane and branch, and its last diff and grants in force. It also shows a mark for a high or low
+priority, **Waits on** with the number of jobs it still waits on (red when one of them failed or was
+abandoned, muted once the job is under way, where it only notes the order) and its workspace.
+Above the columns, a filter shows the jobs of one workspace (or of none), and **Group by workspace**
+splits each column by workspace; this browser remembers both. **Finished** unfolds the
 finished jobs as a table: job, state, worktree, changes and when it last changed.
 
 The **?** button at the top of the tab (and the hint of an empty Plan) opens how to
@@ -94,13 +99,16 @@ copy. Without the skill, **New job** still adds jobs by hand.
 Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide
 screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They
 hold a button that opens the job's pane, **Grants** and **Edit**, then the job's state, agent,
-branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a
+branch, worktree folder, last diff, priority, workspace, the jobs it waits on and those that wait
+on it (each opens its details), prompt, note, grants in force, the dialogs answered under a
 grant and its history. Each grant in force says when it ends and how often it was used, and
 **End** revokes it after you confirm (only where you can give grants, see below).
 
 - **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with
   `termote agents start --job <id>` when you ask it to.
-- **Edit** changes the title, prompt, note, state or the agent the job is given to. Giving it to
+- **Edit** changes the title, prompt, note, state, priority, the jobs it waits on (a job that already
+  waits on this one is not offered, so no circle can be made), its workspace (only while no agent or
+  worktree has the job: then it is the one the job started in) or the agent the job is given to. Giving it to
   another agent ends its grants. When the orchestrator changed the job meanwhile, the form loads
   the job as it is now and tells you.
 - **Grants** lets the job's agent have one kind of permission dialog answered by the orchestrator
@@ -113,7 +121,8 @@ grant and its history. Each grant in force says when it ends and how often it wa
 
 When the orchestrator moves a job to review, a device with notifications on gets a push; tapping
 it opens the Plan. A [view-only device](/usage/devices/#view-only) sees each job's title,
-state, pane and branch only, and a job opens nothing.
+state, pane and branch, its priority, what it waits on and its workspace only, and a job opens
+nothing.
 
 ## Stopping an agent
 

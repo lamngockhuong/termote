@@ -115,6 +115,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/overview-tabs.tsx`            | Overview tabs with counts; the last tab kept on the device     |
 | `pwa/src/components/overview-usage-button.tsx`    | Overview header: today's tokens, opening totals and limits     |
 | `pwa/src/components/overview-jobs.tsx`            | Plan tab: job columns, Finished table, details aside or sheet  |
+| `pwa/src/components/job-workspace-filter.tsx`     | Plan tab: the workspace filter and grouping, kept per browser  |
 | `pwa/src/components/job-card.tsx`                 | One job's compact card; a full client's opens its details      |
 | `pwa/src/components/job-detail.tsx`               | A job's details: pane, Grants, Edit, every field it has        |
 | `pwa/src/utils/job-of-pane.ts`                    | The active job each pane works on, for the agent cards         |
@@ -463,6 +464,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/task_store.go`                            | User tasks (`<stateDir>/tasks`), limits, lock                  |
 | `server/job_store.go`                             | Job ledger (`<stateDir>/jobs`), limits, lock, review hook      |
 | `server/job_routes.go`                            | `/api/mux/jobs*`: roles, live status, unread from transcript   |
+| `server/job_deps.go`                              | A job's priority and the jobs it waits on: checks, order       |
+| `server/job_repo.go`                              | A job's repository: kept with its workspace, `workspaceNow`    |
 | `server/job_identity.go`                          | A job's agent: activity key + pid and start time, or session   |
 | `server/job_finish.go`                            | `/api/mux/jobs/{id}/finish`: checks, locks, close, remove      |
 | `server/job_finish_git.go`                        | A job's worktree: clean, pushed or merged; branch delete       |
