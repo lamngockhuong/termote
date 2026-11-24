@@ -16,14 +16,15 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { Trans } from '../i18n/trans'
 import type { SessionGroup } from '../types/session'
-import { formatAgo } from '../utils/format-ago'
 import {
   groupJobs,
+  jobExpiry,
   jobFinished,
   jobsByWorkspace,
   jobWorkspace,
   workspaceName,
 } from '../utils/jobs'
+import { sessionAge } from '../utils/session-age'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, JobCard, jobBranch } from './job-card'
 import { JobDetail } from './job-detail'
@@ -277,10 +278,18 @@ export function OverviewJobs({
       Number.isFinite(Date.parse(j.updated)),
     ),
   }
-  const ago = (at: string) => {
-    const ms = Date.parse(at)
-    return Number.isFinite(ms) ? formatAgo(Math.max(0, now - ms), t) : ''
-  }
+  // When each finished job may be removed, and how many soon or now
+  const expiries = new Map(
+    jobGroups.finished.map((j) => [
+      j.id,
+      jobExpiry(j, store.finishedKeepMs, now),
+    ]),
+  )
+  const expiring = [...expiries.values()].filter(Boolean).length
+  const keepDays =
+    store.finishedKeepMs === null
+      ? 0
+      : Math.max(1, Math.round(store.finishedKeepMs / 86_400_000))
 
   const detail = selected && (
     <JobDetail
@@ -293,6 +302,7 @@ export function OverviewJobs({
           : undefined
       }
       onEdit={setEditing}
+      finishedKeepMs={store.finishedKeepMs}
       canEndGrants={store.canGrant}
       ciAvailable={store.ciAvailable}
       jobs={store.jobs}
@@ -446,8 +456,22 @@ export function OverviewJobs({
                 aria-hidden="true"
                 className={showFinished ? 'rotate-180' : ''}
               />
-              {t('jobs.group.finished', { count: jobGroups.finished.length })}
+              {expiring > 0
+                ? t('jobs.group.finishedExpiring', {
+                    total: jobGroups.finished.length,
+                    count: expiring,
+                  })
+                : t('jobs.group.finished', {
+                    count: jobGroups.finished.length,
+                  })}
             </Button>
+            {showFinished && store.finishedKeepMs !== null && (
+              <p className="m-0 text-[12px] text-fg-subtle">
+                {t('jobs.finishedKeep', { count: keepDays })}
+                {store.jobsMax !== null &&
+                  ` ${t('jobs.finishedCap', { max: store.jobsMax })}`}
+              </p>
+            )}
             {showFinished && (
               <div
                 id={finishedId}
@@ -485,6 +509,7 @@ export function OverviewJobs({
                       const title = visibleUnsafe(job.title)
                       const branch = jobBranch(job)
                       const isSelected = job.id === selected?.id
+                      const expiry = expiries.get(job.id)
                       return (
                         <tr
                           key={job.id}
@@ -519,8 +544,19 @@ export function OverviewJobs({
                             </td>
                           )}
                           {finishedCols.updated && (
-                            <td className="whitespace-nowrap px-3 py-1 text-right text-fg-muted">
-                              {ago(job.updated)}
+                            <td className="px-3 py-1 text-right text-fg-muted">
+                              <span className="whitespace-nowrap">
+                                {sessionAge(job.updated, now, t)}
+                              </span>
+                              {expiry && (
+                                <span className="block whitespace-normal text-warning">
+                                  {expiry.kind === 'soon'
+                                    ? t('jobs.expiry.soon', {
+                                        count: expiry.days,
+                                      })
+                                    : t('jobs.expiry.due')}
+                                </span>
+                              )}
                             </td>
                           )}
                         </tr>

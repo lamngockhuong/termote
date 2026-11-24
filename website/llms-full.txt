@@ -3232,6 +3232,8 @@ It closes the job’s tab and removes the worktree, through the same calls as th
 
 Files git ignores in the worktree (local databases, `node_modules`, build output) are removed with it. The branch is deleted only when a merged pull request of the job has the worktree’s head; otherwise it stays and the command says why. A remove that fails after the tab closed says so; the same command run again removes the rest. On psmux and herdr-core termote cannot tell which pane the command runs in, so it refuses: close the tab and remove the worktree in the PWA.
 
+Termote also removes finished jobs on its own: one not changed for 30 days goes at the next change to the ledger (changing it keeps it), and when the ledger holds 200 jobs, adding one removes the oldest finished job first. `job remove` and `jobs prune` remove them sooner.
+
 ## Stop
 
 [Section titled “Stop”](#stop)
@@ -3330,6 +3332,8 @@ Beside each agent the bar then says **Sent**, **Queued** (the agent was working 
 [Section titled “Plan”](#plan)
 
 When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then done and not read yet, running, to review and to do. The line above the columns counts the open jobs and names the groups with no job. On a phone the columns stack. Each column is sorted by priority; in **To do** the jobs that wait on nothing come first. A job’s card shows its title and state, what its agent does, its pane and branch, and its last diff and grants in force. It also shows a mark for a high or low priority, **Waits on** with the number of jobs it still waits on (red when one of them failed or was abandoned, muted once the job is under way, where it only notes the order) and its workspace. Above the columns, a filter shows the jobs of one workspace (or of none), and **Group by workspace** splits each column by workspace; this browser remembers both. **Finished** unfolds the finished jobs as a table: job, state, worktree, changes and when it last changed.
+
+Finished jobs do not stay forever. One not changed for 30 days is removed at the next change to the plan (to any job or question); changing the job keeps it. When the plan holds 200 jobs, adding one removes the oldest finished job first. A plan a newer Termote saved is never changed here, so nothing is removed from it. A note above the table says this, the **Finished** button counts the jobs that may go within three days or are past their time (**Finished · 16 · 2 expire soon**), and each such row says *may be removed in N days* or *awaiting removal* under its time, as the job’s details do.
 
 The **?** button at the top of the tab (and the hint of an empty Plan) opens how to [install the orchestrator skill](/usage/orchestrator/#install-the-skill), with each command ready to copy. Without the skill, **New job** still adds jobs by hand.
 

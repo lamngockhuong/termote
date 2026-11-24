@@ -210,7 +210,9 @@ each `job finish`, pick the next job with `jobs --ready` (the user's jobs from t
 one is the user's call: ask with `ask add --job <id>`, never drop the dependency yourself. `--after` on a
 running or finished job only notes the order; it never holds up a state change or `job finish`. The ledger is the user's history: remove finished jobs
 (`job remove <id>`, `jobs prune`) only when the user asks; an unfinished one is refused, so
-`job set <id> --state abandoned` it first. Once the user has looked at a job in `review` and says
+`job set <id> --state abandoned` it first. termote itself removes a finished job not changed for 30
+days at the next change to the ledger, and the oldest finished one when the ledger holds 200 jobs and
+one is added. Once the user has looked at a job in `review` and says
 yes, `job finish <id> --close --remove-worktree` (or `--close` alone for a job without a worktree)
 closes its tab and removes its worktree, only when the agent is at rest, its last turn was read and
 the worktree is clean with its commits pushed or merged; files git ignores there go with it, and the

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobsState } from '../hooks/use-jobs'
 import type { Job } from '../hooks/use-mux-api'
 import { OverviewJobs } from './overview-jobs'
@@ -56,6 +56,8 @@ function loaded(over: Partial<JobsState> = {}): JobsState {
     canGrant: true,
     ciAvailable: true,
     jobFields: [],
+    finishedKeepMs: null,
+    jobsMax: null,
     clockOffset: 0,
     loaded: true,
     error: false,
@@ -172,6 +174,83 @@ describe('OverviewJobs', () => {
     ).toEqual(['Job', 'State', 'Worktree', 'Changes', 'Updated'])
     expect(within(table).getByText('feat/⟨U+202E⟩x')).toBeVisible()
     expect(within(table).getByText('2 commits · 1 file changed')).toBeVisible()
+  })
+
+  describe('finished jobs past or near their keep time', () => {
+    const DAY = 86_400_000
+    const NOW = Date.parse('2026-11-24T12:00:00Z')
+    const KEEP = 30 * DAY
+    // A finished job with left ms of its keep time remaining
+    const aged = (id: string, left: number) =>
+      job(id, {
+        state: 'done',
+        updated: new Date(NOW - KEEP + left).toISOString(),
+      })
+    const JOBS_AGED = [
+      aged('far', 10 * DAY),
+      aged('soon', 2.5 * DAY),
+      aged('due', -DAY),
+      job('new', {
+        state: 'failed',
+        updated: new Date(NOW - 3_600_000).toISOString(),
+      }),
+    ]
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+    })
+    afterEach(() => vi.useRealTimers())
+    const cell = (title: string) =>
+      within(screen.getByRole('row', { name: new RegExp(`^${title} `) }))
+        .getAllByRole('cell')
+        .at(-1)!
+
+    it('counts them on the group, tells the rules and marks each row', () => {
+      show({ jobs: JOBS_AGED, finishedKeepMs: KEEP, jobsMax: 200 })
+      expect(finished()).toHaveTextContent('Finished · 4 · 2 expire soon')
+      fireEvent.click(finished())
+      expect(
+        screen.getByText(
+          'A finished job not changed for 30 days is removed at the next change to the plan; changing a job keeps it. When the plan holds 200 jobs, the oldest finished one is removed first to make room.',
+        ),
+      ).toBeVisible()
+      expect(cell('job far')).toHaveTextContent(/^20 d ago$/)
+      expect(cell('job soon')).toHaveTextContent(
+        '27 d agomay be removed in 3 days',
+      )
+      expect(cell('job due')).toHaveTextContent('31 d agoawaiting removal')
+      expect(cell('job new')).toHaveTextContent(/^1h ago$|^1 h ago$/)
+    })
+
+    it('names one expiring job, and leaves out the limit the server does not give', () => {
+      show({ jobs: [aged('due', -1)], finishedKeepMs: DAY })
+      expect(finished()).toHaveTextContent('Finished · 1 · 1 expires soon')
+      fireEvent.click(finished())
+      expect(
+        screen.getByText(
+          'A finished job not changed for 1 day is removed at the next change to the plan; changing a job keeps it.',
+        ),
+      ).toBeVisible()
+    })
+
+    it('tells and marks nothing when the server keeps no limit', () => {
+      show({ jobs: JOBS_AGED })
+      expect(finished()).toHaveTextContent(/^Finished · 4$/)
+      fireEvent.click(finished())
+      expect(screen.queryByText(/is removed at the next change/)).toBeNull()
+      expect(screen.queryByText(/may be removed|awaiting removal/)).toBeNull()
+    })
+
+    it('tells it in the details of a finished job', () => {
+      show({ jobs: JOBS_AGED, finishedKeepMs: KEEP })
+      fireEvent.click(finished())
+      fireEvent.click(screen.getByRole('button', { name: 'job soon' }))
+      expect(
+        within(screen.getByRole('dialog', { name: 'job soon' })).getByText(
+          'This job may be removed in 3 days unless it changes',
+        ),
+      ).toBeVisible()
+    })
   })
 
   it('opens the details of a job in a sheet, the editor and grants from there', () => {

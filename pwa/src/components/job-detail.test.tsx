@@ -71,6 +71,58 @@ describe('JobDetail', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Could not copy')
   })
 
+  it('tells when a finished job may be removed, and how to keep it while it can change', () => {
+    const DAY = 86_400_000
+    const KEEP = 30 * DAY
+    const at = (left: number) => new Date(NOW - KEEP + left).toISOString()
+    const done = (left: number, over: Partial<Job> = {}) =>
+      job({ state: 'done', updated: at(left), live: {}, ...over })
+    const { rerender } = render(
+      <JobDetail job={done(1.5 * DAY)} now={NOW} finishedKeepMs={KEEP} />,
+    )
+    expect(
+      screen.getByText('This job may be removed in 2 days unless it changes'),
+    ).toBeVisible()
+    rerender(
+      <JobDetail
+        job={done(-1)}
+        now={NOW}
+        finishedKeepMs={KEEP}
+        onEdit={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByText(
+        'Past its keep time: this job is removed at the next change to the plan, unless you change it',
+      ),
+    ).toBeVisible()
+    rerender(<JobDetail job={done(-1)} now={NOW} finishedKeepMs={KEEP} />)
+    expect(
+      screen.getByText(
+        'Past its keep time: this job is removed at the next change to the plan',
+      ),
+    ).toBeVisible()
+    // Far off, unfinished, or a server that keeps no limit: nothing
+    for (const el of [
+      <JobDetail
+        key="far"
+        job={done(10 * DAY)}
+        now={NOW}
+        finishedKeepMs={KEEP}
+      />,
+      <JobDetail
+        key="active"
+        job={done(-1, { state: 'active' })}
+        now={NOW}
+        finishedKeepMs={KEEP}
+      />,
+      <JobDetail key="none" job={done(-1)} now={NOW} />,
+    ]) {
+      rerender(el)
+      expect(screen.queryByText(/removed/)).toBeNull()
+    }
+  })
+
   it('takes the word of the last copy away after a moment', async () => {
     vi.useFakeTimers()
     try {

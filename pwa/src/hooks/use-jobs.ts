@@ -39,6 +39,11 @@ export interface JobsState {
   // The fields beyond the first ones the server takes: the editors of the
   // others, and the workspace filter, are hidden
   jobFields: JobField[]
+  // How long a finished job not changed is kept (ms) and how many jobs the
+  // ledger holds; null when the server does not say (it prunes nothing then
+  // or is older). A failed read keeps the last ones.
+  finishedKeepMs: number | null
+  jobsMax: number | null
   // Server time minus this device's (ms), from the last read
   clockOffset: number
   loaded: boolean
@@ -66,6 +71,8 @@ const INITIAL: JobsState = {
   canGrant: false,
   ciAvailable: false,
   jobFields: [],
+  finishedKeepMs: null,
+  jobsMax: null,
   clockOffset: 0,
   loaded: false,
   error: false,
@@ -114,6 +121,8 @@ async function readJobs(): Promise<void> {
       ciAvailable: list.ciAvailable,
       // None from a list without them
       jobFields: list.jobFields ?? [],
+      finishedKeepMs: list.finishedKeepMs ?? null,
+      jobsMax: list.jobsMax ?? null,
       clockOffset: Number.isNaN(server) ? 0 : server - Date.now(),
       loaded: true,
       error: false,

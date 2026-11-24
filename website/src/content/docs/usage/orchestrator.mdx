@@ -341,6 +341,10 @@ otherwise it stays and the command says why. A remove that fails after the tab c
 same command run again removes the rest. On psmux and herdr-core termote cannot tell which pane the
 command runs in, so it refuses: close the tab and remove the worktree in the PWA.
 
+Termote also removes finished jobs on its own: one not changed for 30 days goes at the next change
+to the ledger (changing it keeps it), and when the ledger holds 200 jobs, adding one removes the
+oldest finished job first. `job remove` and `jobs prune` remove them sooner.
+
 ## Stop
 
 `stop` ends the turn an agent is working on, as Esc does in its terminal. It needs the `cursor`

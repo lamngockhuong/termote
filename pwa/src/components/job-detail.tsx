@@ -19,6 +19,7 @@ import {
   grantLabel,
   grantLeft,
   grantUsed,
+  jobExpiry,
   jobPaneRef,
   jobsNeeding,
   jobWorkspace,
@@ -80,6 +81,9 @@ interface Props {
   groups?: readonly SessionGroup[]
   // Opens another job's details
   onOpenJob?: (id: string) => void
+  // How long the server keeps a finished job not changed (ms); null or
+  // absent when it does not say
+  finishedKeepMs?: number | null
 }
 
 // What a full client knows of one job, under the title its panel gives it:
@@ -97,6 +101,7 @@ export function JobDetail({
   jobs = [],
   groups = [],
   onOpenJob,
+  finishedKeepMs = null,
 }: Props) {
   const { t } = useT()
   // The grant whose end waits for a yes, and how the last end went
@@ -192,6 +197,7 @@ export function JobDetail({
     return Number.isFinite(ms) ? formatAgo(Math.max(0, now - ms), t) : ''
   }
   const changed = ago(job.live.lastTs ?? job.updated)
+  const expiry = jobExpiry(job, finishedKeepMs, now)
   // The agent the job was given: its product's name (else the kind the
   // server recorded) and its pane
   const kind = job.agent && agentLabel(job.agent.kind)
@@ -211,6 +217,13 @@ export function JobDetail({
           {status && live && <span className={LIVE_TONE[status]}>{live}</span>}
           {live && changed && <span className="text-fg-muted"> · </span>}
           {changed && <span className="text-fg-muted">{changed}</span>}
+        </p>
+      )}
+      {expiry && (
+        <p className="m-0 text-[12px] text-warning">
+          {expiry.kind === 'soon'
+            ? t('jobs.expiry.soonLong', { count: expiry.days })
+            : t(onEdit ? 'jobs.expiry.dueLong' : 'jobs.expiry.dueLongNoEdit')}
         </p>
       )}
       {((ref && paneId && onOpenPane) || onGrants || onEdit) && (

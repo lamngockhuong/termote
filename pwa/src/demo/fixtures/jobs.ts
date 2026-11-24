@@ -1,9 +1,11 @@
 // The demo's plan: jobs an orchestrator handed out, one running in web's
-// Claude Code with a grant to run its tests, one done in acme-api's with its
-// turn not read yet (high priority), one waiting for the user's review whose
-// pull request's docs check failed, and three to do: the release notes,
-// which wait on that review, the announcement (low priority, no workspace),
-// which waits on the notes, and a search box for web, ready to start.
+// Claude Code with a grant to run its tests, one in acme-api's whose last
+// turn ended and is not read yet (high priority), one waiting for the user's
+// review whose pull request's docs check failed, three to do: the release
+// notes, which wait on that review, the announcement (low priority, no
+// workspace), which waits on the notes, and a search box for web, ready to
+// start; and one done 28 days ago, close to the server's keep time (the demo
+// removes nothing).
 import type { Job } from '../../hooks/use-mux-api'
 import { ACME_ROOT, DEMO_HOME } from './workspace'
 
@@ -18,6 +20,9 @@ const agent = (paneId: string, ref: string, groupId: string) => ({
   groupId,
   ref,
 })
+
+// A day in minutes, for at()
+const DAY = 24 * 60
 
 // The jobs at now (ms)
 export function demoJobs(now: number): DemoJob[] {
@@ -156,6 +161,21 @@ export function demoJobs(now: number): DemoJob[] {
       events: [{ at: at(30), kind: 'created' }],
       created: at(30),
       updated: at(30),
+    },
+    {
+      id: '728394a5b6c7d8e9',
+      // i18n-ignore: demo data, as an agent wrote it
+      title: 'Bump the Go toolchain',
+      state: 'done',
+      createdBy: 'claude',
+      workspace: 'w1',
+      diff: { commits: 1, files: 2, head: '5e4d3c2', at: at(28 * DAY + 30) },
+      events: [
+        { at: at(28 * DAY + 60), kind: 'created' },
+        { at: at(28 * DAY), kind: 'state', text: 'done' },
+      ],
+      created: at(28 * DAY + 60),
+      updated: at(28 * DAY),
     },
   ]
 }

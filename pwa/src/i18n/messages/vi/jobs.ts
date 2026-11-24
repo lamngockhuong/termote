@@ -19,6 +19,8 @@ export default {
   'jobs.group.review': 'Cần xem lại · {count}',
   'jobs.group.todo': 'Chưa làm · {count}',
   'jobs.group.finished': 'Đã kết thúc · {count}',
+  'jobs.group.finishedExpiring_other':
+    'Đã kết thúc · {total} · {count} sắp xóa',
   'jobs.waitingNone': 'Không có việc nào chờ bạn',
   'jobs.openCount_other': '{count} việc đang mở',
   'jobs.groupEmpty': '{name} 0',
@@ -39,6 +41,18 @@ export default {
   'jobs.priority.high': 'Ưu tiên cao',
   'jobs.priority.normal': 'Ưu tiên bình thường',
   'jobs.priority.low': 'Ưu tiên thấp',
+  'jobs.finishedKeep_other':
+    'Việc đã kết thúc không đổi trong {count} ngày sẽ bị xóa ở lần kế hoạch thay đổi tiếp theo; sửa một việc sẽ giữ nó lại.',
+  'jobs.finishedCap':
+    'Khi kế hoạch đủ {max} việc, việc đã kết thúc cũ nhất bị xóa trước để có chỗ.',
+  'jobs.expiry.soon_other': 'có thể xóa sau {count} ngày',
+  'jobs.expiry.due': 'chờ xóa',
+  'jobs.expiry.soonLong_other':
+    'Việc này có thể bị xóa sau {count} ngày nếu không thay đổi',
+  'jobs.expiry.dueLong':
+    'Đã quá hạn giữ: việc này bị xóa ở lần kế hoạch thay đổi tiếp theo, trừ khi bạn sửa nó',
+  'jobs.expiry.dueLongNoEdit':
+    'Đã quá hạn giữ: việc này bị xóa ở lần kế hoạch thay đổi tiếp theo',
   'jobs.state.todo': 'Chưa làm',
   'jobs.state.active': 'Đang làm',
   'jobs.state.review': 'Cần xem lại',

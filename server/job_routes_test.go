@@ -917,3 +917,26 @@ func TestJobLedgerOverBridge(t *testing.T) {
 		t.Errorf("no %q in\n%s", want, logs)
 	}
 }
+
+// The list tells every client how long a finished job is kept and how many
+// jobs fit, except over a ledger a newer termote wrote: nothing is dropped
+// from that one.
+func TestJobListKeepAndMax(t *testing.T) {
+	jt := newJobsTest(t)
+	jt.create(map[string]any{"title": "Parser", "prompt": "Tidy the parser", "pane": "w1:pa"})
+	for _, as := range []string{"full", "view"} {
+		code, out := jt.do(as, http.MethodGet, "/api/mux/jobs?all=1", nil)
+		if code != http.StatusOK || out["finishedKeepSeconds"] != float64(30*24*60*60) || out["jobsMax"] != float64(200) {
+			t.Errorf("%s list = %d %v", as, code, out)
+		}
+	}
+	os.WriteFile(filepath.Join(jt.dir, jobsFile), []byte(`{"v":2,"jobs":[{"id":"x","title":"new","state":"done"}]}`), 0o600)
+	for _, as := range []string{"full", "view"} {
+		code, out := jt.do(as, http.MethodGet, "/api/mux/jobs?all=1", nil)
+		_, keep := out["finishedKeepSeconds"]
+		_, max := out["jobsMax"]
+		if code != http.StatusOK || keep || max || len(out["jobs"].([]any)) != 1 {
+			t.Errorf("%s list over a newer ledger = %d %v", as, code, out)
+		}
+	}
+}

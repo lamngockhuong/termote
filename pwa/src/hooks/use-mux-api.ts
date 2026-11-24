@@ -3272,6 +3272,16 @@ export interface JobList {
   // The fields beyond the first ones this server takes (none from an older
   // one)
   jobFields: JobField[]
+  // How long a finished job not changed is kept (ms), and how many jobs the
+  // ledger holds; null from an older server or over a ledger a newer one
+  // wrote, which is never pruned here
+  finishedKeepMs: number | null
+  jobsMax: number | null
+}
+
+// A count the server sent, when it is one: finite and above zero
+function positive(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 
 async function jobRequest(
@@ -3301,6 +3311,11 @@ export async function fetchJobs(): Promise<JobList> {
             typeof f === 'string' && JOB_FIELDS.includes(f),
         )
       : [],
+    finishedKeepMs:
+      positive(body.finishedKeepSeconds) === null
+        ? null
+        : body.finishedKeepSeconds * 1000,
+    jobsMax: positive(body.jobsMax),
   }
 }
 

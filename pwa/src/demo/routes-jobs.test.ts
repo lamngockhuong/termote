@@ -12,6 +12,8 @@ const DOCS = 'd3e4f5061728394a'
 const NOTES = 'e4f5061728394a5b'
 const BLOG = 'f5061728394a5b6c'
 const SEARCH = '061728394a5b6c7d'
+// Done 28 days ago, close to the server's keep time
+const OLD = '728394a5b6c7d8e9'
 
 describe('demo plan routes: priority, dependencies and workspace', () => {
   let state: DemoState
@@ -48,6 +50,7 @@ describe('demo plan routes: priority, dependencies and workspace', () => {
       SEARCH,
       DARK,
       DOCS,
+      OLD,
       BLOG,
     ])
     const notes = await get(NOTES)
