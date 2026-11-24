@@ -112,6 +112,22 @@ func TestFilesBranch(t *testing.T) {
 	if code, body := gx.get(t, "branch", url.Values{"base": {"nope"}}); code != http.StatusNotFound || body["code"] != "base_not_found" {
 		t.Errorf("unknown base = %d %v", code, body)
 	}
+	// Only a branch is a base: a commit hash or a tag would show a file as
+	// it was at any commit of HEAD's history.
+	first := strings.TrimSpace(gitT(t, gx.repo, "rev-list", "--max-parents=0", "HEAD"))
+	gitT(t, gx.repo, "tag", "v1", first)
+	for _, base := range []string{first, "v1"} {
+		for _, route := range []string{"branch", "branch/diff"} {
+			if code, body := gx.get(t, route, url.Values{"base": {base}, "path": {"a.txt"}}); code != http.StatusNotFound || body["code"] != "base_not_found" {
+				t.Errorf("%s base %q = %d %v", route, base, code, body)
+			}
+		}
+	}
+	// A remote branch is one.
+	gitT(t, gx.repo, "update-ref", "refs/remotes/origin/trunk", "refs/heads/trunk")
+	if code, body := gx.get(t, "branch", url.Values{"base": {"origin/trunk"}}); code != 200 || body["commits"] != float64(2) {
+		t.Errorf("remote branch = %d %v", code, body)
+	}
 	// A tag named like the branch does not win over it.
 	gitT(t, gx.repo, "tag", "trunk", "HEAD")
 	if code, body := gx.get(t, "branch", url.Values{"base": {"trunk"}}); code != 200 || body["commits"] != float64(2) {
