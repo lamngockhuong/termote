@@ -37,9 +37,7 @@ export function ChatAsks({ paneId, clockOffset }: Props) {
         (a) => a.live?.status === 'running' && a.live.paneId === paneId,
       )
 
-  const measure = useCallback(() => {
-    const el = box.current
-    if (!el) return
+  const measure = useCallback((el: HTMLElement) => {
     setBelow(el.scrollHeight - el.scrollTop - el.clientHeight > END_SLACK)
   }, [])
 
@@ -48,7 +46,7 @@ export function ChatAsks({ paneId, clockOffset }: Props) {
   useEffect(() => {
     const el = box.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(() => measure(el))
     ro.observe(el)
     for (const child of el.children) ro.observe(child)
     return () => ro.disconnect()
@@ -58,7 +56,7 @@ export function ChatAsks({ paneId, clockOffset }: Props) {
     <div className="relative shrink-0">
       <div
         ref={box}
-        onScroll={measure}
+        onScroll={(e) => measure(e.currentTarget)}
         className="scrollbar-hide relative max-h-[40vh] overflow-y-auto border-t border-border px-3 py-2 empty:hidden"
       >
         <OverviewAsks

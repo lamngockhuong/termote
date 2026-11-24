@@ -112,6 +112,46 @@ describe('ChatAsks', () => {
     expect(screen.queryByRole('button', { name: label })).toBeNull()
   })
 
+  it('measures again when the box or its content is resized', async () => {
+    let fire = () => {}
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          fire = cb
+        }
+        observe = observe
+        disconnect = disconnect
+      },
+    )
+    try {
+      api.fetchAsks.mockResolvedValue({
+        asks: [ask('Q1'), ask('Q2')],
+        readOnly: false,
+      })
+      const { container, unmount } = render(
+        <ChatAsks paneId="%1" clockOffset={0} />,
+      )
+      await settle()
+      const box = container.firstElementChild?.firstElementChild as HTMLElement
+      // The box and its section
+      expect(observe).toHaveBeenCalledWith(box)
+      expect(observe).toHaveBeenCalledWith(box.firstElementChild)
+      Object.defineProperty(box, 'scrollHeight', { value: 600 })
+      Object.defineProperty(box, 'clientHeight', { value: 300 })
+      act(() => fire())
+      expect(
+        screen.getByRole('button', { name: 'Scroll to the questions below' }),
+      ).toBeInTheDocument()
+      unmount()
+      expect(disconnect).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('offers no toggle for a single question', async () => {
     api.fetchAsks.mockResolvedValue({ asks: [ask('Q1')], readOnly: false })
     render(<ChatAsks paneId="%1" clockOffset={0} />)
