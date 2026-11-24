@@ -102,7 +102,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   For a pane whose snapshot shows Claude Code `working`, the overview also reads its screen through
   the prompt route's capture cache (`paneBackground`, inside the same bounded parallel reads) and
   sends `background`, the work its working line says it only waits for, never any other screen text;
-  the card then shows no Stop.
+  the card then shows no Stop. A view-only client gets `cursor` and `background` too: the transcript
+  route gives it the same cursor (paging needs it) and `agent/prompt` the same activity line, the
+  card shows the background work to it, and `agent/interrupt`, the one route that takes the cursor
+  to act, is `requireWriteRole`.
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude Code or OpenCode session (`AgentSession`, as the transcript): another
