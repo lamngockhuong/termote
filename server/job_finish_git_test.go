@@ -44,6 +44,9 @@ func newFinishRepo(t *testing.T) finishRepo {
 	gitIn(t, r.main, "init", "-q", "-b", "main")
 	gitIn(t, r.main, "config", "user.name", "t")
 	gitIn(t, r.main, "config", "user.email", "t@t")
+	// gitRunner reads no system config, so a checkout made with Git for
+	// Windows' core.autocrlf would read as modified.
+	gitIn(t, r.main, "config", "core.autocrlf", "false")
 	if err := os.WriteFile(filepath.Join(r.main, ".gitignore"), []byte(".env*\nnode_modules/\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
