@@ -144,6 +144,9 @@ export function OverviewJobs({
   // workspace a client sets (an older one): every job then, flat
   const [view, setView] = usePlanView()
   const byWorkspace = store.jobFields.includes('workspace')
+  // A workspace with no job now shows every workspace; the choice stays
+  // saved, for when its job is listed there again (a workspace opened again,
+  // a list read before its repository was known)
   const filter = byWorkspace
     ? effectiveFilter(view.filter, store.jobs, groups)
     : 'all'
@@ -162,11 +165,6 @@ export function OverviewJobs({
   useEffect(() => {
     if (selectedId && !selected && !editorOpen) setSelectedId(null)
   }, [selectedId, selected, editorOpen])
-  // A workspace with no job any more: every workspace from now on
-  useEffect(() => {
-    if (store.loaded && byWorkspace && filter !== view.filter)
-      setView({ ...view, filter })
-  }, [store.loaded, byWorkspace, filter, view, setView])
   // The Activity opened: the details make room for it
   useEffect(() => {
     if (activityOpen) setSelectedId(null)

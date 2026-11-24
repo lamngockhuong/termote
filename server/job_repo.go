@@ -42,24 +42,25 @@ func (a *agentAPI) groupRepos(snap Snapshot, start bool) []groupRepo {
 
 // workspaceNow is the open group j is shown under when its workspace is
 // gone: the first of the same repository, a main checkout before a linked
-// worktree of it. None while its workspace is open, or without a repository.
+// worktree of it, and of the linked ones, the job's own worktree's before
+// another's. None while its workspace is open, or without a repository.
 func workspaceNow(snap Snapshot, repos []groupRepo, j job) string {
 	if j.Workspace == "" || j.Repo == "" || groupIndex(snap.Groups, j.Workspace) >= 0 {
 		return ""
 	}
-	match := ""
+	own, first := "", ""
 	for _, r := range repos {
-		if r.repo != j.Repo {
-			continue
-		}
-		if !r.linked {
+		switch {
+		case r.repo != j.Repo:
+		case !r.linked:
 			return r.id
-		}
-		if match == "" {
-			match = r.id
+		case j.Worktree != nil && r.id == j.Worktree.GroupID:
+			own = r.id
+		case first == "":
+			first = r.id
 		}
 	}
-	return match
+	return cmp.Or(own, first)
 }
 
 // anchorJob keeps j's repository with its workspace: recorded while the

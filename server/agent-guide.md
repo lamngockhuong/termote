@@ -167,7 +167,7 @@ termote agents stop <pane> --cursor <cursor>   # end its turn, as Esc (cursor fr
 termote agents start --workspace <id> --kind claude 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-tests --title 'Fix the tests' 'Fix the failing tests'
 termote agents jobs                            # the job ledger, by priority: each job's pane, status, unread turn, branch, dir
-termote agents jobs --ready --mine             # the jobs to do that wait on nothing, highest priority first
+termote agents jobs --ready                    # the jobs to do that wait on nothing, highest priority first
 termote agents job add --title 'Docs' --priority high --after <job> --workspace <id>   # --after names jobs, unlike wait <pane>@<seq>
 termote agents job set <id> --priority low --no-after <job>   # also --after <job>, --workspace <id> or --no-workspace
 termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 4: timeout, 5: gone, 6: all idle and read
@@ -205,8 +205,8 @@ its last turn was read and nothing it started runs in the background, it says th
 agent is done; leave `done` to the user. Record the work you split up with `job add` (`--priority`,
 `--after <job>` for the order, `--workspace` while no agent has it yet: once a job has an agent or a
 worktree its workspace is fixed). At the start of a session, after each job reaches `review` and after
-each `job finish`, pick the next job with `jobs --ready --mine` (or `--workspace <id>`), highest priority
-first: `start --job` refuses a job that still waits on another. A job waiting on a failed or abandoned
+each `job finish`, pick the next job with `jobs --ready` (the user's jobs from the PWA too; `--mine` or
+`--workspace <id>` narrows it), highest priority first: `start --job` refuses a job that still waits on another. A job waiting on a failed or abandoned
 one is the user's call: ask with `ask add --job <id>`, never drop the dependency yourself. `--after` on a
 running or finished job only notes the order; it never holds up a state change or `job finish`. The ledger is the user's history: remove finished jobs
 (`job remove <id>`, `jobs prune`) only when the user asks; an unfinished one is refused, so

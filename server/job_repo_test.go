@@ -133,9 +133,20 @@ func TestJobRepoWorkspaceNow(t *testing.T) {
 	if snap, _ := jt.agent.activity.lastSnapshot(); workspaceNow(snap, jt.agent.groupRepos(snap, false), jt.stored(id)) != "w6" {
 		t.Error("linked fallback")
 	}
+	// The job's own worktree before another's of the same repository.
+	jt.agent.jobs.update(id, "", func(j *job) error { j.Worktree = &jobTree{Branch: "b", Dir: "/src/app-wt2", GroupID: "w8"}; return nil })
+	jt.setGroups(w2, repoGroup("w6", "/src/app-wt"), repoGroup("w8", "/src/app-wt"))
+	warmRepos(t, jt, 3)
+	if snap, _ := jt.agent.activity.lastSnapshot(); workspaceNow(snap, jt.agent.groupRepos(snap, false), jt.stored(id)) != "w8" {
+		t.Error("own worktree first")
+	}
 	// Two main checkouts: the first in the snapshot's order.
 	jt.setGroups(w2, repoGroup("w7", "/src/app"), repoGroup("w5", "/src/app"))
 	warmRepos(t, jt, 3)
+	// A single job's view (a grant's or a finish's answer) says it too.
+	if v := jt.agent.viewJob(jt.stored(id)); v.WorkspaceNow != "w7" {
+		t.Errorf("view %q", v.WorkspaceNow)
+	}
 	// The next write moves it.
 	if code, out := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "sent", "text": "x"}); code != http.StatusOK {
 		t.Fatalf("event = %d %v", code, out)

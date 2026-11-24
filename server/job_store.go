@@ -452,7 +452,12 @@ func (s *jobStore) create(j job) (job, error) {
 		j.Created = s.stamp(time.Time{})
 		j.Updated = j.Created
 		s.addEvent(&j, "created", "")
-		return append(list, j), nil
+		list = append(list, j)
+		// A job it waits on dropped for room leaves its after now, so the
+		// job returned is the one written.
+		s.pruneAfterJobs(list)
+		j = list[len(list)-1].clone()
+		return list, nil
 	})
 	if err == nil && j.State == "review" {
 		if f := s.onReview.Load(); f != nil {

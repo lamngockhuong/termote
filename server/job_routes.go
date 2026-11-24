@@ -856,7 +856,9 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 func (a *agentAPI) viewJob(j job) jobView {
 	snap, _ := a.activity.lastSnapshot()
 	list, _ := a.jobs.jobs()
-	return a.jobViewOf(list, j, a.jobLiveIn(snap, j))
+	v := a.jobViewOf(list, j, a.jobLiveIn(snap, j))
+	v.WorkspaceNow = workspaceNow(snap, a.groupRepos(snap, false), j)
+	return v
 }
 
 // jobViewOf is j for a full client, what it waits on read from list.

@@ -43,7 +43,7 @@ termote agents start --workspace <id> --kind <kind> --worktree <new branch> [--b
 termote agents start ... --title '<short title>'   # every start records a job; the title is what the user sees
 termote agents start --workspace <id> --kind <kind> --job <id>   # take up a job the user added in the PWA
 termote agents jobs [--mine] [--workspace <id>] [--ready] [--all] [--json]  # the ledger by priority: pane, status, unread, branch, dir
-termote agents jobs --ready --mine            # the jobs to do that wait on nothing: the next one to start
+termote agents jobs --ready                   # the jobs to do that wait on nothing: the next one to start
 termote agents job show <id>                  # prompt, note, grants, history
 termote agents job set <id> --state review --note '<what was done>'   # or: --pane <pane>, --title
 termote agents job add --title '<title>' [--pane <pane>] [--priority high|normal|low] [--after <job>]... [--workspace <id>]
@@ -136,8 +136,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   sees the order (`job --after` names jobs, unlike `wait <pane>@<seq>` marks), and `--workspace`
   when you add a job: once it has an agent or a worktree its workspace is fixed. At the start of a
   session, after each job reaches `review` and after each `job finish` (the usual way a job becomes
-  `done`, which can make the jobs after it ready), pick the next job with `jobs --ready --mine` (or
-  `--workspace <id>`), highest priority first. Never `start --job` a job that still waits: it is
+  `done`, which can make the jobs after it ready), pick the next job with `jobs --ready` (the user's
+  jobs from the PWA too; `--mine` or `--workspace <id>` narrows it), highest priority first. Never `start --job` a job that still waits: it is
   refused. A job waiting on a failed or abandoned one is the user's call: ask with `ask add --job
   <id>`, never drop the dependency yourself. `--after` on a running or finished job only notes the
   order; it never holds up a state change or `job finish`.

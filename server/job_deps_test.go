@@ -244,12 +244,21 @@ func TestJobStorePruneAfter(t *testing.T) {
 	// Removed.
 	a := mk("a", "done")
 	b := mk("b", "todo", a.ID)
-	bUpdated := b.Updated
 	if _, err := s.remove(a.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
-	if j, _ := s.job(b.ID); j.After != nil || !j.Updated.After(bUpdated) || !slices.Equal(deps(b.ID), []string{a.ID + " removed"}) {
+	if j, _ := s.job(b.ID); j.After != nil || !j.Updated.Equal(b.Updated) || !slices.Equal(deps(b.ID), []string{a.ID + " removed"}) {
 		t.Errorf("after a remove: %+v", j)
+	}
+	// Finished jobs waiting on each other are removed as read, one after
+	// the other (jobs prune).
+	pa := mk("pa", "done")
+	pb := mk("pb", "done", pa.ID)
+	if _, err := s.remove(pa.ID, pa.Updated.Format(time.RFC3339Nano), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.remove(pb.ID, pb.Updated.Format(time.RFC3339Nano), true); err != nil {
+		t.Errorf("the job read before its dependency went: %v", err)
 	}
 
 	// Dropped after 30 days.
@@ -280,6 +289,9 @@ func TestJobStorePruneAfter(t *testing.T) {
 	}
 	if j, _ := s.job(d.ID); j.After != nil || !slices.Equal(deps(d.ID), []string{f1.ID + " removed"}) {
 		t.Errorf("after the drop for room: %+v", j)
+	}
+	if d.After != nil || len(d.Events) != 2 {
+		t.Errorf("the job returned is not the one written: %+v", d)
 	}
 
 	// A file without the new fields reads and writes back without them.

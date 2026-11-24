@@ -149,14 +149,18 @@ func sortJobs(list []job) {
 
 // pruneAfter removes from every job's after the ids no longer in f, with a
 // deps event on that job: a job removed, pruned or dropped for its age
-// never stays named.
-func (s *jobStore) pruneAfter(f *jobFile) {
-	ids := make(map[string]bool, len(f.Jobs))
-	for _, j := range f.Jobs {
+// never stays named. updated does not move: nothing a client chose
+// changed, and a job read before (jobs prune going through finished jobs
+// that wait on each other) is still removed as read.
+func (s *jobStore) pruneAfter(f *jobFile) { s.pruneAfterJobs(f.Jobs) }
+
+func (s *jobStore) pruneAfterJobs(list []job) {
+	ids := make(map[string]bool, len(list))
+	for _, j := range list {
 		ids[j.ID] = true
 	}
-	for i := range f.Jobs {
-		j := &f.Jobs[i]
+	for i := range list {
+		j := &list[i]
 		var gone []string
 		j.After = slices.DeleteFunc(j.After, func(a string) bool {
 			if ids[a] {
@@ -170,9 +174,6 @@ func (s *jobStore) pruneAfter(f *jobFile) {
 		}
 		for _, a := range gone {
 			s.addEvent(j, "deps", a+" removed")
-		}
-		if len(gone) > 0 {
-			j.Updated = s.stamp(j.Updated)
 		}
 	}
 }

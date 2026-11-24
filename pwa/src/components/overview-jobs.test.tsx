@@ -651,8 +651,9 @@ describe('OverviewJobs', () => {
       planned()
       expect(filter()).toHaveValue('all')
       expect(titles('To do · 4')).toHaveLength(4)
+      // Kept for when a job is listed there again
       expect(JSON.parse(localStorage.getItem('termote-plan-view:')!)).toEqual({
-        filter: 'all',
+        filter: 'ws:w9',
         grouped: false,
       })
     })
