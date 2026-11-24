@@ -814,7 +814,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   read found, which a view-only client does not get for a home dir (`viewHidden`), as the
   overview's changes; the route never runs git itself. A view-only client also gets `ciSummary`
   (the worst pull request's colour, the count and the numbers, never a check name, link, repo or
-  error), and nothing of it where the branch is hidden; see Job pull requests. A job's worktree is its branch and folder
+  error), and nothing of it where the branch is hidden; see Job pull requests. Every role also gets
+  `finishedKeepSeconds` and `jobsMax`, the two server constants above and no job's data, except over a
+  newer-format ledger, which is never written and so never pruned (`TestJobListKeepAndMax`). A job's worktree is its branch and folder
   (a view-only client's `branch`) only while its agent's pane is in it (`dirInTree`, through
   symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
   and the pane's are shown, the worktree record kept. Writes:

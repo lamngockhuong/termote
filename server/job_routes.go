@@ -839,18 +839,28 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		full = append(full, v)
 	}
 	serverNow := time.Now().UTC().Format(activityTimeFormat)
+	var out map[string]any
 	if viewOnly {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": serverNow, "ciAvailable": ciOn, "jobFields": jobFields})
-		return
+		out = map[string]any{"jobs": brief, "readOnly": true, "serverNow": serverNow, "ciAvailable": ciOn, "jobFields": jobFields}
+	} else {
+		if full == nil {
+			full = []jobView{}
+		}
+		out = map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": serverNow, "canGrant": canGrant(r),
+			"ciAvailable": ciOn, "jobFields": jobFields}
 	}
-	if full == nil {
-		full = []jobView{}
+	// How long a finished job is kept and how many jobs fit: server
+	// constants, no job's data, so a view-only client gets them too. A ledger
+	// a newer termote wrote is never written here, so nothing is dropped from
+	// it and the PWA is told nothing.
+	if !readOnly {
+		out["finishedKeepSeconds"] = int64(jobsDoneKeep / time.Second)
+		out["jobsMax"] = maxJobs
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": serverNow, "canGrant": canGrant(r),
-		"ciAvailable": ciOn, "jobFields": jobFields})
+	jsonOK(w, out)
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
