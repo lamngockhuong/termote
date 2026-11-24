@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  NOTIFY_WORKER_VERSION,
   needsHomeScreenApp,
   notificationSupport,
   notifyWorkerReady,
@@ -47,7 +48,7 @@ describe('notify permission', () => {
   })
 
   it('is ready when the active worker answers the ping', async () => {
-    const worker = stubWorker({ version: 4 })
+    const worker = stubWorker({ version: NOTIFY_WORKER_VERSION })
     await expect(notifyWorkerReady()).resolves.toBe(true)
     expect(worker.postMessage).toHaveBeenCalledWith(
       { type: 'termote-notify-ping' },
@@ -60,6 +61,9 @@ describe('notify permission', () => {
     await expect(notifyWorkerReady()).resolves.toBe(false)
     // One without the settings proposal push
     stubWorker({ version: 2 })
+    await expect(notifyWorkerReady()).resolves.toBe(false)
+    // One that would leave a hidden workspace's name in a push
+    stubWorker({ version: 4 })
     await expect(notifyWorkerReady()).resolves.toBe(false)
     stubWorker(null)
     await expect(notifyWorkerReady()).resolves.toBe(false)

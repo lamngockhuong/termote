@@ -56,6 +56,7 @@ import { ReadOnlyBar } from './components/read-only-bar'
 import { SelectTextSheet } from './components/select-text-sheet'
 import {
   type GroupActions,
+  type HideActions,
   moveProblem,
   type ReorderActions,
   SessionSidebar,
@@ -103,6 +104,7 @@ import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
 import { openChangeFromLink } from './hooks/use-git-changes'
+import { useHiddenWorkspaces } from './hooks/use-hidden-workspaces'
 import {
   dropStaleViewerEntry,
   onViewerEntryGone,
@@ -156,6 +158,7 @@ import {
 } from './utils/deep-link'
 import { signOutPage } from './utils/files-persist'
 import { isFocusWindow } from './utils/focus-mode'
+import { visibleGroups, visibleSessions } from './utils/hidden-workspaces'
 import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
@@ -242,6 +245,9 @@ const getClipboardErrorMsg = (
 }
 
 // A toast with an action stays long enough to reach the button.
+// No workspace hidden from what is drawn (the hidden ones shown for a while)
+const NO_IDS: ReadonlySet<string> = new Set()
+
 const ACTION_TOAST_MS = 10000
 
 // An upload slower than this shows that it is running.
@@ -451,6 +457,19 @@ export default function App({
     clockOffset,
     settingsProposal,
   } = useLocalSessions(settings.pollInterval)
+  // Workspaces hidden on this browser. hiddenIds holds them whether or not
+  // they are shown for a while (notifications leave their names out either
+  // way); shownIds only while they are not, for what is drawn.
+  const hidden = useHiddenWorkspaces(groups)
+  const shownIds = hidden.revealed ? NO_IDS : hidden.hiddenIds
+  const shownGroups = useMemo(
+    () => visibleGroups(groups, shownIds),
+    [groups, shownIds],
+  )
+  const shownSessions = useMemo(
+    () => visibleSessions(sessions, shownIds),
+    [sessions, shownIds],
+  )
   // An agent's proposal of settings: shown until this browser applies or
   // dismisses it. The dialog keeps the proposal it opened on and applies
   // only that one.
@@ -493,6 +512,7 @@ export default function App({
   useAgentNotifications({
     sessions,
     groups,
+    hiddenGroupIds: hidden.hiddenIds,
     activePaneId: activeSession.paneId,
     enabled: settings.notifyAgents,
     pushActive: push.pushActive,
@@ -713,7 +733,12 @@ export default function App({
       ? {
           kind: groupKind,
           onNew: () => setNewGroupOpen(true),
-          onRename: renameGroup,
+          onRename: async (id, name) => {
+            const old = groups.find((g) => g.id === id)?.name
+            await renameGroup(id, name)
+            // A hidden one stays hidden under its new name
+            hidden.rename(old, name)
+          },
           onClose: setPendingGroupCloseId,
           canRename: (id) => namedGroups && !isDefaultGroup(id),
           ...worktreeActions,
@@ -734,6 +759,16 @@ export default function App({
             : undefined,
         }
       : undefined
+  // Hiding changes nothing on the server: offered on every role
+  const hideActions: HideActions = {
+    kind: groupKind,
+    hiddenIds: hidden.hiddenIds,
+    revealed: hidden.revealed,
+    onHide: hidden.hide,
+    onUnhide: hidden.unhide,
+    onReveal: hidden.reveal,
+    onRehide: hidden.rehide,
+  }
   // Tab bars show the current group only; the sidebar shows every group.
   const groupSessions = useMemo(
     () =>
@@ -742,14 +777,18 @@ export default function App({
         : sessions,
     [sessions, activeSession.groupId],
   )
-  const groupName = groups.find((g) => g.id === activeSession.groupId)?.name
+  // The workspace on screen stays open when hidden, under a common label
+  const groupName =
+    activeSession.groupId && shownIds.has(activeSession.groupId)
+      ? t('shell.hidden.label')
+      : groups.find((g) => g.id === activeSession.groupId)?.name
   // Mobile chip: tabs waiting on the user besides the one on screen.
   const blockedElsewhere = useMemo(
     () =>
-      sessions.filter(
+      shownSessions.filter(
         (s) => s.id !== activeSession.id && matchesFilter(s, 'needs-you'),
       ).length,
-    [sessions, activeSession.id],
+    [shownSessions, activeSession.id],
   )
 
   // Views offered for this pane; one that stops being offered gives way to
@@ -2340,6 +2379,7 @@ export default function App({
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
+            hideActions={hideActions}
             reorder={reorder}
             layout={compactSidebar ? 'compact' : 'detailed'}
             onSelectGroup={selectGroup}
@@ -2368,6 +2408,7 @@ export default function App({
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
+            hideActions={hideActions}
             reorder={reorder}
           />
         )}
@@ -2779,6 +2820,7 @@ export default function App({
                   <OverviewScreen
                     sessions={sessions}
                     groups={groups}
+                    hiddenGroupIds={shownIds}
                     groupNoun={groupNoun}
                     ready={sessionsLoaded}
                     pollInterval={settings.pollInterval * 1000}
@@ -2898,9 +2940,14 @@ export default function App({
           // the dialog does not open
           recent={!!mux.caps.recentGroups}
           takenNames={groups.map((g) => g.name)}
+          // The recent list leaves the hidden ones out, as the sidebar does
+          hiddenKeys={hidden.revealed ? undefined : hidden.keys}
+          machineId={hidden.machineId}
           onClose={() => setNewGroupOpen(false)}
           onCreate={async (name, cwd, isOpen) => {
             await createGroup(name, cwd, isOpen)
+            // A workspace made with a hidden one's name is shown
+            hidden.forgetName(name)
             // As a new session does: the sheet closes on what was made
             if (isMobile && isOpen()) setSidebarOpen(false)
           }}
@@ -3044,8 +3091,8 @@ export default function App({
               onRun={runFromPalette}
               commands={commands}
               session={activeSession}
-              sessions={sessions}
-              groups={groups}
+              sessions={shownSessions}
+              groups={shownGroups}
               readOnly={readOnly}
               filesAvailable={
                 !!activeSession.paneId &&

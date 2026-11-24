@@ -61,10 +61,15 @@ export function eventTime(
   return formatTime(t - clockOffset, locale, true)
 }
 
+const NO_IDS: ReadonlySet<string> = new Set()
+
 interface Props {
   events: readonly ActivityEvent[]
   sessions: Session[]
   groups: SessionGroup[]
+  // Workspaces hidden on this browser: their panes' events are left out,
+  // rather than shown as closed
+  hiddenGroupIds?: ReadonlySet<string>
   // Server time minus this device's (ms)
   clockOffset: number
   loaded: boolean
@@ -79,6 +84,7 @@ export function ActivityLog({
   events,
   sessions,
   groups,
+  hiddenGroupIds = NO_IDS,
   clockOffset,
   loaded,
   error,
@@ -99,13 +105,26 @@ export function ActivityLog({
     () => new Map(groups.map((g) => [g.id, g.name])),
     [groups],
   )
+  // A hidden workspace's events are left out, as if there were none
+  const listed = useMemo(
+    () =>
+      hiddenGroupIds.size
+        ? events.filter(
+            (e) =>
+              !hiddenGroupIds.has(
+                byKey.get(e.key)?.session.groupId ?? e.groupId,
+              ),
+          )
+        : events,
+    [events, byKey, hiddenGroupIds],
+  )
   const rows = useMemo(
     () =>
-      events
+      listed
         .filter((e) => filter === 'all' || e.to === filter)
         .slice()
         .reverse(),
-    [events, filter],
+    [listed, filter],
   )
 
   return (
@@ -124,7 +143,7 @@ export function ActivityLog({
       )}
       {loaded && rows.length === 0 ? (
         <p className="py-4 text-center text-[13px] text-fg-muted">
-          {events.length
+          {listed.length
             ? t('tasks.activity.noMatch')
             : t('tasks.activity.none')}
         </p>

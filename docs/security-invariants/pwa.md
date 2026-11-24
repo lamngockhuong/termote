@@ -20,8 +20,12 @@ Part of the [security invariants](README.md): notifications, settings proposals 
   HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
   service learns neither. The service worker reads the names from the snapshot (3 s) and strips
   the characters `visibleUnsafe` marks (64 characters max); the pane's name (`Pane.Name`), when
-  it has one, goes before the agent's; `Pane.Title` is never used; every push shows a
-  notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
+  it has one, goes before the agent's; `Pane.Title` is never used; a workspace hidden on this
+  browser (`/__hidden` in the `termote-prefs` cache, written by `hooks/use-hidden-workspaces.ts`,
+  keyed on the push's `machineId` and the group's name trimmed, as `hiddenKey` builds it) loses
+  its name, and every one does when that entry is there but cannot be read (none is hidden
+  without it); the page's own notifications do the same, shown for a while or not; every push
+  shows a notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
   evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new

@@ -7,15 +7,20 @@ export function movableGroups(groups: SessionGroup[]): SessionGroup[] {
 }
 
 // The index Move up (-1) or Move down (+1) sends for id in ids, or null at
-// an end (or when id is not there).
+// an end (or when id is not there). The ids in skip (not on screen) are
+// stepped over: id lands past the next one shown, the skipped ones keep
+// their place among the rest.
 export function targetIndex(
   ids: string[],
   id: string,
   delta: -1 | 1,
+  skip?: ReadonlySet<string>,
 ): number | null {
   const at = ids.indexOf(id)
-  const to = at + delta
-  return at < 0 || to < 0 || to >= ids.length ? null : to
+  if (at < 0) return null
+  let to = at + delta
+  while (to >= 0 && to < ids.length && skip?.has(ids[to])) to += delta
+  return to < 0 || to >= ids.length ? null : to
 }
 
 // The final index of dragged dropped before (after: false) or after over,

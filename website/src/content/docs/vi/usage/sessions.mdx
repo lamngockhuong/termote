@@ -273,6 +273,43 @@ của chúng, nhưng một liên kết tới tab (hoặc lựa chọn đã lưu 
 đánh số lại sẽ mở một tab khác sau đó.
 </Aside>
 
+### Ẩn workspace
+
+Muốn danh sách gọn hơn, hay không để tên dự án lọt vào ảnh chụp màn hình, hãy chọn **Hide** trong
+menu **⋯** của workspace (session tmux hay Zellij cũng có mục này). Workspace đó biến khỏi sidebar,
+mục **Agents** của bố cục compact, command palette, [overview agent](/vi/usage/overview/) (thẻ agent,
+nhật ký hoạt động và các job của Plan) và danh sách gần đây trong hộp **New workspace**. Các linked
+worktree của repository cũng bị ẩn theo.
+
+- Dưới danh sách có một dòng cho biết đang ẩn bao nhiêu workspace. Bấm **Show** thì chúng hiện lại
+  đúng chỗ cũ, mỗi cái kèm biểu tượng con mắt gạch chéo, cho tới khi bạn bấm **Hide again** hoặc tải
+  lại trang. Muốn một workspace hiện hẳn, chọn **Unhide** trong menu của nó lúc đang hiện tạm.
+- Workspace đang xem vẫn mở, chỉ là header ghi **Hidden** thay cho tên.
+- Thiết bị chỉ xem cũng có mục **Hide**. Khi bạn di chuyển các workspace khác, workspace ẩn vẫn nằm
+  yên chỗ của nó.
+- Agent trong workspace ẩn vẫn gửi thông báo, nhưng cả thông báo của trang lẫn Web Push đều không
+  ghi tên workspace, kể cả lúc nó đang hiện tạm. Thông báo của workspace đó còn trên màn hình sẽ bị
+  đóng ngay khi bạn ẩn.
+
+Danh sách ẩn nằm trong trình duyệt, không nằm trên server: mỗi trình duyệt và mỗi thiết bị giữ danh
+sách riêng. Trên iOS, tab Safari và ứng dụng thêm vào màn hình chính cũng giữ hai danh sách khác nhau.
+
+<Aside type="caution">
+Ẩn chỉ bỏ tên khỏi màn hình. Nội dung terminal không bị làm mờ, và ai đăng nhập được vẫn mở được
+workspace. Ngoài ra còn mấy giới hạn sau:
+
+- Danh sách nhớ workspace theo tên (cùng máy chứa nó). Hai workspace trùng tên sẽ bị ẩn cùng nhau,
+  còn workspace mới đặt trùng tên một workspace đang ẩn thì vẫn hiện.
+- Đổi tên lúc đang có trang Termote mở thì workspace vẫn ẩn dưới tên mới; đổi tên lúc không có trang
+  nào mở thì nó hiện lại. Space herdr-core không đặt tên sẽ lấy tên thư mục, nên có thể hiện lại nếu
+  thư mục đổi lúc không có trang nào mở. Session Zellij đổi tên bên ngoài Termote cũng hiện lại, vì
+  id của nó đổi theo tên.
+- Thông báo job vẫn hiện tiêu đề của job.
+- Với Zellij, thanh địa chỉ chứa id của session, tức là tên của nó mã hoá base64.
+- Web Push chỉ bỏ tên sau khi trình duyệt chạy service worker mới: bấm **Reload** khi Termote báo có
+  phiên bản mới.
+</Aside>
+
 ### Tìm phiên
 
 Khi có từ hai phiên trở lên, header của sidebar desktop (và header của bảng phiên trên mobile, cạnh

@@ -248,6 +248,13 @@ export default {
   'shell.reorder.hint': '{steps} để sắp xếp lại',
   'shell.group.renameFailed': 'Không đổi tên được {noun}',
   'shell.group.newName': 'Tên mới cho {noun} {name}',
+  'shell.hidden.hide': 'Ẩn',
+  'shell.hidden.unhide': 'Bỏ ẩn',
+  'shell.hidden.label': 'Đã ẩn',
+  'shell.hidden.count': '{count} mục đã ẩn',
+  'shell.hidden.showing': 'Đang hiện {count} mục ẩn',
+  'shell.hidden.show': 'Hiện',
+  'shell.hidden.rehide': 'Ẩn lại',
   'shell.group.actions': 'Thao tác với {noun} {name}',
   'shell.sidebar.sessionName': 'Tên phiên',
   'shell.sidebar.tabNameFixed':

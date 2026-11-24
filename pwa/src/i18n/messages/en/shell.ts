@@ -284,6 +284,14 @@ export default {
   'shell.reorder.hint': '{steps} to reorder',
   'shell.group.renameFailed': 'Could not rename the {noun}',
   'shell.group.newName': 'New name for {noun} {name}',
+  // Workspaces hidden on this browser (hooks/use-hidden-workspaces.ts)
+  'shell.hidden.hide': 'Hide',
+  'shell.hidden.unhide': 'Unhide',
+  'shell.hidden.label': 'Hidden',
+  'shell.hidden.count': '{count} hidden',
+  'shell.hidden.showing': 'Showing {count} hidden',
+  'shell.hidden.show': 'Show',
+  'shell.hidden.rehide': 'Hide again',
   'shell.group.actions': 'Actions for {noun} {name}',
   'shell.sidebar.sessionName': 'Session name',
   'shell.sidebar.tabNameFixed':

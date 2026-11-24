@@ -580,7 +580,18 @@ vi.mock('./components/session-sidebar', () => ({
     width,
     onWidthChange,
     onResizingChange,
+    groups,
+    hideActions,
   }: {
+    groups?: { id: string; name: string }[]
+    hideActions?: {
+      hiddenIds: ReadonlySet<string>
+      revealed: boolean
+      onHide: (group: object) => void
+      onUnhide: (group: object) => void
+      onReveal: () => void
+      onRehide: () => void
+    }
     machines?: import('react').ReactNode
     width?: unknown
     onWidthChange?: (width: number) => void
@@ -622,6 +633,30 @@ vi.mock('./components/session-sidebar', () => ({
       data-width={width === undefined ? undefined : String(width)}
     >
       {machines}
+      {hideActions && (
+        <span
+          data-testid="sb-hidden"
+          data-ids={[...hideActions.hiddenIds].join(',')}
+          data-revealed={String(hideActions.revealed)}
+        >
+          <button
+            onClick={() =>
+              hideActions.onHide(groups!.find((g) => g.id === 'main')!)
+            }
+          >
+            SBHideMain
+          </button>
+          <button
+            onClick={() =>
+              hideActions.onUnhide(groups!.find((g) => g.id === 'main')!)
+            }
+          >
+            SBUnhideMain
+          </button>
+          <button onClick={hideActions.onReveal}>SBReveal</button>
+          <button onClick={hideActions.onRehide}>SBRehide</button>
+        </span>
+      )}
       {onResizingChange && (
         <>
           <button onClick={() => onResizingChange(true)}>SBDragStart</button>
@@ -6978,6 +7013,56 @@ describe('App — group actions', () => {
     ).toBeInTheDocument()
     fireEvent.click(screen.getByText('GroupNew'))
     expect(screen.queryByLabelText('Name')).toBeNull()
+  })
+
+  describe('hidden workspaces', () => {
+    beforeEach(() => localStorage.removeItem('termote-hidden-workspaces'))
+    afterEach(() => {
+      localStorage.removeItem('termote-hidden-workspaces')
+      mockIsMobile.mockReturnValue(false)
+    })
+
+    it('mobile: the workspace on screen stays open under a common label', async () => {
+      mockIsMobile.mockReturnValue(true)
+      withGroups()
+      render(<App />)
+      const hiddenState = () => {
+        const el = screen.getByTestId('sb-hidden')
+        return `${el.dataset.ids} ${el.dataset.revealed}`
+      }
+      expect(await screen.findByText(/^main · 2/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('SBHideMain'))
+      expect(hiddenState()).toBe('main false')
+      expect(screen.getByText(/^Hidden · 2/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('SBReveal'))
+      expect(screen.getByText(/^main · 2/)).toBeInTheDocument()
+      // Still hidden for notifications while shown
+      expect(hiddenState()).toBe('main true')
+      fireEvent.click(screen.getByText('SBRehide'))
+      expect(screen.getByText(/^Hidden · 2/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('SBUnhideMain'))
+      expect(screen.getByText(/^main · 2/)).toBeInTheDocument()
+    })
+
+    it("shows a workspace made with a hidden one's name", async () => {
+      withGroups()
+      render(<App />)
+      fireEvent.click(await screen.findByText('SBHideMain'))
+      fireEvent.click(screen.getByText('GroupNew'))
+      fireEvent.change(screen.getByLabelText('Name'), {
+        target: { value: 'main' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+      })
+      expect(createGroup).toHaveBeenCalledWith('main', '', expect.any(Function))
+      expect(screen.getByTestId('sb-hidden').dataset.ids).toBe('')
+      // Shown for a while, the dialog lists every recent one
+      fireEvent.click(screen.getByText('SBHideMain'))
+      fireEvent.click(screen.getByText('SBReveal'))
+      fireEvent.click(screen.getByText('GroupNew'))
+      expect(screen.getByText('New tmux session')).toBeInTheDocument()
+    })
   })
 
   it('creates a group from the dialog', async () => {

@@ -19,8 +19,9 @@ import type {
 import { agentCards, type OverviewCard } from '../utils/agent-cards'
 import { stuckFor } from '../utils/agent-stuck'
 import { asksOverviewPlan } from '../utils/deep-link'
+import { visibleGroups, visibleSessions } from '../utils/hidden-workspaces'
 import { jobOfPane } from '../utils/job-of-pane'
-import { groupJobs } from '../utils/jobs'
+import { groupJobs, jobWorkspace } from '../utils/jobs'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
 import {
@@ -59,9 +60,14 @@ import { Sheet } from './ui/sheet'
 // The card's time is a coarse "3 min ago", read again this often
 export const OVERVIEW_TICK = NOW_TICK
 
+const NO_IDS: ReadonlySet<string> = new Set()
+
 interface Props {
   sessions: Session[]
   groups: SessionGroup[]
+  // Workspaces hidden on this browser (and not shown for a while): their
+  // agents, events and jobs are left out
+  hiddenGroupIds?: ReadonlySet<string>
   // What a group is called here ("workspace", "tmux session")
   groupNoun: string
   // The first snapshot is in: until then nothing says "no agent"
@@ -100,8 +106,9 @@ interface Props {
 // first, then working, done and idle, the longest in its state first. A card
 // opens its pane; the filter is the overview's own, not the sidebar's.
 export function OverviewScreen({
-  sessions,
-  groups,
+  sessions: allSessions,
+  groups: allGroups,
+  hiddenGroupIds = NO_IDS,
   groupNoun,
   ready,
   pollInterval,
@@ -118,6 +125,14 @@ export function OverviewScreen({
   notify = noNotify,
 }: Props) {
   const { t } = useT()
+  const sessions = useMemo(
+    () => visibleSessions(allSessions, hiddenGroupIds),
+    [allSessions, hiddenGroupIds],
+  )
+  const groups = useMemo(
+    () => visibleGroups(allGroups, hiddenGroupIds),
+    [allGroups, hiddenGroupIds],
+  )
   const overview = useAgentOverview(pollInterval)
   const activity = useActivityLog(pollInterval)
   // Every session's tokens, today and in the last 7 days
@@ -351,7 +366,11 @@ export function OverviewScreen({
     setPlanFocus(undefined)
     if (next !== 'agents') stopPicking()
   }
-  const jobGroups = groupJobs(jobs.jobs)
+  const jobGroups = groupJobs(
+    hiddenGroupIds.size
+      ? jobs.jobs.filter((j) => !hiddenGroupIds.has(jobWorkspace(j)))
+      : jobs.jobs,
+  )
   const openJobs =
     jobGroups.waiting.length +
     jobGroups.unread.length +
@@ -417,8 +436,9 @@ export function OverviewScreen({
   const log = (
     <ActivityLog
       events={activity.events}
-      sessions={sessions}
+      sessions={allSessions}
       groups={groups}
+      hiddenGroupIds={hiddenGroupIds}
       clockOffset={clockOffset}
       loaded={activity.loaded}
       error={activity.error}
@@ -547,7 +567,8 @@ export function OverviewScreen({
                   wide={wide}
                   detailSlot={detailSlot}
                   onCloseActivity={() => setLogOpen(false)}
-                  groups={groups}
+                  groups={allGroups}
+                  hiddenGroupIds={hiddenGroupIds}
                 />
               )}
             </div>

@@ -120,6 +120,13 @@ describe('useAgentNotifications', () => {
     expect(showNotification).toHaveBeenCalledTimes(1)
   })
 
+  it("leaves a hidden workspace's name out", async () => {
+    const { next } = setup({ hiddenGroupIds: new Set(['g']) })
+    next({ p1: 'working', p2: 'blocked' })
+    await waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1))
+    expect(showNotification.mock.calls[0][1].body).toBe('claude · tab-p2')
+  })
+
   it('a status follows its pane when a move shifts the ids', async () => {
     const { next } = setup({
       sessions: sessionsWith({ p1: 'idle', p2: 'working' }),

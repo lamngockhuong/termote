@@ -9,6 +9,7 @@ import {
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
+import { hiddenKey } from '../utils/hidden-workspaces'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -95,6 +96,10 @@ interface Props {
   // The group takes a name (caps.renameGroup); herdr-core names a new space
   // after its folder, so only the directory is asked there
   named?: boolean
+  // Workspaces hidden on this browser (utils/hidden-workspaces.ts), keyed on
+  // machineId: left out of the recent list
+  hiddenKeys?: readonly string[]
+  machineId?: string
 }
 
 // Asks for the name and directory of a new group and creates it. A refusal
@@ -106,6 +111,8 @@ export function GroupDialog({
   recent = false,
   takenNames = [],
   named = true,
+  hiddenKeys = [],
+  machineId = '',
 }: Props) {
   const { t } = useT()
   const noun = groupNoun(kind, t)
@@ -154,7 +161,12 @@ export function GroupDialog({
       },
     )
   }, [recent])
-  const recentGroups = loaded?.groups.filter((g) => !hidden.has(g.id)) ?? []
+  const hiddenNames = new Set(hiddenKeys)
+  const recentGroups =
+    loaded?.groups.filter(
+      (g) =>
+        !hidden.has(g.id) && !hiddenNames.has(hiddenKey(machineId, g.name)),
+    ) ?? []
   const shownGroups = expanded
     ? recentGroups
     : recentGroups.slice(0, RECENT_SHOWN)

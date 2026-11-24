@@ -700,6 +700,43 @@ describe('OverviewJobs', () => {
       expect(within(card('job d')).getByText('High priority')).toBeVisible()
     })
 
+    it("leaves a hidden workspace's jobs and name out", () => {
+      localStorage.clear()
+      show({ jobs: PLANNED, jobFields: FIELDS }, false, undefined, {
+        groups: GROUPS,
+        hiddenGroupIds: new Set(['w2']),
+      })
+      expect(titles('To do · 3')).toEqual(['job d', 'job a', 'job c'])
+      expect(titles('To review · 1')).toEqual(['job f'])
+      expect(
+        within(filter())
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['All workspaces', 'acme-api', 'gone1', 'No workspace'])
+      expect(screen.queryByText(/web/)).toBeNull()
+      // A new job cannot be put in it
+      fireEvent.click(screen.getByRole('button', { name: 'New job' }))
+      const dialog = screen.getByRole('dialog', { name: 'New job' })
+      expect(
+        within(within(dialog).getByLabelText('Workspace'))
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['No workspace', 'acme-api'])
+    })
+
+    it('shows no job when every one is in a hidden workspace', () => {
+      show(
+        { jobs: [job('b', { workspace: 'w2' })], jobFields: FIELDS },
+        false,
+        undefined,
+        { groups: GROUPS, hiddenGroupIds: new Set(['w2']) },
+      )
+      expect(screen.queryByText('job b')).toBeNull()
+      expect(
+        screen.queryByRole('combobox', { name: 'Workspace shown' }),
+      ).toBeNull()
+    })
+
     it('filters by workspace, remembering the choice in this browser', () => {
       const { unmount } = planned()
       expect(filter()).toHaveValue('all')

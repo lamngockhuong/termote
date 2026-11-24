@@ -6,9 +6,10 @@
   // The page turns notifications on only once the active worker answers this,
   // since an older worker kept active (registerType 'prompt') lacks the click
   // handler, one from before 2 lacks the push handler, one from before 3
-  // the settings proposal push, and one from before 4 the job review push.
+  // the settings proposal push, one from before 4 the job review push, and
+  // one from before 5 leaves a hidden workspace's name in a push.
   // Equal to NOTIFY_WORKER_VERSION in src/utils/notify-permission.ts.
-  const NOTIFY_VERSION = 4
+  const NOTIFY_VERSION = 5
 
   self.addEventListener('message', (event) => {
     if (event.data?.type !== 'termote-notify-ping') return
@@ -212,15 +213,53 @@
     }
   }
 
+  // Where the page keeps the workspaces hidden on this browser. Equal to
+  // HIDDEN_URL in src/utils/hidden-workspaces.ts, in LOCALE_CACHE.
+  const HIDDEN_URL = '/__hidden'
+
+  // The hidden workspaces' keys: none when the page never kept a list (or
+  // Cache Storage is refused), null when a kept list cannot be read, so that
+  // no workspace's name is shown then.
+  async function readHidden() {
+    let res
+    try {
+      res = await caches.match(HIDDEN_URL, { cacheName: LOCALE_CACHE })
+    } catch {
+      return new Set()
+    }
+    if (!res) return new Set()
+    try {
+      const list = await res.json()
+      if (!Array.isArray(list)) return null
+      return new Set(list.filter((k) => typeof k === 'string'))
+    } catch {
+      return null
+    }
+  }
+
+  // A workspace's key: the machine's id ('' for this server) and its own
+  // name, trimmed. The same as hiddenKey in src/utils/hidden-workspaces.ts.
+  function hiddenKeyOf(machine, name) {
+    return `${machine}\u0000${typeof name === 'string' ? name.trim() : ''}`
+  }
+
   // Group, tab, pane and agent names of the event's pane, or null without a
-  // snapshot.
-  function namesOf(snap, ev) {
+  // snapshot. A hidden workspace's name is left out (all of them when the
+  // list cannot be read).
+  function namesOf(snap, ev, hidden, machine) {
     if (!snap) return null
     const group = snap.groups?.find((g) => g.id === ev.groupId)
     const tab = group?.tabs?.find((t) => t.id === ev.tabId)
     const pane = tab?.panes?.find((p) => p.id === ev.paneId)
+    // A linked worktree is hidden with its repository checkout, as
+    // hiddenGroupIds does
+    const parent = snap.groups?.find((g) => g.id === group?.worktree?.parent)
+    const hide =
+      !hidden ||
+      hidden.has(hiddenKeyOf(machine, group?.name)) ||
+      (!!parent && hidden.has(hiddenKeyOf(machine, parent.name)))
     return {
-      group: group?.name,
+      group: hide ? undefined : group?.name,
       tab: tab?.name,
       pane: pane?.name,
       agent: pane?.agent?.name,
@@ -382,7 +421,7 @@
     const read = await readSnapshot(machine)
     // The badge counts this server's agents only
     if (!machine) await updateBadge(read)
-    const names = namesOf(read.snap, ev)
+    const names = namesOf(read.snap, ev, await readHidden(), machine)
     const options = {
       tag: machine ? `${machine}/${ev.paneId}` : ev.paneId,
       renotify: true,
