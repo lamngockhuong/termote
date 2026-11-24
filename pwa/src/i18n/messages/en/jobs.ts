@@ -5,9 +5,11 @@ export default {
   'jobs.title': 'Plan',
   'jobs.new': 'New job',
   'jobs.readFailed': 'Could not read the plan. Showing the last one read',
-  'jobs.none':
-    'No job yet. Add one, or let an orchestrator agent plan the work',
+  // The empty plan: a title, then a line under it
+  'jobs.none': 'No job yet',
+  'jobs.noneHint': 'Add one, or let an orchestrator agent plan the work',
   'jobs.noneOpen': 'Every job is finished',
+  'jobs.noneOpenHint': 'The finished jobs are in the list below',
   // The groups; {count}: how many jobs are in it
   'jobs.group.waiting': 'Waiting for you · {count}',
   'jobs.group.unread': 'Done, not read · {count}',

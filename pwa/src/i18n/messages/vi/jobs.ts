@@ -5,9 +5,11 @@ export default {
   'jobs.title': 'Kế hoạch',
   'jobs.new': 'Thêm việc',
   'jobs.readFailed': 'Không đọc được kế hoạch. Đang hiện bản đọc gần nhất',
-  'jobs.none':
-    'Chưa có việc nào. Hãy thêm một việc, hoặc để một agent điều phối lên kế hoạch',
+  'jobs.none': 'Chưa có việc nào',
+  'jobs.noneHint':
+    'Hãy thêm một việc, hoặc để một agent điều phối lên kế hoạch',
   'jobs.noneOpen': 'Mọi việc đều đã kết thúc',
+  'jobs.noneOpenHint': 'Các việc đã kết thúc nằm ở danh sách bên dưới',
   'jobs.group.waiting': 'Đang chờ bạn · {count}',
   'jobs.group.unread': 'Xong, chưa đọc · {count}',
   'jobs.group.running': 'Đang chạy · {count}',

@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, X } from 'lucide-react'
+import { ChevronDown, CircleCheck, ListTodo, Plus, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useJobs } from '../hooks/use-jobs'
 import type { Job } from '../hooks/use-mux-api'
@@ -248,9 +248,29 @@ export function OverviewJobs({
           </p>
         )}
         {store.loaded && open === 0 && (
-          <p className="m-0 text-[12px] text-fg-muted">
-            {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
-          </p>
+          <div className="flex flex-col items-center gap-1.5 rounded-panel border border-dashed border-border-strong px-4 py-8 text-center">
+            {store.jobs.length === 0 ? (
+              <ListTodo
+                size={22}
+                aria-hidden="true"
+                className="text-fg-subtle"
+              />
+            ) : (
+              <CircleCheck
+                size={22}
+                aria-hidden="true"
+                className="text-success"
+              />
+            )}
+            <p className="m-0 mt-1 font-medium text-fg">
+              {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
+            </p>
+            <p className="m-0 text-[12px] text-fg-muted">
+              {store.jobs.length === 0
+                ? t('jobs.noneHint')
+                : t('jobs.noneOpenHint')}
+            </p>
+          </div>
         )}
         {open > 0 && (
           <>
