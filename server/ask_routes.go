@@ -18,12 +18,13 @@ import (
 // server looks up itself (never a key or an identity from the request). A
 // full client reads them and answers one: the server types a fixed English
 // message into the input box of the orchestrator that asked, checked under
-// the pane's lock as sendCI checks a job's agent, and records the answer. A
+// the pane's lock as sendCI checks a job's agent, and records the answer;
+// or dismisses one, typing nothing (wait --mine tells the orchestrator). A
 // view-only client sees how many wait and their ids, never their text.
 //
-// The machine proxy forwards the list and an answer only
-// (machine_proxy.go): another termote's browser answers through its
-// Machines, never its CLI.
+// The machine proxy forwards the list, an answer and a dismissal only
+// (machine_proxy.go): another termote's browser answers or dismisses
+// through its Machines, never its CLI.
 
 var (
 	errAskBusy        = &codedError{"ask_busy", "an answer to the question is being sent", http.StatusConflict}
@@ -89,6 +90,10 @@ type askInput struct {
 	Answer  string   `json:"answer"`
 }
 
+type askDismissInput struct {
+	Updated string `json:"updated"`
+}
+
 type askAnswerInput struct {
 	Updated string  `json:"updated"`
 	Choice  *int    `json:"choice"`
@@ -100,6 +105,7 @@ func (a *agentAPI) registerAskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/asks/{id}/close", a.handleAskClose)
 	mux.HandleFunc("/api/mux/asks/{id}/reported", a.handleAskReported)
 	mux.HandleFunc("/api/mux/asks/{id}/answer", a.handleAskAnswer)
+	mux.HandleFunc("/api/mux/asks/{id}/dismiss", a.handleAskDismiss)
 }
 
 func (a *agentAPI) handleAsks(w http.ResponseWriter, r *http.Request) {
@@ -322,11 +328,7 @@ func (a *agentAPI) handleAskAnswer(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 		return
 	}
-	// The answer is the user's words: over the bridge only a browser of the
-	// other termote gives one, never its CLI or an older termote that names
-	// no origin, as a permission dialog's choices are held (cliMayChoose).
-	if auth, ok := authFrom(r.Context()); ok && auth.Kind == authMachine && !browserOrigin(auth.OriginAuth) {
-		writeJobError(w, errAskBrowserOnly)
+	if !askFromBrowser(w, r) {
 		return
 	}
 	var in askAnswerInput
@@ -388,10 +390,7 @@ func (a *agentAPI) handleAskAnswer(w http.ResponseWriter, r *http.Request) {
 		a.writeCIError(w, err)
 		return
 	}
-	by, via := "socket", "none"
-	if _, ok := authFrom(r.Context()); ok {
-		by, via = auditWho(r)
-	}
+	by, via := askWho(r)
 	// Never the answer's text
 	auditf("ask_answered", "ask", id, "by", by, "via", via)
 	saved, err := a.jobs.answerAsk(id, in.Updated, answer, choice)
@@ -402,6 +401,65 @@ func (a *agentAPI) handleAskAnswer(w http.ResponseWriter, r *http.Request) {
 		saved = q
 	}
 	jsonOK(w, map[string]any{"ask": a.viewAsk(saved), "queued": queued, "recorded": recorded})
+}
+
+// askFromBrowser refuses an answer or a dismissal over the bridge from
+// anything but a browser of the other termote. Both are the user's: never
+// its CLI or an older termote that names no origin, as a permission
+// dialog's choices are held (cliMayChoose).
+func askFromBrowser(w http.ResponseWriter, r *http.Request) bool {
+	if auth, ok := authFrom(r.Context()); ok && auth.Kind == authMachine && !browserOrigin(auth.OriginAuth) {
+		writeJobError(w, errAskBrowserOnly)
+		return false
+	}
+	return true
+}
+
+// askWho is who answered or dismissed an ask, for the audit line: the
+// local socket when no auth came with the request.
+func askWho(r *http.Request) (by, via string) {
+	if _, ok := authFrom(r.Context()); ok {
+		return auditWho(r)
+	}
+	return "socket", "none"
+}
+
+// handleAskDismiss: the user chooses in the PWA not to answer an open ask,
+// whether its orchestrator still runs or not. Nothing is typed into its
+// pane; wait --mine tells the orchestrator once (reported).
+func (a *agentAPI) handleAskDismiss(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) || !askFromBrowser(w, r) {
+		return
+	}
+	var in askDismissInput
+	if !decodeAskBody(w, r, &in) {
+		return
+	}
+	if a.jobs == nil {
+		writeJobError(w, errJobsUnavailable)
+		return
+	}
+	id := r.PathValue("id")
+	if !validAskID(id) {
+		writeJobError(w, errAskNotFound)
+		return
+	}
+	// Not while an answer or a close of it is in flight
+	release, ok := a.asking.take(id)
+	if !ok {
+		writeJobError(w, errAskBusy)
+		return
+	}
+	defer release()
+	saved, err := a.jobs.dismissAsk(id, in.Updated)
+	if err != nil {
+		writeJobError(w, err)
+		return
+	}
+	by, via := askWho(r)
+	// Never the question's text
+	auditf("ask_dismissed", "ask", id, "by", by, "via", via)
+	jsonOK(w, map[string]any{"ask": a.viewAsk(saved)})
 }
 
 // sendAskAnswer types msg into the input box of the orchestrator q was

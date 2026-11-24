@@ -13,9 +13,9 @@ export default {
     'Chỉ bạn mới chọn được câu trả lời luôn cho phép, ngay trong hộp thoại',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
   'errors.ask_browser_only':
-    'Termote khác chỉ trả lời câu hỏi từ trình duyệt, không bao giờ từ dòng lệnh của nó',
+    'Termote khác chỉ trả lời hay bỏ qua câu hỏi từ trình duyệt, không bao giờ từ dòng lệnh của nó',
   'errors.ask_busy': 'Đang gửi một câu trả lời cho câu hỏi này. Hãy thử lại',
-  'errors.ask_closed': 'Câu hỏi này đã được trả lời',
+  'errors.ask_closed': 'Câu hỏi này đã được trả lời hoặc bị bỏ qua',
   'errors.ask_conflict': 'Câu hỏi này vừa được thay đổi ở nơi khác',
   'errors.ask_invalid': 'Câu hỏi này không nhận câu trả lời đó',
   'errors.ask_no_agent':

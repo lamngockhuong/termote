@@ -398,6 +398,14 @@ func TestJobFinishStateAndAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ft.refused("open ask", map[string]any{"close": true}, http.StatusConflict, "finish_open_ask")
+	// Dismissed in the PWA, it holds the finish no more
+	q, _ := ft.agent.jobs.askByID("Q1")
+	if _, err := ft.agent.jobs.dismissAsk(q.ID, q.Updated.Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := ft.finish(map[string]any{"close": true}); code != http.StatusOK || out["closed"] != true {
+		t.Errorf("finish with a dismissed ask = %d %v", code, out)
+	}
 }
 
 func TestJobFinishSnapshotFails(t *testing.T) {

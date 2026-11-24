@@ -201,10 +201,16 @@ your answer into the orchestrator's input box as `Answer to Q3: ...` (or
 `Answer to Q3 (choice 2): ...`), and the orchestrator closes the question with
 `termote agents ask close Q3`. A draft you left in the orchestrator's input box is never replaced:
 the answer is refused and the question stays open until you send or clear the draft. When the
-orchestrator that asked no longer runs, the PWA says so and you answer it in its terminal. A
-view-only device sees how many questions wait and their ids, never their text. A machine open
-through [Machines](/usage/machines/) shows its own questions, and you answer them from the browser;
-another Termote's command line cannot answer one.
+orchestrator that asked no longer runs, the PWA says so: answer it in its terminal, or dismiss it.
+
+A question you do not want to answer can be dismissed: **Dismiss** on its card, in the Plan or in
+the chat, asks you to confirm on the card itself, then takes it off the list, whether its
+orchestrator still runs or has exited. Nothing is typed into the orchestrator's input box: the next
+`termote agents wait --mine` tells it once (`Q3 dismissed in the PWA`), and it does not ask that
+question again. A dismissed question no longer counts as waiting, and no longer holds a job's
+finish. A view-only device sees how many questions wait and their ids, never their text. A machine open
+through [Machines](/usage/machines/) shows its own questions, and you answer or dismiss them from the
+browser; another Termote's command line cannot.
 
 ```bash
 termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>

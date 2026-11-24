@@ -474,3 +474,139 @@ func TestAskAnswerOverBridge(t *testing.T) {
 		t.Errorf("pasted %q", jt.f.pasted)
 	}
 }
+
+func (jt *jobsTest) dismiss(as, id string, body map[string]any) (int, map[string]any) {
+	jt.t.Helper()
+	if body["updated"] == nil {
+		q, _ := jt.agent.jobs.askByID(id)
+		body["updated"] = q.Updated.Format(time.RFC3339Nano)
+	}
+	return jt.do(as, http.MethodPost, "/api/mux/asks/"+id+"/dismiss", body)
+}
+
+// The user dismisses an open question in the PWA: nothing is typed into
+// the orchestrator's pane, the audit line names who and never the text.
+func TestAskDismissFromPWA(t *testing.T) {
+	jt := newAsksTest(t)
+	logs := captureLog(t)
+	jt.addAsk(map[string]any{"text": "Which secret way?", "choices": []string{"Left", "Right"}})
+	jt.addAsk(map[string]any{"text": "q2"})
+
+	for name, c := range map[string]struct {
+		as, id string
+		body   any
+		code   int
+		want   string
+	}{
+		"view":      {"view", "Q1", map[string]any{"updated": "x"}, http.StatusForbidden, ""},
+		"bad id":    {"full", "q1", map[string]any{"updated": "x"}, http.StatusNotFound, "ask_not_found"},
+		"missing":   {"full", "Q9", map[string]any{"updated": "x"}, http.StatusNotFound, "ask_not_found"},
+		"stale":     {"full", "Q1", map[string]any{"updated": "2026-01-01T00:00:00Z"}, http.StatusConflict, "ask_conflict"},
+		"too large": {"full", "Q1", map[string]any{"updated": strings.Repeat("x", askBody)}, http.StatusRequestEntityTooLarge, "too_large"},
+		"not JSON":  {"full", "Q1", `{`, http.StatusBadRequest, ""},
+	} {
+		if code, out := jt.do(c.as, http.MethodPost, "/api/mux/asks/"+c.id+"/dismiss", c.body); code != c.code || (c.want != "" && out["code"] != c.want) {
+			t.Errorf("%s = %d %v", name, code, out)
+		}
+	}
+	// A view-only device is refused before its body is read
+	if code, out := jt.do("view", http.MethodPost, "/api/mux/asks/Q1/dismiss", `{`); code != http.StatusForbidden || out["code"] != "view_only" {
+		t.Errorf("view-only, bad body = %d %v", code, out)
+	}
+	if code, _ := jt.do("full", http.MethodGet, "/api/mux/asks/Q1/dismiss", nil); code != http.StatusMethodNotAllowed {
+		t.Errorf("GET = %d", code)
+	}
+	// Not while an answer or a close of it is in flight
+	release, _ := jt.agent.asking.take("Q1")
+	if code, out := jt.dismiss("full", "Q1", map[string]any{}); code != http.StatusConflict || out["code"] != "ask_busy" {
+		t.Errorf("dismiss while busy = %d %v", code, out)
+	}
+	release()
+	if q, _ := jt.agent.jobs.askByID("Q1"); q.State != askOpen {
+		t.Fatalf("refusals changed it: %+v", q)
+	}
+
+	code, out := jt.dismiss("full", "Q1", map[string]any{})
+	if code != http.StatusOK {
+		t.Fatalf("dismiss = %d %v", code, out)
+	}
+	if q := out["ask"].(map[string]any); q["state"] != "dismissed" || q["answeredBy"] != "pwa" || q["answer"] != nil || q["live"] != nil {
+		t.Errorf("dismissed %v", q)
+	}
+	if code, out := jt.dismiss("full", "Q1", map[string]any{}); code != http.StatusConflict || out["code"] != "ask_closed" || out["ask"].(map[string]any)["state"] != "dismissed" {
+		t.Errorf("twice = %d %v", code, out)
+	}
+	if code, out := jt.answer("Q1", map[string]any{"choice": 1}); code != http.StatusConflict || out["code"] != "ask_closed" {
+		t.Errorf("answer a dismissed one = %d %v", code, out)
+	}
+	// The local socket dismisses one too, as it answers
+	if code, out := jt.dismiss("socket", "Q2", map[string]any{}); code != http.StatusOK || out["ask"].(map[string]any)["state"] != "dismissed" {
+		t.Errorf("socket = %d %v", code, out)
+	}
+	if len(jt.f.pasted) != 0 {
+		t.Errorf("typed into the pane %q", jt.f.pasted)
+	}
+	text := logs.String()
+	if !strings.Contains(text, `audit: ask_dismissed ask="Q1" by="session:s"`) || !strings.Contains(text, `audit: ask_dismissed ask="Q2" by="socket" via="none"`) ||
+		strings.Contains(text, "secret") {
+		t.Errorf("audit:\n%s", text)
+	}
+	// A view-only device no longer counts it
+	if view := jt.asks("view"); len(view) != 0 {
+		t.Errorf("dismissed for view %v", view)
+	}
+	// reported: wait --mine tells the orchestrator once
+	if code, out := jt.do("socket", http.MethodPost, "/api/mux/asks/Q1/reported", map[string]any{"pane": "w1:pa"}); code != http.StatusOK || out["ok"] != true {
+		t.Errorf("reported = %d %v", code, out)
+	}
+	if q, _ := jt.agent.jobs.askByID("Q1"); !q.Reported {
+		t.Error("not reported")
+	}
+	// No ledger on this server
+	jt.agent.jobs = nil
+	if code, out := jt.do("full", http.MethodPost, "/api/mux/asks/Q1/dismiss", map[string]any{"updated": "x"}); code != http.StatusServiceUnavailable || out["code"] != "jobs_unavailable" {
+		t.Errorf("no ledger = %d %v", code, out)
+	}
+}
+
+// Over the bridge only a browser of the other termote dismisses one.
+func TestAskDismissOverBridge(t *testing.T) {
+	jt := newAsksTest(t)
+	logs := captureLog(t)
+	jt.addAsk(map[string]any{"text": "q"})
+	for _, as := range []string{"bridge-full:socket", "bridge-full:basic", "bridge-full:", "bridge"} {
+		if code, out := jt.dismiss(as, "Q1", map[string]any{}); code != http.StatusForbidden || out["code"] != "ask_browser_only" {
+			t.Errorf("%s dismiss = %d %v", as, code, out)
+		}
+	}
+	if code, out := jt.dismiss("bridge-view:password", "Q1", map[string]any{}); code != http.StatusForbidden || out["code"] != "view_only" {
+		t.Errorf("view dismiss = %d %v", code, out)
+	}
+	if q, _ := jt.agent.jobs.askByID("Q1"); q.State != askOpen {
+		t.Fatalf("refusals changed it: %+v", q)
+	}
+	if code, out := jt.dismiss("bridge-full:password", "Q1", map[string]any{}); code != http.StatusOK {
+		t.Fatalf("browser dismiss = %d %v", code, out)
+	}
+	if want := `audit: ask_dismissed ask="Q1" by="machine" via="machine:password"`; !strings.Contains(logs.String(), want) {
+		t.Errorf("no %q in\n%s", want, logs)
+	}
+}
+
+// A cross-site dismissal is refused by the write guard.
+func TestAskDismissCrossSite(t *testing.T) {
+	jt := newAsksTest(t)
+	jt.addAsk(map[string]any{"text": "q"})
+	q, _ := jt.agent.jobs.askByID("Q1")
+	req := httptest.NewRequest(http.MethodPost, "/api/mux/asks/Q1/dismiss", strings.NewReader(`{"updated":"`+q.Updated.Format(time.RFC3339Nano)+`"}`))
+	req.Host = "localhost:7680"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://evil.example")
+	if rec := serve(writeGuard(parseAllowedHosts("", false), jt.mux), req); rec.Code != http.StatusForbidden {
+		t.Errorf("cross-site = %d", rec.Code)
+	}
+	if q, _ := jt.agent.jobs.askByID("Q1"); q.State != askOpen {
+		t.Errorf("cross-site dismissed it: %+v", q)
+	}
+}

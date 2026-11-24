@@ -253,8 +253,19 @@ export default {
   'jobs.asks.sent': 'Sent',
   'jobs.asks.queued': 'Sent; the orchestrator reads it when it is ready',
   'jobs.asks.failed': 'Could not send the answer',
+  // Dismissing a question: confirmed on its card, nothing typed to the
+  // orchestrator
+  'jobs.asks.dismiss': 'Dismiss',
+  'jobs.asks.dismissFor': 'Dismiss {id}',
+  'jobs.asks.dismissConfirm':
+    'Dismiss {id}? The orchestrator is told you chose not to answer it.',
+  'jobs.asks.dismissConfirmGone':
+    'Dismiss {id}? Its orchestrator is no longer running; one that runs again in that pane is told once.',
+  'jobs.asks.dismissCancel': 'Cancel',
+  'jobs.asks.dismissed': '{id} dismissed',
+  'jobs.asks.dismissFailed': 'Could not dismiss the question',
   'jobs.asks.gone':
-    'The orchestrator that asked is no longer running; answer it in its terminal',
+    'The orchestrator that asked is no longer running; answer it in its terminal, or dismiss it',
   // A view-only device: how many, and their ids, never what they ask
   'jobs.asks.viewOnly_one':
     '{count} question waits on a device with full access',

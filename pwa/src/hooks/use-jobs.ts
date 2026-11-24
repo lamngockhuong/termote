@@ -7,6 +7,7 @@ import {
   createGrant,
   createJob,
   deleteJob,
+  dismissAsk,
   fetchAsks,
   fetchJobs,
   type GrantKind,
@@ -386,15 +387,40 @@ export async function answerQuestion(
     })
     return { queued: r.queued }
   } catch (err) {
-    if (
-      err instanceof RequestError &&
-      (err.code === 'ask_conflict' ||
-        err.code === 'ask_closed' ||
-        err.code === 'ask_not_found')
-    )
-      await reloadAsks()
+    await reloadAsksAfter(err)
     throw err
   }
+}
+
+// Dismisses ask as it was read: the ask is shown dismissed at once.
+// Throws RequestError: after ask_conflict, ask_closed or ask_not_found the
+// asks are read again first.
+export async function dismissQuestion(ask: Ask): Promise<void> {
+  try {
+    const r = await dismissAsk(ask.id, ask.updated ?? '')
+    askSeq++
+    const dismissed: Ask =
+      r.ask?.id === ask.id && r.ask.state === 'dismissed'
+        ? r.ask
+        : { ...ask, state: 'dismissed' }
+    set({
+      asks: state.asks.map((a) => (a.id === ask.id ? dismissed : a)),
+    })
+  } catch (err) {
+    await reloadAsksAfter(err)
+    throw err
+  }
+}
+
+// Reads the asks again after a refusal that says the one held is stale.
+async function reloadAsksAfter(err: unknown) {
+  if (
+    err instanceof RequestError &&
+    (err.code === 'ask_conflict' ||
+      err.code === 'ask_closed' ||
+      err.code === 'ask_not_found')
+  )
+    await reloadAsks()
 }
 
 // Forgets what was read (tests).

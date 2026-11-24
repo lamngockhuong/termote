@@ -18,7 +18,8 @@ import (
 // The orchestrator adds and closes them over the local socket (termote
 // agents ask); the user answers one in the PWA's Plan, and the server types
 // the answer into the input box of the orchestrator that asked
-// (ask_routes.go).
+// (ask_routes.go), or dismisses it: nothing is typed then, and wait --mine
+// tells the orchestrator once.
 //
 // An ask belongs to the pane of the orchestrator that added it: CreatedBy is
 // that pane's activity key, as a job's is, and Agent the agent that ran
@@ -27,6 +28,8 @@ import (
 const (
 	askOpen     = "open"
 	askAnswered = "answered"
+	// askDismissed: the user chose in the PWA not to answer it.
+	askDismissed = "dismissed"
 	// maxAskText and maxAskChoice are in runes, maxAskAnswer in bytes: an
 	// answer with its fixed prefix stays far below agentMaxText.
 	maxAskText    = 500
@@ -52,16 +55,16 @@ func invalidAsk(msg string) *codedError {
 	return &codedError{"ask_invalid", msg, http.StatusBadRequest}
 }
 
-// askError is an ask that was answered already (ask_closed) or changed
-// since the client read it (ask_conflict). It carries the ask as it is, so
-// the CLI can print the answer it has.
+// askError is an ask that was answered or dismissed already (ask_closed)
+// or changed since the client read it (ask_conflict). It carries the ask as
+// it is, so the CLI can print the answer it has.
 type askError struct {
 	codedError
 	ask ask
 }
 
 func askClosed(q ask) *askError {
-	return &askError{codedError{"ask_closed", "the question was answered already", http.StatusConflict}, q}
+	return &askError{codedError{"ask_closed", "the question was answered or dismissed already", http.StatusConflict}, q}
 }
 
 func askConflict(q ask) *askError {
@@ -81,10 +84,12 @@ type ask struct {
 	Answer    string   `json:"answer,omitempty"`
 	// Choice: the 1-based choice an answer from the PWA picked.
 	Choice int `json:"choice,omitempty"`
-	// AnsweredBy: pwa (the user, through the server) or agent (the
-	// orchestrator closed it: the user answered somewhere else).
+	// AnsweredBy: pwa (the user, through the server: an answer or a
+	// dismissal) or agent (the orchestrator closed it: the user answered
+	// somewhere else).
 	AnsweredBy string `json:"answeredBy,omitempty"`
-	// Reported: wait --mine told the orchestrator of an answer from the PWA.
+	// Reported: wait --mine told the orchestrator of an answer or a
+	// dismissal from the PWA.
 	Reported bool      `json:"reported,omitempty"`
 	Created  time.Time `json:"created"`
 	Updated  time.Time `json:"updated"`
@@ -116,8 +121,8 @@ func validAskID(id string) bool { return askIDRe.MatchString(id) }
 
 // pruneAsks drops the asks a write leaves with nothing to wait for. Once
 // every job of an orchestrator is finished (one with no job yet is left
-// alone), its answered asks go, but an answer from the PWA that wait --mine
-// has not reported yet, and its open asks of a job; an open ask of no job
+// alone), its answered and dismissed asks go, but an answer or a dismissal
+// from the PWA that wait --mine has not reported yet, and its open asks of a job; an open ask of no job
 // stays ("what next?" asked after the last job). An ask not changed since
 // cutoff goes in any case.
 func pruneAsks(f *jobFile, cutoff time.Time) {
@@ -138,7 +143,7 @@ func pruneAsks(f *jobFile, cutoff time.Time) {
 			return true
 		case !done[q.CreatedBy]:
 			return false
-		case q.State == askAnswered:
+		case q.State == askAnswered || q.State == askDismissed:
 			return q.AnsweredBy != "pwa" || q.Reported
 		}
 		return q.Job != ""
@@ -212,12 +217,12 @@ func (s *jobStore) addAsk(q ask) (ask, error) {
 	return q, err
 }
 
-// oldestAnswered is the index of the answered ask changed longest ago (only
-// one whose answer needs no report with settled), or -1.
+// oldestAnswered is the index of the answered or dismissed ask changed
+// longest ago (only one that needs no report with settled), or -1.
 func oldestAnswered(list []ask, settled bool) int {
 	at := -1
 	for i, o := range list {
-		if o.State != askAnswered || (settled && o.AnsweredBy == "pwa" && !o.Reported) {
+		if (o.State != askAnswered && o.State != askDismissed) || (settled && o.AnsweredBy == "pwa" && !o.Reported) {
 			continue
 		}
 		if at < 0 || o.Updated.Before(list[at].Updated) {
@@ -248,13 +253,13 @@ func (s *jobStore) changeAsk(id, key string, op func(q *ask) error) (ask, error)
 }
 
 // closeAsk records that the user answered ask id of the orchestrator key
-// somewhere else (answer may be empty). An answered one is ask_closed, with
-// its answer; one the PWA answered counts as reported then: the orchestrator
-// has the answer, wait --mine need not print it again.
+// somewhere else (answer may be empty). An answered or dismissed one is
+// ask_closed, with its answer; one the PWA answered or dismissed counts as
+// reported then: the orchestrator knows of it, wait --mine need not print it.
 func (s *jobStore) closeAsk(id, key, answer string) (ask, error) {
 	closed := false
 	q, err := s.changeAsk(id, key, func(q *ask) error {
-		if q.State == askAnswered {
+		if q.State != askOpen {
 			if q.AnsweredBy != "pwa" || q.Reported {
 				return askClosed(q.clone())
 			}
@@ -271,10 +276,10 @@ func (s *jobStore) closeAsk(id, key, answer string) (ask, error) {
 }
 
 // answerAsk records the user's answer from the PWA, refusing an ask
-// answered already or changed since updated.
+// answered or dismissed already or changed since updated.
 func (s *jobStore) answerAsk(id, updated, answer string, choice int) (ask, error) {
 	return s.changeAsk(id, "", func(q *ask) error {
-		if q.State == askAnswered {
+		if q.State != askOpen {
 			return askClosed(q.clone())
 		}
 		if q.Updated.Format(time.RFC3339Nano) != updated {
@@ -285,12 +290,28 @@ func (s *jobStore) answerAsk(id, updated, answer string, choice int) (ask, error
 	})
 }
 
+// dismissAsk records that the user chose in the PWA not to answer ask id,
+// refusing one answered or dismissed already or changed since updated.
+// wait --mine tells the orchestrator (reported, as for an answer).
+func (s *jobStore) dismissAsk(id, updated string) (ask, error) {
+	return s.changeAsk(id, "", func(q *ask) error {
+		if q.State != askOpen {
+			return askClosed(q.clone())
+		}
+		if q.Updated.Format(time.RFC3339Nano) != updated {
+			return askConflict(q.clone())
+		}
+		q.State, q.Answer, q.Choice, q.AnsweredBy, q.Reported = askDismissed, "", 0, "pwa", false
+		return nil
+	})
+}
+
 // markAskReported records that wait --mine told the orchestrator key of
-// the PWA's answer to ask id.
+// the PWA's answer to ask id, or that the user dismissed it there.
 func (s *jobStore) markAskReported(id, key string) error {
 	_, err := s.changeAsk(id, key, func(q *ask) error {
 		if q.AnsweredBy != "pwa" {
-			return invalidAsk("only an answer from the PWA is reported")
+			return invalidAsk("only an answer or a dismissal from the PWA is reported")
 		}
 		if q.Reported {
 			return errNoChange

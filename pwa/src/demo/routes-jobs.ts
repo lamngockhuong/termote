@@ -334,9 +334,32 @@ const answerAsk: Handler = (req) => {
   return json({ ask: q, queued: false, recorded: true })
 }
 
+// A dismissal: the open ask, at the version read, is only recorded.
+const dismissAsk: Handler = (req) => {
+  const q = req.state.asks.find((a) => a.id === req.params.id)
+  if (!q) return fail(404, 'ask_not_found', 'no such question')
+  if (q.state !== 'open')
+    return fail(409, 'ask_closed', 'the question was answered already', {
+      ask: q,
+    })
+  if (req.body?.updated !== q.updated)
+    return fail(409, 'ask_conflict', 'the question was changed elsewhere', {
+      ask: q,
+    })
+  Object.assign(q, {
+    state: 'dismissed',
+    answer: undefined,
+    choice: undefined,
+    answeredBy: 'pwa',
+    updated: iso(req.state),
+  })
+  return json({ ask: q })
+}
+
 export const JOB_ROUTES: Record<string, Handler> = {
   'GET /asks': listAsks,
   'POST /asks/{id}/answer': answerAsk,
+  'POST /asks/{id}/dismiss': dismissAsk,
   'GET /jobs': list,
   'POST /jobs': create,
   'PATCH /jobs/{id}': update,

@@ -7,6 +7,7 @@ import { OverviewAsks } from './overview-asks'
 const api = vi.hoisted(() => ({
   fetchAsks: vi.fn(),
   answerAsk: vi.fn(),
+  dismissAsk: vi.fn(),
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
@@ -19,6 +20,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   }),
   fetchAsks: () => api.fetchAsks(),
   answerAsk: (id: string, a: unknown) => api.answerAsk(id, a),
+  dismissAsk: (id: string, updated: string) => api.dismissAsk(id, updated),
 }))
 vi.mock('../hooks/use-agent-overview', () => ({
   followOverview: () => () => {},
@@ -227,15 +229,151 @@ describe('OverviewAsks', () => {
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
   })
 
-  it('offers no answer when the orchestrator that asked is gone', async () => {
+  it('offers no answer when the orchestrator that asked is gone, only a dismissal', async () => {
     await show([ask('Q1', { live: { status: 'gone' } })])
-    expect(within(card('Q1')).queryByRole('button')).toBeNull()
+    expect(
+      within(card('Q1'))
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Dismiss Q1'])
     expect(within(card('Q1')).queryByRole('textbox')).toBeNull()
     expect(
       within(card('Q1')).getByText(
-        'The orchestrator that asked is no longer running; answer it in its terminal',
+        'The orchestrator that asked is no longer running; answer it in its terminal, or dismiss it',
       ),
     ).toBeVisible()
+    fireEvent.click(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    )
+    expect(
+      within(card('Q1')).getByText(
+        'Dismiss Q1? Its orchestrator is no longer running; one that runs again in that pane is told once.',
+      ),
+    ).toBeVisible()
+  })
+
+  it('dismisses an ask after a confirmation on its card', async () => {
+    await show([ask('Q1'), ask('Q2')])
+    let done = (_v: unknown) => {}
+    api.dismissAsk.mockReturnValue(new Promise((ok) => (done = ok)))
+    const open = within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' })
+    fireEvent.click(open)
+    expect(api.dismissAsk).not.toHaveBeenCalled()
+    const group = within(card('Q1')).getByRole('group', { name: 'Dismiss Q1' })
+    expect(group).toHaveTextContent(
+      'Dismiss Q1? The orchestrator is told you chose not to answer it.',
+    )
+    // Confirming: the answer is held, the focus in the confirmation
+    expect(within(group).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    expect(
+      within(card('Q1')).getByRole('button', { name: 'Yes' }),
+    ).toBeDisabled()
+    expect(within(card('Q1')).getByRole('textbox')).toBeDisabled()
+    fireEvent.submit(within(card('Q1')).getByRole('textbox').closest('form')!)
+    expect(api.answerAsk).not.toHaveBeenCalled()
+    fireEvent.click(within(group).getByRole('button', { name: 'Dismiss' }))
+    expect(api.dismissAsk).toHaveBeenCalledWith('Q1', 'Q1-1')
+    for (const b of within(card('Q1')).getAllByRole('button'))
+      expect(b).toBeDisabled()
+    // Escape does nothing while it is sent
+    fireEvent.keyDown(group, { key: 'Escape' })
+    expect(group).toBeInTheDocument()
+    await act(async () => {
+      done({ ask: ask('Q1', { state: 'dismissed', answeredBy: 'pwa' }) })
+    })
+    expect(screen.queryByRole('article', { name: 'Q1' })).toBeNull()
+    expect(card('Q2')).toBeVisible()
+    expect(within(region()).getByRole('status')).toHaveTextContent(
+      'Q1 dismissed',
+    )
+  })
+
+  it('cancels a dismissal with its button or Escape, the focus back on Dismiss', async () => {
+    await show([ask('Q1')])
+    const open = within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' })
+    fireEvent.click(open)
+    fireEvent.click(within(card('Q1')).getByRole('button', { name: 'Cancel' }))
+    expect(
+      within(card('Q1')).queryByRole('group', { name: 'Dismiss Q1' }),
+    ).toBeNull()
+    expect(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    ).toHaveFocus()
+    expect(
+      within(card('Q1')).getByRole('button', { name: 'Yes' }),
+    ).toBeEnabled()
+
+    fireEvent.click(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    )
+    const group = within(card('Q1')).getByRole('group', { name: 'Dismiss Q1' })
+    // Another key does nothing
+    fireEvent.keyDown(group, { key: 'Enter' })
+    expect(
+      within(card('Q1')).getByRole('group', { name: 'Dismiss Q1' }),
+    ).toBeInTheDocument()
+    fireEvent.keyDown(group, { key: 'Escape' })
+    expect(
+      within(card('Q1')).queryByRole('group', { name: 'Dismiss Q1' }),
+    ).toBeNull()
+    expect(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    ).toHaveFocus()
+    expect(api.dismissAsk).not.toHaveBeenCalled()
+  })
+
+  it('tells a refused dismissal on the card, which stays', async () => {
+    await show([ask('Q1')])
+    api.dismissAsk.mockRejectedValue(refusal('ask_busy'))
+    fireEvent.click(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    )
+    await act(async () => {
+      fireEvent.click(
+        within(card('Q1')).getByRole('button', { name: 'Dismiss' }),
+      )
+    })
+    expect(within(card('Q1')).getByRole('alert')).toHaveTextContent(
+      'An answer to this question is being sent. Try again',
+    )
+    expect(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss' }),
+    ).toBeEnabled()
+    // Not a refusal: a sentence of its own
+    api.dismissAsk.mockRejectedValue(new Error('offline'))
+    await act(async () => {
+      fireEvent.click(
+        within(card('Q1')).getByRole('button', { name: 'Dismiss' }),
+      )
+    })
+    expect(within(card('Q1')).getByRole('alert')).toHaveTextContent(
+      'Could not dismiss the question',
+    )
+    // Opening it again clears the sentence
+    fireEvent.click(within(card('Q1')).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    )
+    expect(within(card('Q1')).queryByRole('alert')).toBeNull()
+  })
+
+  it('reads the asks again after one was dismissed or answered elsewhere', async () => {
+    await show([ask('Q1')])
+    api.fetchAsks.mockResolvedValue({
+      asks: [ask('Q1', { state: 'answered', answeredBy: 'agent' })],
+      readOnly: false,
+    })
+    api.dismissAsk.mockRejectedValue(refusal('ask_closed'))
+    fireEvent.click(
+      within(card('Q1')).getByRole('button', { name: 'Dismiss Q1' }),
+    )
+    await act(async () => {
+      fireEvent.click(
+        within(card('Q1')).getByRole('button', { name: 'Dismiss' }),
+      )
+    })
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
   })
 
   it('tells a view-only device only how many wait, and their ids', async () => {
@@ -270,6 +408,7 @@ describe('OverviewAsks', () => {
     ).toBeVisible()
     expect(screen.queryByText('question Q1')).toBeNull()
     expect(within(region()).queryByRole('button')).toBeNull()
+    expect(screen.queryByText('Dismiss')).toBeNull()
   })
 
   it('shows nothing on a server without asks (404), nor with none open', async () => {
@@ -288,7 +427,8 @@ describe('OverviewAsks', () => {
     const box = within(card('Q1')).getByRole('textbox')
     const form = box.closest('form')!
     // No text: the ask is shown with an empty body, and only a text answer
-    expect(within(card('Q1')).getAllByRole('button')).toHaveLength(1)
+    // (besides Dismiss)
+    expect(within(card('Q1')).getAllByRole('button')).toHaveLength(2)
     fireEvent.change(box, { target: { value: '  \n ' } })
     fireEvent.submit(form)
     expect(api.answerAsk).not.toHaveBeenCalled()

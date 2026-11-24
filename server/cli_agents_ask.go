@@ -182,8 +182,11 @@ func (c *cli) agentsAskList(args []string) error {
 			}
 			fmt.Fprintf(tw, "\t\t%s\n", strings.Join(cs, "  "))
 		}
-		if q.State == askAnswered {
+		switch q.State {
+		case askAnswered:
 			fmt.Fprintf(tw, "\t\tanswered (%s): %s\n", plainText(q.AnsweredBy), dash(clipLine(q.Answer, 200)))
+		case askDismissed:
+			fmt.Fprintf(tw, "\t\tdismissed in the PWA\n")
 		}
 	}
 	return tw.Flush()
@@ -224,7 +227,11 @@ func (c *cli) agentsAskClose(args []string) error {
 	case r.status == http.StatusConflict && r.failure().Code == "ask_closed":
 		// Closing again is no error: the skill closes every answer it gets.
 		if q, err := askReply(r); err == nil {
-			fmt.Fprintf(c.out, "%s was already answered (%s): %s\n", id, plainText(q.AnsweredBy), dash(clipLine(q.Answer, 300)))
+			if q.State == askDismissed {
+				fmt.Fprintf(c.out, "%s was dismissed in the PWA: the user chose not to answer it\n", id)
+			} else {
+				fmt.Fprintf(c.out, "%s was already answered (%s): %s\n", id, plainText(q.AnsweredBy), dash(clipLine(q.Answer, 300)))
+			}
 			return nil
 		}
 	}
@@ -232,7 +239,7 @@ func (c *cli) agentsAskClose(args []string) error {
 }
 
 // mineAsks reads the questions of the orchestrator key: the PWA's answers
-// wait --mine has not reported yet, and the ids of the open ones. A server
+// and dismissals wait --mine has not reported yet, and the ids of the open ones. A server
 // that keeps no questions (an older one) has none.
 func (c *cli) mineAsks(port int, key string) (answers []askView, open []string) {
 	var l asksListing
@@ -251,11 +258,17 @@ func (c *cli) mineAsks(port int, key string) (answers []askView, open []string) 
 	return answers, open
 }
 
-// reportAskAnswers prints each answer the user gave in the PWA and marks it
-// reported, so the next wait does not print it again.
-func (c *cli) reportAskAnswers(port int, pane string, answers []askView) {
+// reportAskReplies prints each answer the user gave in the PWA, and each
+// question the user dismissed there, and marks it reported, so the next
+// wait does not print it again. The lines are fixed English the skill
+// knows.
+func (c *cli) reportAskReplies(port int, pane string, answers []askView) {
 	for _, q := range answers {
-		fmt.Fprintf(c.out, "%s answered in the PWA: %s\n", plainText(q.ID), dash(clipLine(q.Answer, 300)))
+		if q.State == askDismissed {
+			fmt.Fprintf(c.out, "%s dismissed in the PWA: the user chose not to answer it; do not ask it again\n", plainText(q.ID))
+		} else {
+			fmt.Fprintf(c.out, "%s answered in the PWA: %s\n", plainText(q.ID), dash(clipLine(q.Answer, 300)))
+		}
 		r, err := c.agentsCall(port, http.MethodPost, "/api/mux/asks/"+q.ID+"/reported", map[string]any{"pane": pane}, agentsReadTimeout)
 		if err == nil && r.status != http.StatusOK {
 			err = agentsRefusal(r)

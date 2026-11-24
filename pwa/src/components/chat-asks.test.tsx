@@ -4,11 +4,16 @@ import { resetJobs } from '../hooks/use-jobs'
 import type { Ask } from '../hooks/use-mux-api'
 import { ChatAsks } from './chat-asks'
 
-const api = vi.hoisted(() => ({ fetchAsks: vi.fn(), answerAsk: vi.fn() }))
+const api = vi.hoisted(() => ({
+  fetchAsks: vi.fn(),
+  answerAsk: vi.fn(),
+  dismissAsk: vi.fn(),
+}))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchAsks: () => api.fetchAsks(),
   answerAsk: (id: string, a: unknown) => api.answerAsk(id, a),
+  dismissAsk: (id: string, u: string) => api.dismissAsk(id, u),
 }))
 
 const ask = (id: string, over: Partial<Ask> = {}): Ask => ({
@@ -30,6 +35,7 @@ describe('ChatAsks', () => {
     resetJobs()
     api.fetchAsks.mockReset()
     api.answerAsk.mockReset()
+    api.dismissAsk.mockReset()
   })
   afterEach(() => resetJobs())
 
@@ -68,6 +74,26 @@ describe('ChatAsks', () => {
     })
     expect(screen.queryByRole('article', { name: 'Q1' })).toBeNull()
     expect(screen.getByRole('status')).toBeInTheDocument()
+  })
+
+  it('dismisses one here, its card gone and the next one shown', async () => {
+    api.fetchAsks.mockResolvedValue({
+      asks: [ask('Q1'), ask('Q2')],
+      readOnly: false,
+    })
+    api.dismissAsk.mockResolvedValue({
+      ask: ask('Q1', { state: 'dismissed', live: undefined }),
+    })
+    render(<ChatAsks paneId="%1" clockOffset={0} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Q1' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    })
+    expect(api.dismissAsk).toHaveBeenCalledWith('Q1', 'Q1-1')
+    expect(screen.queryByRole('article', { name: 'Q1' })).toBeNull()
+    expect(screen.getByRole('article', { name: 'Q2' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Q1 dismissed')
   })
 
   it('shows the oldest question only, the others behind a toggle', async () => {

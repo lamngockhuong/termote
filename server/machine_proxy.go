@@ -41,10 +41,10 @@ func machineRest(p string) string {
 // job ledger only the list, one job and its ci route: never a job's history
 // (event, the orchestrator's on the machine's local socket) or its grants,
 // which the user gives on the machine's own PWA. Of the orchestrator's
-// questions the list and an answer: adding, closing and reporting one are
+// questions the list, an answer and a dismissal: adding, closing and reporting one are
 // the machine's local socket's (and asks takes a GET only, machineAsksAdd).
 var machineRouteRe = regexp.MustCompile(`^(?:snapshot|overview|activity|system|stream-token|stream|health|uploads|files/places|` +
-	`jobs(?:/[^/]+(?:/ci)?)?|asks(?:/[^/]+/answer)?|` +
+	`jobs(?:/[^/]+(?:/ci)?)?|asks(?:/[^/]+/(?:answer|dismiss))?|` +
 	`(?:tabs|panes|groups|worktrees|tasks|templates|recent-groups)(?:/.*)?)$`)
 
 // machineResponseIdleWait and machineResponseBodyMost bound reading a

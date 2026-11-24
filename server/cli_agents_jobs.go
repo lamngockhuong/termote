@@ -858,7 +858,8 @@ func (c *cli) waitJobs(port int, w jobWait, timeout time.Duration) error {
 		} else {
 			failures = 0
 			// wait --mine: the user's answers in the PWA to this pane's
-			// questions end the wait too, reported once.
+			// questions, and the ones dismissed there, end the wait too,
+			// reported once.
 			var answers []askView
 			var open []string
 			if w.mine() {
@@ -870,7 +871,7 @@ func (c *cli) waitJobs(port int, w jobWait, timeout time.Duration) error {
 				return err
 			}
 			if len(ends) > 0 || len(answers) > 0 {
-				c.reportAskAnswers(port, w.pane, answers)
+				c.reportAskReplies(port, w.pane, answers)
 				return c.jobsEnded(port, list, ids, ends, rest, w)
 			}
 			if len(rest) == 0 {

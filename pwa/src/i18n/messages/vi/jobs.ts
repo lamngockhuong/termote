@@ -227,8 +227,17 @@ export default {
   'jobs.asks.sent': 'Đã gửi',
   'jobs.asks.queued': 'Đã gửi; orchestrator sẽ đọc khi sẵn sàng',
   'jobs.asks.failed': 'Không gửi được câu trả lời',
+  'jobs.asks.dismiss': 'Bỏ qua',
+  'jobs.asks.dismissFor': 'Bỏ qua {id}',
+  'jobs.asks.dismissConfirm':
+    'Bỏ qua {id}? Orchestrator sẽ được báo là bạn không trả lời câu này.',
+  'jobs.asks.dismissConfirmGone':
+    'Bỏ qua {id}? Orchestrator của câu này đã thoát; orchestrator chạy lại trong pane đó sẽ được báo một lần.',
+  'jobs.asks.dismissCancel': 'Huỷ',
+  'jobs.asks.dismissed': 'Đã bỏ qua {id}',
+  'jobs.asks.dismissFailed': 'Không bỏ qua được câu hỏi',
   'jobs.asks.gone':
-    'Orchestrator đặt câu hỏi này không còn chạy; hãy trả lời trong terminal của nó',
+    'Orchestrator đặt câu hỏi này không còn chạy; hãy trả lời trong terminal của nó, hoặc bỏ qua câu này',
   'jobs.asks.viewOnly_other':
     '{count} câu hỏi đang chờ trên một thiết bị có toàn quyền',
   'jobs.asks.more_other': 'Xem thêm {count} câu khác',

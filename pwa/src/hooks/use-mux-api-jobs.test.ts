@@ -4,6 +4,7 @@ import {
   createGrant,
   createJob,
   deleteJob,
+  dismissAsk,
   fetchAsks,
   fetchJobs,
   jobCI,
@@ -219,5 +220,21 @@ describe('ask requests', () => {
     )
     expect(err).toBeInstanceOf(RequestError)
     expect(err).toMatchObject({ status: 409, code: 'input_has_draft' })
+  })
+
+  it('dismisses an ask, naming the version read', async () => {
+    const sent = mockFetch({ ask: { ...ASK, state: 'dismissed' } })
+    expect(await dismissAsk('Q 1', 'u1')).toEqual({
+      ask: { ...ASK, state: 'dismissed' },
+    })
+    expect(sent[0]).toEqual({
+      url: '/api/mux/asks/Q%201/dismiss',
+      method: 'POST',
+      body: { updated: 'u1' },
+    })
+    mockFetch({ code: 'ask_closed', error: 'x' }, 409)
+    const err = await dismissAsk('Q1', 'u1').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({ status: 409, code: 'ask_closed' })
   })
 })
