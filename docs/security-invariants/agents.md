@@ -859,12 +859,17 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
   `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
-  exec`, also after options: `pnpm -s exec`, `pnpm --filter a exec`) (`interpreter`; the same two
+  exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
+  `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
+  init x`; the lists of `delegateRunners` and the PWA's `RUNNERS` are the same) (`interpreter`; the same two
   checks hold a grant's prefix when it is made); the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
   the prefix and a space (`no_grant`), and no word after the prefix starts with `-` (`option`: a
   granted program runs another through its own options, `rg --pre=x`, `tar --to-command=x`, `go
-  test -exec=x`, so only the options the user typed into the prefix are covered). A grant for a
+  test -exec=x`, so only the options the user typed into the prefix are covered; `tar`, of
+  `delegateBundledOptions`, reads its first argument as option letters even without a dash, `tar
+  xIf ./x.sh a.tar` running `./x.sh`, so under a prefix of its name alone any further word is
+  `option`, and a prefix such as `tar xzf` or `tar -xf` covers what follows it). A grant for a
   test, build or script command still runs code the agent can edit (its test files, a script it
   wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every

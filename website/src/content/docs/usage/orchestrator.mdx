@@ -189,7 +189,8 @@ and answers "Yes" for this one time only when the dialog on screen and the one t
 agent's transcript has waiting name the same command or file, no subagent runs, the command holds
 nothing a shell would chain, expand or redirect and does not start with a shell or interpreter, no
 word after your prefix is an option (starts with `-`: `rg --pre=x` or `go test -exec=x` runs
-another program, so type into the prefix the options you allow), and
+another program, so type into the prefix the options you allow; `tar` reads its first word as
+options even without a dash, so grant `tar xzf`, not `tar`), and
 the file is in the worktree, reached through no link, and not one that configures the agent, runs
 as a hook, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
 Anything else is refused and comes to you as before. Each answer shows on the job's card and in the

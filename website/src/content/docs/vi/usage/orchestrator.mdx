@@ -189,7 +189,8 @@ duy nhất đang chờ trong transcript của agent cùng nêu một lệnh ho�
 đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, và không bắt đầu
 bằng một shell hay trình thông dịch; không từ nào sau tiền tố của bạn là tùy chọn (bắt đầu bằng `-`:
 `rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên tùy chọn nào bạn cho phép thì
-gõ luôn vào tiền tố); file nằm trong worktree, không đi qua liên kết nào, và không
+gõ luôn vào tiền tố; `tar` đọc từ đầu tiên sau nó là tùy chọn dù không có `-`, nên hãy cấp
+`tar xzf` thay vì `tar`); file nằm trong worktree, không đi qua liên kết nào, và không
 phải file cấu hình agent, file chạy như hook hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, `.env`...). Mọi trường hợp khác đều bị từ chối và quay về
 bạn như trước. Mỗi câu trả lời hiện trên thẻ của việc và trong nhật ký kiểm toán của server.
