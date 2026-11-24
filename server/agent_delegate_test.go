@@ -220,6 +220,11 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		}, "subagent"},
 		"edit a denied file": {"edit", strings.Replace(edit, "notes.txt", ".claude/settings.local.json", 1), nil, "mismatch"},
 		"edit outside":       {"edit", strings.Replace(edit, "WT/notes.txt", "OUT/notes.txt", 1), nil, "no_grant"},
+		// A path not in its clean form, though it names the file the
+		// screen shows once cleaned: sub may be a symlink out of the worktree.
+		"edit through ..":   {"edit", strings.Replace(edit, "WT/notes.txt", "WT/sub/../notes.txt", 1), nil, "denied_path"},
+		"edit through .":    {"edit", strings.Replace(edit, "WT/notes.txt", "WT/./notes.txt", 1), nil, "denied_path"},
+		"edit, two slashes": {"edit", strings.Replace(edit, "WT/notes.txt", "WT//notes.txt", 1), nil, "denied_path"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dt := newDelegateTest(t, delegateScreen(t, tc.screen), "")

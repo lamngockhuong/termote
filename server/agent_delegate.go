@@ -280,6 +280,11 @@ func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, s
 	if file == "" || !filepath.IsAbs(file) || !ok {
 		return delegation{}, refuseDelegation("mismatch")
 	}
+	// Only a path already in its clean form: filepath.Rel below reads
+	// sub/../x as x, while the OS walks sub (a symlink, maybe) first.
+	if filepath.Clean(file) != filepath.FromSlash(file) {
+		return delegation{}, refuseDelegation("denied_path")
+	}
 	why := "no_grant"
 	for _, g := range grants {
 		rel, err := filepath.Rel(g.grant.Dir, file)

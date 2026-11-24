@@ -897,7 +897,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   xIf ./x.sh a.tar` running `./x.sh`, so under a prefix of its name alone any further word is
   `option`, and a prefix such as `tar xzf` or `tar -xf` covers what follows it). A grant for a
   test, build or script command still runs code the agent can edit (its test files, a script it
-  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, inside the grant's directory,
+  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
+  component and no doubled separator, since `filepath.Rel` reads `sub/../x` as `x` while the OS walks
+  `sub` first: `denied_path`), inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every
   component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
   short name or stream, nothing case folding or Windows maps onto another name), not a
