@@ -123,8 +123,8 @@ importers:
         specifier: 6.4.299
         version: 6.4.299
       pele:
-        specifier: 1.8.0
-        version: 1.8.0
+        specifier: 1.13.0
+        version: 1.13.0
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -5126,8 +5126,8 @@ packages:
     resolution: {integrity: sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==}
     engines: {node: '>=22.13.0 || >=24'}
 
-  pele@1.8.0:
-    resolution: {integrity: sha512-AYmHttE70cwNJVXdfPMCANGivFlmc3bGGpMG0GqH5S5vE3RgtEuLlkqbhRfe94Csv/ZEd1TUbv2dMUHpw4p1Bg==}
+  pele@1.13.0:
+    resolution: {integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw==}
     engines: {node: '>=20'}
 
   piccolore@0.1.3:
@@ -11806,7 +11806,7 @@ snapshots:
     optionalDependencies:
       '@napi-rs/canvas': 1.0.13
 
-  pele@1.8.0: {}
+  pele@1.13.0: {}
 
   piccolore@0.1.3: {}
 
