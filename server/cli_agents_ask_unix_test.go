@@ -304,3 +304,29 @@ func TestAgentsReadAskHints(t *testing.T) {
 		t.Errorf("older server: %d\n%s", code, out)
 	}
 }
+
+// read moves the mark of every unfinished job whose agent runs in the
+// pane, one in review too: wait --mine waits on those, so a turn left
+// unread there would be reported again at every wait. A finished job is
+// left as it is.
+func TestAgentsReadMarksUnfinishedJobs(t *testing.T) {
+	tc, s, jobs, self := mineCLI(t)
+	unread := jobLive{Status: "idle", Unread: true, LastTS: "2026-11-24T06:42:13.434Z"}
+	jobs(mineJob("j1", "Plan", "review", self, "w1:pA", unread), mineJob("j2", "Fix", "active", self, "w1:pA", unread),
+		mineJob("j3", "Old", "done", self, "w1:pA", unread), mineJob("j4", "Other", "review", self, "w1:pB", unread))
+	s.set("GET /api/mux/panes/w1:pA/agent/transcript", answer(http.StatusOK,
+		`{"agent":"claude","cursor":"c1","entries":[{"id":"e1","ts":"2026-11-24T06:42:13.434Z","role":"assistant","parts":[{"kind":"text","text":"Which one?"}]}]}`))
+	if code, out := runAgents(tc, "read", "w1:pA"); code != 0 || !strings.Contains(out, "ends with a question") {
+		t.Fatalf("read: %d\n%s", code, out)
+	}
+	for _, id := range []string{"j1", "j2"} {
+		if p := lastPost(s, "/api/mux/jobs/"+id+"/event"); !strings.Contains(p, `"kind":"read"`) || !strings.Contains(p, `"lastTs":"2026-11-24T06:42:13.434Z"`) {
+			t.Errorf("%s not marked read: %q", id, p)
+		}
+	}
+	for _, id := range []string{"j3", "j4"} {
+		if p := lastPost(s, "/api/mux/jobs/"+id+"/event"); p != "" {
+			t.Errorf("%s marked: %q", id, p)
+		}
+	}
+}
