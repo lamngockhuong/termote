@@ -283,8 +283,9 @@ another tab afterwards.
 To keep the list short, or to keep a project's name out of a screenshot, choose **Hide** in a
 workspace's **⋯** menu (a tmux or Zellij session's too). The workspace leaves the sidebar, the
 compact layout's **Agents** section, the command palette, the [agent overview](/usage/overview/)
-(its cards, the activity log and the Plan's jobs) and the recent list of **New workspace**. A
-repository's linked worktrees are hidden with it.
+(its cards, the activity log, the Plan's jobs and the questions about those jobs, which the count
+on its button leaves out too) and the recent list of **New workspace**. A repository's linked
+worktrees are hidden with it.
 
 - A line under the list says how many are hidden. **Show** brings them back in their places, each
   marked with a struck-through eye, until you choose **Hide again** or reload the page. **Unhide**
@@ -310,6 +311,8 @@ sign in from opening the workspace. Other limits:
   show again when that folder changes with no page open. A Zellij session renamed outside
   Termote shows again too, since its id changes with its name.
 - A job's title still shows in a job's notification.
+- An orchestrator's question about no job is always shown, and the questions above an
+  orchestrator's own chat are shown whatever job they are about.
 - With Zellij, the address bar holds the session's id, which is its name encoded in base64.
 - A Web Push leaves the name out only once the browser runs the new service worker: choose
   **Reload** when Termote says a new version is ready.

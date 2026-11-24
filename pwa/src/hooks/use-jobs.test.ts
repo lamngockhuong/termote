@@ -689,6 +689,49 @@ describe('useOpenAsks', () => {
     expect(api.fetchAsks).toHaveBeenCalledTimes(1)
   })
 
+  it("leaves out a hidden workspace's asks, reading the jobs to know them", async () => {
+    api.fetchAsks.mockResolvedValue(
+      asks([ask('Q1', { job: 'a' }), ask('Q2', { job: 'b' }), ask('Q3')]),
+    )
+    api.fetchJobs.mockResolvedValue(
+      list([job('a', { workspace: 'w2' }), job('b', { workspace: 'w1' })]),
+    )
+    const hide = new Set(['w2'])
+    const { result, unmount } = renderHook(() => useOpenAsks(hide))
+    await flush()
+    expect(api.fetchJobs).toHaveBeenCalledTimes(1)
+    expect(result.current.open.map((a) => a.id)).toEqual(['Q2', 'Q3'])
+    // Every period, with the asks
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchJobs).toHaveBeenCalledTimes(2)
+    // Not while the overview reads them itself
+    renderHook(() => useJobs())
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchJobs).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('reads no jobs while nothing is hidden, or no open ask is about a job', async () => {
+    api.fetchAsks.mockResolvedValue(
+      asks([ask('Q1'), ask('Q2', { job: 'a', state: 'answered' })]),
+    )
+    api.fetchJobs.mockResolvedValue(list([]))
+    const shown = renderHook(() => useOpenAsks(new Set()))
+    await flush()
+    shown.unmount()
+    const hide = new Set(['w2'])
+    const hiding = renderHook(() => useOpenAsks(hide))
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    expect(hiding.result.current.open.map((a) => a.id)).toEqual(['Q1'])
+    hiding.unmount()
+    // Gone with its reader: an ask about a job reads none
+    api.fetchAsks.mockResolvedValue(asks([ask('Q3', { job: 'a' })]))
+    renderHook(() => useOpenAsks())
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchJobs).not.toHaveBeenCalled()
+  })
+
   it('leaves the overview to start its own follow', async () => {
     api.fetchAsks.mockResolvedValue(asks([]))
     renderHook(() => useOpenAsks())

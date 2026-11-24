@@ -423,6 +423,33 @@ describe('OverviewJobs', () => {
     expect(screen.getByRole('complementary', { name: 'job w' })).toBeVisible()
   })
 
+  it("leaves out the questions about a hidden workspace's jobs", () => {
+    const open = (id: string, j?: string) => ({
+      id,
+      state: 'open' as const,
+      text: `question ${id}`,
+      job: j,
+      created: new Date().toISOString(),
+      updated: id,
+    })
+    show(
+      {
+        jobs: [job('a', { workspace: 'w2' }), job('b', { workspace: 'w1' })],
+        asks: [open('Q1', 'a'), open('Q2', 'b'), open('Q3')],
+      },
+      false,
+      undefined,
+      { hiddenGroupIds: new Set(['w2']) },
+    )
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    expect(
+      within(waiting)
+        .getAllByRole('article')
+        .map((a) => a.ariaLabel),
+    ).toEqual(['Q2', 'Q3'])
+    expect(screen.queryByText('question Q1')).toBeNull()
+  })
+
   it('shows no questions section with none open', () => {
     show({ asks: [{ id: 'Q2', state: 'answered', created: '' }] })
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()

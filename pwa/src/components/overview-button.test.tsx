@@ -6,10 +6,11 @@ import type { Ask } from '../hooks/use-mux-api'
 import { OverviewButton } from './overview-button'
 import { ViewMenu } from './ui/view-menu'
 
-const api = vi.hoisted(() => ({ fetchAsks: vi.fn() }))
+const api = vi.hoisted(() => ({ fetchAsks: vi.fn(), fetchJobs: vi.fn() }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchAsks: () => api.fetchAsks(),
+  fetchJobs: () => api.fetchJobs(),
 }))
 
 const ask = (id: string, over: Partial<Ask> = {}): Ask => ({
@@ -24,6 +25,25 @@ const read = async (asks: Ask[], readOnly = false) => {
 }
 
 const settle = () => act(async () => {})
+
+// Q1 is about a job of the hidden workspace w2, Q2 about one of w1, Q3
+// about none
+const hidingRead = () => {
+  api.fetchAsks.mockResolvedValue({
+    asks: [ask('Q1', { job: 'a' }), ask('Q2', { job: 'b' }), ask('Q3')],
+    readOnly: false,
+  })
+  api.fetchJobs.mockResolvedValue({
+    jobs: [
+      { id: 'a', title: 'a', state: 'todo', updated: '', workspace: 'w2' },
+      { id: 'b', title: 'b', state: 'todo', updated: '', workspace: 'w1' },
+    ],
+    readOnly: false,
+    canGrant: false,
+    serverNow: '',
+  })
+}
+const HIDDEN = new Set(['w2'])
 
 describe('OverviewButton', () => {
   beforeEach(() => {
@@ -70,6 +90,24 @@ describe('OverviewButton', () => {
     expect(screen.getByTestId('asks-count')).toHaveTextContent('9+')
   })
 
+  it("does not count the questions about a hidden workspace's jobs", async () => {
+    hidingRead()
+    render(
+      <OverviewButton
+        onClick={() => {}}
+        pressed={false}
+        hiddenGroupIds={HIDDEN}
+      />,
+    )
+    await settle()
+    expect(
+      screen.getByRole('button', {
+        name: 'Agent overview, 2 questions waiting for you',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('asks-count')).toHaveTextContent('2')
+  })
+
   it('says one question in the singular', async () => {
     await read([ask('Q1')])
     render(<OverviewButton onClick={() => {}} pressed={false} />)
@@ -86,6 +124,7 @@ describe('ViewMenu', () => {
   beforeEach(() => {
     resetJobs()
     api.fetchAsks.mockReset()
+    api.fetchJobs.mockReset()
   })
   afterEach(() => resetJobs())
 
@@ -106,6 +145,25 @@ describe('ViewMenu', () => {
     )
     await settle()
     expect(screen.getByTestId('asks-dot')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Terminal/ }))
+    const item = await screen.findByRole('menuitem', {
+      name: /Agent overview/,
+    })
+    expect(item).toHaveTextContent('2 questions waiting for you')
+  })
+
+  it("counts no question about a hidden workspace's jobs", async () => {
+    hidingRead()
+    render(
+      <ViewMenu
+        views={views}
+        value="terminal"
+        onChange={() => {}}
+        onOpenOverview={() => {}}
+        hiddenGroupIds={HIDDEN}
+      />,
+    )
+    await settle()
     fireEvent.click(screen.getByRole('button', { name: /Terminal/ }))
     const item = await screen.findByRole('menuitem', {
       name: /Agent overview/,

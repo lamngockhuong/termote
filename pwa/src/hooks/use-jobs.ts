@@ -1,5 +1,6 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { currentMachine } from '../utils/api-base'
+import { visibleAsks } from '../utils/jobs'
 import { followOverview } from './use-agent-overview'
 import {
   type Ask,
@@ -197,10 +198,28 @@ function scheduleAsks() {
     : undefined
 }
 
+// The readers of the open asks that leave out those of hidden workspaces:
+// the jobs tell an ask's workspace, so the asks' poll reads them too while
+// the overview's does not
+let askJobReaders = 0
+const NO_IDS: ReadonlySet<string> = new Set()
+const NO_JOBS: Job[] = []
+
+// An open ask is about a job: only then do the jobs matter to its readers
+function asksNeedJobs() {
+  return (
+    askJobReaders > 0 &&
+    listeners.size === 0 &&
+    state.asks.some((a) => a.state === 'open' && a.job)
+  )
+}
+
 async function pollAsks() {
   // A hidden page reads nothing; it reads again once shown
-  if (!document.hidden && Date.now() - askReadAt >= askPeriod() - 250)
+  if (!document.hidden && Date.now() - askReadAt >= askPeriod() - 250) {
     await reloadAsks()
+    if (asksNeedJobs()) await readJobs()
+  }
   scheduleAsks()
 }
 
@@ -232,16 +251,31 @@ export interface OpenAsks {
 }
 
 // The open asks, read on their own while a reader is shown. A view-only
-// device learns how many wait, never what they ask.
-export function useOpenAsks(): OpenAsks {
+// device learns how many wait, never what they ask. Those about a job of a
+// hidden workspace (hidden: the groups' ids) are left out.
+export function useOpenAsks(hidden: ReadonlySet<string> = NO_IDS): OpenAsks {
   const s = useSyncExternalStore(subscribeAsks, get)
+  const hiding = hidden.size > 0
   const { asks, asksReadOnly } = s
+  // A write of a job changes the list only while it can hide an ask
+  const jobs = hiding ? s.jobs : NO_JOBS
+  useEffect(() => {
+    if (!hiding) return
+    askJobReaders++
+    return () => {
+      askJobReaders--
+    }
+  }, [hiding])
   return useMemo(
     () => ({
-      open: asks.filter((a) => a.state === 'open'),
+      open: visibleAsks(
+        asks.filter((a) => a.state === 'open'),
+        jobs,
+        hidden,
+      ),
       readOnly: asksReadOnly,
     }),
-    [asks, asksReadOnly],
+    [asks, asksReadOnly, jobs, hidden],
   )
 }
 
