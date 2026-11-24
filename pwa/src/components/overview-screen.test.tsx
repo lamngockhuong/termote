@@ -1267,10 +1267,19 @@ describe('OverviewScreen, the Plan', () => {
       ).toBeVisible()
       openPlan()
       pick('job a')
-      expect(screen.getByRole('complementary', { name: 'job a' })).toBeVisible()
+      const details = screen.getByRole('complementary', { name: 'job a' })
+      expect(details).toBeVisible()
       expect(
         screen.queryByRole('complementary', { name: 'Activity' }),
       ).toBeNull()
+      // Hidden on the Agents tab, and the same details back on the Plan tab
+      // (not drawn again, so what is open in them stays)
+      fireEvent.click(screen.getByRole('tab', { name: /^Agents/ }))
+      // (the slot's class: jsdom has no Tailwind)
+      expect(details.parentElement).toHaveClass('hidden')
+      openPlan()
+      expect(screen.getByRole('complementary', { name: 'job a' })).toBe(details)
+      expect(details.parentElement).toHaveClass('contents')
       expect(activity).toHaveAttribute('aria-pressed', 'false')
       fireEvent.click(activity)
       expect(

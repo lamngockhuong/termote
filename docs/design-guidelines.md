@@ -158,9 +158,12 @@ There is no bottom navigation: the terminal takes that height.
 - Where the system's scrollbars take room beside the content (Windows, Linux, macOS set to always
   show them) they become 8px with a clear track and no arrows; overlay scrollbars (macOS by
   default, phones) stay as the system draws them (`utils/classic-scrollbars.ts` measures which and
-  sets `data-classic-scrollbars` on `<html>`). The sidebar's lists show the thumb only on
-  hover or with focus inside (`.scrollbar-hover`); tab rows hide theirs (`.scrollbar-hide`) and a
-  vertical wheel scrolls them sideways.
+  sets `data-classic-scrollbars` on `<html>`). The sidebar's lists and the Overview's columns show
+  their scrollbar only while the pointer is over them or keyboard focus (`:focus-visible`) is in
+  them, not after a mouse click (`.scrollbar-hover`); with a mouse and no touchscreen the area has
+  no scrollbar until then, in a gutter kept for it, since Chrome on Windows does not repaint a
+  thumb restyled on hover. Tab rows hide theirs (`.scrollbar-hide`) and a vertical wheel scrolls
+  them sideways.
 - An open menu sits in the top layer (Popover API), so a scrolling list such as the sidebar never
   cuts it; near the bottom of the screen it opens upward, and scrolling the list under it closes it.
 - A tab is a `role="tab"` button with a sibling close button; Delete closes the focused tab.

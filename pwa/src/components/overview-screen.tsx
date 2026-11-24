@@ -125,6 +125,8 @@ export function OverviewScreen({
   // The activity log: a column beside the cards on a wide screen, a sheet
   // anywhere else.
   const [logOpen, setLogOpen] = useState(false)
+  // Where OverviewJobs puts a job's details on a wide screen
+  const [detailSlot, setDetailSlot] = useState<HTMLDivElement | null>(null)
   const wide = useMediaQuery('(min-width: 1280px)')
   const isMobile = useIsMobile()
   // Focus moves into the overview and back to where it was when it closes.
@@ -526,7 +528,7 @@ export function OverviewScreen({
         </div>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 scrollbar-hover">
           {overview.error && (
             <p role="status" className="mb-3 text-[12px] text-fg-muted">
               {t('tasks.overview.readFailed')}
@@ -543,6 +545,7 @@ export function OverviewScreen({
                   onFocused={() => setPlanFocus(undefined)}
                   activityOpen={logOpen}
                   wide={wide}
+                  detailSlot={detailSlot}
                   onCloseActivity={() => setLogOpen(false)}
                 />
               )}
@@ -756,10 +759,17 @@ export function OverviewScreen({
             )}
           </div>
         </div>
+        {/* The Plan tab's job details, a column of their own (OverviewJobs):
+          hidden, not emptied, on the Agents tab, so they outlive a switch as
+          the panels do */}
+        <div
+          ref={setDetailSlot}
+          className={shownTab === 'plan' ? 'contents' : 'hidden'}
+        />
         {logOpen && wide && (
           <aside
             aria-labelledby="overview-activity-title"
-            className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border px-3 py-3"
+            className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border px-3 py-3 scrollbar-hover"
           >
             <h3
               id="overview-activity-title"
