@@ -326,8 +326,11 @@ func TestMachineProxyAsks(t *testing.T) {
 	if rec := serve(h, apiRequest("POST", base+"asks/Q1/answer", `{"choice":1,"updated":"x"}`)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ask_browser_only") {
 		t.Errorf("answer through the proxy: %d %s", rec.Code, rec.Body)
 	}
+	if rec := serve(h, apiRequest("POST", base+"asks/Q1/dismiss", `{"updated":"x"}`)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ask_browser_only") {
+		t.Errorf("dismiss through the proxy: %d %s", rec.Code, rec.Body)
+	}
 	for _, rt := range []struct{ method, path string }{{"POST", "asks"}, {"PUT", "asks"}, {"POST", "asks/Q1/close"}, {"POST", "asks/Q1/reported"},
-		{"GET", "asks/Q1"}, {"POST", "asks/Q1/answer/x"}} {
+		{"GET", "asks/Q1"}, {"POST", "asks/Q1/answer/x"}, {"POST", "asks/Q1/dismiss/x"}} {
 		if rec := serve(h, apiRequest(rt.method, base+rt.path, `{}`)); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "machine_route_forbidden") {
 			t.Errorf("%s %s through the proxy: %d %s", rt.method, rt.path, rec.Code, rec.Body)
 		}
@@ -335,6 +338,9 @@ func TestMachineProxyAsks(t *testing.T) {
 	view := pairDevice(t, h, "view")
 	if rec := serve(h, asDevice("POST", base+"asks/Q1/answer", `{"choice":1}`, view)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "view_only") {
 		t.Errorf("view answer through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(h, asDevice("POST", base+"asks/Q1/dismiss", `{"updated":"x"}`, view)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "view_only") {
+		t.Errorf("view dismiss through the proxy: %d %s", rec.Code, rec.Body)
 	}
 	if rec := serve(h, asDevice("GET", base+"asks", "", view)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"readOnly":true`) {
 		t.Errorf("view asks through the proxy: %d %s", rec.Code, rec.Body)

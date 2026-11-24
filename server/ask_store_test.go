@@ -391,3 +391,103 @@ func TestAskTextChecks(t *testing.T) {
 		t.Error("errors")
 	}
 }
+
+// A dismissal from the PWA: open asks only, at the version read; it is
+// reported once, as an answer from the PWA, and makes room and goes as one.
+func TestAskStoreDismiss(t *testing.T) {
+	s, _ := newTestJobStore(t)
+	q1 := mustAddAsk(t, s, testAsk("one"))
+	stamp := q1.Updated.Format(time.RFC3339Nano)
+	var ae *askError
+	if _, err := s.dismissAsk("Q99", stamp); !errors.Is(err, errAskNotFound) {
+		t.Errorf("a missing one: %v", err)
+	}
+	if _, err := s.dismissAsk(q1.ID, "stale"); !errors.As(err, &ae) || ae.code != "ask_conflict" || ae.ask.ID != q1.ID {
+		t.Errorf("stale: %v", err)
+	}
+	got, err := s.dismissAsk(q1.ID, stamp)
+	if err != nil || got.State != askDismissed || got.AnsweredBy != "pwa" || got.Answer != "" || got.Choice != 0 || got.Reported || !got.Updated.After(q1.Updated) {
+		t.Fatalf("dismiss %+v %v", got, err)
+	}
+	if _, err := s.dismissAsk(q1.ID, got.Updated.Format(time.RFC3339Nano)); !errors.As(err, &ae) || ae.code != "ask_closed" || ae.ask.State != askDismissed {
+		t.Errorf("dismiss twice: %v", err)
+	}
+	if _, err := s.answerAsk(q1.ID, got.Updated.Format(time.RFC3339Nano), "x", 0); !errors.As(err, &ae) || ae.code != "ask_closed" {
+		t.Errorf("answer a dismissed one: %v", err)
+	}
+	// An answered one is closed too
+	q2 := mustAddAsk(t, s, testAsk("two"))
+	a2, _ := s.answerAsk(q2.ID, q2.Updated.Format(time.RFC3339Nano), "B", 0)
+	if _, err := s.dismissAsk(q2.ID, a2.Updated.Format(time.RFC3339Nano)); !errors.As(err, &ae) || ae.code != "ask_closed" || ae.ask.Answer != "B" {
+		t.Errorf("dismiss an answered one: %v", err)
+	}
+	// Closing a dismissed one: ask_closed, and it needs no report now
+	if got, err := s.closeAsk(q1.ID, askKey, ""); !errors.As(err, &ae) || ae.code != "ask_closed" || !got.Reported || ae.ask.State != askDismissed {
+		t.Errorf("close a dismissed one: %+v %v", got, err)
+	}
+	if _, err := s.closeAsk(q1.ID, askKey, ""); !errors.As(err, &ae) || ae.code != "ask_closed" {
+		t.Errorf("close it again: %v", err)
+	}
+	// Reported once
+	q3 := mustAddAsk(t, s, testAsk("three"))
+	d3, _ := s.dismissAsk(q3.ID, q3.Updated.Format(time.RFC3339Nano))
+	if err := s.markAskReported(q3.ID, askKey); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := s.askByID(q3.ID); !after.Reported || after.State != askDismissed || !after.Updated.After(d3.Updated) {
+		t.Errorf("reported %+v", after)
+	}
+}
+
+// A dismissed ask goes once its orchestrator's jobs are finished and it is
+// reported, and makes room in a full file as an answered one does.
+func TestAskStoreDismissPruneAndRoom(t *testing.T) {
+	s, _ := newTestJobStore(t)
+	j, _ := s.create(job{Title: "j", State: "active", CreatedBy: askKey})
+	qd := mustAddAsk(t, s, testAsk("dismissed"))           // Q1
+	qr := mustAddAsk(t, s, testAsk("dismissed, reported")) // Q2
+	s.dismissAsk(qd.ID, qd.Updated.Format(time.RFC3339Nano))
+	s.dismissAsk(qr.ID, qr.Updated.Format(time.RFC3339Nano))
+	s.markAskReported(qr.ID, askKey)
+	if _, err := s.update(j.ID, "", func(j *job) error { j.State = "done"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := s.asksList(); askIDs(list) != "Q1:dismissed" {
+		t.Errorf("pruned %s", askIDs(list))
+	}
+	s.markAskReported(qd.ID, askKey)
+	if list, _ := s.asksList(); len(list) != 0 {
+		t.Errorf("a reported dismissal stayed: %s", askIDs(list))
+	}
+
+	// Full file: a dismissal not reported yet makes room after a settled
+	// one, and before any open ask
+	s2, _ := newTestJobStore(t)
+	a := mustAddAsk(t, s2, testAsk("a")) // Q1
+	b := mustAddAsk(t, s2, testAsk("b")) // Q2
+	s2.dismissAsk(a.ID, a.Updated.Format(time.RFC3339Nano))
+	s2.dismissAsk(b.ID, b.Updated.Format(time.RFC3339Nano))
+	s2.markAskReported(b.ID, askKey)
+	if err := s2.changeFile(func(f *jobFile) error {
+		for len(f.Asks) < maxAsks {
+			q := testAsk("filler")
+			q.ID, q.CreatedBy, q.State = "Q"+string(rune('a'+len(f.Asks)%26)), "%F"+strings.Repeat("x", len(f.Asks)), askOpen
+			q.Updated = time.Now()
+			f.Asks = append(f.Asks, q)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mustAddAsk(t, s2, testAsk("c"))
+	if _, ok := s2.askByID(b.ID); ok {
+		t.Error("the reported dismissal stayed")
+	}
+	if _, ok := s2.askByID(a.ID); !ok {
+		t.Error("the unreported dismissal went first")
+	}
+	mustAddAsk(t, s2, testAsk("d"))
+	if _, ok := s2.askByID(a.ID); ok {
+		t.Error("the unreported dismissal stayed with nothing else to drop")
+	}
+}
