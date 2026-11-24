@@ -270,8 +270,8 @@ gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải 
 `pnpm --filter a lint`); lệnh cargo chỉ được là `build`, `test`, `check`, `clippy` hay `fmt` (với từ
 nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn lệnh `install` của nó build một
 crate do agent nêu tên); lệnh go chỉ được là `build`, `test`, `vet`, `fmt`, `list`, `mod` hay `version`
-(`go run x@latest` và `go install` build một module do agent nêu tên); `pip install x`, `gem install x` và
-`npm link x` không được yêu cầu cài một gói;
+(lệnh `run` và `install` của nó build một module do agent nêu tên, ở phiên bản bất kỳ); lệnh `install` của
+pip, gem và lệnh `link` của npm không được kèm tên một gói cần cài;
 file nằm trong worktree, không đi qua liên kết nào, và không
 phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, pipeline CI, `justfile`, `.env`...). File nằm trong thư mục mà
