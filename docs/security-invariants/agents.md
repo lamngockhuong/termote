@@ -1129,8 +1129,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   refused at or above home, or with no home dir found, by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
   read with its `gitRunner` (`checkRoot`, hooks and fsmonitor off): the branch's push remote and
   an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
-  repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias
-  (a host without a dot) mapped to github.com only when github.com is the one host
+  repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`; the host of an SSH remote
+  (`ssh://`, `git+ssh://`, scp form; never https) is the one `ssh -G -- <host>` prints as its `hostname`, as gh
+  reads an alias of `~/.ssh/config` (`ssh_host.go`: the host must match `ghHostRe` before ssh runs and the
+  printed one after, argv only, `cmd.Dir` the temp dir, no `GIT_*`/`TERMOTE_*`, 5 s; ssh only prints its
+  configuration and connects to nothing, though a `Match exec` of the user's own config may run, as it does when gh reads the alias),
+  kept with the target (2 minutes); an SSH alias ssh cannot resolve (a host without a dot) is mapped to github.com only when github.com is the one host
   `gh auth status --json hosts` lists with a working login, else `ci_no_repo` (another login may
   make the alias a GitHub Enterprise, and a same-named repository on github.com would be read), and only a host `gh auth status` says is signed in (github.com not signed
   in is `ci_gh_auth`, any other host `ci_no_repo`; a login is kept 10 minutes, no login is asked again on the next read). gh's stderr only classifies the failure

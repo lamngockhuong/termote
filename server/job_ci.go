@@ -54,6 +54,9 @@ type ciPoller struct {
 	git *gitRunner
 	// resolve is the files routes' root resolver (rootResolver.resolve).
 	resolve func(ctx context.Context, dir string) (filesRoot, error)
+	// sshHost is the host ssh connects to for an SSH remote's host (an
+	// alias of ~/.ssh/config), "" when it cannot tell; nil asks nothing.
+	sshHost func(ctx context.Context, host string) string
 	now     func() time.Time
 
 	// onFailed, onMerged are told the id of a job whose checks failed anew
@@ -92,8 +95,8 @@ type ciDefault struct {
 }
 
 func newCIPoller(a *agentAPI, files *filesAPI, dir string) *ciPoller {
-	p := &ciPoller{a: a, gh: newGhRunner(dir), git: files.git, resolve: files.roots.resolve, now: time.Now,
-		state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
+	p := &ciPoller{a: a, gh: newGhRunner(dir), git: files.git, resolve: files.roots.resolve, sshHost: sshHostName,
+		now: time.Now, state: map[string]*ciJobState{}, defaults: map[string]ciDefault{}, targets: map[string]ciTargetAt{}}
 	p.afterRead = p.autoSend
 	return p
 }
@@ -612,17 +615,32 @@ func (p *ciPoller) readTarget(ctx context.Context, dir, branch string) (t ciTarg
 	if pushName == "" {
 		return ciTarget{}, errNoRepo
 	}
-	push, ok := parseRemoteURL(git("remote", "get-url", pushName))
+	push, ok := p.remoteRepo(ctx, git("remote", "get-url", pushName))
 	if !ok {
 		return ciTarget{}, errNoRepo
 	}
 	repo := push
 	if up := pickRemote(remotes, "upstream"); up != "" && up != pushName {
-		if r, ok := parseRemoteURL(git("remote", "get-url", up)); ok && r.Host == push.Host {
+		if r, ok := p.remoteRepo(ctx, git("remote", "get-url", up)); ok && r.Host == push.Host {
 			repo = r
 		}
 	}
 	return ciTarget{repo: repo, push: push, branch: branch}, nil
+}
+
+// remoteRepo reads a remote's URL as parseRemoteURL does; the host of an
+// SSH URL is then the one ssh connects to, as gh reads it: an alias of
+// ~/.ssh/config (Host work.github.com, HostName github.com) is the host it
+// names. An https URL is taken as it is.
+func (p *ciPoller) remoteRepo(ctx context.Context, raw string) (ghRepo, bool) {
+	r, ok := parseRemoteURL(raw)
+	if !ok || p.sshHost == nil || !isSSHRemote(raw) {
+		return r, ok
+	}
+	if h := p.sshHost(ctx, r.Host); h != "" {
+		r.Host = h
+	}
+	return r, true
 }
 
 // pushRemoteName is the remote branch is pushed to, as git push picks it
