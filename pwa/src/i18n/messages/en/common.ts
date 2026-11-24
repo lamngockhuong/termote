@@ -12,6 +12,8 @@ export default {
   'common.files': 'Files',
   'common.changes': 'Changes',
   'common.tasks': 'Tasks',
+  'common.asksWaiting_one': '{count} question waiting for you',
+  'common.asksWaiting_other': '{count} questions waiting for you',
   'common.overview': 'Agent overview',
   'common.settings': 'Settings',
   'common.commandPalette': 'Command palette',

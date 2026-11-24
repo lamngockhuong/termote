@@ -18,6 +18,7 @@ const {
   mockSendMessage,
   mockInterrupt,
   mockFetchJobs,
+  mockFetchAsks,
   mockFetchSubagents,
   mockFetchPrompt,
   mockAnswer,
@@ -25,6 +26,7 @@ const {
   mockFetchPrompt: vi.fn(),
   mockAnswer: vi.fn(),
   mockFetchJobs: vi.fn(),
+  mockFetchAsks: vi.fn(),
   mockFetchOverview: vi.fn(),
   mockFetchActivity: vi.fn(),
   mockFetchUsage: vi.fn(),
@@ -43,6 +45,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
     mockSendMessage(pane, text, cursor),
   interruptAgent: (...a: unknown[]) => mockInterrupt(...a),
   fetchJobs: () => mockFetchJobs(),
+  fetchAsks: () => mockFetchAsks(),
   fetchSubagents: (pane: string) => mockFetchSubagents(pane),
   fetchAgentPrompt: async (pane: string) => ({
     prompt: await mockFetchPrompt(pane),
@@ -75,7 +78,7 @@ vi.mock('./subagent-transcript-sheet', () => ({
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
 import { resetAgentPromptStores } from '../hooks/use-agent-prompt'
-import { resetJobs } from '../hooks/use-jobs'
+import { reloadJobs, resetJobs } from '../hooks/use-jobs'
 import { AgentRequestError, RequestError } from '../hooks/use-mux-api'
 import { agentCards } from '../utils/agent-cards'
 import { OVERVIEW_TICK, OverviewScreen } from './overview-screen'
@@ -1390,6 +1393,24 @@ describe('OverviewScreen, the tabs', () => {
     )!
     expect(panel).toHaveAttribute('role', 'tabpanel')
     expect(panel).toHaveAttribute('aria-labelledby', agentsTab().id)
+  })
+
+  it('counts the questions waiting on the Plan, and opens on it while they wait', async () => {
+    mockFetchAsks.mockResolvedValue({
+      asks: [
+        { id: 'Q1', state: 'open', created: '' },
+        { id: 'Q2', state: 'open', created: '' },
+        { id: 'Q3', state: 'answered', created: '' },
+      ],
+      readOnly: true,
+    })
+    // The badge on the overview's button read them before it opened
+    await reloadJobs()
+    renderScreen()
+    await act(async () => {})
+    expect(planTab()).toHaveAccessibleName('Plan, 3 open, 3 waiting')
+    expect(planTab()).toHaveAttribute('aria-selected', 'true')
+    mockFetchAsks.mockReset()
   })
 
   it('opens on the tab this browser looked at last', async () => {
