@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -591,13 +592,18 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	// A server that does not follow pull requests (a container) shows none
 	// it read before.
 	ciOn := a.ci.available()
-	var full []jobView
-	var brief []jobBrief
+	var shown []job
 	for _, j := range list {
 		if (!all && jobFinished(j.State)) || (ws != "" && j.Workspace != ws) {
 			continue
 		}
-		live := a.jobLiveIn(snap, j)
+		shown = append(shown, j)
+	}
+	lives := a.jobLives(snap, shown)
+	var full []jobView
+	var brief []jobBrief
+	for i, j := range shown {
+		live := lives[i]
 		if viewOnly {
 			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated}
 			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir, b.Live.OutsideWorktree = "", "", "", false
@@ -645,6 +651,27 @@ func (a *agentAPI) jobViewOf(j job, live jobLive) jobView {
 		v.CIChecked = t.UTC().Format(activityTimeFormat)
 	}
 	return v
+}
+
+// jobLives is what each of list's agents does in snap, read side by side
+// (overviewParallel at once): each read may wait on the backend for the
+// pane's session and screen, and one after another they add up past a
+// client's wait when the backend is slow.
+func (a *agentAPI) jobLives(snap Snapshot, list []job) []jobLive {
+	lives := make([]jobLive, len(list))
+	sem := make(chan struct{}, overviewParallel)
+	var wg sync.WaitGroup
+	for i := range list {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			lives[i] = a.jobLiveIn(snap, list[i])
+		}()
+	}
+	wg.Wait()
+	return lives
 }
 
 // jobLiveIn is what j's agent does in snap, the tracker's last snapshot

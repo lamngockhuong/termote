@@ -789,7 +789,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   a symlink refused), written as the tasks file is (`jobs.lock`, read again before each change,
   `writeStateFile`; a corrupt file is never overwritten, a newer format is read only). Lock order:
   `jobs.lock`, then the store's mutex; the store calls nothing outside it, and the routes read the
-  tracker and agent sessions before or after a store call, never inside one. 200 jobs, a finished one
+  tracker and agent sessions before or after a store call, never inside one; `GET` reads its jobs' agents side by side, at most
+  `overviewParallel` (4) at once (`jobLives`). 200 jobs, a finished one
   not changed for 30 days dropped at the next write (finished ones make room first); title one line,
   200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
   hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
