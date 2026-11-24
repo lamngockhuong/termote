@@ -224,4 +224,7 @@ export default {
     'Orchestrator đặt câu hỏi này không còn chạy; hãy trả lời trong terminal của nó',
   'jobs.asks.viewOnly_other':
     '{count} câu hỏi đang chờ trên một thiết bị có toàn quyền',
+  'jobs.asks.more_other': 'Xem thêm {count} câu khác',
+  'jobs.asks.less': 'Chỉ hiện câu đầu',
+  'jobs.asks.scrollMore': 'Cuộn xuống các câu bên dưới',
 } satisfies Translation<typeof en>

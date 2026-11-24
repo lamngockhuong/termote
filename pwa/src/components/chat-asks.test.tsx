@@ -70,13 +70,62 @@ describe('ChatAsks', () => {
     expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
+  it('shows the oldest question only, the others behind a toggle', async () => {
+    api.fetchAsks.mockResolvedValue({
+      asks: [ask('Q1'), ask('Q2'), ask('Q3')],
+      readOnly: false,
+    })
+    render(<ChatAsks paneId="%1" clockOffset={0} />)
+    await settle()
+    expect(screen.getByRole('article', { name: 'Q1' })).toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Q2' })).toBeNull()
+    const toggle = screen.getByRole('button', {
+      name: 'Show 2 more questions',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    expect(screen.getByRole('article', { name: 'Q2' })).toBeInTheDocument()
+    expect(screen.getByRole('article', { name: 'Q3' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show only the first' }))
+    expect(screen.queryByRole('article', { name: 'Q3' })).toBeNull()
+  })
+
+  it('points at the questions hidden below, and scrolls to them', async () => {
+    api.fetchAsks.mockResolvedValue({
+      asks: [ask('Q1'), ask('Q2')],
+      readOnly: false,
+    })
+    const { container } = render(<ChatAsks paneId="%1" clockOffset={0} />)
+    await settle()
+    const box = container.firstElementChild?.firstElementChild as HTMLElement
+    const scrollBy = vi.fn()
+    box.scrollBy = scrollBy as typeof box.scrollBy
+    Object.defineProperty(box, 'scrollHeight', { value: 600 })
+    Object.defineProperty(box, 'clientHeight', { value: 300 })
+    const label = 'Scroll to the questions below'
+    expect(screen.queryByRole('button', { name: label })).toBeNull()
+    fireEvent.scroll(box)
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(scrollBy).toHaveBeenCalledWith({ top: 240, behavior: 'smooth' })
+    box.scrollTop = 300
+    fireEvent.scroll(box)
+    expect(screen.queryByRole('button', { name: label })).toBeNull()
+  })
+
+  it('offers no toggle for a single question', async () => {
+    api.fetchAsks.mockResolvedValue({ asks: [ask('Q1')], readOnly: false })
+    render(<ChatAsks paneId="%1" clockOffset={0} />)
+    await settle()
+    expect(screen.queryByRole('button', { name: /more question/ })).toBeNull()
+  })
+
   it('shows nothing for another pane, nor on a view-only device', async () => {
     api.fetchAsks.mockResolvedValue({ asks: [ask('Q1')], readOnly: false })
     const { container, unmount } = render(
       <ChatAsks paneId="%9" clockOffset={0} />,
     )
     await settle()
-    expect(container.firstElementChild).toBeEmptyDOMElement()
+    expect(container.firstElementChild?.firstElementChild).toBeEmptyDOMElement()
     unmount()
     resetJobs()
     api.fetchAsks.mockResolvedValue({
@@ -85,6 +134,8 @@ describe('ChatAsks', () => {
     })
     const view = render(<ChatAsks paneId="%1" clockOffset={0} />)
     await settle()
-    expect(view.container.firstElementChild).toBeEmptyDOMElement()
+    expect(
+      view.container.firstElementChild?.firstElementChild,
+    ).toBeEmptyDOMElement()
   })
 })

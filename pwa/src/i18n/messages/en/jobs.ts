@@ -249,4 +249,8 @@ export default {
     '{count} question waits on a device with full access',
   'jobs.asks.viewOnly_other':
     '{count} questions wait on a device with full access',
+  'jobs.asks.more_one': 'Show {count} more question',
+  'jobs.asks.more_other': 'Show {count} more questions',
+  'jobs.asks.less': 'Show only the first',
+  'jobs.asks.scrollMore': 'Scroll to the questions below',
 }
