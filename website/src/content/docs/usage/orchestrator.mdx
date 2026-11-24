@@ -200,7 +200,7 @@ let it run your `lint` script), a cargo command is `build`, `test`, `check`, `cl
 (cargo runs any other word as a program `cargo-<x>` on your `PATH`, and `cargo install` builds a crate
 the agent names), and
 the file is in the worktree, reached through no link, and not one that configures the agent, runs
-as a hook, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
+as a hook or is run by one of your git hooks, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
 Anything else is refused and comes to you as before. Each answer shows on the job's card and in the
 server's audit log.
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -36,6 +37,8 @@ var delegateInterpreters = []string{
 	"npx", "pnpx", "bunx", "dlx", "uvx", "uv", "pipx", "tsx", "ts-node", "busybox", "node", "deno", "bun",
 	"python", "perl", "ruby", "php", "lua", "awk", "eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout",
 	"watch", "make",
+	// GNU's and the other builds of awk and make.
+	"gawk", "mawk", "nawk", "gmake",
 	// sed and ed run a program from their script (sed's e command, ed's !).
 	"sed", "ed",
 	// More interpreters, and wrappers that run the program named after them.
@@ -290,10 +293,16 @@ var delegateDeniedNames = []string{
 	"claude.local.md", "agents.override.md",
 	// The package managers run or read these when they install.
 	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
+	// Gemini CLI reads GEMINI.md as instructions; mise runs the tasks and
+	// hooks of its config on entering the folder; vim and Neovim run a
+	// folder's .exrc and .nvim.lua; MSBuild imports Directory.Build.* into
+	// every project below it.
+	"gemini.md", "mise.toml", ".mise.toml", ".exrc", ".nvim.lua", "directory.build.props", "directory.build.targets",
 }
 
-// delegateHookConfigs are lefthook's configs, every extension it reads:
-// denied names, since a hook runs what they say at the user's next commit.
+// delegateHookConfigs are the files that make git hooks run a program:
+// lefthook's (also denied names) and pre-commit's. checkDelegateHook reads
+// them, and the scripts of .husky, for the files they run.
 var delegateHookConfigs = func() []string {
 	var names []string
 	for _, base := range []string{"lefthook", "lefthook-local"} {
@@ -301,15 +310,71 @@ var delegateHookConfigs = func() []string {
 			names = append(names, base+ext, "."+base+ext)
 		}
 	}
-	return names
+	return append(names, ".pre-commit-config.yaml")
 }()
 
 func init() { delegateDeniedNames = append(delegateDeniedNames, delegateHookConfigs...) }
 
+// hookScriptRe is a word of a hook config that names a script file.
+var hookScriptRe = regexp.MustCompile(`[A-Za-z0-9_@+./-]+\.(?:sh|bash|zsh|js|mjs|cjs|ts|mts|cts|py|rb|pl|ps1|go)\b`)
+
+// maxHookConfig bounds what checkDelegateHook reads of one file, and
+// maxHookScripts how many of .husky's.
+const (
+	maxHookConfig  = 64 << 10
+	maxHookScripts = 64
+)
+
+// checkDelegateHook is "denied_path" when rel, under dir, is a file a git
+// hook of dir runs: named in a hook config at dir's root or in a script of
+// .husky, compared by the end of its path ("../scripts/x.sh" in a command
+// run from a subfolder denies every scripts/x.sh), since such a file runs
+// at the user's next commit or push, past the grant. A config dir does
+// not hold, or one too large, denies nothing more; what a hook script
+// reads in turn is not followed.
+func checkDelegateHook(dir, rel string) string {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "denied_path"
+	}
+	defer root.Close()
+	files := slices.Clone(delegateHookConfigs)
+	if d, err := root.Open(".husky"); err == nil {
+		names, _ := d.Readdirnames(maxHookScripts)
+		d.Close()
+		for _, n := range names {
+			files = append(files, ".husky/"+n)
+		}
+	}
+	rel = strings.ToLower(filepath.ToSlash(rel))
+	for _, name := range files {
+		f, err := root.Open(name)
+		if err != nil {
+			continue
+		}
+		b, _ := io.ReadAll(io.LimitReader(f, maxHookConfig))
+		f.Close()
+		for _, w := range hookScriptRe.FindAllString(string(b), -1) {
+			w = strings.ToLower(w)
+			for strings.HasPrefix(w, "./") || strings.HasPrefix(w, "../") {
+				w = w[strings.Index(w, "/")+1:]
+			}
+			w = strings.TrimPrefix(w, "/")
+			if w != "" && (rel == w || strings.HasSuffix(rel, "/"+w)) {
+				return "denied_path"
+			}
+		}
+	}
+	return ""
+}
+
 // delegateDeniedDirs are directories nothing under which a grant covers
 // ("/"-separated, lowercased, from the worktree's root down).
 var delegateDeniedDirs = []string{".git", ".claude", ".codex", ".opencode", ".agents", ".husky", ".githooks", ".lefthook",
-	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules"}
+	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules",
+	// Agent and editor settings that run or instruct: Gemini CLI, Cursor,
+	// a dev container's commands.
+	".gemini", ".cursor", ".devcontainer"}
 
 // checkDelegatePath is "" when rel, a path relative to a grant's dir, may
 // be edited under it, else the refusal code. Only the names are read here;

@@ -446,18 +446,13 @@ export function SessionTabs({
     menuAnchor.current = groupButtons.current.get(name)!
     setGroupMenu({ name, byKey })
   }
-  // The tab renamed gets the focus back with a ring only when the rename
-  // was started from the keyboard: the Enter that saves it is a key, so a
-  // rename started with a pointer would ring the tab too
-  const renameByKey = useRef(false)
   // The field asks for a new tab group of the tab, not for its name
   const [namingGroup, setNamingGroup] = useState(false)
   // With tab groups a tab's name is edited without its group's, which its
   // group's name shows
   const editedName = (session: Session) =>
     tabGroups ? splitTabGroup(session.name).label : session.name
-  const startRename = (session: Session, byKey: boolean, group = false) => {
-    renameByKey.current = byKey
+  const startRename = (session: Session, group = false) => {
     setNamingGroup(group)
     setDraft(group ? '' : editedName(session))
     setRenaming(session.id)
@@ -479,8 +474,10 @@ export function SessionTabs({
       moveToGroup(session, typed)
     else if (save && !namingGroup && name && name !== session.name)
       onUpdate!(session.id, { name })
+    // The tab renamed gets the focus back without a ring, however the rename
+    // began: the name was just typed in its place, so the ring tells nothing
     refocus.current = lastingKey(session)
-    refocusRing.current = renameByKey.current
+    refocusRing.current = false
     setRenaming(null)
   }
   // A tab's rename (to name, into or out of a group) and then its move,
@@ -664,7 +661,7 @@ export function SessionTabs({
     if (e.key === 'F2') {
       if (!canRename) return true
       e.preventDefault()
-      startRename(session, true)
+      startRename(session)
       return true
     }
     // N, the key where it is on any layout: a new tab with a name. Only on
@@ -1112,23 +1109,23 @@ export function SessionTabs({
                 openMenu(session.id, false)
               }}
               data-active={looksActive || undefined}
-              className={`group relative flex h-9 min-w-[120px] max-w-[240px] shrink-0 items-center pr-1.5 text-[13px] ${TAB_DIVIDER} ${group === undefined ? '' : `after:pointer-events-none after:absolute after:-inset-x-0.5 after:bottom-0 after:h-0.5 ${tabGroupLine(group)}`} transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) || (group !== undefined && folded.current) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              className={`group relative flex h-9 min-w-[120px] max-w-[240px] shrink-0 items-center pr-1.5 text-[13px] ${TAB_DIVIDER} ${group === undefined ? '' : `after:pointer-events-none after:absolute after:-inset-x-0.5 after:bottom-0 after:h-0.5 ${tabGroupLine(group)}`} transition-[color,background-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] has-[[role=tab]:focus-visible]:outline-2 has-[[role=tab]:focus-visible]:-outline-offset-2 has-[[role=tab]:focus-visible]:outline-accent data-dragging:z-20 data-dragging:transition-none ${isNew(key) || (group !== undefined && folded.current) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 looksActive
-                  ? 'z-[1] pointer-coarse:h-11 rounded-t-[10px] bg-term text-fg ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)]'
+                  ? 'z-[1] pointer-coarse:h-11 rounded-t-[10px] border border-b-0 border-border bg-term text-fg ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)]'
                   : 'mb-0.5 h-8 pointer-coarse:h-10 rounded-lg text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
               }`}
             >
               {looksActive && (
                 <>
                   {/* The curves joining the tab to the terminal below, like
-                      a browser's */}
+                      a browser's, with the tab's border drawn along them */}
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute bottom-0 -left-2 size-2 bg-[radial-gradient(circle_at_0_0,transparent_7.5px,var(--color-term)_8px)]"
+                    className="pointer-events-none absolute bottom-0 -left-2 size-2 bg-[radial-gradient(circle_at_0_0,transparent_7px,var(--color-border)_7.5px,var(--color-border)_8px,var(--color-term)_8.5px)]"
                   />
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute bottom-0 -right-2 size-2 bg-[radial-gradient(circle_at_100%_0,transparent_7.5px,var(--color-term)_8px)]"
+                    className="pointer-events-none absolute bottom-0 -right-2 size-2 bg-[radial-gradient(circle_at_100%_0,transparent_7px,var(--color-border)_7.5px,var(--color-border)_8px,var(--color-term)_8.5px)]"
                   />
                 </>
               )}
@@ -1163,6 +1160,8 @@ export function SessionTabs({
                   />
                 </span>
               ) : (
+                // Its focus ring is drawn around the whole tab, close
+                // button and rounded top included, not around this button
                 <button
                   ref={(el) => {
                     if (active) activeRef.current = el
@@ -1178,7 +1177,7 @@ export function SessionTabs({
                   onClick={() => onSelect(session.id)}
                   aria-keyshortcuts={keys.join(' ') || undefined}
                   title={tabTitle(session)}
-                  className={`flex h-full min-w-0 flex-1 select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
+                  className="flex h-full min-w-0 flex-1 select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 outline-none"
                 >
                   <span className="text-base leading-none">
                     <TabIcon session={session} />
@@ -1252,7 +1251,7 @@ export function SessionTabs({
                 title={renameTab ? undefined : t('shell.sidebar.tabNameFixed')}
                 // i18n-ignore: a key's name
                 shortcut={{ label: 'F2', aria: 'F2' }}
-                onSelect={(e) => startRename(menuSession, e.byKey)}
+                onSelect={() => startRename(menuSession)}
               >
                 {t('shell.tabs.rename')}
               </MenuItem>
@@ -1273,9 +1272,7 @@ export function SessionTabs({
                     {visibleUnsafe(g)}
                   </MenuItem>
                 ))}
-              <MenuItem
-                onSelect={(e) => startRename(menuSession, e.byKey, true)}
-              >
+              <MenuItem onSelect={() => startRename(menuSession, true)}>
                 {t('shell.tabGroups.new')}
               </MenuItem>
               {menuGroup !== undefined && (

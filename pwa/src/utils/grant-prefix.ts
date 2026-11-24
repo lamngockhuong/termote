@@ -62,6 +62,11 @@ const INTERPRETERS = new Set([
   'timeout',
   'watch',
   'make',
+  // GNU's and the other builds of awk and make
+  'gawk',
+  'mawk',
+  'nawk',
+  'gmake',
   'git',
   // sed and ed run a program from their script (sed's e command, ed's !)
   'sed',

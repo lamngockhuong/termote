@@ -199,7 +199,7 @@ gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải 
 nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn `cargo install` build một crate
 do agent nêu tên);
 file nằm trong worktree, không đi qua liên kết nào, và không
-phải file cấu hình agent, file chạy như hook hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
+phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, `.env`...). Mọi trường hợp khác đều bị từ chối và quay về
 bạn như trước. Mỗi câu trả lời hiện trên thẻ của việc và trong nhật ký kiểm toán của server.
 

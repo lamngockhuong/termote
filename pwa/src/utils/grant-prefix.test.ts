@@ -239,6 +239,9 @@ describe('grantPrefixTooWide', () => {
       'stdbuf',
       'gdb',
       'java',
+      'gawk',
+      'mawk',
+      'gmake',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     expect(grantPrefixProblem('gcc -O2')).toBeNull()

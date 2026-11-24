@@ -303,6 +303,10 @@ func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, s
 			why = code
 			continue
 		}
+		if code := checkDelegateHook(g.grant.Dir, rel); code != "" {
+			why = code
+			continue
+		}
 		d.jobID, d.grantID, d.path = g.job, g.grant.ID, filepath.ToSlash(rel)
 		return d, nil
 	}
