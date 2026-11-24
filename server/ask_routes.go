@@ -21,12 +21,14 @@ import (
 // the pane's lock as sendCI checks a job's agent, and records the answer. A
 // view-only client sees how many wait and their ids, never their text.
 //
-// The machine proxy does not forward these routes (machine_proxy.go): a
-// question is answered in the PWA of the server that holds it.
+// The machine proxy forwards the list and an answer only
+// (machine_proxy.go): another termote's browser answers through its
+// Machines, never its CLI.
 
 var (
-	errAskBusy    = &codedError{"ask_busy", "an answer to the question is being sent", http.StatusConflict}
-	errAskNoAgent = &codedError{"ask_no_agent", "the orchestrator that asked no longer runs in its pane", http.StatusConflict}
+	errAskBusy        = &codedError{"ask_busy", "an answer to the question is being sent", http.StatusConflict}
+	errAskNoAgent     = &codedError{"ask_no_agent", "the orchestrator that asked no longer runs in its pane", http.StatusConflict}
+	errAskBrowserOnly = &codedError{"ask_browser_only", "another termote answers a question from a browser only", http.StatusForbidden}
 )
 
 // askReservations holds the ids of the asks a write is in flight for: an
@@ -320,6 +322,13 @@ func (a *agentAPI) handleAskAnswer(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 		return
 	}
+	// The answer is the user's words: over the bridge only a browser of the
+	// other termote gives one, never its CLI or an older termote that names
+	// no origin, as a permission dialog's choices are held (cliMayChoose).
+	if auth, ok := authFrom(r.Context()); ok && auth.Kind == authMachine && !browserOrigin(auth.OriginAuth) {
+		writeJobError(w, errAskBrowserOnly)
+		return
+	}
 	var in askAnswerInput
 	if !decodeAskBody(w, r, &in) {
 		return
@@ -379,12 +388,12 @@ func (a *agentAPI) handleAskAnswer(w http.ResponseWriter, r *http.Request) {
 		a.writeCIError(w, err)
 		return
 	}
-	by := "socket"
-	if auth, ok := authFrom(r.Context()); ok {
-		by = auditBy(auth)
+	by, via := "socket", "none"
+	if _, ok := authFrom(r.Context()); ok {
+		by, via = auditWho(r)
 	}
 	// Never the answer's text
-	auditf("ask_answered", "ask", id, "by", by)
+	auditf("ask_answered", "ask", id, "by", by, "via", via)
 	saved, err := a.jobs.answerAsk(id, in.Updated, answer, choice)
 	recorded := err == nil
 	if !recorded {

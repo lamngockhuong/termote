@@ -64,6 +64,8 @@ func TestBridgeForbidsPasswordOnlyRoutes(t *testing.T) {
 		{"GET", "/pair"},
 		{"POST", "/login/link"},
 		{"GET", "/api/mux/devices/../devices"},
+		{"POST", "/api/mux/jobs/abc/grants"},
+		{"DELETE", "/api/mux/jobs/abc/grants/g1"},
 	}
 	for _, noAuth := range []bool{false, true} {
 		h := newBridgeServer(t, noAuth)

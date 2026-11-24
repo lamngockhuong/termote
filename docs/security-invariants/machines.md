@@ -19,7 +19,12 @@ Part of the [security invariants](README.md): other termote servers reached over
   `authMachine`. On the bridge, sign-in and sign-out (`/login`, `/pair`, `/login/link`,
   `/api/mux/logout`), `login-links`, `devices*`, `signins*`, `push*`, `settings*` and a job's
   `grants*` (`/api/mux/jobs/{id}/grants...`, see Dialog delegation) answer 403
-  `machine_forbidden` before any handler, whatever the role (cleaned path); a snapshot read over the
+  `machine_forbidden` before any handler, whatever the role (cleaned path); the rest of the job ledger
+  is held as a browser's: a view role gets the brief, `PATCH` and `DELETE` need `updated`, `/event`
+  is 403 `socket_only`, a job it makes is `createdBy: "pwa"` from a browser origin and `"machine"`
+  from any other (`TestJobLedgerOverBridge`); adding, closing or reporting an orchestrator's question
+  is 403 `socket_only`, and an answer to one is taken from a browser origin only (403
+  `ask_browser_only` otherwise, see Orchestrator asks); a snapshot read over the
   bridge carries no `settingsProposal` and `caps.settingsProposals` false, so a machine's settings
   proposal never reaches a browser open on it through another termote. `hostGuard` takes
   `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`. A
@@ -116,9 +121,13 @@ Part of the [security invariants](README.md): other termote servers reached over
   (`machineRest`). The id is 16 hex of a stored machine (else 404 `machine_unknown`); `rest` must
   match the allowlist (`snapshot`, `overview`, `activity`, `system`, `stream-token`, `stream`,
   `health`, `uploads`, `files/places`, `tabs*`, `panes*`, `groups*`, `worktrees*`, `tasks*`,
-  `templates*`, `recent-groups*`), hold no `.`/`..` segment, empty segment, `%2F` or `%5C`, else 404
+  `templates*`, `recent-groups*`, of the job ledger `jobs`, `jobs/{id}` and `jobs/{id}/ci` only, and of
+  the orchestrator's questions `asks` with `GET`/`HEAD` and `asks/{id}/answer` only: the one
+  method check of the allowlist, `machineAsksAdd`),
+  hold no `.`/`..` segment, empty segment, `%2F` or `%5C`, else 404
   `machine_route_forbidden` (so never `devices*`, `signins*`, `push*`, `login-links`, `logout`,
-  `machines*`). Before forwarding it runs `crossSiteRejection` on every method, refuses
+  `machines*`, a job's history `jobs/{id}/event` or its grants `jobs/{id}/grants*`, which the machine
+  refuses on the bridge too: the edge is a second wall, `TestMachineProxyJobs`). Before forwarding it runs `crossSiteRejection` on every method, refuses
   `stream-token` as a navigation, checks a stream's Origin, refuses a view role's writes, caps the
   body (100 MiB for `files/upload`, else the largest other route limit; the machine applies its
   own) and extends the read deadline for a write. It removes `Cookie`, `Authorization`, `Origin`,
