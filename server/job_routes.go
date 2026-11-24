@@ -217,10 +217,11 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		}
 		// The grants of an unfinished job end with it.
 		auth, _ := authFrom(r.Context())
+		_, via := auditWho(r)
 		now := a.jobs.now()
 		for _, g := range gone.Grants {
 			if !jobFinished(gone.State) && grantUnexpired(g, now) {
-				auditf("grant_revoked", "grant", g.ID, "job", id, "reason", "job_removed", "by", auditBy(auth))
+				auditf("grant_revoked", "grant", g.ID, "job", id, "reason", "job_removed", "by", auditBy(auth), "via", via)
 			}
 		}
 		jsonOK(w, map[string]bool{"ok": true})
@@ -282,9 +283,10 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth, _ := authFrom(r.Context())
+	_, via := auditWho(r)
 	for _, reason := range []string{"agent_changed", "job_finished"} {
 		for _, gid := range ended[reason] {
-			auditf("grant_revoked", "grant", gid, "job", id, "reason", reason, "by", auditBy(auth))
+			auditf("grant_revoked", "grant", gid, "job", id, "reason", reason, "by", auditBy(auth), "via", via)
 		}
 	}
 	jsonOK(w, map[string]any{"job": a.viewJob(j)})
@@ -411,11 +413,16 @@ func tsAfter(a, b string) bool {
 	return err != nil || ta.After(tb)
 }
 
-// newJob is a job as in asks for it. A browser's is the user's ("pwa");
-// only the CLI names who made it, or a worktree.
+// newJob is a job as in asks for it. A browser's is the user's ("pwa"), and
+// so is one another termote's browser made over the bridge; another
+// termote's CLI or Basic auth there makes a "machine" one. Only the CLI here
+// names who made it, or a worktree.
 func (a *agentAPI) newJob(r *http.Request, in jobInput) (job, error) {
 	socket := isLocalSocket(r.Context())
 	j := job{State: "todo", CreatedBy: "pwa"}
+	if auth, ok := authFrom(r.Context()); ok && auth.Kind == authMachine && !browserOrigin(auth.OriginAuth) {
+		j.CreatedBy = "machine"
+	}
 	if socket {
 		j.CreatedBy = "cli"
 		if by := clipJobText(in.CreatedBy, 128); by != "" {

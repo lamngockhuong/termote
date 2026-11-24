@@ -59,8 +59,10 @@ function loaded(over: Partial<JobsState> = {}): JobsState {
     loaded: true,
     error: false,
     unavailable: false,
+    outdated: false,
     asks: [],
     asksReadOnly: false,
+    asksOutdated: false,
     ...over,
   }
 }
@@ -475,6 +477,24 @@ describe('OverviewJobs', () => {
     unmount()
     const again = show({ unavailable: true, error: true })
     expect(again.container).toBeEmptyDOMElement()
+  })
+
+  it('asks to update a machine without the ledger, offering nothing to change', () => {
+    show({ outdated: true, error: true, loaded: false, jobs: [] })
+    const plan = screen.getByRole('region', { name: 'Plan' })
+    expect(plan.textContent).toContain(
+      'Termote on this machine is too old to show the plan',
+    )
+    expect(plan.textContent).toContain('termote update')
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByText(/Could not read the plan/)).toBeNull()
+  })
+
+  it('asks to update a machine without the asks above the jobs', () => {
+    show({ asksOutdated: true })
+    const region = screen.getByRole('region', { name: 'Waiting on you' })
+    expect(region.textContent).toContain('too old to keep the orchestrator')
+    expect(screen.getByRole('button', { name: /New job/ })).toBeTruthy()
   })
 
   it('tells a failed read, over the last jobs read or none', () => {

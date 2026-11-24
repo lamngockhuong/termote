@@ -9,6 +9,7 @@ import {
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import { currentMachine } from '../utils/api-base'
 import {
   grantPrefixProblem,
   grantPrefixTooWide,
@@ -147,7 +148,7 @@ export function JobGrantSheet({
         <p className="m-0 text-fg-muted">{t('jobs.grant.intro')}</p>
         {!canGrant && (
           <p role="note" className="m-0 text-fg-muted">
-            {t('jobs.grant.cannot')}
+            {t(currentMachine() ? 'jobs.grant.machine' : 'jobs.grant.cannot')}
           </p>
         )}
         <section aria-labelledby={`${ids}-active`}>

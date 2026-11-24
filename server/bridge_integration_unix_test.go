@@ -30,6 +30,7 @@ func bridgeTestServer(t *testing.T) (string, int) {
 	}
 	cfg := testConfig(t)
 	cfg.LocalSocketDir = dir
+	cfg.JobsDir = filepath.Join(t.TempDir(), "jobs")
 	// A backend that can watch a pane: the stream of a view role.
 	m := &viewMux{fakeMux: &fakeMux{snap: oneTabSnapshot()}, canView: true, attached: make(chan string, 16)}
 	m.attach = func(string, Size) (TermStream, error) { return newFakeTerm(), nil }

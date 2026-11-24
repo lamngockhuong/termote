@@ -100,6 +100,7 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth, _ := authFrom(r.Context())
+	_, via := auditWho(r)
 	now := a.jobs.now()
 	if del {
 		gid := r.PathValue("gid")
@@ -119,7 +120,7 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 			writeJobError(w, err)
 			return
 		}
-		auditf("grant_revoked", "grant", gid, "job", id, "by", auditBy(auth))
+		auditf("grant_revoked", "grant", gid, "job", id, "by", auditBy(auth), "via", via)
 		jsonOK(w, map[string]any{"job": a.viewJob(j)})
 		return
 	}
@@ -177,9 +178,9 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, gid := range replaced {
-		auditf("grant_revoked", "grant", gid, "job", id, "reason", "replaced", "by", auditBy(auth))
+		auditf("grant_revoked", "grant", gid, "job", id, "reason", "replaced", "by", auditBy(auth), "via", via)
 	}
-	auditf("grant_created", "grant", g.ID, "job", id, "kind", g.Kind, "prefix", g.Prefix, "expires", g.Expires, "by", auditBy(auth))
+	auditf("grant_created", "grant", g.ID, "job", id, "kind", g.Kind, "prefix", g.Prefix, "expires", g.Expires, "by", auditBy(auth), "via", via)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"job": a.viewJob(j), "grant": g.ID})

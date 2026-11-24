@@ -674,13 +674,15 @@ func (c *cli) agentsRead(args []string) error {
 	var openAsks, wroteAfter []string
 	if jobsErr != nil {
 		c.jobWarn(jobsErr)
-	} else if j, ok := paneJob(jobs, p.pane.ID); ok {
+	} else if js := readJobs(jobs, p.pane.ID); len(js) > 0 {
 		if t.Cursor != "" {
-			if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "read", LastTS: j.Live.LastTS, Cursor: t.Cursor}); err != nil {
-				c.jobWarn(err)
+			for _, j := range js {
+				if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "read", LastTS: j.Live.LastTS, Cursor: t.Cursor}); err != nil {
+					c.jobWarn(err)
+				}
 			}
 		}
-		openAsks, wroteAfter = c.askHints(port, j, t.Entries)
+		openAsks, wroteAfter = c.askHints(port, js[0], t.Entries)
 	}
 	entries := t.Entries
 	if !all {

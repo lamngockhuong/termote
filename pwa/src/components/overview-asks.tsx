@@ -13,6 +13,9 @@ interface Props {
   asks: Ask[]
   // View-only: how many wait, and their ids, never what they ask
   readOnly: boolean
+  // The machine open in this page keeps no asks yet (an older Termote):
+  // says to update it instead
+  outdated?: boolean
   // Now on the server's clock (ms)
   now: number
   // Opens the details of the job an ask is about, by its id; absent when
@@ -36,6 +39,7 @@ const FIELD =
 export function OverviewAsks({
   asks,
   readOnly,
+  outdated = false,
   now,
   onOpenJob,
   openableJobs,
@@ -52,7 +56,7 @@ export function OverviewAsks({
   }, [notice])
 
   const open = asks.filter((a) => a.state === 'open')
-  if (open.length === 0 && !notice) return null
+  if (open.length === 0 && !notice && !outdated) return null
 
   return (
     <section
@@ -70,6 +74,11 @@ export function OverviewAsks({
         />
         {t('jobs.asks.title')}
       </h4>
+      {outdated && (
+        <p className="m-0 text-[13px] text-fg-muted">
+          {t('jobs.asks.outdated')}
+        </p>
+      )}
       {readOnly
         ? open.length > 0 && (
             <>

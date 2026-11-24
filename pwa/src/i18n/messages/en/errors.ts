@@ -17,6 +17,8 @@ export default {
     'Only you choose an answer that always allows something, in the dialog itself',
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',
+  'errors.ask_browser_only':
+    'Another Termote answers a question only from a browser, never from its command line',
   'errors.ask_busy': 'An answer to this question is being sent. Try again',
   'errors.ask_closed': 'This question was answered already',
   'errors.ask_conflict': 'The question was changed elsewhere meanwhile',

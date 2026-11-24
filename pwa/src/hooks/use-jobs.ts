@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { currentMachine } from '../utils/api-base'
 import { followOverview } from './use-agent-overview'
 import {
   type Ask,
@@ -40,11 +41,17 @@ export interface JobsState {
   // The server keeps no ledger (an older Termote, or none could be made):
   // the Plan section is not shown
   unavailable: boolean
+  // The machine open in this page runs a Termote from before the ledger:
+  // the Plan section asks for an update instead
+  outdated: boolean
   // The orchestrators' questions, answered ones too; none from a server
   // that keeps none. A failed read keeps the last ones read.
   asks: Ask[]
   // The asks were read view-only: ids only, no text
   asksReadOnly: boolean
+  // The machine open in this page keeps a ledger but runs a Termote from
+  // before the asks: Waiting for you asks for an update instead
+  asksOutdated: boolean
 }
 
 const INITIAL: JobsState = {
@@ -56,8 +63,10 @@ const INITIAL: JobsState = {
   loaded: false,
   error: false,
   unavailable: false,
+  outdated: false,
   asks: [],
   asksReadOnly: false,
+  asksOutdated: false,
 }
 
 let state = INITIAL
@@ -93,14 +102,32 @@ async function readJobs(): Promise<void> {
       loaded: true,
       error: false,
       unavailable: false,
+      outdated: false,
     })
   } catch (err) {
     if (id !== readSeq) return
+    const outdated = olderMachine(err)
     const unavailable =
+      !outdated &&
       err instanceof RequestError &&
       (err.status === 404 || err.code === 'jobs_unavailable')
-    set({ error: true, unavailable })
+    set({ error: true, unavailable, outdated })
   }
+}
+
+// A 404 without a code from the machine open in this page: a Termote from
+// before the route, whose catch-all answers so. Every ledger route answers
+// a coded error, and this server refuses a route it does not forward with
+// machine_route_forbidden, so only an older machine gives this one. On
+// this server the same answer is an older Termote too, but the page then
+// comes from it and has no Plan to explain.
+function olderMachine(err: unknown): boolean {
+  return (
+    currentMachine() !== '' &&
+    err instanceof RequestError &&
+    err.status === 404 &&
+    !err.code
+  )
 }
 
 // Reads the asks again. A server without them (404, an older Termote) or
@@ -110,14 +137,14 @@ async function reloadAsks(): Promise<void> {
   try {
     const list = await fetchAsks()
     if (id !== askSeq) return
-    set({ asks: list.asks, asksReadOnly: list.readOnly })
+    set({ asks: list.asks, asksReadOnly: list.readOnly, asksOutdated: false })
   } catch (err) {
     if (id !== askSeq) return
     if (
       err instanceof RequestError &&
       (err.status === 404 || err.code === 'jobs_unavailable')
     )
-      set({ asks: [], asksReadOnly: false })
+      set({ asks: [], asksReadOnly: false, asksOutdated: olderMachine(err) })
   }
 }
 

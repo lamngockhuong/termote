@@ -98,6 +98,24 @@ func paneJob(list []jobView, paneID string) (jobView, bool) {
 	return jobView{}, false
 }
 
+// readJobs is every unfinished job whose agent runs in paneID, the active
+// ones first: wait --mine waits on all of them, so a read moves the mark
+// of each, one in review too.
+func readJobs(list []jobView, paneID string) []jobView {
+	var active, rest []jobView
+	for _, j := range list {
+		if jobFinished(j.State) || j.Live.PaneID != paneID || j.Live.Status == "gone" || j.Live.Status == "" {
+			continue
+		}
+		if j.State == "active" {
+			active = append(active, j)
+		} else {
+			rest = append(rest, j)
+		}
+	}
+	return append(active, rest...)
+}
+
 // worktreeJob is the newest job made for the worktree at dir.
 func worktreeJob(list []jobView, dir string) (jobView, bool) {
 	for _, j := range list {

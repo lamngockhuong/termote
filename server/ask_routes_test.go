@@ -414,19 +414,63 @@ func TestAskMessageAndErrors(t *testing.T) {
 	}
 }
 
-// The machine proxy forwards no ask route: a question is answered in the
-// PWA of the server that holds it.
-func TestAskRoutesNotForwarded(t *testing.T) {
+// A cross-site read of the questions is refused.
+func TestAskRoutesCrossSite(t *testing.T) {
 	jt := newAsksTest(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/mux/asks", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	if rec := serve(jt.mux, req); rec.Code != http.StatusForbidden {
 		t.Errorf("cross-site = %d", rec.Code)
 	}
+}
 
-	for _, p := range []string{"asks", "asks/Q1/answer", "asks/Q1/close"} {
-		if machineRouteRe.MatchString(p) {
-			t.Errorf("%s forwarded", p)
+// Another termote's Machines lists the questions and answers one from a
+// browser there only: its CLI, Basic auth or an older termote that names
+// no origin is refused before the question is touched.
+func TestAskAnswerOverBridge(t *testing.T) {
+	jt := newAsksTest(t)
+	logs := captureLog(t)
+	jt.addAsk(map[string]any{"text": "Which way?", "choices": []string{"Left", "Right"}})
+	code, out := jt.do("bridge-view:password", http.MethodGet, "/api/mux/asks", nil)
+	if code != http.StatusOK || out["readOnly"] != true {
+		t.Fatalf("view list = %d %v", code, out)
+	}
+	for k := range out["asks"].([]any)[0].(map[string]any) {
+		if k != "id" && k != "state" && k != "job" && k != "created" {
+			t.Errorf("a view role over the bridge reads %s", k)
 		}
+	}
+	answer := func(as, id string) (int, map[string]any) {
+		q, _ := jt.agent.jobs.askByID(id)
+		return jt.do(as, http.MethodPost, "/api/mux/asks/"+id+"/answer", map[string]any{"choice": 1, "updated": q.Updated.Format(time.RFC3339Nano)})
+	}
+	for _, as := range []string{"bridge-full:socket", "bridge-full:basic", "bridge-full:", "bridge"} {
+		if code, out := answer(as, "Q1"); code != http.StatusForbidden || out["code"] != "ask_browser_only" {
+			t.Errorf("%s answer = %d %v", as, code, out)
+		}
+	}
+	if code, out := answer("bridge-view:password", "Q1"); code != http.StatusForbidden || out["code"] != "view_only" {
+		t.Errorf("view answer = %d %v", code, out)
+	}
+	if len(jt.f.pasted) != 0 {
+		t.Fatalf("pasted on a refusal %q", jt.f.pasted)
+	}
+	if q, _ := jt.agent.jobs.askByID("Q1"); q.State != askOpen {
+		t.Fatalf("refused answers changed the question: %+v", q)
+	}
+	for i, origin := range []string{"password", "device", "none"} {
+		id := "Q1"
+		if i > 0 {
+			id = jt.addAsk(map[string]any{"text": "Again?", "choices": []string{"Yes", "No"}})["id"].(string)
+		}
+		if code, out := answer("bridge-full:"+origin, id); code != http.StatusOK || out["recorded"] != true {
+			t.Fatalf("%s answer = %d %v", origin, code, out)
+		}
+		if want := `audit: ask_answered ask="` + id + `" by="machine" via="machine:` + origin + `"`; !strings.Contains(logs.String(), want) {
+			t.Errorf("no %q in\n%s", want, logs)
+		}
+	}
+	if len(jt.f.pasted) != 3 {
+		t.Errorf("pasted %q", jt.f.pasted)
 	}
 }

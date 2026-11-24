@@ -104,3 +104,32 @@ export function jobPaneRef(job: Job): string {
       '',
   )
 }
+
+// PR_PATH: /<owner>/<repo>/pull/<n>, the only path of a pull request link
+const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/([1-9][0-9]*)$/
+
+// url when it is an https link to pull request n of repo (host/owner/name),
+// else undefined. The server keeps such links only, but through Machines the
+// ledger is the machine's JSON, which a hostile machine writes as it likes:
+// a link to another host would pass for that repo's pull request.
+export function safePRUrl(
+  url: string | undefined,
+  n: number,
+  repo: string,
+): string | undefined {
+  if (!url) return undefined
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return undefined
+  }
+  if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash)
+    return undefined
+  const m = PR_PATH.exec(u.pathname)
+  if (!m || Number(m[1]) !== n) return undefined
+  return `${u.host}${u.pathname}`.toLowerCase() ===
+    `${repo}/pull/${n}`.toLowerCase()
+    ? url
+    : undefined
+}

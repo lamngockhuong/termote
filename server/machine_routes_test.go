@@ -52,6 +52,9 @@ func TestMachineProxyHelpers(t *testing.T) {
 		originAuth(authInfo{Kind: authSession}, true, true) != "socket" {
 		t.Error("originAuth without sign-in or on the socket")
 	}
+	if !machineAsksAdd("POST", "asks") || machineAsksAdd("GET", "asks") || machineAsksAdd("HEAD", "asks") || machineAsksAdd("POST", "asks/Q1/answer") {
+		t.Error("machineAsksAdd")
+	}
 	if machinePathClass("panes/%1/files") != "panes" || machinePathClass("snapshot") != "snapshot" {
 		t.Error("machinePathClass")
 	}
@@ -59,7 +62,11 @@ func TestMachineProxyHelpers(t *testing.T) {
 		t.Error("machineRest")
 	}
 	for p, ok := range map[string]bool{"snapshot": true, "panes/x/files": true, "tabs": true, "recent-groups/1": true, "files/places": true,
-		"devices": false, "files/other": false, "snapshot/x": false, "panesx": false, "push/key": false} {
+		"devices": false, "files/other": false, "snapshot/x": false, "panesx": false, "push/key": false,
+		"jobs": true, "jobs/abc": true, "jobs/abc/ci": true, "jobs/": false, "jobs/abc/event": false, "jobs/abc/grants": false,
+		"jobs/abc/grants/g1": false, "jobs/abc/ci/x": false, "jobsx": false,
+		"asks": true, "asks/Q1/answer": true, "asks/": false, "asks/Q1": false, "asks/Q1/close": false, "asks/Q1/reported": false,
+		"asks/Q1/answer/x": false} {
 		if machineRouteRe.MatchString(p) != ok {
 			t.Errorf("route %q allowed=%v", p, !ok)
 		}

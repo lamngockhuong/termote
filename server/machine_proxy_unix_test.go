@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -159,8 +160,15 @@ func TestMachineProxyViewOnly(t *testing.T) {
 	h, _, id := mainWithMachine(t)
 	base := "/api/machines/" + id + "/mux/"
 	view := pairDevice(t, h, "view")
-	if rec := serve(h, asDevice("POST", base+"tabs", `{"groupId":"main"}`, view)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "view_only") {
-		t.Errorf("view write through the proxy: %d %s", rec.Code, rec.Body)
+	for _, w := range []struct{ method, path, body string }{{"POST", "tabs", `{"groupId":"main"}`}, {"POST", "jobs", `{"title":"t"}`},
+		{"PATCH", "jobs/abc", `{"state":"done"}`}, {"POST", "jobs/abc/ci", `{"action":"send"}`}} {
+		if rec := serve(h, asDevice(w.method, base+w.path, w.body, view)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "view_only") {
+			t.Errorf("view %s %s through the proxy: %d %s", w.method, w.path, rec.Code, rec.Body)
+		}
+	}
+	// The machine gives a view role the brief of its jobs.
+	if rec := serve(h, asDevice("GET", base+"jobs?all=1", "", view)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"readOnly":true`) {
+		t.Errorf("view jobs through the proxy: %d %s", rec.Code, rec.Body)
 	}
 	snap := decodeBody(t, serve(h, asDevice("GET", base+"snapshot", "", view)))
 	if caps, _ := snap["caps"].(map[string]any); caps["role"] != "view" {
@@ -246,5 +254,89 @@ func TestMachineProxyStreamAndRevoke(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+// The machine's job ledger reads and changes through the proxy, on the
+// machine; a job's history and its grants never leave this server.
+func TestMachineProxyJobs(t *testing.T) {
+	h, agent, id := mainWithMachine(t)
+	base := "/api/machines/" + id + "/mux/"
+	rec := serve(h, apiRequest("POST", base+"jobs", `{"title":"Remote job"}`))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	var made struct {
+		Job struct{ ID, CreatedBy, Updated string }
+	}
+	json.Unmarshal(rec.Body.Bytes(), &made)
+	// Basic auth here is not a browser: the machine names the job its.
+	if made.Job.CreatedBy != "machine" {
+		t.Errorf("created by %q", made.Job.CreatedBy)
+	}
+	rec = serve(h, apiRequest("GET", base+"jobs?all=1", ""))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Remote job") || !strings.Contains(rec.Body.String(), `"canGrant":false`) {
+		t.Errorf("list through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	if agent.jobs != nil {
+		if _, ok := agent.jobs.job(made.Job.ID); ok {
+			t.Error("the job was made on this server")
+		}
+	}
+	job := base + "jobs/" + made.Job.ID
+	rec = serve(h, apiRequest("PATCH", job, `{"state":"review","updated":"`+made.Job.Updated+`"}`))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"state":"review"`) {
+		t.Errorf("patch through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	// Forwarded: the machine answers, whatever it says about ci.
+	if rec := serve(h, apiRequest("POST", job+"/ci", `{"action":"refresh"}`)); strings.Contains(rec.Body.String(), "machine_route_forbidden") || rec.Code/100 == 5 && !strings.Contains(rec.Body.String(), "ci_unavailable") {
+		t.Errorf("ci through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	for _, rt := range []struct{ method, path string }{{"POST", job + "/event"}, {"POST", job + "/grants"}, {"DELETE", job + "/grants/g1"},
+		{"POST", job + "/ci/x"}, {"GET", base + "jobs/"}, {"GET", base + "jobsx"}} {
+		if rec := serve(h, apiRequest(rt.method, rt.path, `{}`)); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "machine_route_forbidden") {
+			t.Errorf("%s %s through the proxy: %d %s", rt.method, rt.path, rec.Code, rec.Body)
+		}
+	}
+	rec = serve(h, apiRequest("GET", base+"jobs?all=1", ""))
+	var list struct {
+		Jobs []struct{ ID, Updated string }
+	}
+	json.Unmarshal(rec.Body.Bytes(), &list)
+	if len(list.Jobs) != 1 {
+		t.Fatalf("jobs %s", rec.Body)
+	}
+	if rec := serve(h, apiRequest("DELETE", job+"?updated="+url.QueryEscape(list.Jobs[0].Updated), "")); rec.Code != http.StatusOK {
+		t.Errorf("delete through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(h, apiRequest("GET", base+"jobs?all=1", "")); !strings.Contains(rec.Body.String(), `"jobs":[]`) {
+		t.Errorf("after delete: %s", rec.Body)
+	}
+}
+
+// The machine's questions list through the proxy and an answer reaches it;
+// adding, closing or reporting one never leaves this server.
+func TestMachineProxyAsks(t *testing.T) {
+	h, _, id := mainWithMachine(t)
+	base := "/api/machines/" + id + "/mux/"
+	if rec := serve(h, apiRequest("GET", base+"asks", "")); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"asks":[]`) {
+		t.Errorf("asks through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	// Forwarded: the machine refuses an answer from Basic auth here.
+	if rec := serve(h, apiRequest("POST", base+"asks/Q1/answer", `{"choice":1,"updated":"x"}`)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ask_browser_only") {
+		t.Errorf("answer through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	for _, rt := range []struct{ method, path string }{{"POST", "asks"}, {"PUT", "asks"}, {"POST", "asks/Q1/close"}, {"POST", "asks/Q1/reported"},
+		{"GET", "asks/Q1"}, {"POST", "asks/Q1/answer/x"}} {
+		if rec := serve(h, apiRequest(rt.method, base+rt.path, `{}`)); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "machine_route_forbidden") {
+			t.Errorf("%s %s through the proxy: %d %s", rt.method, rt.path, rec.Code, rec.Body)
+		}
+	}
+	view := pairDevice(t, h, "view")
+	if rec := serve(h, asDevice("POST", base+"asks/Q1/answer", `{"choice":1}`, view)); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "view_only") {
+		t.Errorf("view answer through the proxy: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(h, asDevice("GET", base+"asks", "", view)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"readOnly":true`) {
+		t.Errorf("view asks through the proxy: %d %s", rec.Code, rec.Body)
 	}
 }

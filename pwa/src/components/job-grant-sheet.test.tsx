@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Job, type JobGrant, RequestError } from '../hooks/use-mux-api'
+import { setCurrentMachineForTest } from '../utils/api-base'
 import { JobGrantSheet } from './job-grant-sheet'
 
 const store = vi.hoisted(() => ({
@@ -359,6 +360,21 @@ describe('JobGrantSheet', () => {
     expect(screen.getByText('Run: pnpm test')).toBeVisible()
     expect(screen.queryByRole('button', { name: /End/ })).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it("says a machine's grants are given on that machine, offering nothing", () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      open(job({ grants: [grant()] }), false)
+      expect(screen.getByRole('note')).toHaveTextContent(
+        /given on its own Termote/,
+      )
+      expect(screen.getByText('Run: pnpm test')).toBeVisible()
+      expect(screen.queryByRole('button', { name: /End|Give/ })).toBeNull()
+      expect(screen.queryByRole('textbox')).toBeNull()
+    } finally {
+      setCurrentMachineForTest('')
+    }
   })
 
   it('takes no new grant for a finished job, or one without an agent', () => {

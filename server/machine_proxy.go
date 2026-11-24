@@ -37,8 +37,14 @@ func machineRest(p string) string {
 	return p
 }
 
-// machineRouteRe is the allowlist of routes forwarded to a machine.
+// machineRouteRe is the allowlist of routes forwarded to a machine. Of the
+// job ledger only the list, one job and its ci route: never a job's history
+// (event, the orchestrator's on the machine's local socket) or its grants,
+// which the user gives on the machine's own PWA. Of the orchestrator's
+// questions the list and an answer: adding, closing and reporting one are
+// the machine's local socket's (and asks takes a GET only, machineAsksAdd).
 var machineRouteRe = regexp.MustCompile(`^(?:snapshot|overview|activity|system|stream-token|stream|health|uploads|files/places|` +
+	`jobs(?:/[^/]+(?:/ci)?)?|asks(?:/[^/]+/answer)?|` +
 	`(?:tabs|panes|groups|worktrees|tasks|templates|recent-groups)(?:/.*)?)$`)
 
 // machineResponseIdleWait and machineResponseBodyMost bound reading a
@@ -192,7 +198,8 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 			return
 		}
 		id, rest, restEsc := m[1], m[2], esc[2]
-		if strings.Contains("/"+rest+"/", "/../") || strings.Contains("/"+rest+"/", "/./") || strings.Contains(rest, "//") || !machineRouteRe.MatchString(rest) {
+		if strings.Contains("/"+rest+"/", "/../") || strings.Contains("/"+rest+"/", "/./") || strings.Contains(rest, "//") || !machineRouteRe.MatchString(rest) ||
+			machineAsksAdd(r.Method, rest) {
 			writeCoded(w, errMachineRouteForbidden)
 			return
 		}
@@ -475,6 +482,12 @@ func originAuth(a authInfo, signedIn, socket bool) string {
 		return "socket"
 	}
 	return ""
+}
+
+// machineAsksAdd: a request to add a question, which asks shares with the
+// list; only the machine's orchestrator adds one, over its local socket.
+func machineAsksAdd(method, rest string) bool {
+	return rest == "asks" && method != http.MethodGet && method != http.MethodHead
 }
 
 // machinePathClass is the first segment of rest, for logs: never an id or

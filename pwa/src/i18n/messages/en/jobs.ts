@@ -9,6 +9,10 @@ export default {
   'jobs.none': 'No job yet',
   'jobs.noneHint': 'Add one, or let an orchestrator agent plan the work',
   'jobs.noneOpen': 'Every job is finished',
+  // A machine open through Machines runs a Termote from before the plan
+  'jobs.outdated.title': 'Termote on this machine is too old to show the plan',
+  'jobs.outdated.hint':
+    'Run termote update on that machine, or brew upgrade termote && termote restart where Homebrew installed it',
   'jobs.noneOpenHint': 'The finished jobs are in the list below',
   // The groups; {count}: how many jobs are in it
   'jobs.group.waiting': 'Waiting for you · {count}',
@@ -127,6 +131,8 @@ export default {
     "A grant lets the orchestrator answer one kind of permission dialog of this job's agent for you, until it ends",
   'jobs.grant.cannot':
     'Only a browser signed in with the password, or a fully paired device, gives or ends grants. This browser has neither (no sign-in, or Basic auth)',
+  'jobs.grant.machine':
+    'Grants of this machine are given on its own Termote, signed in there. Here they are only shown',
   'jobs.grant.active': 'In force',
   'jobs.grant.none': 'No grant is in force',
   'jobs.grant.runLabel': 'Run: {prefix}',
@@ -226,6 +232,8 @@ export default {
   // {ref}: the pane that asked, {id}: the question's id (Q3)
   'jobs.asks.title': 'Waiting on you',
   'jobs.asks.from': 'Asked from {ref}',
+  'jobs.asks.outdated':
+    'Termote on this machine is too old to keep the orchestrator’s questions. Update it to answer them here',
   'jobs.asks.about': 'About',
   'jobs.asks.choices': 'Choices for {id}',
   'jobs.asks.answerLabel': 'Your answer to {id}',

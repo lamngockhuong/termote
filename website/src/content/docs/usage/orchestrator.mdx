@@ -192,7 +192,9 @@ your answer into the orchestrator's input box as `Answer to Q3: ...` (or
 `termote agents ask close Q3`. A draft you left in the orchestrator's input box is never replaced:
 the answer is refused and the question stays open until you send or clear the draft. When the
 orchestrator that asked no longer runs, the PWA says so and you answer it in its terminal. A
-view-only device sees how many questions wait and their ids, never their text.
+view-only device sees how many questions wait and their ids, never their text. A machine open
+through [Machines](/usage/machines/) shows its own questions, and you answer them from the browser;
+another Termote's command line cannot answer one.
 
 ```bash
 termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>
@@ -209,7 +211,8 @@ A permission dialog (run a command, edit a file) is yours to answer. To keep a l
 while you are away, you can give one job's agent a grant in the PWA, signed in with your password
 or a paired device: run commands that start with a prefix you type (`pnpm test`), or edit files in
 the job's worktree while its agent works there, for up to a day. Only you give grants: the orchestrator, the command line,
-another Termote and a server without sign-in cannot.
+another Termote and a server without sign-in cannot. For a machine open through
+[Machines](/usage/machines/), give them on that machine's own Termote; here they are only shown.
 
 The orchestrator then tries `answer <pane> --delegated` first. Termote itself checks the dialog
 and answers "Yes" for this one time only when the dialog on screen and the one tool call the

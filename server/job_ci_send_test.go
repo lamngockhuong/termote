@@ -67,8 +67,11 @@ func setFailing(t *testing.T, jt *jobsTest, id, head string, more ...jobPR) {
 func TestJobCIRoute(t *testing.T) {
 	jt, id := newCISendTest(t)
 	path := "/api/mux/jobs/" + id + "/ci"
-	if code, _ := jt.do("view", http.MethodPost, path, map[string]any{"action": "send"}); code != http.StatusForbidden {
-		t.Errorf("view-only send = %d", code)
+	logs := captureLog(t)
+	for _, as := range []string{"view", "bridge-view:password"} {
+		if code, out := jt.do(as, http.MethodPost, path, map[string]any{"action": "send"}); code != http.StatusForbidden || out["code"] != "view_only" {
+			t.Errorf("%s send = %d %v", as, code, out)
+		}
 	}
 	if code, _ := jt.do("full", http.MethodPost, path, `{"action":"`+strings.Repeat("x", 2000)+`"}`); code != http.StatusRequestEntityTooLarge {
 		t.Errorf("large body = %d", code)
@@ -86,6 +89,9 @@ func TestJobCIRoute(t *testing.T) {
 	want := `CI failed on PR #12: "lint". Read the failures with gh pr checks 12, fix them and push.`
 	if len(jt.f.pasted) != 1 || jt.f.pasted[0] != want {
 		t.Errorf("pasted %q", jt.f.pasted)
+	}
+	if !strings.Contains(logs.String(), `audit: ci_sent job="`+id+`" prs="#12" by="session:s" via="session"`) {
+		t.Errorf("audit\n%s", logs)
 	}
 	j, _ := jt.agent.jobs.job(id)
 	if j.CI.Sent != "fail:12@aaa" || j.Events[len(j.Events)-1].Text != "sent CI failure of #12" {
@@ -110,7 +116,7 @@ func TestJobCISendRefusals(t *testing.T) {
 	jt.f.mu.Lock()
 	jt.f.screen = boxScreen("half typed")
 	jt.f.mu.Unlock()
-	if _, _, err := jt.agent.sendCI(ctx, id, "u", false); err == nil || !strings.Contains(err.Error(), "draft") {
+	if _, _, err := jt.agent.sendCI(ctx, id, "u", "", false); err == nil || !strings.Contains(err.Error(), "draft") {
 		t.Fatalf("draft = %v", err)
 	}
 	j, _ := jt.agent.jobs.job(id)
@@ -122,13 +128,13 @@ func TestJobCISendRefusals(t *testing.T) {
 	jt.f.screen = boxScreen("")
 	jt.f.session.PID = 4242
 	jt.f.mu.Unlock()
-	if _, _, err := jt.agent.sendCI(ctx, id, "u", false); !errors.Is(err, errJobNoAgent) {
+	if _, _, err := jt.agent.sendCI(ctx, id, "u", "", false); !errors.Is(err, errJobNoAgent) {
 		t.Errorf("another agent = %v", err)
 	}
 	// A job without an agent.
 	other, _ := jt.agent.jobs.create(job{Title: "b", State: "active"})
 	setFailing(t, jt, other.ID, "bbb")
-	if _, _, err := jt.agent.sendCI(ctx, other.ID, "u", false); !errors.Is(err, errJobNoAgent) {
+	if _, _, err := jt.agent.sendCI(ctx, other.ID, "u", "", false); !errors.Is(err, errJobNoAgent) {
 		t.Errorf("no agent = %v", err)
 	}
 }
@@ -233,8 +239,21 @@ func TestJobCIAutoSendBacksOff(t *testing.T) {
 		t.Errorf("backoff %+v", s)
 	}
 	// Refused again by hand: still one history line for the set
-	jt.agent.sendCI(ctx, id, "u", false)
+	jt.agent.sendCI(ctx, id, "u", "", false)
 	if j, _ = jt.agent.jobs.job(id); countEvents(j, "ci_failed_send") != 1 {
 		t.Errorf("%d ci_failed_send lines", countEvents(j, "ci_failed_send"))
+	}
+}
+
+// Another termote's browser sends the failures over the bridge; the audit
+// line names the bridge and how that browser signed in there.
+func TestJobCISendOverBridge(t *testing.T) {
+	jt, id := newCISendTest(t)
+	logs := captureLog(t)
+	if code, out := jt.do("bridge-full:device", http.MethodPost, "/api/mux/jobs/"+id+"/ci", map[string]any{"action": "send"}); code != http.StatusOK {
+		t.Fatalf("bridge send = %d %v", code, out)
+	}
+	if len(jt.f.pasted) != 1 || !strings.Contains(logs.String(), `audit: ci_sent job="`+id+`" prs="#12" by="machine" via="machine:device"`) {
+		t.Errorf("pasted %q, audit\n%s", jt.f.pasted, logs)
 	}
 }
