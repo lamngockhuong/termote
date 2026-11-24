@@ -180,6 +180,16 @@ estimated cost and the files they changed. Read one, resume it in a new tab, or 
 still running. See
 [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session).
 
+### Coordinating Agents from One Session
+
+One Claude Code or Codex session can coordinate the agents in your other panes: see their status,
+give one of them a task in its own git worktree, wait for several, review their changes and ask you
+what only you can decide. Install its skill with `termote skills install`, or as a plugin from
+[termote-plugins](https://github.com/lamngockhuong/termote-plugins) (in Claude Code
+`/plugin marketplace add lamngockhuong/termote-plugins`, then `/plugin install termote@termote`);
+install it one way only. Its jobs and its questions for you show in the overview's **Plan** tab,
+where you answer them from the phone. See [Orchestrator](https://termote.ohnice.app/usage/orchestrator/).
+
 ### Monitoring Long-Running Processes
 
 1. Start your process in a session (e.g., `npm run build`)
@@ -201,8 +211,8 @@ still running. See
 - Check that both devices are on the same network
 - Verify the URL matches your server's local IP (`ip addr` or `ifconfig`)
 - Check firewall allows port 7680
-- If you get a 403 because the Host was rejected, run the `termote start --allow-host <name>`
-  the error message suggests
+- If you get a 403 because the Host was rejected, `termote logs` names the
+  `termote start --allow-host <name>` to run
 
 ### Forgot the Password
 

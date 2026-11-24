@@ -186,7 +186,10 @@ agents <cmd>         The agents in the panes, for an orchestrator agent (native 
                      (its order and workspace, server/job_deps.go),
                      job ci <id> [--refresh] [--send] (its pull requests via the user's gh, server/job_ci.go),
                      job finish <id> [--close] [--remove-worktree] (after the user's yes, server/job_finish.go)
+                     ask add --text [--choice]... [--job <id>], ask list [--all], ask close <Qn> [--answer]
+                     (its questions for the user, answered or dismissed in the PWA, server/ask_store.go)
 skills <cmd>         The embedded orchestrator skill for Claude Code and Codex: install, uninstall [--agent], status
+                     (the same skill ships as the termote-plugins marketplace, scripts/termote-plugins.sh)
 pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
 signins              List the browsers signed in with the password; `signins revoke <id>|--all` signs them out
@@ -307,6 +310,7 @@ make test-go          # go test ./... in server/
 make test-hc          # hc backend against a real hc on PATH (a core of its own per test)
 make test-cli         # Test the termote.sh dev shim
 make test-install     # Test install.sh (fake curl)
+make test-termote-plugins # Test the termote-plugins marketplace generator
 make test-entrypoints # Test Docker entrypoints
 make test-git-hooks   # Test the git hooks installer (prepare)
 

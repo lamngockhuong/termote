@@ -137,7 +137,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Một cổng HTTPS đã phục vụ thứ khác (ví dụ chế độ còn lại) bị từ chối
 - [ ] `--fresh` buộc tạo mật khẩu mới (bỏ qua config đã lưu)
 - [ ] `--allow-host <name>` thêm tên vào danh sách Host được phép (có lưu lại); request có header
-      `Host` không nằm trong danh sách nhận 403 kèm gợi ý đúng cờ đó
+      `Host` không nằm trong danh sách nhận 403 chỉ tới `termote logs`, và log của server ghi đúng cờ
+      đó (bản thân trang 403 không bao giờ ghi)
 - [ ] `--remove-host <name>` xóa một tên đã cho phép trước đó
 - [ ] Request từ hostname/IP LAN lạ bị từ chối (403) cho tới khi được thêm bằng
       `--allow-host`
@@ -465,6 +466,39 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
       mở pane của nó, dòng của window đã đóng thì bấm không có tác dụng; màn hình rộng hiện thành cột
       bên cạnh các thẻ, điện thoại hiện thành sheet (360 px, không cuộn ngang)
 
+### Orchestrator
+
+Server chạy native (Linux hoặc macOS), từ hai pane chạy Claude Code hoặc Codex trở lên, một pane
+trong số đó là orchestrator.
+
+- [ ] `termote skills install` cài skill cho Claude Code và Codex; `skills status` hiện ra skill đó;
+      `skills uninstall` gỡ nó. Cài từ marketplace termote-plugins thay vào đó (Claude Code
+      `/plugin marketplace add lamngockhuong/termote-plugins`, `/plugin install termote@termote`;
+      Codex `codex plugin marketplace add ...`, `codex plugin add termote@termote`) skill cũng nạp
+- [ ] Gợi ý của tab Plan trống, và nút **?** của nó, hiện các dòng cài đặt, mỗi dòng có nút sao chép
+- [ ] Khi được nhờ giao việc cho một agent trong worktree mới, orchestrator chạy `agents start
+      --worktree ... --job`: job hiện trong Plan, thẻ của nó ghi agent, pane và branch
+- [ ] `job add --priority high --after <job>`: thẻ có dấu ưu tiên cao và **Waits on 1**; `jobs
+      --ready` bỏ nó ra cho tới khi job kia xong; bắt job đầu chờ job thứ hai thì bị từ chối
+      (`job_cycle`)
+- [ ] Agent của một job đứng ở hộp thoại xin quyền: job đó chuyển sang **Waiting for you**
+- [ ] **Copy ID** trong chi tiết job sao chép id của nó
+- [ ] `ask add --text 'Merge now?' --choice Yes --choice Later --job <id>` in ra `Q1`: nút tổng quan
+      hiện số câu hỏi (trên điện thoại là chấm ở menu view), mục "Waiting on you" của Plan và chat
+      của orchestrator đều liệt kê nó
+- [ ] Trả lời bằng một lựa chọn gõ `Answer to Q1 (choice 1): ...` vào ô nhập của orchestrator; ô
+      đó còn bản nháp thì câu trả lời bị từ chối cho tới khi gửi hoặc xoá nháp
+- [ ] **Dismiss** không gõ gì; lần `agents wait --mine` kế tiếp báo `Q1 dismissed in the PWA` đúng
+      một lần
+- [ ] Thiết bị chỉ xem thấy số câu hỏi đang chờ và id của chúng, không bao giờ thấy nội dung
+- [ ] Một máy mở qua Machines hiện tab Plan của máy đó; câu hỏi của nó được trả lời và bỏ qua ngay ở
+      đó
+- [ ] Job có branch đã mở pull request: thẻ hiện chip pull request; `job ci <id> --refresh` đọc lại;
+      check lỗi gửi từ phần chi tiết tới được ô nhập của agent
+- [ ] `job finish <id> --close --remove-worktree` bị từ chối khi worktree còn thay đổi chưa commit
+      hoặc commit chưa push; push xong thì nó đóng tab, xoá worktree và job thành done
+- [ ] `jobs prune --dry-run` chỉ liệt kê job đã kết thúc, và không xoá gì
+
 ### Số liệu máy chủ
 
 - [ ] Thanh tiêu đề có chip máy chủ, trên mọi màn hình chỉ hiện một giá trị kèm biểu tượng: đồng hồ
@@ -628,7 +662,7 @@ Trên psmux, gửi tin từ Chat view chưa được cho đến khi xong #408.
 Linux, Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start --mux herdr`).
 
 - [ ] Pane đang rảnh có view Chat với hai nút "Claude Code" và "Codex"; pane đang chạy `vim` thì
-      không; tmux không có nút nào và `POST …/agent/start` trả 501
+      không; psmux không có nút nào và `POST …/agent/start` trả 501
 - [ ] Claude Code: `claude` chạy, trạng thái đi từ `starting` sang `ready`, hội thoại hiện ra; tin
       đầu tiên gửi từ view Chat tới nơi (ghi lại Herdr mất bao lâu mới báo session, trong lúc đó
       view ghi "Claude Code is starting…")
@@ -664,6 +698,25 @@ Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux
       `Remove-Job -Force` pane rảnh trở lại
 - [ ] `curl` với `{"kind":"codex"}` chạy `codex --no-daemon`; `caps.agentStartCodex` trong
       snapshot là true
+
+### Khởi động agent (tmux, Zellij, hc)
+
+Linux/macOS với tmux và với Zellij (`termote start --mux tmux|zellij`); Windows với hc
+(`termote start --mux hc`, shell của pane là pwsh).
+
+- [ ] Pane đang rảnh có view Chat với các nút "Claude Code", "Codex" (nơi Codex có view Chat) và
+      "OpenCode"; pane đang chạy `vim` thì không
+- [ ] Claude Code: pane hiện `claude` được gõ ở dấu nhắc, trạng thái đi từ `starting` sang
+      `ready`, hội thoại hiện ra; tin đầu tiên gửi từ view Chat tới nơi
+- [ ] Codex: `codex '--no-daemon'` được gõ; view Chat nhắc gõ tin đầu tiên trong terminal.
+      OpenCode: `opencode '--session' 'ses_…'` được gõ và view Chat của nó hiện ra
+- [ ] Gõ dở `echo hi` rồi khởi động: chỉ agent chạy (ở dấu nhắc `PS2` cũng vậy)
+- [ ] Thư mục mà Claude Code hỏi tin cậy: `blocked`, PWA mở Terminal
+- [ ] `PATH` không có `claude`: khoảng 4 giây sau khi khởi động thì `exited`, có toast cảnh báo;
+      khởi động lại được ngay (ngoài Herdr không có `start_pending`)
+- [ ] `curl` POST tới pane đang chạy `vim` → 409 `pane_busy`, không gõ gì, `vim` vẫn chạy
+- [ ] Hai thiết bị cùng khởi động: một bên nhận 200, bên kia 409 `starting`
+- [ ] tmux: pane đang ở copy mode → 409 `pane_busy`; psmux: `caps.agentStart` là false
 
 ---
 
@@ -783,6 +836,9 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr.
       tải gì
 - [ ] Khối `<details><summary>...</summary>` ... `</details>` mở ra khi chạm và hiển thị phần
       Markdown bên trong; `<details>` thiếu `</details>` hiện dạng chữ
+- [ ] Trong một ô bảng, `<br>` xuống dòng, `<ul><li>a</li><li>b</li></ul>` hiện thành danh sách và
+      `<details><summary>Why</summary>...</details>` mở ra khi chạm mà không mở dòng bị cắt; `<ul>`
+      thiếu `</ul>` hiện dạng chữ
 - [ ] File Markdown lớn hơn 256 KiB hiện `Too large to preview: shown as source`
 - [ ] Changes: nút "Preview" của file `.md` có thay đổi hiện bản hiện tại ở dạng xem trước
 

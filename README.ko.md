@@ -45,7 +45,7 @@
 - **세션 전환**: 생성/편집/삭제가 가능한 여러 tmux 세션
 - **세션 탭**: 빠른 창 전환을 위한 가로 탭 바
 - **Herdr 백엔드** (네이티브 또는 컨테이너 안): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
-- **Chat 뷰**: Claude Code, Codex(`--no-daemon`으로 시작) 또는 OpenCode 2를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안, 대화상자 응답, 실행 중인 서브에이전트 표시를 지원 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
+- **Chat 뷰**: Claude Code, Codex(`--no-daemon`으로 시작) 또는 OpenCode 2를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안, 대화상자 응답, 채팅에서 선택한 글을 답장에 인용, 실행 중인 서브에이전트 표시를 지원하며 서브에이전트를 탭하면 그 대화를 읽을 수 있음 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
 - **세션 기록**: pane의 폴더에서 실행된 Claude Code, Codex, OpenCode 세션을 나열하고, 세션을 읽거나 새 탭에서 재개하거나 실행 중인 세션을 포크 — [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session) 참고
 - **토큰과 비용**: 에이전트 세션별 토큰 수와 예상 비용, 일별 합계 — [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost) 참고
 - **세션이 변경한 파일**: 에이전트 세션이 편집한 파일을 Changes와 세션 기록에 나열하고, 각 파일에서 diff를 엶 — [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed) 참고
@@ -62,12 +62,15 @@
 - **Zellij 백엔드** (Linux, macOS 또는 컨테이너 안): tmux 대신 Zellij 세션, 탭, 패널을 제어 (Zellij 0.45.0 이상), `--mux zellij`로 선택 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **herdr-core 백엔드** (네이티브, 모든 OS): herdr-core의 클라이언트 하나로서 herdr 앱이 보여 주는 스페이스, 탭, 패널을 그대로 표시 (`hc` 0.1.16 이상), `--mux hc`로 선택 — [herdr-core 백엔드](https://termote.ohnice.app/installation/native/#herdr-core-backend) 참고
 - **Machines**: 다른 컴퓨터의 에이전트를 하나의 Termote에서 SSH로 지켜보고 제어. 사용하는 키는 그 컴퓨터의 Termote에만 닿을 수 있음 (`termote machine add <alias>`) — [Machines](https://termote.ohnice.app/usage/machines/) 참고
+- **오케스트레이터**: 하나의 Claude Code 또는 Codex 세션이 다른 pane의 에이전트를 조율합니다. 상태 확인, 작업 지시, 답변과 대화상자 처리, 전용 worktree에서 새 에이전트 시작(`termote agents`) — [Orchestrator](https://termote.ohnice.app/usage/orchestrator/) 참고. 스킬은 Termote에 포함되어 있거나(`termote skills install`) [termote-plugins](https://github.com/lamngockhuong/termote-plugins)에서 플러그인으로 설치할 수 있습니다(Claude Code에서는 `/plugin marketplace add lamngockhuong/termote-plugins`, Codex에서는 `codex plugin marketplace add lamngockhuong/termote-plugins`). 둘 중 하나만 설치하세요
+- **Plan과 작업**: 오케스트레이터가 나눠 준 일을 우선순위, 기다리는 작업, 워크스페이스가 있는 작업으로 보여 주고, 풀 리퀘스트와 CI 검사(실패한 검사는 에이전트에게 다시 보냄), 승인 후 탭을 닫고 worktree를 지우는 마무리까지 다룹니다(`termote agents job ...`) — [Orchestrator](https://termote.ohnice.app/usage/orchestrator/) 참고
+- **나에게 온 질문**: 오케스트레이터는 묻는 질문을 기록합니다(`termote agents ask add`). **Plan** 탭이나 질문한 오케스트레이터의 채팅에서, 이 Termote든 Machines의 다른 컴퓨터든 하나씩 답하거나 무시할 수 있습니다. 에이전트가 대화상자에서 멈춘 작업은 **Waiting for you**에 표시됩니다 — [Orchestrator](https://termote.ohnice.app/usage/orchestrator/#questions-waiting-on-you) 참고
 - **Herdr 플러그인**: Herdr를 벗어나지 않고 포커스된 Herdr pane을 Termote에서 열고, 링크를 휴대폰용 QR 코드로 표시하고, 서버를 시작하거나 중지 — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 스크롤
 - **명령 히스토리**: 검색 기능으로 이전에 전송한 명령 재호출
 - **빠른 작업**: 모바일 툴바 끝에 고정된 ⋯ 키가 자주 쓰는 작업(clear, cancel, exit)의 Actions 줄을 보여 줍니다
-- **인터페이스 스타일**: Neutral, Terminal, Native 중 설정에서 선택하며 라이트/다크 테마와 별개입니다
+- **인터페이스 스타일**: Neutral, Terminal, Native 중 설정에서 선택하며 라이트/다크 테마와 별개이며, 강조 색상은 모든 스타일이 함께 씁니다
 - **인터페이스 언어**: 영어 또는 베트남어를 설정에서 선택하며, Auto는 브라우저 언어를 따릅니다
 - **설정 내보내기와 가져오기**: 이 브라우저의 설정을 파일로 내보내 다른 브라우저에서 가져오거나, 코딩 에이전트가 `termote settings propose`로 제안한 설정을 검토합니다 — [Settings](https://termote.ohnice.app/usage/settings/#export-and-import) 참고
 - **GPU 터미널**: 기기에 GPU가 있으면 터미널을 WebGL2로 그려, 출력이 많아도 부드럽게 표시합니다
@@ -201,6 +204,7 @@ termote url --qr                     # The link to open, as a QR code for a phon
 termote pair                         # A one-time code that signs a new device in
 termote devices                      # List the paired devices (devices revoke <id>)
 termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
+termote skills install               # The orchestrator skill for Claude Code and Codex
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command, the install and uploads
 ```
@@ -384,13 +388,16 @@ termote/
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
+│   ├── job_*.go, ask_*.go  # The orchestrator's job ledger and its questions for the user
+│   ├── skills/             # The orchestrator skill (`termote skills install`, termote-plugins)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
 │   ├── install.sh          # Unix online installer (curl | sh)
 │   ├── install.ps1         # Windows online installer (irm | iex)
 │   ├── termote.sh          # Unix shim: builds and runs a checkout
-│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   ├── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   └── termote-plugins.sh  # Writes the termote-plugins marketplace at each stable release
 ├── tests/                  # Test suite
 │   ├── test-termote.sh     # Unix shim tests
 │   ├── test-termote.ps1    # Windows shim tests

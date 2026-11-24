@@ -1,6 +1,6 @@
 # Bắt đầu với Termote
 
-Điều khiển Claude Code, GitHub Copilot, hoặc bất kỳ công cụ terminal nào từ điện thoại — chỉ trong 5 phút.
+Điều khiển Claude Code, Codex, OpenCode, GitHub Copilot, hoặc bất kỳ công cụ terminal nào từ điện thoại — chỉ trong 5 phút.
 
 ## Termote là gì?
 
@@ -17,7 +17,7 @@ Từ bản 1.0.0, một tệp thực thi duy nhất là `termote` đảm nhận 
 
 ## Cài đặt
 
-> Để xem các tùy chọn chi tiết (cờ cho chế độ native, chế độ container, Windows, Tailscale), xem [Hướng dẫn triển khai](deployment-guide.md).
+> Để xem các tùy chọn chi tiết (cờ cho chế độ native, chế độ container, Windows, Tailscale), xem [Hướng dẫn triển khai](../deployment-guide.md).
 
 Chỉ hai lệnh, trên Linux hoặc macOS:
 
@@ -50,7 +50,7 @@ termote show-password
 
 Nhờ agent lập trình (Claude Code, Codex...) cài Termote? Chỉ cho nó [`/agents.md`](https://termote.ohnice.app/agents.md), hoặc `termote help agent` khi đã cài.
 
-Muốn chạy container thay vì cài native? Chạy `termote container up` (cần podman hoặc docker) thay cho `termote start`; xem [Hướng dẫn triển khai](deployment-guide.md) để biết các cờ của lệnh này.
+Muốn chạy container thay vì cài native? Chạy `termote container up` (cần podman hoặc docker) thay cho `termote start`; xem [Hướng dẫn triển khai](../deployment-guide.md) để biết các cờ của lệnh này.
 
 ## Truy cập từ điện thoại
 
@@ -90,7 +90,7 @@ PWA hoạt động offline và giống như ứng dụng gốc.
 
 ### Phiên làm việc (Sessions)
 
-Termote tổ chức terminal theo ba cấp: **group → tab → pane**. Với tmux (mặc định), mỗi group là một session của tmux và mỗi tab là một cửa sổ tmux:
+Termote tổ chức terminal theo ba cấp: **group → tab → pane**. Với tmux (mặc định), mỗi group là một session của tmux (mọi session trên tmux server đều được liệt kê, kể cả session bạn tự mở) và mỗi tab là một cửa sổ tmux:
 
 - **Tạo mới:** Nhấn nút "+" trong thanh bên
 - **Chuyển đổi:** Nhấn tên phiên trong thanh bên
@@ -132,6 +132,31 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 3. Dùng cử chỉ cảm ứng: vuốt xuống/lên để cuộn output, vuốt phải để tự động hoàn thành bằng Tab
 4. Dùng bàn phím ảo cho các phím đặc biệt (Ctrl+C để ngắt)
 
+### Trả lời agent từ view Chat
+
+Khi một pane chạy Claude Code, Codex (khởi động bằng `codex --no-daemon`) hoặc OpenCode 2, phần đầu
+có thêm view **Chat**: hội thoại hiện thành các tin nhắn, có ô gửi tin tiếp theo (kèm ảnh), lệnh `/`,
+và các thẻ để trả lời hộp thoại xin quyền của agent. Tin gửi lúc agent đang làm sẽ chờ tới khi lượt
+đó kết thúc. Xem [Agent Chat](https://termote.ohnice.app/vi/usage/agent-chat/).
+
+### Mở lại một phiên cũ
+
+**Session history** (nút lịch sử trong view Chat, hoặc bảng lệnh) liệt kê các phiên Claude Code,
+Codex và OpenCode đã chạy trong thư mục của pane, kèm số token, chi phí ước tính và các file mỗi phiên
+đã sửa. Bạn có thể đọc một phiên, tiếp tục nó trong tab mới, hoặc tách nhánh một phiên còn đang chạy.
+Xem [Tiếp tục phiên cũ](https://termote.ohnice.app/vi/usage/agent-chat/#tiếp-tục-phiên-cũ).
+
+### Điều phối các agent từ một phiên
+
+Một phiên Claude Code hoặc Codex có thể điều phối các agent ở những pane khác: xem trạng thái của
+chúng, giao việc cho một agent trong git worktree riêng, chờ nhiều agent cùng lúc, xem lại thay đổi
+của chúng và hỏi bạn những gì chỉ bạn mới quyết được. Cài skill của nó bằng `termote skills install`,
+hoặc dưới dạng plugin từ [termote-plugins](https://github.com/lamngockhuong/termote-plugins) (trong
+Claude Code: `/plugin marketplace add lamngockhuong/termote-plugins`, rồi
+`/plugin install termote@termote`); chỉ cài theo một cách. Các job và câu hỏi nó dành cho bạn hiện
+trong tab **Plan** của màn hình tổng quan, nơi bạn trả lời ngay trên điện thoại. Xem
+[Orchestrator](https://termote.ohnice.app/vi/usage/orchestrator/).
+
 ### Giám sát tiến trình chạy lâu
 
 1. Khởi động tiến trình trong một phiên (ví dụ: `npm run build`)
@@ -153,7 +178,7 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 - Kiểm tra cả hai thiết bị cùng mạng
 - Xác nhận URL khớp với IP nội bộ của máy chủ (`ip addr` hoặc `ifconfig`)
 - Kiểm tra tường lửa cho phép cổng 7680
-- Nếu nhận lỗi 403 do Host bị từ chối, chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi gợi ý
+- Nếu nhận lỗi 403 do Host bị từ chối, `termote logs` ghi đúng lệnh `termote start --allow-host <name>` cần chạy
 
 ### Cho thiết bị khác truy cập
 
@@ -164,7 +189,7 @@ Thiết bị đã ghép được tin tới đâu: [`security-model.md`](../secur
 
 ### Quên mật khẩu
 
-- Chạy `termote show-password` để in lại mật khẩu đã lưu
+- Chạy `termote show-password` để in lại tên đăng nhập và mật khẩu đã lưu
 
 ### Terminal hiển thị không đúng
 

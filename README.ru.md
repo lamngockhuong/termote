@@ -47,7 +47,7 @@
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
 - **Бэкенд Herdr** (нативно или в контейнере): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
-- **Вид Chat**: читайте панель с Claude Code, Codex (запущенным с `--no-daemon`) или OpenCode 2 как чат и отвечайте в ней, с подсказками slash-команд, ответами на диалоги и запущенными субагентами — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Вид Chat**: читайте панель с Claude Code, Codex (запущенным с `--no-daemon`) или OpenCode 2 как чат и отвечайте в ней, с подсказками slash-команд, ответами на диалоги, цитированием выделенного в чате текста в ответе и запущенными субагентами, переписку каждого из которых можно открыть одним касанием — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **История сессий**: список сессий Claude Code, Codex и OpenCode, которые работали в папке панели; любую из них можно прочитать, продолжить в новой вкладке, а работающую — форкнуть — см. [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
 - **Токены и стоимость**: токены и примерная стоимость каждой сессии агента, с итогами по дням — см. [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
 - **Файлы, изменённые сессией**: файлы, которые отредактировала сессия агента, перечислены в Changes и в истории сессий, и каждый открывает свой diff — см. [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
@@ -64,12 +64,15 @@
 - **Бэкенд Zellij** (Linux, macOS или в контейнере): управление сессиями, вкладками и панелями Zellij вместо tmux (Zellij 0.45.0 или новее), выбирается через `--mux zellij` — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
 - **Бэкенд herdr-core** (нативно, любая ОС): показывает пространства, вкладки и панели, которые показывает приложение herdr, как ещё один клиент herdr-core (`hc` 0.1.16 или новее), выбирается через `--mux hc` — см. [Бэкенд herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**: следите за агентами других ваших компьютеров и управляйте ими из одного Termote по SSH с ключом, который даёт доступ только к Termote на той машине (`termote machine add <alias>`) — см. [Machines](https://termote.ohnice.app/usage/machines/)
+- **Оркестратор**: одна сессия Claude Code или Codex координирует агентов в других панелях: их состояние, задача для одного из них, его ответ, его диалоги, новый агент в собственном worktree (`termote agents`) — см. [Orchestrator](https://termote.ohnice.app/usage/orchestrator/). Его skill входит в Termote (`termote skills install`) или ставится как плагин из [termote-plugins](https://github.com/lamngockhuong/termote-plugins) (`/plugin marketplace add lamngockhuong/termote-plugins` в Claude Code, `codex plugin marketplace add lamngockhuong/termote-plugins` в Codex); устанавливайте только одним способом
+- **Plan и задачи**: работа, которую раздаёт оркестратор, в виде задач с приоритетом, задачами, которых они ждут, и workspace, их pull request и проверки CI (упавшие отправляются обратно агенту), а также завершение, которое после вашего согласия закрывает вкладку и удаляет worktree (`termote agents job ...`) — см. [Orchestrator](https://termote.ohnice.app/usage/orchestrator/)
+- **Вопросы к вам**: оркестратор записывает, о чём вас спрашивает (`termote agents ask add`); отвечайте на каждый вопрос или отклоняйте его на вкладке **Plan** или в чате спросившего оркестратора, в этом Termote или в Termote другой машины; задачи, чей агент стоит на диалоге, показаны в **Waiting for you** — см. [Orchestrator](https://termote.ohnice.app/usage/orchestrator/#questions-waiting-on-you)
 - **Плагин Herdr**: открыть активную панель Herdr в Termote, показать её ссылку QR-кодом для телефона, запустить или остановить сервер, не выходя из Herdr — см. [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
 - **История команд**: Вызов ранее отправленных команд с поиском
 - **Быстрые действия**: Клавиша ⋯, закреплённая в конце мобильной панели, показывает строку Actions с частыми операциями (clear, cancel, exit)
-- **Стили интерфейса**: Neutral, Terminal или Native, выбираются в настройках независимо от светлой/тёмной темы
+- **Стили интерфейса**: Neutral, Terminal или Native, выбираются в настройках независимо от светлой/тёмной темы, с общим для всех стилей акцентным цветом
 - **Язык интерфейса**: английский или вьетнамский, выбирается в настройках; Auto следует языку браузера
 - **Настройки с собой**: экспорт настроек этого браузера в файл и импорт в другом браузере, а также просмотр настроек, которые предлагает ИИ-агент через `termote settings propose` — см. [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
 - **Терминал на GPU**: терминал отрисовывается через WebGL2, если у устройства есть GPU, поэтому большой вывод остаётся плавным
@@ -203,6 +206,7 @@ termote url --qr                     # The link to open, as a QR code for a phon
 termote pair                         # A one-time code that signs a new device in
 termote devices                      # List the paired devices (devices revoke <id>)
 termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
+termote skills install               # The orchestrator skill for Claude Code and Codex
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command, the install and uploads
 ```
@@ -386,13 +390,16 @@ termote/
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
+│   ├── job_*.go, ask_*.go  # The orchestrator's job ledger and its questions for the user
+│   ├── skills/             # The orchestrator skill (`termote skills install`, termote-plugins)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
 │   ├── install.sh          # Unix online installer (curl | sh)
 │   ├── install.ps1         # Windows online installer (irm | iex)
 │   ├── termote.sh          # Unix shim: builds and runs a checkout
-│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   ├── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   └── termote-plugins.sh  # Writes the termote-plugins marketplace at each stable release
 ├── tests/                  # Test suite
 │   ├── test-termote.sh     # Unix shim tests
 │   ├── test-termote.ps1    # Windows shim tests

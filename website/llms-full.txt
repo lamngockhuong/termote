@@ -3084,7 +3084,7 @@ codex plugin marketplace add lamngockhuong/termote-plugins
 codex plugin add termote@termote
 ```
 
-The first block is for Claude Code, the second for Codex.
+The first block is for Claude Code, the second for Codex. The [termote-plugins](https://github.com/lamngockhuong/termote-plugins) repository is generated from Termote at each stable release, so the plugin carries the skill of the newest release; the skill needs Termote running natively, and says when this termote is too old for it. `termote skills status` notes when the plugin is installed too, and `termote skills install` warns about it.
 
 ## Set up the orchestrator
 

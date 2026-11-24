@@ -45,7 +45,7 @@
 - **会话切换**：多个 tmux 会话，支持创建/编辑/删除
 - **会话标签**：水平标签栏，快速切换窗口
 - **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
-- **Chat 视图**：以对话形式阅读并回复运行 Claude Code、Codex（以 `--no-daemon` 启动）或 OpenCode 2 的窗格，支持斜杠命令提示、对话框应答，并显示运行中的子代理——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Chat 视图**：以对话形式阅读并回复运行 Claude Code、Codex（以 `--no-daemon` 启动）或 OpenCode 2 的窗格，支持斜杠命令提示、对话框应答、把聊天中选中的文字引用到回复里，并显示运行中的子代理，点一下即可阅读某个子代理自己的对话——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **会话历史**：列出在窗格所在文件夹中运行过的 Claude Code、Codex 和 OpenCode 会话，可以阅读某个会话、在新标签页中恢复它，或分叉一个正在运行的会话——参见[Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
 - **Token 与费用**：每个代理会话的 token 用量和估算费用，以及每日合计——参见[Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
 - **会话改动的文件**：在 Changes 和会话历史中列出代理会话编辑过的文件，每个文件都可打开其 diff——参见[Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
@@ -62,12 +62,15 @@
 - **Zellij 后端**（Linux、macOS 或容器内）：用 Zellij 会话、标签页和窗格代替 tmux（Zellij 0.45.0 或更高版本），通过 `--mux zellij` 选择——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **herdr-core 后端**（原生，所有操作系统）：作为 herdr-core 的又一个客户端，显示 herdr 应用所显示的空间、标签页和窗格（`hc` 0.1.16 或更高版本），通过 `--mux hc` 选择——参见[herdr-core 后端](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**：在一个 Termote 中通过 SSH 查看并操控其他电脑上的代理，所用密钥在那台电脑上只能访问 Termote（`termote machine add <alias>`）——参见[Machines](https://termote.ohnice.app/usage/machines/)
+- **编排器（Orchestrator）**：由一个 Claude Code 或 Codex 会话协调其他窗格中的代理：查看状态、给某个代理派任务、读取回答、处理对话框，并在独立 worktree 中启动新代理（`termote agents`）——参见[Orchestrator](https://termote.ohnice.app/usage/orchestrator/)。其技能随 Termote 提供（`termote skills install`），也可作为插件从 [termote-plugins](https://github.com/lamngockhuong/termote-plugins) 安装（Claude Code 中运行 `/plugin marketplace add lamngockhuong/termote-plugins`，Codex 中运行 `codex plugin marketplace add lamngockhuong/termote-plugins`）；两种方式只选其一
+- **Plan 与任务**：编排器分派的工作以任务形式呈现，带优先级、所依赖的任务和工作区，以及它们的拉取请求和 CI 检查（失败项可发回给代理），并在你同意后关闭标签页、删除 worktree 来结束任务（`termote agents job ...`）——参见[Orchestrator](https://termote.ohnice.app/usage/orchestrator/)
+- **给你的问题**：编排器会记录它向你提出的问题（`termote agents ask add`）；在 **Plan** 标签页或提问的编排器聊天中逐一回答或忽略，本机的 Termote 和 Machines 中的都可以；代理停在对话框上的任务显示在 **Waiting for you** 中——参见[Orchestrator](https://termote.ohnice.app/usage/orchestrator/#questions-waiting-on-you)
 - **Herdr 插件**：无需离开 Herdr，即可在 Termote 中打开当前聚焦的 Herdr 窗格、将其链接显示为二维码供手机扫描、启动或停止服务器——参见[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
 - **命令历史**：搜索并调用之前发送的命令
 - **快捷操作**：固定在移动端工具栏末端的 ⋯ 键展开常用操作的 Actions 行（clear、cancel、exit）
-- **界面风格**：Neutral、Terminal 或 Native，在设置中选择，与浅色/深色主题无关
+- **界面风格**：Neutral、Terminal 或 Native，在设置中选择，与浅色/深色主题无关，强调色在所有风格间共用
 - **界面语言**：英语或越南语，在设置中选择；Auto 跟随浏览器语言
 - **设置导出与导入**：将此浏览器的设置导出为文件并在另一个浏览器中导入，或审阅编码代理通过 `termote settings propose` 提出的设置——参见[Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
 - **GPU 终端**：设备有 GPU 时用 WebGL2 绘制终端，大量输出也能保持流畅
@@ -201,6 +204,7 @@ termote url --qr                     # The link to open, as a QR code for a phon
 termote pair                         # A one-time code that signs a new device in
 termote devices                      # List the paired devices (devices revoke <id>)
 termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
+termote skills install               # The orchestrator skill for Claude Code and Codex
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command, the install and uploads
 ```
@@ -384,13 +388,16 @@ termote/
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
+│   ├── job_*.go, ask_*.go  # The orchestrator's job ledger and its questions for the user
+│   ├── skills/             # The orchestrator skill (`termote skills install`, termote-plugins)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
 │   ├── install.sh          # Unix online installer (curl | sh)
 │   ├── install.ps1         # Windows online installer (irm | iex)
 │   ├── termote.sh          # Unix shim: builds and runs a checkout
-│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   ├── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   └── termote-plugins.sh  # Writes the termote-plugins marketplace at each stable release
 ├── tests/                  # Test suite
 │   ├── test-termote.sh     # Unix shim tests
 │   ├── test-termote.ps1    # Windows shim tests
