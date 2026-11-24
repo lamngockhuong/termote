@@ -74,6 +74,10 @@ func TestMain(m *testing.M) {
 		helperTree()
 	case "sleep":
 		time.Sleep(5 * time.Minute)
+	case "ready-sleep":
+		// READY says the process has finished starting, then it sleeps.
+		fmt.Println("READY")
+		time.Sleep(5 * time.Minute)
 	case "ssh-master":
 		helperSSHMaster()
 	case "serve":

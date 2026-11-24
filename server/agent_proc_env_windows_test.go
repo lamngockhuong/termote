@@ -1,23 +1,35 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// startEnvChild runs the test binary asleep with extra environment entries;
-// the PEB holds them from creation, so nothing has to be waited for.
+// startEnvChild runs the test binary asleep with extra environment entries
+// and waits until it prints READY. Until the child's loader has run, its
+// PEB's ProcessParameters are still being moved to the heap: a read then
+// finds EnvironmentSize 0 or fails with a partial copy, and the lookups fall
+// back to the server user's folders.
 func startEnvChild(t *testing.T, env ...string) int {
 	t.Helper()
 	cmd := exec.Command(os.Args[0])
-	cmd.Env = append(append(os.Environ(), helperEnv+"=sleep"), env...)
+	cmd.Env = append(append(os.Environ(), helperEnv+"=ready-sleep"), env...)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	if line, _ := bufio.NewReader(out).ReadString('\n'); strings.TrimSpace(line) != "READY" {
+		t.Fatalf("env child: %q", line)
+	}
 	return cmd.Process.Pid
 }
 
