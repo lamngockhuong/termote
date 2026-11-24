@@ -17,6 +17,15 @@ describe('targetIndex', () => {
     expect(targetIndex(ids, 'd', 1)).toBeNull()
     expect(targetIndex(ids, 'x', 1)).toBeNull()
   })
+
+  it('steps over the ids not on screen', () => {
+    const skip = new Set(['b'])
+    expect(targetIndex(ids, 'a', 1, skip)).toBe(2)
+    expect(targetIndex(ids, 'c', -1, skip)).toBe(0)
+    expect(targetIndex(ids, 'c', 1, skip)).toBe(3)
+    expect(targetIndex(['a', 'b'], 'a', 1, skip)).toBeNull()
+    expect(targetIndex(['b', 'a'], 'a', -1, skip)).toBeNull()
+  })
 })
 
 describe('dropIndex', () => {

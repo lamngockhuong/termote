@@ -88,6 +88,28 @@ describe('ActivityLog', () => {
     expect(screen.getByText('No changes match.')).toBeInTheDocument()
   })
 
+  it("leaves out a hidden workspace's events, found or gone", () => {
+    renderLog({
+      events: [
+        ev(1, '@7', '', 'working'),
+        { ...ev(2, '@9', '', 'blocked', 'aider'), groupId: 'g2' },
+      ],
+      groups: [...GROUPS, { id: 'g2', name: 'web' }],
+      hiddenGroupIds: new Set(['g1']),
+    })
+    // The pane found in g1 goes; the closed one of g2 stays
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toHaveTextContent('aider')
+    // One of g2, closed, goes when g2 is hidden
+    renderLog({
+      events: [{ ...ev(2, '@9', '', 'blocked', 'aider'), groupId: 'g2' }],
+      hiddenGroupIds: new Set(['g2']),
+    })
+    expect(
+      screen.getByText('No status changes since the server started.'),
+    ).toBeInTheDocument()
+  })
+
   it('names the group when there are several', () => {
     renderLog({ groups: [...GROUPS, { id: 'g2', name: 'web' }] })
     expect(rows()[0]).toHaveTextContent('api / build')

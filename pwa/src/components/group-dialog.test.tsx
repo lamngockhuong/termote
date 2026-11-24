@@ -14,6 +14,7 @@ import {
   removeRecentGroup,
 } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
+import { hiddenKey } from '../utils/hidden-workspaces'
 import {
   freeGroupName,
   GroupDialog,
@@ -447,5 +448,31 @@ describe('groupProblem', () => {
     ]) {
       expect(groupProblem(code, 'tmux', tFor('en'))).toBe(text)
     }
+  })
+})
+
+describe('GroupDialog with hidden workspaces', () => {
+  it('leaves the hidden names on this machine out of the recent list', async () => {
+    const machine = '0123456789abcdef'
+    vi.mocked(listRecentGroups).mockResolvedValue({
+      groups: [recentGroup(1, 'open'), recentGroup(2, 'secret')],
+      readOnly: false,
+    })
+    render(
+      <GroupDialog
+        kind="tmux"
+        recent
+        hiddenKeys={[hiddenKey(machine, 'secret'), hiddenKey('', 'open')]}
+        machineId={machine}
+        onClose={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    )
+    await act(async () => {})
+    expect(
+      screen.getByRole('button', { name: 'Use open in /srv/open' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('secret')).toBeNull()
+    expect(screen.queryByText('/srv/secret')).toBeNull()
   })
 })

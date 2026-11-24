@@ -3345,3 +3345,236 @@ describe('SessionSidebar — compact layout', () => {
     expect(screen.getByRole('radiogroup')).toBeInTheDocument()
   })
 })
+
+describe('SessionSidebar — hidden workspaces', () => {
+  const tab = (
+    id: string,
+    name: string,
+    groupId: string,
+    over: Partial<Session> = {},
+  ): Session => ({
+    id,
+    key: `@${id}`,
+    name,
+    icon: '💻',
+    description: '',
+    groupId,
+    ...over,
+  })
+  // In the server's order: alpha, secret (hidden), beta
+  const GROUPS: SessionGroup[] = [
+    { id: 'a', name: 'alpha' },
+    { id: 'h', name: 'secret', agentStatus: 'blocked' },
+    { id: 'b', name: 'beta' },
+  ]
+  const agentPane = {
+    id: 'p1',
+    label: 'claude',
+    hasAgent: true,
+    agentStatus: 'blocked' as const,
+  }
+  const TABS = [
+    tab('a:1', 'one', 'a'),
+    tab('h:1', 'hush', 'h', {
+      hasAgent: true,
+      agentStatus: 'blocked',
+      panes: [agentPane],
+    }),
+    tab('b:1', 'two', 'b'),
+  ]
+  const hideOf = (over = {}) => ({
+    kind: 'workspace' as const,
+    hiddenIds: new Set(['h']) as ReadonlySet<string>,
+    revealed: false,
+    onHide: vi.fn(),
+    onUnhide: vi.fn(),
+    onReveal: vi.fn(),
+    onRehide: vi.fn(),
+    ...over,
+  })
+  const reorderOf = () => ({
+    tabs: true,
+    groups: true,
+    moving: false,
+    onMoveTab: vi.fn(),
+    onMoveGroup: vi.fn(),
+  })
+  const groupActions = {
+    kind: 'workspace' as const,
+    onNew: vi.fn(),
+    onRename: vi.fn(async () => {}),
+    onClose: vi.fn(),
+    canRename: () => true,
+  }
+  const props = (over: Partial<Parameters<typeof SessionSidebar>[0]> = {}) => ({
+    sessions: TABS,
+    groups: GROUPS,
+    activeId: 'a:1',
+    onSelect: vi.fn(),
+    groupActions,
+    hideActions: hideOf(),
+    ...over,
+  })
+  const openMenu = (name: string, noun = 'workspace') =>
+    fireEvent.click(
+      screen.getByRole('button', { name: `Actions for ${noun} ${name}` }),
+    )
+
+  beforeEach(() => localStorage.clear())
+
+  it('leaves a hidden workspace and its tabs out, and says how many', () => {
+    const hide = hideOf()
+    render(<SessionSidebar {...props({ hideActions: hide })} />)
+    expect(screen.getByRole('region', { name: 'alpha' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'secret' })).toBeNull()
+    expect(screen.queryByText('hush')).toBeNull()
+    expect(screen.getByText('1 hidden')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    expect(hide.onReveal).toHaveBeenCalled()
+  })
+
+  it('shows nothing about hiding when none is hidden', () => {
+    render(
+      <SessionSidebar
+        {...props({ hideActions: hideOf({ hiddenIds: new Set() }) })}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'secret' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
+    openMenu('secret')
+    expect(screen.getByRole('menuitem', { name: 'Hide' })).toBeInTheDocument()
+  })
+
+  it('hides a workspace from its menu', () => {
+    const hide = hideOf()
+    render(<SessionSidebar {...props({ hideActions: hide })} />)
+    openMenu('alpha')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))
+    expect(hide.onHide).toHaveBeenCalledWith(GROUPS[0])
+  })
+
+  it('offers Hide on a view-only device, with no other action', () => {
+    render(
+      <SessionSidebar
+        {...props({
+          groupActions: undefined,
+          hideActions: hideOf({ kind: 'tmux' }),
+        })}
+      />,
+    )
+    openMenu('alpha', 'tmux session')
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Hide',
+    ])
+  })
+
+  it('names the menu after a workspace without a kind', () => {
+    const { kind: _, ...noKind } = hideOf()
+    render(
+      <SessionSidebar
+        {...props({
+          groupActions: undefined,
+          hideActions: noKind as ReturnType<typeof hideOf>,
+        })}
+      />,
+    )
+    openMenu('alpha')
+  })
+
+  it('steps a move over a hidden workspace, in the server order', () => {
+    const r = reorderOf()
+    render(<SessionSidebar {...props({ reorder: r })} />)
+    openMenu('alpha')
+    expect(screen.getByRole('menuitem', { name: 'Move up' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move down' }))
+    // Past beta: secret keeps its place before it
+    expect(r.onMoveGroup).toHaveBeenCalledWith('a', 2)
+    openMenu('beta')
+    expect(screen.getByRole('menuitem', { name: 'Move down' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }))
+    expect(r.onMoveGroup).toHaveBeenLastCalledWith('b', 0)
+  })
+
+  it('shows the hidden ones for a while, marked, with Unhide', () => {
+    const hide = hideOf({ revealed: true })
+    render(<SessionSidebar {...props({ hideActions: hide })} />)
+    const secret = screen.getByRole('region', { name: 'secret' })
+    expect(within(secret).getByRole('img', { name: 'Hidden' })).toBeTruthy()
+    expect(
+      within(screen.getByRole('region', { name: 'alpha' })).queryByRole('img', {
+        name: 'Hidden',
+      }),
+    ).toBeNull()
+    expect(screen.getByText('Showing 1 hidden')).toBeInTheDocument()
+    openMenu('secret')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unhide' }))
+    expect(hide.onUnhide).toHaveBeenCalledWith(GROUPS[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Hide again' }))
+    expect(hide.onRehide).toHaveBeenCalled()
+  })
+
+  it('counts and filters only the agents on screen', () => {
+    render(
+      <SessionSidebar {...props({ filter: 'all', onFilterChange: vi.fn() })} />,
+    )
+    // The only agent is hidden: there is nothing to filter by
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+  })
+
+  it('compact: leaves the workspace and its agents out', () => {
+    const r = reorderOf()
+    const { rerender } = render(
+      <SessionSidebar
+        {...props({
+          layout: 'compact',
+          onSelectGroup: vi.fn(),
+          onOpenAgent: vi.fn(),
+          reorder: r,
+        })}
+      />,
+    )
+    const rows = () =>
+      screen
+        .getAllByRole('button', { name: /, \d+ tabs?/ })
+        .map((b) => b.getAttribute('aria-label'))
+    expect(rows()).toEqual(['alpha, 1 tab', 'beta, 1 tab'])
+    expect(screen.queryByRole('region', { name: 'Running agents' })).toBeNull()
+    // Alt+ArrowDown steps over it as the menu does
+    fireEvent.keyDown(screen.getByRole('button', { name: 'alpha, 1 tab' }), {
+      key: 'ArrowDown',
+      altKey: true,
+    })
+    expect(r.onMoveGroup).toHaveBeenCalledWith('a', 2)
+    fireEvent.keyDown(screen.getByRole('button', { name: 'beta, 1 tab' }), {
+      key: 'ArrowDown',
+      altKey: true,
+    })
+    expect(r.onMoveGroup).toHaveBeenCalledTimes(1)
+    rerender(
+      <SessionSidebar
+        {...props({
+          layout: 'compact',
+          onSelectGroup: vi.fn(),
+          onOpenAgent: vi.fn(),
+          hideActions: hideOf({ revealed: true }),
+        })}
+      />,
+    )
+    expect(rows()[1]).toMatch(/^secret, Hidden, 1 tab, /)
+    expect(
+      screen.getByRole('region', { name: 'Running agents' }),
+    ).toBeInTheDocument()
+  })
+
+  it('collapsed rail and phone sheet leave it out too', () => {
+    const { unmount } = render(
+      <SessionSidebar {...props({ isCollapsed: true })} />,
+    )
+    expect(screen.queryByRole('region', { name: 'secret' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'alpha' })).toBeInTheDocument()
+    unmount()
+    render(<SessionSidebar {...props({ isMobile: true, isOpen: true })} />)
+    expect(screen.queryByRole('region', { name: 'secret' })).toBeNull()
+    expect(screen.getByText('1 hidden')).toBeInTheDocument()
+  })
+})

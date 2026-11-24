@@ -1404,6 +1404,25 @@ describe('OverviewScreen, the tabs', () => {
     expect(panel).toHaveAttribute('aria-labelledby', agentsTab().id)
   })
 
+  it("leaves a hidden workspace's agents and jobs out of the counts", async () => {
+    mockFetchJobs.mockResolvedValue({
+      jobs: [
+        { ...job('a', 'blocked'), workspace: 'g2' },
+        job('b', 'working'),
+        job('c', 'idle'),
+      ],
+      readOnly: false,
+      canGrant: true,
+      serverNow: '',
+    })
+    renderScreen({ hiddenGroupIds: new Set(['g2']) })
+    await act(async () => {})
+    // web (g2) holds three of the four agents
+    expect(agentsTab()).toHaveAccessibleName('Agents, 1 agent')
+    expect(planTab()).toHaveAccessibleName('Plan, 2 open')
+    expect(cardNames().join(' ')).not.toMatch(/web/)
+  })
+
   it('counts the questions waiting on the Plan, and opens on it while they wait', async () => {
     mockFetchAsks.mockResolvedValue({
       asks: [

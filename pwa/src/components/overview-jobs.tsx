@@ -65,6 +65,9 @@ interface Props {
   onCloseActivity?: () => void
   // The workspaces: their names on the cards, and the filter's
   groups?: SessionGroup[]
+  // Workspaces hidden on this browser: their jobs are left out, and their
+  // names are never shown
+  hiddenGroupIds?: ReadonlySet<string>
 }
 
 type OpenGroup = 'unread' | 'running' | 'review' | 'todo'
@@ -102,6 +105,7 @@ const GROUP_DOT = {
 const TH = 'px-3 py-2 font-medium'
 
 const NO_GROUPS: SessionGroup[] = []
+const NO_IDS: ReadonlySet<string> = new Set()
 
 // The overview's Plan: the jobs an orchestrator agent handed out, kept by
 // the server (use-jobs.ts), in columns by what they need from the user
@@ -119,9 +123,24 @@ export function OverviewJobs({
   detailSlot,
   onCloseActivity,
   groups = NO_GROUPS,
+  hiddenGroupIds = NO_IDS,
 }: Props) {
   const { t } = useT()
   const store = useJobs()
+  // Without the hidden workspaces' jobs; their groups left out of what can
+  // be picked, and named by a common label wherever an id is shown
+  const hiding = hiddenGroupIds.size > 0
+  const jobs = hiding
+    ? store.jobs.filter((j) => !hiddenGroupIds.has(jobWorkspace(j)))
+    : store.jobs
+  const pickable = hiding
+    ? groups.filter((g) => !hiddenGroupIds.has(g.id))
+    : groups
+  const named = hiding
+    ? groups.map((g) =>
+        hiddenGroupIds.has(g.id) ? { ...g, name: t('shell.hidden.label') } : g,
+      )
+    : groups
   const now = useNow(store.clockOffset)
   const titleId = useId()
   const finishedId = useId()
@@ -137,9 +156,7 @@ export function OverviewJobs({
   const [setupOpen, setSetupOpen] = useState(false)
   const canWrite = !readOnly && !store.readOnly
   const shown = store.loaded && !store.unavailable
-  const selected = canWrite
-    ? store.jobs.find((j) => j.id === selectedId)
-    : undefined
+  const selected = canWrite ? jobs.find((j) => j.id === selectedId) : undefined
   const editorOpen = editing !== undefined || granting !== null
   // The workspace shown and the grouping, unless the server keeps no
   // workspace a client sets (an older one): every job then, flat
@@ -148,9 +165,7 @@ export function OverviewJobs({
   // A workspace with no job now shows every workspace; the choice stays
   // saved, for when its job is listed there again (a workspace opened again,
   // a list read before its repository was known)
-  const filter = byWorkspace
-    ? effectiveFilter(view.filter, store.jobs, groups)
-    : 'all'
+  const filter = byWorkspace ? effectiveFilter(view.filter, jobs, named) : 'all'
   const grouped = byWorkspace && view.grouped
 
   useEffect(() => {
@@ -195,7 +210,7 @@ export function OverviewJobs({
       </section>
     )
   if (store.unavailable || (!store.loaded && !store.error)) return null
-  const shownJobs = filterJobs(store.jobs, filter)
+  const shownJobs = filterJobs(jobs, filter)
   const jobGroups = groupJobs(shownJobs)
   const groupIds = groups.map((g) => g.id)
   // An ask's job opens as its card would, never closed by it
@@ -220,7 +235,7 @@ export function OverviewJobs({
         selected={job.id === selected?.id}
         workspace={
           jobWorkspace(job)
-            ? workspaceName(jobWorkspace(job), groups)
+            ? workspaceName(jobWorkspace(job), named)
             : undefined
         }
       />
@@ -250,7 +265,7 @@ export function OverviewJobs({
           <div key={w.workspace} className="flex flex-col gap-1.5">
             <h5 className="m-0 truncate text-[11px] font-medium text-fg-subtle">
               {w.workspace
-                ? workspaceName(w.workspace, groups)
+                ? workspaceName(w.workspace, named)
                 : t('jobs.filter.none')}
             </h5>
             {cards(w.jobs)}
@@ -306,7 +321,7 @@ export function OverviewJobs({
       canEndGrants={store.canGrant}
       ciAvailable={store.ciAvailable}
       jobs={store.jobs}
-      groups={groups}
+      groups={named}
       onOpenJob={openJob}
       onGrants={
         !jobFinished(selected.state) &&
@@ -372,17 +387,17 @@ export function OverviewJobs({
           onOpenJob={canWrite ? openJob : undefined}
           openableJobs={new Set(store.jobs.map((j) => j.id))}
         />
-        {byWorkspace && store.jobs.length > 0 && (
+        {byWorkspace && jobs.length > 0 && (
           <JobWorkspaceFilter
-            jobs={store.jobs}
-            groups={groups}
+            jobs={jobs}
+            groups={named}
             view={{ filter, grouped }}
             onChange={setView}
           />
         )}
         {store.loaded && open === 0 && (
           <div className="flex flex-col items-center gap-1.5 rounded-panel border border-dashed border-border-strong px-4 py-8 text-center">
-            {store.jobs.length === 0 ? (
+            {jobs.length === 0 ? (
               <ListTodo
                 size={22}
                 aria-hidden="true"
@@ -396,10 +411,10 @@ export function OverviewJobs({
               />
             )}
             <p className="m-0 mt-1 font-medium text-fg">
-              {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
+              {jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
             </p>
             <p className="m-0 text-[12px] text-fg-muted">
-              {store.jobs.length === 0 ? (
+              {jobs.length === 0 ? (
                 <Trans
                   k="jobs.noneHint"
                   tags={{
@@ -614,7 +629,7 @@ export function OverviewJobs({
           job={editing}
           agents={agents}
           jobs={store.jobs}
-          groups={groups}
+          groups={pickable}
           fields={store.jobFields}
           onClose={() => setEditing(undefined)}
         />

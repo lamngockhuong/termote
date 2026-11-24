@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, GitBranch } from 'lucide-react'
+import { ChevronDown, ChevronRight, EyeOff, GitBranch } from 'lucide-react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useT } from '../i18n/i18n-context'
 import type { AgentStatus, SessionGroup } from '../types/session'
@@ -39,6 +39,8 @@ interface Props {
   keyShortcuts?: string
   // The group's actions, shown on hover or with focus inside
   menu?: ReactNode
+  // A hidden workspace shown for a while: an eye struck through by its name
+  hidden?: boolean
 }
 
 // One workspace on one line (the compact sidebar): a letter on its colour,
@@ -61,6 +63,7 @@ export function CompactGroupRow({
   buttonRef,
   keyShortcuts,
   menu,
+  hidden = false,
 }: Props) {
   const { t } = useT()
   const name = visibleUnsafe(group.name || group.id)
@@ -74,6 +77,7 @@ export function CompactGroupRow({
     : ''
   const label = [
     shownName,
+    hidden && t('shell.hidden.label'),
     t('shell.sidebar.tabCount', { count: tabCount }),
     !nested && branch && `${t('shell.sidebar.branch')} ${branch}`,
     status && t(agentStatusLabel(status)),
@@ -133,6 +137,13 @@ export function CompactGroupRow({
         <span className="min-w-0 flex-1 truncate ui-terminal:font-label ui-terminal:text-[12px]">
           {shownName}
         </span>
+        {hidden && (
+          <EyeOff
+            size={12}
+            aria-hidden="true"
+            className="shrink-0 text-fg-subtle"
+          />
+        )}
         {/* Already in the button's name */}
         <span
           aria-hidden="true"

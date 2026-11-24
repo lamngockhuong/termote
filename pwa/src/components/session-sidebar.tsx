@@ -4,6 +4,8 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
   FolderGit2,
   FolderOpen,
   FolderPlus,
@@ -146,7 +148,25 @@ interface Props {
   // The Machines section (SidebarMachines), above the list; none without
   // machines
   machines?: ReactNode
+  // Hiding workspaces on this browser: on every role, since nothing changes
+  // on the server
+  hideActions?: HideActions
 }
+
+export interface HideActions {
+  // What a group is, for the menu's name where there are no group actions
+  kind: GroupKind
+  // The hidden groups (with the worktrees of a hidden checkout), shown or not
+  hiddenIds: ReadonlySet<string>
+  // Shown for a while
+  revealed: boolean
+  onHide: (group: SessionGroup) => void
+  onUnhide: (group: SessionGroup) => void
+  onReveal: () => void
+  onRehide: () => void
+}
+
+const NONE: ReadonlySet<string> = new Set()
 
 export interface ReorderActions {
   tabs: boolean
@@ -296,6 +316,7 @@ export function SessionSidebar({
   onOpenAgent,
   activePaneId,
   clockOffset = 0,
+  hideActions,
 }: Props) {
   const { t } = useT()
   const coarsePointer = useMediaQuery('(pointer: coarse)')
@@ -343,12 +364,22 @@ export function SessionSidebar({
     editIconChoice === null ||
     (editIconChoice === undefined && !editingSession?.customIcon)
 
+  // Hidden workspaces are left out of what is drawn, but every move and
+  // count the server reads works on the whole list, in its order.
+  const hiddenSet =
+    hideActions && !hideActions.revealed ? hideActions.hiddenIds : NONE
+  const listedGroups =
+    hiddenSet.size === 0 ? groups : groups.filter((g) => !hiddenSet.has(g.id))
+  const listedSessions =
+    hiddenSet.size === 0
+      ? sessions
+      : sessions.filter((s) => !s.groupId || !hiddenSet.has(s.groupId))
   // A phone's sheet always lists each workspace with its tabs
   const compact = layout === 'compact' && !isMobile
   // A filter applies only with the bar that can clear it; the compact
   // layout has none, the saved filter kept for the detailed one.
   const activeFilter =
-    onFilterChange && !compact ? effectiveFilter(sessions, filter) : 'all'
+    onFilterChange && !compact ? effectiveFilter(listedSessions, filter) : 'all'
   const filtering = activeFilter !== 'all'
   // The search box: opened from its magnifier, never saved; a phone's sheet
   // closing clears it.
@@ -378,7 +409,7 @@ export function SessionSidebar({
   const isNew = useNewKeys(allKeys)
   const known = new Set(allKeys)
   const gone = (key: string) => !known.has(key)
-  const summary = summarizeSessions(sessions)
+  const summary = summarizeSessions(listedSessions)
   // Hidden with no agent anywhere: there is nothing to filter by.
   const showFilterBar = !!onFilterChange && !compact && summary.agents > 0
   // The compact list shows workspaces, not tabs: nothing to sort, and
@@ -389,9 +420,10 @@ export function SessionSidebar({
   const arrange = (list: Session[]) => {
     const matching = list.filter(
       (s) =>
-        s.id === editingId ||
-        (matchesFilter(s, activeFilter) &&
-          matchesQuery(s, terms, groupById.get(s.groupId ?? ''))),
+        !hiddenSet.has(s.groupId ?? '') &&
+        (s.id === editingId ||
+          (matchesFilter(s, activeFilter) &&
+            matchesQuery(s, terms, groupById.get(s.groupId ?? '')))),
     )
     return sortsBlocked ? blockedFirst(matching) : matching
   }
@@ -423,11 +455,11 @@ export function SessionSidebar({
     return true
   }
   // A group's menu offers only the moves that exist (disabled at the ends).
+  // A hidden group between keeps its place: the move steps over it.
+  const groupStep = (group: SessionGroup, delta: -1 | 1) =>
+    targetIndex(movableIds, group.id, delta, hiddenSet)
   const stepGroup = (group: SessionGroup, delta: -1 | 1) =>
-    reorder?.onMoveGroup(
-      group.id,
-      targetIndex(movableIds, group.id, delta) as number,
-    )
+    reorder?.onMoveGroup(group.id, groupStep(group, delta) as number)
 
   // A phone's sheet opens again on the whole list.
   useEffect(() => {
@@ -500,7 +532,7 @@ export function SessionSidebar({
   // A repository checkout's linked worktrees, drawn under it. Asked only
   // while not filtering (collapsed, or dragging), when they are indented.
   const worktreesOf = (id: string) =>
-    groups.filter((g) => g.worktree?.parent === id)
+    listedGroups.filter((g) => g.worktree?.parent === id)
   // A group's badge: collapsed, it speaks for its hidden worktrees too
   const groupStatus = (group: SessionGroup, collapsed: boolean) =>
     collapsed
@@ -848,18 +880,22 @@ export function SessionSidebar({
     </form>
   )
 
-  // Rename and Close of a group, next to its header
+  // Rename, Hide and Close of a group, next to its header. Hide is offered
+  // on a view-only device too: it changes nothing on the server.
   const renderGroupMenu = (group: SessionGroup, name: string) =>
-    groupActions && (
+    (groupActions || hideActions) && (
       <Menu
         label={t('shell.group.actions', {
-          noun: groupNoun(groupActions.kind, t),
+          noun: groupNoun(
+            groupActions?.kind ?? hideActions?.kind ?? 'workspace',
+            t,
+          ),
           name,
         })}
         trigger={<MoreHorizontal size={14} aria-hidden="true" />}
         triggerSize="sm"
       >
-        {groupActions.canRename(group.id) && (
+        {groupActions?.canRename(group.id) && (
           <MenuItem
             icon={<Pencil size={16} />}
             onSelect={() => startGroupRename(group)}
@@ -871,14 +907,14 @@ export function SessionSidebar({
           <>
             <MenuItem
               icon={<ArrowUp size={16} />}
-              disabled={movableIds[0] === group.id}
+              disabled={groupStep(group, -1) === null}
               onSelect={() => stepGroup(group, -1)}
             >
               {t('shell.sidebar.moveUp')}
             </MenuItem>
             <MenuItem
               icon={<ArrowDown size={16} />}
-              disabled={movableIds[movableIds.length - 1] === group.id}
+              disabled={groupStep(group, 1) === null}
               onSelect={() => stepGroup(group, 1)}
             >
               {t('shell.sidebar.moveDown')}
@@ -890,7 +926,23 @@ export function SessionSidebar({
             {pausedHint}
           </MenuItem>
         )}
-        {groupActions.onOpenHistory && (
+        {hideActions &&
+          (hideActions.hiddenIds.has(group.id) ? (
+            <MenuItem
+              icon={<Eye size={16} />}
+              onSelect={() => hideActions.onUnhide(group)}
+            >
+              {t('shell.hidden.unhide')}
+            </MenuItem>
+          ) : (
+            <MenuItem
+              icon={<EyeOff size={16} />}
+              onSelect={() => hideActions.onHide(group)}
+            >
+              {t('shell.hidden.hide')}
+            </MenuItem>
+          ))}
+        {groupActions?.onOpenHistory && (
           <MenuItem
             icon={<History size={16} />}
             onSelect={() => groupActions.onOpenHistory?.(group.id)}
@@ -898,7 +950,7 @@ export function SessionSidebar({
             {t('chat.history.title')}
           </MenuItem>
         )}
-        {groupActions.onNewWorktree && !group.worktree?.linked && (
+        {groupActions?.onNewWorktree && !group.worktree?.linked && (
           <MenuItem
             icon={<FolderGit2 size={16} />}
             onSelect={() => groupActions.onNewWorktree?.(group.id)}
@@ -906,7 +958,7 @@ export function SessionSidebar({
             {t('shell.sidebar.newWorktree')}
           </MenuItem>
         )}
-        {groupActions.onOpenWorktree && !group.worktree?.linked && (
+        {groupActions?.onOpenWorktree && !group.worktree?.linked && (
           <MenuItem
             icon={<FolderOpen size={16} />}
             onSelect={() => groupActions.onOpenWorktree?.(group.id)}
@@ -914,14 +966,16 @@ export function SessionSidebar({
             {t('shell.sidebar.openWorktree')}
           </MenuItem>
         )}
-        <MenuItem
-          icon={<Trash2 size={16} />}
-          danger
-          onSelect={() => groupActions.onClose(group.id)}
-        >
-          {t('common.close')}
-        </MenuItem>
-        {groupActions.onRemoveWorktree && group.worktree?.linked && (
+        {groupActions && (
+          <MenuItem
+            icon={<Trash2 size={16} />}
+            danger
+            onSelect={() => groupActions.onClose(group.id)}
+          >
+            {t('common.close')}
+          </MenuItem>
+        )}
+        {groupActions?.onRemoveWorktree && group.worktree?.linked && (
           <MenuItem
             icon={<Trash2 size={16} />}
             danger
@@ -1085,6 +1139,15 @@ export function SessionSidebar({
                   </span>
                 )}
               </span>
+              {/* A hidden workspace shown for a while */}
+              {hideActions?.hiddenIds.has(group.id) && (
+                <EyeOff
+                  size={12}
+                  role="img"
+                  aria-label={t('shell.hidden.label')}
+                  className="shrink-0 text-fg-subtle"
+                />
+              )}
               <AgentStatusBadge status={status} size={12} />
               <span className="ml-1 font-normal tabular-nums text-fg-muted">
                 {tabs.length}
@@ -1164,7 +1227,7 @@ export function SessionSidebar({
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
       e.preventDefault()
       const delta = e.key === 'ArrowUp' ? -1 : 1
-      if (targetIndex(movableIds, group.id, delta) === null) return
+      if (groupStep(group, delta) === null) return
       stepGroup(group, delta)
       refocusKey.current = rowKey
     }
@@ -1211,6 +1274,7 @@ export function SessionSidebar({
             else rowButtons.current.delete(rowKey)
           }}
           menu={renderGroupMenu(group, name) || undefined}
+          hidden={!!hideActions?.hiddenIds.has(group.id)}
         />
         {dropTarget?.after &&
           blockEnd(dropTarget.id) === group.id &&
@@ -1270,7 +1334,9 @@ export function SessionSidebar({
 
   // The rows in the order on screen: by group when there are headers
   const shownSessions = showGroups
-    ? groups.flatMap((g) => arrange(sessions.filter((s) => s.groupId === g.id)))
+    ? listedGroups.flatMap((g) =>
+        arrange(sessions.filter((s) => s.groupId === g.id)),
+      )
     : visibleSessions
 
   const searchToggle = canSearch && (
@@ -1315,6 +1381,33 @@ export function SessionSidebar({
     />
   )
 
+  // Under the list: how many workspaces are hidden, and the way to show
+  // them for a while or hide them again
+  const hiddenCount = hideActions?.hiddenIds.size ?? 0
+  const hiddenLine = hideActions && hiddenCount > 0 && (
+    <div className="flex items-center justify-between gap-2 px-2 pt-2 text-[12px] text-fg-muted">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <EyeOff size={12} aria-hidden="true" className="shrink-0" />
+        <span className="truncate">
+          {hideActions.revealed
+            ? t('shell.hidden.showing', { count: hiddenCount })
+            : t('shell.hidden.count', { count: hiddenCount })}
+        </span>
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={
+          hideActions.revealed ? hideActions.onRehide : hideActions.onReveal
+        }
+      >
+        {hideActions.revealed
+          ? t('shell.hidden.rehide')
+          : t('shell.hidden.show')}
+      </Button>
+    </div>
+  )
+
   // Session list content (shared between mobile and desktop)
   const sessionList =
     narrowed && visibleSessions.length === 0 ? (
@@ -1334,12 +1427,12 @@ export function SessionSidebar({
     ) : compact && groups.length ? (
       // Even a single group (tmux): its tabs are in the header's bar
       <div className="flex flex-col gap-px">
-        {groups.map(renderCompactGroup)}
+        {listedGroups.map(renderCompactGroup)}
       </div>
     ) : showGroups ? (
       // Their own parent, so first: finds the first group shown, not a form
       // or a button the phone's sheet puts above the list
-      <div>{groups.map(renderGroup)}</div>
+      <div>{listedGroups.map(renderGroup)}</div>
     ) : (
       <Rows
         sessions={visibleSessions}
@@ -1428,6 +1521,7 @@ export function SessionSidebar({
           {newGroupButton}
           {searchField}
           {sessionList}
+          {hiddenLine}
         </div>
       </Sheet>
     )
@@ -1536,7 +1630,7 @@ export function SessionSidebar({
           )}
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1 scrollbar-hover scrollbar-hover-no-gutter">
             {showGroups ? (
-              groups.map(renderRailGroup)
+              listedGroups.map(renderRailGroup)
             ) : (
               <Rows
                 sessions={visibleSessions}
@@ -1624,11 +1718,12 @@ export function SessionSidebar({
         {machines}
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 scrollbar-hover">
           {sessionList}
+          {hiddenLine}
         </div>
         {compact && onOpenAgent && (
           <SidebarAgents
-            sessions={sessions}
-            groups={groups}
+            sessions={listedSessions}
+            groups={listedGroups}
             activePaneId={activePaneId}
             clockOffset={clockOffset}
             onOpen={onOpenAgent}
