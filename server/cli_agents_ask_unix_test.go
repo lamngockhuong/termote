@@ -110,14 +110,17 @@ func TestAgentsAskList(t *testing.T) {
 	q2.AnsweredBy, q2.Answer = "pwa", "yes\nplease"
 	q4 := mineAsk("Q4", self, askOpen)
 	q4.Job, q4.Text = "j9", "two\nlines‮"
-	asksOf(s, q1, q2, mineAsk("Q3", "cli", askOpen), q4)
+	q5 := mineAsk("Q5", self, askDismissed)
+	q5.AnsweredBy = "pwa"
+	asksOf(s, q1, q2, mineAsk("Q3", "cli", askOpen), q4, q5)
 	code, out := runAgents(tc, "ask", "list")
 	if code != 0 || !strings.Contains(out, "Q1  Parser  Question Q1\n") || !strings.Contains(out, "1) Left  2) Right") ||
-		!strings.Contains(out, "Q4  j9      two lines\n") || strings.Contains(out, "Q2") || strings.Contains(out, "Q3") {
+		!strings.Contains(out, "Q4  j9      two lines\n") || strings.Contains(out, "Q2") || strings.Contains(out, "Q3") || strings.Contains(out, "Q5") {
 		t.Errorf("list: %d\n%s", code, out)
 	}
 	code, out = runAgents(tc, "ask", "ls", "--all")
-	if code != 0 || !strings.Contains(out, "answered (pwa): yes please") || strings.Contains(out, "Q3") {
+	if code != 0 || !strings.Contains(out, "answered (pwa): yes please") || !strings.Contains(out, "Q5") || !strings.Contains(out, "dismissed in the PWA\n") ||
+		strings.Contains(out, "Q3") {
 		t.Errorf("list --all: %d\n%s", code, out)
 	}
 	code, out = runAgents(tc, "ask", "list", "--json")
@@ -159,6 +162,10 @@ func TestAgentsAskClose(t *testing.T) {
 	s.set("POST /api/mux/asks/Q2/close", answer(http.StatusConflict, `{"code":"ask_closed","error":"x","ask":{"id":"Q2","answeredBy":"pwa","answer":"Right"}}`))
 	if code, out := runAgents(tc, "ask", "close", "Q2"); code != 0 || out != "Q2 was already answered (pwa): Right\n" {
 		t.Errorf("closed already: %d %q", code, out)
+	}
+	s.set("POST /api/mux/asks/Q2/close", answer(http.StatusConflict, `{"code":"ask_closed","error":"x","ask":{"id":"Q2","state":"dismissed","answeredBy":"pwa"}}`))
+	if code, out := runAgents(tc, "ask", "close", "Q2"); code != 0 || out != "Q2 was dismissed in the PWA: the user chose not to answer it\n" {
+		t.Errorf("dismissed: %d %q", code, out)
 	}
 	s.set("POST /api/mux/asks/Q2/close", answer(http.StatusConflict, `{"code":"ask_closed","error":"x"}`))
 	if code, _ := runAgents(tc, "ask", "close", "Q2"); code != 1 {
@@ -233,6 +240,29 @@ func TestAgentsWaitMineAsks(t *testing.T) {
 	s.set("POST /api/mux/asks/Q1/reported", hangUp)
 	if code, _ := waitMine(t, tc, "--timeout", "2s"); code != 0 || !strings.Contains(tc.stderr.String(), "Q1 may be reported again") {
 		t.Errorf("mark failed: %d %s", code, tc.stderr.String())
+	}
+
+	// A question dismissed in the PWA ends the wait too, reported once;
+	// with an answer, both are printed
+	dismissed := mineAsk("Q9", self, askDismissed)
+	dismissed.AnsweredBy = "pwa"
+	asksOf(s, answered, dismissed)
+	s.set("POST /api/mux/asks/Q1/reported", answer(http.StatusOK, `{"ok":true}`))
+	s.set("POST /api/mux/asks/Q9/reported", answer(http.StatusOK, `{"ok":true}`))
+	jobs()
+	code, out = waitMine(t, tc, "--timeout", "2s")
+	if code != 0 || !strings.Contains(out, "Q9 dismissed in the PWA: the user chose not to answer it; do not ask it again\n") ||
+		!strings.Contains(out, "Q1 answered in the PWA") || strings.Contains(out, "Q9 answered") {
+		t.Errorf("dismissed: %d\n%s", code, out)
+	}
+	if p := lastPost(s, "/api/mux/asks/Q9/reported"); !strings.Contains(p, `"pane":"w1:pO"`) {
+		t.Errorf("dismissal not marked reported: %v", s.posts)
+	}
+	// Reported, it is not printed again
+	dismissed.Reported = true
+	asksOf(s, dismissed, mineAsk("Q2", self, askOpen))
+	if code, out := waitMine(t, tc, "--timeout", "2s"); code != agentsExitIdle || strings.Contains(out, "Q9") || !strings.Contains(out, "open: Q2\n") {
+		t.Errorf("dismissal reported: %d\n%s", code, out)
 	}
 
 	// Only open questions: the wait ends as before, naming them

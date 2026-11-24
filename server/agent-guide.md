@@ -216,7 +216,9 @@ user, kept by the server across a compacted conversation, so never number questi
 user may answer in the PWA's Plan (Waiting on you): the answer arrives in your input box as
 `Answer to Q3: ...` or `Answer to Q3 (choice 2): ...`, and `wait --mine` reports it once; whatever
 way the user answers, run `ask close Q3 --answer '...'` (closing one already answered is not an
-error). `read` says when the user wrote in a job's pane after its question was asked
+error). The user may also dismiss a question in the PWA: nothing reaches your input box,
+`wait --mine` reports `Q3 dismissed in the PWA` once, and `ask close` on it is not an error; do
+not ask it again. `read` says when the user wrote in a job's pane after its question was asked
 (`read --json`: `openAsks`, `userWroteAfter`). Without `self` the ask commands are refused.
 
 The server follows each unfinished job's pull requests with the user's own `gh` login (not in a
