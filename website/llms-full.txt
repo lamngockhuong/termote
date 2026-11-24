@@ -3935,13 +3935,19 @@ Open settings from the **More** (⋯) menu in the header → **Settings**. Setti
 
 Settings → Appearance → **Interface style** changes how the whole app looks. The change applies at once and is saved in this browser.
 
-| Style    | Look                                                | Default |
-| -------- | --------------------------------------------------- | ------- |
-| Neutral  | Balanced defaults, indigo accent                    | ✓       |
-| Terminal | Monospace labels, small corner radius, green accent |         |
-| Native   | Large corner radius, system-app feel, blue accent   |         |
+| Style    | Look                                                        | Default |
+| -------- | ----------------------------------------------------------- | ------- |
+| Neutral  | Balanced defaults, indigo default accent                    | ✓       |
+| Terminal | Monospace labels, small corner radius, green default accent |         |
+| Native   | Large corner radius, system-app feel, blue default accent   |         |
 
 The style is independent of the **theme** (Light, Dark, System), which you pick right below it in Settings → Appearance → **Theme**, or in the **More** (⋯) menu. Any style works with any theme. If you have turned on reduced motion in your operating system, Termote skips its animations.
+
+## Accent Color
+
+[Section titled “Accent Color”](#accent-color)
+
+Settings → Appearance → **Accent color**, right below the style, picks the color of buttons, links, the selected item and the terminal cursor. **Follow style** (the default) keeps each style’s own accent; the other seven (Indigo, Blue, Teal, Green, Orange, Pink, Violet) apply to every style, in light and dark alike. With one of them chosen, the terminal’s cursor and the background of selected text take it too. Each dot shows the color in light (left half) and dark (right half), and the name of the chosen one is written below the dots. The change applies at once and is saved in this browser.
 
 ## Text Input Send Behavior
 

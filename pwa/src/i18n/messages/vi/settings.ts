@@ -24,6 +24,17 @@ export default {
   'settings.style.neutral': 'Trung tính',
   'settings.style.terminal': 'Terminal',
   'settings.style.native': 'Theo hệ thống',
+  'settings.accent': 'Màu nhấn',
+  'settings.accentDesc':
+    'Nút, liên kết, mục đang chọn và con trỏ terminal. Theo style giữ màu riêng của mỗi style.',
+  'settings.accent.auto': 'Theo style',
+  'settings.accent.indigo': 'Chàm',
+  'settings.accent.blue': 'Xanh dương',
+  'settings.accent.teal': 'Xanh ngọc',
+  'settings.accent.green': 'Xanh lá',
+  'settings.accent.orange': 'Cam',
+  'settings.accent.pink': 'Hồng',
+  'settings.accent.violet': 'Tím',
 
   'settings.ime': 'Cách gửi chữ từ ô nhập',
   'settings.ime.sendOnly': 'Chỉ gửi chữ',

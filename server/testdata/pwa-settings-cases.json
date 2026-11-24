@@ -19,6 +19,7 @@
    "name": "every kind",
    "values": {
     "uiStyle": "terminal",
+    "uiAccent": "teal",
     "pollInterval": 10,
     "sidebarWidth": 300,
     "terminalFont": "JetBrains Mono",
@@ -71,6 +72,15 @@
    },
    "bad": [
     "editorFontSize"
+   ]
+  },
+  {
+   "name": "unknown accent",
+   "values": {
+    "uiAccent": "gold"
+   },
+   "bad": [
+    "uiAccent"
    ]
   },
   {

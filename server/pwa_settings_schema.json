@@ -26,6 +26,14 @@
       "description": "Visual style of the app chrome"
     },
     {
+      "key": "uiAccent",
+      "store": "settings",
+      "type": "enum",
+      "values": ["auto", "indigo", "blue", "teal", "green", "orange", "pink", "violet"],
+      "default": "auto",
+      "description": "Accent color of buttons, the selected item and the terminal cursor; auto keeps the style's own"
+    },
+    {
       "key": "language",
       "store": "settings",
       "type": "enum",

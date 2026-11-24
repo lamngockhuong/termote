@@ -9,6 +9,7 @@ import type { CommandId } from './shortcuts'
 export const SETTING_LABEL: Record<string, MessageKey> = {
   theme: 'shell.menu.theme',
   uiStyle: 'settings.style',
+  uiAccent: 'settings.accent',
   language: 'settings.language',
   terminalFontSize: 'settings.key.terminalFontSize',
   terminalFont: 'settings.font',
@@ -105,6 +106,16 @@ export const VALUE_LABEL: Record<string, Record<string, MessageKey>> = {
     neutral: 'settings.style.neutral',
     terminal: 'settings.style.terminal',
     native: 'settings.style.native',
+  },
+  uiAccent: {
+    auto: 'settings.accent.auto',
+    indigo: 'settings.accent.indigo',
+    blue: 'settings.accent.blue',
+    teal: 'settings.accent.teal',
+    green: 'settings.accent.green',
+    orange: 'settings.accent.orange',
+    pink: 'settings.accent.pink',
+    violet: 'settings.accent.violet',
   },
   language: {
     auto: 'settings.languageAuto',

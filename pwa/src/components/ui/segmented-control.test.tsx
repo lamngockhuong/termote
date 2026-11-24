@@ -109,4 +109,38 @@ describe('SegmentedControl', () => {
     fireEvent.keyDown(group, { key: 'ArrowLeft' })
     expect(onChange).toHaveBeenLastCalledWith('system')
   })
+
+  it('draws swatches as wrapping round buttons, the selected one ringed', () => {
+    render(
+      <SegmentedControl
+        label="Accent"
+        variant="swatches"
+        options={[
+          { value: 'teal', content: <span />, label: 'Teal' },
+          { value: 'pink', content: <span />, label: 'Pink' },
+        ]}
+        value="pink"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('radiogroup')).toHaveClass('flex-wrap')
+    expect(radio('Pink')).toHaveClass('rounded-full', 'border-fg')
+    expect(radio('Teal')).toHaveClass('border-transparent')
+    expect(radio('Teal')).toHaveClass('pointer-coarse:size-touch')
+  })
+
+  it('draws chips as pills, the selected one filled', () => {
+    render(
+      <SegmentedControl
+        label="Filter"
+        variant="chips"
+        options={OPTIONS}
+        value="dark"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('radiogroup')).toHaveClass('flex-wrap')
+    expect(radio('Dark theme')).toHaveClass('bg-fg')
+    expect(radio('Light theme')).toHaveClass('bg-surface')
+  })
 })

@@ -3,6 +3,8 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StreamControl, TermSize } from '../hooks/use-term-socket'
+import css from '../index.css?raw'
+import { type AccentColor, UI_ACCENTS } from '../ui-style'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { terminalFontFamily } from '../utils/terminal-font'
 import {
@@ -15,6 +17,7 @@ import {
   type TerminalHandle,
   TerminalView,
   THEMES,
+  terminalTheme,
   wheelRows,
   zoomFontSize,
 } from './terminal-view'
@@ -241,6 +244,95 @@ function renderView(
   const view = render(<TerminalView ref={ref} paneId="0" {...props} />)
   return { ...view, ref, term: FakeTerminal.last, fit: FakeFit.last }
 }
+
+// The terminal backgrounds of every style block in index.css, by mode
+const TERM_BGS = [...css.matchAll(/\n(:root[^{]*)\{([^}]*)\}/g)].flatMap(
+  ([, selector, body]) => {
+    const bg = body.match(/--tm-term-bg:\s*(#[0-9a-f]{6});/)?.[1]
+    if (!bg) return []
+    const mode: 'light' | 'dark' = selector.includes('.dark') ? 'dark' : 'light'
+    return [{ mode, bg }]
+  },
+)
+
+// WCAG contrast ratio of two #rrggbb colours
+const channels = (hex: string) =>
+  [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16))
+function luminance(hex: string) {
+  const [r, g, b] = channels(hex).map((v) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+function contrast(a: string, b: string) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+// rgba(r, g, b, a) over an opaque #rrggbb
+function over(rgba: string, bottom: string) {
+  const [r, g, b, a] = rgba.match(/[\d.]+/g)!.map(Number)
+  const below = channels(bottom)
+  return `#${[r, g, b]
+    .map((c, i) =>
+      Math.round(c * a + below[i] * (1 - a))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
+}
+
+describe('terminalTheme', () => {
+  const colors = UI_ACCENTS.filter((a): a is AccentColor => a.id !== 'auto')
+
+  it('reads a terminal background from every style and mode', () => {
+    expect(TERM_BGS.filter((t) => t.mode === 'light')).toHaveLength(3)
+    expect(TERM_BGS.filter((t) => t.mode === 'dark')).toHaveLength(3)
+  })
+
+  it('keeps THEMES itself for auto without the stylesheet', () => {
+    expect(terminalTheme('dark')).toBe(THEMES.dark)
+    expect(terminalTheme('light', 'auto')).toBe(THEMES.light)
+  })
+
+  it('paints the cursor and selection with a chosen accent', () => {
+    expect(terminalTheme('dark', 'teal')).toEqual({
+      ...THEMES.dark,
+      cursor: '#2dd4bf',
+      selectionBackground: 'rgba(45, 212, 191, 0.32)',
+    })
+    expect(terminalTheme('light', 'teal')).toMatchObject({
+      cursor: '#0f766e',
+      selectionBackground: 'rgba(15, 118, 110, 0.28)',
+      selectionForeground: THEMES.light.selectionForeground,
+    })
+  })
+
+  it.each(
+    colors.flatMap((a) =>
+      TERM_BGS.map((t) => ({ name: `${a.id} ${t.mode} on ${t.bg}`, a, ...t })),
+    ),
+  )('$name: the cursor and selected text stay readable', ({ a, mode, bg }) => {
+    const root = document.documentElement
+    root.style.setProperty('--tm-term-bg', bg)
+    try {
+      const t = terminalTheme(mode, a.id)
+      expect(t.cursorAccent).toBe(bg)
+      expect(contrast(t.cursor, bg), 'cursor').toBeGreaterThanOrEqual(3)
+      // The character under a block cursor
+      expect(
+        contrast(t.cursorAccent, t.cursor),
+        'cursorAccent',
+      ).toBeGreaterThanOrEqual(4.5)
+      expect(
+        contrast(t.selectionForeground, over(t.selectionBackground, bg)),
+        'selection',
+      ).toBeGreaterThanOrEqual(4.5)
+    } finally {
+      root.style.removeProperty('--tm-term-bg')
+    }
+  })
+})
 
 describe('stripTerminalReplies', () => {
   it('removes DA, DSR and focus replies and keeps typed text', () => {
@@ -1555,6 +1647,25 @@ describe('TerminalView', () => {
     } finally {
       root.style.removeProperty('--tm-term-bg')
     }
+  })
+
+  it('creates the terminal with the accent cursor and repaints it on a new accent', () => {
+    const { ref, rerender, term } = renderView({
+      theme: 'dark',
+      uiAccent: 'teal',
+    })
+    expect(term.options.theme).toMatchObject({ cursor: '#2dd4bf' })
+
+    rerender(<TerminalView ref={ref} paneId="0" theme="dark" uiAccent="pink" />)
+    expect(bridge.setTerminalTheme).toHaveBeenLastCalledWith(
+      ref.current,
+      expect.objectContaining({ cursor: '#f472b6' }),
+    )
+    rerender(<TerminalView ref={ref} paneId="0" theme="dark" uiAccent="auto" />)
+    expect(bridge.setTerminalTheme).toHaveBeenLastCalledWith(
+      ref.current,
+      THEMES.dark,
+    )
   })
 
   describe('copy', () => {

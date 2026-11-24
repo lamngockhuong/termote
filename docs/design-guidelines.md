@@ -24,6 +24,28 @@ a new style or theme is a new token block, not a component change.
 - The terminal background (`bg-term`), `<body>`, the `theme-color` meta tag and the manifest
   follow the tokens (`syncThemeColor` in `ui-style.ts`).
 
+### Accent color
+
+The accent color (Settings → Appearance → Accent color, setting `uiAccent`) is a second axis,
+independent of the style the way the theme is. "Follow style" (`auto`, the default) sets nothing
+and keeps each style's own accent; each of the seven colors has one light and one dark pair shared
+by every style.
+
+- `data-accent` on `<html>` selects a `:root[data-accent="<id>"]` block (and its `.dark` one) that
+  overrides only `--tm-accent`, `--tm-accent-fg` and `--tm-accent-soft`. These blocks come after
+  every style block: at equal specificity only that order makes them win.
+- The tint is `rgb(<accent> / var(--tm-accent-soft-alpha))`; each style sets
+  `--tm-accent-soft-alpha` so the tint keeps that style's weight.
+- `UI_ACCENTS` in `pwa/src/ui-style.ts` holds the values; the inline script in `pwa/index.html`
+  applies the attribute before paint, like the style.
+- With a color chosen, the terminal cursor and selection take it (`terminalTheme` in
+  `terminal-view.tsx`); with `auto` the terminal is unchanged.
+- Settings draws each style's own accent (`UI_STYLES[].accent`) for "Follow style" and the style
+  previews, never `bg-accent`, which is the chosen color.
+- A new color must pass `theme-tokens.test.ts` and `terminal-view.test.tsx` on every style and
+  mode: 4.5:1 for buttons, accent text and selected terminal text, and accent text on the tint no
+  worse than the styles' own accents (those already miss 4.5:1 there).
+
 ### Token groups
 
 | Group    | Tokens                                                               |

@@ -133,7 +133,7 @@ import type { MessageKey } from './i18n/messages/en'
 import { Trans } from './i18n/trans'
 import type { Translate } from './i18n/translate'
 import type { Session, SessionPane } from './types/session'
-import { applyUiStyle, syncThemeColor } from './ui-style'
+import { applyUiAccent, applyUiStyle, syncThemeColor } from './ui-style'
 import { canResumeHere } from './utils/agent-start'
 import { currentMachine, switchMachine } from './utils/api-base'
 import { buildAppCommands, type PaletteMode } from './utils/app-commands'
@@ -1132,6 +1132,7 @@ export default function App({
   const { resolvedTheme, setTheme } = useTheme()
   // Before paint and before the terminal's effects read the tokens.
   useLayoutEffect(() => applyUiStyle(settings.uiStyle), [settings.uiStyle])
+  useLayoutEffect(() => applyUiAccent(settings.uiAccent), [settings.uiAccent])
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tokens it reads change with both
   useEffect(() => syncThemeColor(), [settings.uiStyle, resolvedTheme])
   const {
@@ -2623,6 +2624,7 @@ export default function App({
                           gpuRenderer: settings.gpuRenderer,
                           theme: resolvedTheme,
                           uiStyle: settings.uiStyle,
+                          uiAccent: settings.uiAccent,
                           disableContextMenu: settings.disableContextMenu,
                           copyOnSelect: settings.copyOnSelect,
                           onCopy: onTerminalCopy,

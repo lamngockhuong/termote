@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 import {
+  type CSSProperties,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -32,7 +33,7 @@ import {
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
-import { UI_STYLES, type UiStyle } from '../ui-style'
+import { UI_ACCENTS, UI_STYLES, type UiAccent, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
 import { badgeSupported } from '../utils/app-badge'
 import type { AppCommand } from '../utils/app-commands'
@@ -558,14 +559,25 @@ const STYLE_PREVIEW: Record<UiStyle, string> = {
   neutral: 'rounded-[4px] border border-border-strong bg-surface',
 }
 
+// Its own accent, not bg-accent: a chosen accent color would paint all three
 function StylePreview({ style }: { style: UiStyle }) {
+  const { accent } = UI_STYLES.find((s) => s.id === style)!
   return (
     <span
       aria-hidden="true"
       data-preview={style}
       className={`mr-1.5 flex h-4 w-6 flex-col justify-center gap-0.5 px-1 ${STYLE_PREVIEW[style]}`}
     >
-      <span className="h-0.5 w-full rounded-full bg-accent" />
+      <span
+        data-preview-accent
+        className="h-0.5 w-full rounded-full bg-(--preview-light) dark:bg-(--preview-dark)"
+        style={
+          {
+            '--preview-light': accent.light,
+            '--preview-dark': accent.dark,
+          } as CSSProperties
+        }
+      />
       <span className="h-0.5 w-2/3 rounded-full bg-fg-subtle" />
     </span>
   )
@@ -585,6 +597,37 @@ const STYLE_LABEL: Record<UiStyle, MessageKey> = {
   neutral: 'settings.style.neutral',
   terminal: 'settings.style.terminal',
   native: 'settings.style.native',
+}
+
+const ACCENT_LABEL: Record<UiAccent, MessageKey> = {
+  auto: 'settings.accent.auto',
+  indigo: 'settings.accent.indigo',
+  blue: 'settings.accent.blue',
+  teal: 'settings.accent.teal',
+  green: 'settings.accent.green',
+  orange: 'settings.accent.orange',
+  pink: 'settings.accent.pink',
+  violet: 'settings.accent.violet',
+}
+
+// A dot half in the light color, half in the dark one. Follow style shows
+// the current style's own accent, which bg-accent no longer is once a color
+// is chosen.
+function AccentDot({ accent, style }: { accent: UiAccent; style: UiStyle }) {
+  const own = UI_STYLES.find((s) => s.id === style)!.accent
+  const color = UI_ACCENTS.find((a) => a.id === accent)!
+  const [light, dark] =
+    'light' in color ? [color.light[0], color.dark[0]] : [own.light, own.dark]
+  return (
+    <span
+      aria-hidden="true"
+      data-accent-dot={accent}
+      className="block size-7 rounded-full ring-1 ring-border"
+      style={{
+        background: `linear-gradient(90deg, ${light} 50%, ${dark} 50%)`,
+      }}
+    />
+  )
 }
 
 interface GroupDef {
@@ -776,6 +819,7 @@ export function SettingsModal({
       title: t('settings.group.appearance'),
       summary: [
         t(STYLE_LABEL[settings.uiStyle]),
+        settings.uiAccent !== 'auto' && t(ACCENT_LABEL[settings.uiAccent]),
         themeLabel && t(themeLabel),
         t(LANGUAGE_LABEL[settings.language]),
       ]
@@ -804,6 +848,27 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('uiStyle', v)}
               className="self-start"
             />
+          </SettingsRow>
+          <SettingsRow
+            title={t('settings.accent')}
+            desc={t('settings.accentDesc')}
+            layout="stack"
+          >
+            <SegmentedControl
+              label={t('settings.accent')}
+              variant="swatches"
+              options={UI_ACCENTS.map((a) => ({
+                value: a.id,
+                label: t(ACCENT_LABEL[a.id]),
+                content: <AccentDot accent={a.id} style={settings.uiStyle} />,
+              }))}
+              value={settings.uiAccent}
+              onChange={(v) => onUpdateSetting('uiAccent', v)}
+            />
+            {/* The name, for whoever cannot tell the dots apart */}
+            <p className="m-0 text-[13px] text-fg-muted" data-accent-name>
+              {t(ACCENT_LABEL[settings.uiAccent])}
+            </p>
           </SettingsRow>
           <ThemeRow />
           <SettingsRow
