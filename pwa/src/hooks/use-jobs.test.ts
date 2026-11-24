@@ -116,6 +116,16 @@ describe('useJobs', () => {
     expect(api.stop).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the job fields the server takes', async () => {
+    api.fetchJobs.mockResolvedValue(
+      list([job('a')], { jobFields: ['priority', 'workspace'] }),
+    )
+    const { result } = renderHook(() => useJobs())
+    expect(result.current.jobFields).toEqual([])
+    await act(() => reloadJobs())
+    expect(result.current.jobFields).toEqual(['priority', 'workspace'])
+  })
+
   it('takes no offset from a server time it cannot read', async () => {
     api.fetchJobs.mockResolvedValue(list([], { serverNow: '' }))
     const { result } = renderHook(() => useJobs())

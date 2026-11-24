@@ -392,4 +392,90 @@ describe('JobDetail', () => {
       expect(screen.getByRole('status')).toHaveTextContent('The grant ended')
     })
   })
+
+  describe('priority, dependencies and workspace', () => {
+    const others = [
+      job({ id: 'b', title: 'Write docs', state: 'done' }),
+      job({ id: 'c', title: 'Fix CI', state: 'failed' }),
+      job({ id: 'd', title: 'Release', state: 'todo', after: ['a'] }),
+    ]
+    const section = (name: string) =>
+      screen.getByRole('heading', { name }).parentElement as HTMLElement
+
+    it('shows the priority and the workspace by name, else its id', () => {
+      const { rerender } = render(
+        <JobDetail
+          job={job({ priority: 'high', workspace: 'w1' })}
+          now={NOW}
+          groups={[{ id: 'w1', name: 'acme-api' }]}
+        />,
+      )
+      expect(value('Priority')).toHaveTextContent('High priority')
+      expect(value('Workspace')).toHaveTextContent('acme-api')
+      rerender(
+        <JobDetail
+          job={job({ priority: 'low', workspace: 'w9', workspaceNow: 'w8' })}
+          now={NOW}
+        />,
+      )
+      expect(value('Priority')).toHaveTextContent('Low priority')
+      expect(value('Workspace')).toHaveTextContent('w8')
+      rerender(<JobDetail job={job()} now={NOW} />)
+      expect(screen.queryByText('Priority', { selector: 'dt' })).toBeNull()
+      expect(screen.queryByText('Workspace', { selector: 'dt' })).toBeNull()
+    })
+
+    it('lists the jobs it waits on with their state, each opening its details', () => {
+      const onOpenJob = vi.fn()
+      render(
+        <JobDetail
+          job={job({ after: ['b', 'c', 'ffffffffffffffff'] })}
+          now={NOW}
+          jobs={[job(), ...others]}
+          onOpenJob={onOpenJob}
+        />,
+      )
+      const list = within(section('Waits on'))
+      expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual(
+        ['Write docsDone', 'Fix CIFailed', 'A job no longer in the plan'],
+      )
+      expect(list.getByText('Failed')).toHaveClass('text-danger')
+      fireEvent.click(list.getByRole('button', { name: 'Fix CI' }))
+      expect(onOpenJob).toHaveBeenCalledWith('c')
+      // Those waiting on it
+      const needed = within(section('Needed by'))
+      fireEvent.click(needed.getByRole('button', { name: 'Release' }))
+      expect(onOpenJob).toHaveBeenLastCalledWith('d')
+    })
+
+    it('names the jobs without a link where none opens', () => {
+      render(<JobDetail job={job()} now={NOW} jobs={others} />)
+      expect(within(section('Needed by')).getByText('Release')).toBeVisible()
+      expect(screen.queryByRole('button', { name: 'Release' })).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'Waits on' })).toBeNull()
+    })
+
+    it('tells the history lines of a change of priority, dependencies or workspace', () => {
+      render(
+        <JobDetail
+          job={job({
+            events: [
+              { at: ago(4), kind: 'priority', text: 'high' },
+              { at: ago(3), kind: 'after', text: '+b' },
+              { at: ago(2), kind: 'workspace', text: 'w1' },
+              { at: ago(1), kind: 'deps', text: 'b removed' },
+            ],
+          })}
+          now={NOW}
+        />,
+      )
+      for (const words of [
+        'Priority changed',
+        'Jobs it waits on changed',
+        'Workspace changed',
+        'A job it waited on left the plan',
+      ])
+        expect(screen.getByText(words)).toBeVisible()
+    })
+  })
 })

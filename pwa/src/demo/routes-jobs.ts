@@ -5,6 +5,7 @@ import type {
   JobGrant,
   JobLive,
   JobPR,
+  JobPriority,
 } from '../hooks/use-mux-api'
 import { grantPrefixProblem } from '../utils/grant-prefix'
 import { jobFinished } from '../utils/jobs'
@@ -20,6 +21,10 @@ import { type DemoState, findPane, iso, newId } from './state'
 const STATES = ['todo', 'active', 'review', 'done', 'failed', 'abandoned']
 const MAX_JOBS = 200
 const MOST_MINUTES = 1440
+const MAX_AFTER = 20
+const JOB_ID = /^[0-9a-f]{16}$/
+const PRIORITIES = ['high', 'normal', 'low']
+const JOB_FIELDS = ['priority', 'after', 'workspace']
 
 const conflict = (job: DemoJob) =>
   fail(409, 'job_conflict', 'the job was changed elsewhere', { job })
@@ -73,10 +78,46 @@ function ciFailKey(prs: JobPR[]): string {
   return parts.length ? `fail:${parts.join(',')}` : ''
 }
 
+// What j still waits on, as server/job_deps.go's jobWaits: the jobs of
+// after not done, and of those the failed or abandoned ones
+function waitsOf(state: DemoState, j: DemoJob) {
+  const waitsOn: string[] = []
+  const waitsOnFailed: string[] = []
+  for (const id of j.after ?? []) {
+    const o = state.jobs.find((x) => x.id === id)
+    if (!o || o.state === 'done') continue
+    waitsOn.push(id)
+    if (o.state === 'failed' || o.state === 'abandoned') waitsOnFailed.push(id)
+  }
+  return { waitsOn, waitsOnFailed }
+}
+
+const rank = (j: DemoJob) =>
+  j.priority === 'high' ? 0 : j.priority === 'low' ? 2 : 1
+
+// The ledger's order, as server/job_deps.go's sortJobs: by priority, then
+// the jobs to do oldest first, then the others newest first
+function sortJobs(jobs: DemoJob[]): DemoJob[] {
+  const at = (j: DemoJob) => Date.parse(j.created ?? '') || 0
+  return [...jobs].sort((a, b) => {
+    const d = rank(a) - rank(b)
+    if (d !== 0) return d
+    const at1 = a.state === 'todo'
+    const bt = b.state === 'todo'
+    if (at1 && bt) return at(a) - at(b)
+    if (at1 !== bt) return at1 ? -1 : 1
+    return at(b) - at(a)
+  })
+}
+
 function view(state: DemoState, j: DemoJob): Job {
   const { unread: _, ...job } = j
+  const { waitsOn, waitsOnFailed } = waitsOf(state, j)
   return {
     ...job,
+    waitsOn: waitsOn.length ? waitsOn : undefined,
+    waitsOnFailed: waitsOnFailed.length ? waitsOnFailed : undefined,
+    ready: (j.state === 'todo' && waitsOn.length === 0) || undefined,
     live: liveOf(state, j),
     ciSummary: ciSummary(j.ci),
     ciChecked: j.ci ? iso(state, -40_000) : undefined,
@@ -103,7 +144,7 @@ function text(v: unknown, max: number): string | null {
 
 const list: Handler = (req) => {
   const all = req.query.get('all') === '1'
-  const jobs = req.state.jobs
+  const jobs = sortJobs(req.state.jobs)
     .filter((j) => all || !jobFinished(j.state))
     .map((j) => view(req.state, j))
   return json({
@@ -112,7 +153,104 @@ const list: Handler = (req) => {
     serverNow: iso(req.state),
     canGrant: true,
     ciAvailable: true,
+    jobFields: JOB_FIELDS,
   })
+}
+
+// A request's priority, after and workspace checked against the jobs and
+// groups as server/job_routes.go and server/job_deps.go check them, for
+// the job id ('' for a new one): the refusal, or what to set
+interface Order {
+  priority?: JobPriority | ''
+  after?: string[]
+  workspace?: string
+}
+
+function checkOrder(
+  req: DemoRequest,
+  id: string,
+): { refused: Response } | { order: Order } {
+  const b = req.body ?? {}
+  const order: Order = {}
+  if (b.priority !== undefined) {
+    if (!PRIORITIES.includes(b.priority))
+      return { refused: invalid('unknown priority') }
+    order.priority = b.priority === 'normal' ? '' : b.priority
+  }
+  if (b.after !== undefined) {
+    if (!Array.isArray(b.after))
+      return { refused: invalid('a job it waits on is not a job id') }
+    const after: string[] = []
+    for (const a of b.after as unknown[]) {
+      if (typeof a !== 'string' || !JOB_ID.test(a))
+        return { refused: invalid('a job it waits on is not a job id') }
+      if (a === id) return { refused: invalid('a job cannot wait on itself') }
+      if (!after.includes(a)) after.push(a)
+    }
+    if (after.length > MAX_AFTER)
+      return { refused: invalid(`a job waits on up to ${MAX_AFTER} jobs`) }
+    if (after.some((a) => !req.state.jobs.some((j) => j.id === a)))
+      return {
+        refused: fail(
+          409,
+          'job_after_missing',
+          'a job it waits on does not exist',
+        ),
+      }
+    // A cycle: id is reached from after through the jobs' own after
+    const seen = new Set<string>()
+    const stack = [...after]
+    while (id && stack.length > 0) {
+      const cur = stack.pop() as string
+      if (cur === id)
+        return {
+          refused: fail(409, 'job_cycle', 'the jobs would wait on each other'),
+        }
+      if (seen.has(cur)) continue
+      seen.add(cur)
+      stack.push(...(req.state.jobs.find((j) => j.id === cur)?.after ?? []))
+    }
+    order.after = after
+  }
+  if (b.workspace !== undefined) {
+    if (typeof b.workspace !== 'string')
+      return { refused: invalid('the workspace is not a group id') }
+    if (b.workspace && !req.state.groups.some((g) => g.id === b.workspace))
+      return {
+        refused: fail(
+          409,
+          'job_workspace_unknown',
+          'no such workspace is open',
+        ),
+      }
+    order.workspace = b.workspace
+  }
+  return { order }
+}
+
+// Sets order on j, with a history line for each change
+function applyOrder(req: DemoRequest, j: DemoJob, order: Order) {
+  if (order.priority !== undefined && order.priority !== (j.priority ?? '')) {
+    j.priority = order.priority || undefined
+    event(req, j, 'priority', order.priority || 'normal')
+  }
+  if (order.after !== undefined) {
+    const now = order.after
+    const was = j.after ?? []
+    const diff = [
+      ...now.filter((a) => !was.includes(a)).map((a) => `+${a}`),
+      ...was.filter((a) => !now.includes(a)).map((a) => `-${a}`),
+    ]
+    j.after = now.length ? now : undefined
+    if (diff.length) event(req, j, 'after', diff.join(' '))
+  }
+  if (
+    order.workspace !== undefined &&
+    order.workspace !== (j.workspace ?? '')
+  ) {
+    j.workspace = order.workspace || undefined
+    event(req, j, 'workspace', order.workspace)
+  }
 }
 
 const create: Handler = (req) => {
@@ -120,6 +258,8 @@ const create: Handler = (req) => {
   if (!title) return invalid('the title is empty')
   if (req.state.jobs.length >= MAX_JOBS)
     return fail(409, 'too_many_jobs', 'too many jobs')
+  const checked = checkOrder(req, '')
+  if ('refused' in checked) return checked.refused
   const at = iso(req.state)
   const j: DemoJob = {
     id: newId(req.state),
@@ -132,6 +272,10 @@ const create: Handler = (req) => {
     updated: at,
   }
   event(req, j, 'created')
+  const { order } = checked
+  j.priority = order.priority || undefined
+  j.after = order.after?.length ? order.after : undefined
+  j.workspace = order.workspace || undefined
   req.state.jobs.push(j)
   return json({ job: view(req.state, j) }, 201)
 }
@@ -145,23 +289,42 @@ const update: Handler = (req) => {
     return invalid('unknown state')
   if (b.title !== undefined && !text(b.title, 200)?.trim())
     return invalid('the title is empty')
-  if (b.pane !== undefined) {
-    const ref = findPane(req.state, String(b.pane))
-    if (!ref?.pane.agent)
-      return fail(409, 'job_no_agent', 'the pane runs no agent')
-    if (j.agent?.paneId !== ref.pane.id) {
-      revokeAll(req, j)
-      j.agent = {
-        key: ref.pane.id,
-        paneId: ref.pane.id,
-        kind: ref.pane.agent.name,
-        groupId: ref.group.id,
-        ref: `${ref.group.name}:${ref.tab.name}`,
-      }
-      j.unread = false
-      event(req, j, 'agent', j.agent.ref)
+  const checked = checkOrder(req, j.id)
+  if ('refused' in checked) return checked.refused
+  const { order } = checked
+  const ref = b.pane !== undefined ? findPane(req.state, String(b.pane)) : null
+  if (b.pane !== undefined && !ref?.pane.agent)
+    return fail(409, 'job_no_agent', 'the pane runs no agent')
+  // A job given its first agent takes the agent's workspace; one with an
+  // agent or a worktree keeps its own
+  const bound = ref && !j.agent ? ref.group.id : (j.workspace ?? '')
+  if (
+    order.workspace !== undefined &&
+    order.workspace !== bound &&
+    (ref || j.agent || j.worktree)
+  )
+    return fail(
+      409,
+      'job_workspace_bound',
+      'the job has an agent or a worktree: its workspace stays',
+    )
+  if (ref?.pane.agent && j.agent?.paneId !== ref.pane.id) {
+    if (!j.agent && bound !== (j.workspace ?? '')) {
+      j.workspace = bound
+      event(req, j, 'workspace', bound)
     }
+    revokeAll(req, j)
+    j.agent = {
+      key: ref.pane.id,
+      paneId: ref.pane.id,
+      kind: ref.pane.agent.name,
+      groupId: ref.group.id,
+      ref: `${ref.group.name}:${ref.tab.name}`,
+    }
+    j.unread = false
+    event(req, j, 'agent', j.agent.ref)
   }
+  applyOrder(req, j, order)
   const add: unknown[] = Array.isArray(b.addPrs) ? b.addPrs : []
   const drop: unknown[] = Array.isArray(b.removePrs) ? b.removePrs : []
   if (

@@ -547,6 +547,7 @@ export function OverviewScreen({
                   wide={wide}
                   detailSlot={detailSlot}
                   onCloseActivity={() => setLogOpen(false)}
+                  groups={groups}
                 />
               )}
             </div>

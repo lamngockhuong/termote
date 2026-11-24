@@ -160,4 +160,104 @@ describe('JobCard', () => {
     ).toHaveTextContent('Fix⟨U+202E⟩login')
     expect(screen.getByText('feat/⟨U+200B⟩x')).toBeInTheDocument()
   })
+
+  describe('priority, dependencies and workspace', () => {
+    const waits = () => screen.getByTestId('job-waits')
+
+    it('marks a high and a low priority, never a normal one', () => {
+      const { rerender } = render(
+        <JobCard
+          job={job({ priority: 'high' })}
+          now={NOW}
+          onSelect={vi.fn()}
+        />,
+      )
+      expect(within(card()).getByText('High priority')).toHaveClass(
+        'text-warning',
+      )
+      // In the card's description, for a screen reader
+      expect(
+        screen.getByRole('button', { name: 'Fix login' }),
+      ).toHaveAccessibleDescription(/High priority/)
+      rerender(<JobCard job={job({ priority: 'low' })} now={NOW} />)
+      expect(within(card()).getByText('Low priority')).toHaveClass(
+        'text-fg-subtle',
+      )
+      rerender(<JobCard job={job()} now={NOW} />)
+      expect(within(card()).queryByText(/priority/)).toBeNull()
+    })
+
+    it('tells what a job to do waits on, flagged when one failed', () => {
+      const { rerender } = render(
+        <JobCard
+          job={job({ state: 'todo', waitsOn: ['b', 'c'], after: ['b', 'c'] })}
+          now={NOW}
+        />,
+      )
+      expect(waits()).toHaveTextContent('Waits on 2 jobs')
+      expect(waits()).toHaveClass('text-fg')
+      rerender(
+        <JobCard
+          job={job({ state: 'todo', waitsOn: ['b'], waitsOnFailed: ['b'] })}
+          now={NOW}
+        />,
+      )
+      expect(waits()).toHaveTextContent(
+        'Waits on 1 job · 1 failed or abandoned',
+      )
+      expect(waits()).toHaveClass('text-danger')
+      // Waiting on nothing: no chip
+      rerender(<JobCard job={job({ state: 'todo', after: ['b'] })} now={NOW} />)
+      expect(screen.queryByTestId('job-waits')).toBeNull()
+    })
+
+    it.each(['active', 'review', 'done'] as const)(
+      'only informs on a %s job',
+      (state) => {
+        render(
+          <JobCard
+            job={job({ state, waitsOn: ['b'], waitsOnFailed: ['b'] })}
+            now={NOW}
+          />,
+        )
+        expect(waits()).toHaveClass('text-fg-subtle')
+        expect(waits()).not.toHaveClass('text-danger')
+      },
+    )
+
+    it('names the workspace for a screen reader and shows it', () => {
+      render(<JobCard job={job()} now={NOW} workspace="acme-api" />)
+      expect(within(card()).getByText('In workspace acme-api')).toHaveClass(
+        'sr-only',
+      )
+      expect(within(card()).getByText('acme-api')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      )
+    })
+
+    it("shows a view-only device's brief fields the same", () => {
+      render(
+        <JobCard
+          job={{
+            id: 'a',
+            title: 'Fix login',
+            state: 'todo',
+            updated: 'u',
+            live: {},
+            priority: 'high',
+            after: ['b'],
+            waitsOn: ['b'],
+            workspace: 'w1',
+          }}
+          now={NOW}
+          workspace="w1"
+        />,
+      )
+      expect(within(card()).getByText('High priority')).toBeVisible()
+      expect(waits()).toHaveTextContent('Waits on 1 job')
+      expect(within(card()).getByText('w1')).toBeVisible()
+      expect(screen.queryByRole('button')).toBeNull()
+    })
+  })
 })

@@ -25,6 +25,93 @@ export function jobFinished(state: JobState): boolean {
   return state === 'done' || state === 'failed' || state === 'abandoned'
 }
 
+// The rank of a job's priority: high first, low last
+function priorityRank(job: Job): number {
+  return job.priority === 'high' ? 0 : job.priority === 'low' ? 2 : 1
+}
+
+// jobs by priority, keeping their order otherwise (the server's)
+export function sortByPriority(jobs: readonly Job[]): Job[] {
+  return [...jobs].sort((a, b) => priorityRank(a) - priorityRank(b))
+}
+
+// The jobs job still waits on (not done yet), as the server worked them out
+export function jobWaits(job: Job): number {
+  return job.waitsOn?.length ?? 0
+}
+
+// The jobs to do: those that wait on nothing first (what to start next),
+// then the waiting ones, each by priority
+export function sortTodo(jobs: readonly Job[]): Job[] {
+  const sorted = sortByPriority(jobs)
+  return [
+    ...sorted.filter((j) => jobWaits(j) === 0),
+    ...sorted.filter((j) => jobWaits(j) > 0),
+  ]
+}
+
+// The workspace (group id) job belongs to, '' for none: the one the server
+// found it in now, else the one it was set to
+export function jobWorkspace(job: Job): string {
+  return job.workspaceNow || job.workspace || ''
+}
+
+// What a workspace is called: its group's name, else its id as the server
+// keeps it (a group closed since, or not in the snapshot yet)
+export function workspaceName(
+  id: string,
+  groups: readonly { id: string; name: string }[] = [],
+): string {
+  return visibleUnsafe(groups.find((g) => g.id === id)?.name || id)
+}
+
+// jobs split by workspace, in the order of order (the groups' ids), then
+// the workspaces order does not name as they come, then the jobs with none
+// ('' as their workspace); each keeps the jobs' order
+export function jobsByWorkspace(
+  jobs: readonly Job[],
+  order: readonly string[] = [],
+): { workspace: string; jobs: Job[] }[] {
+  const by = new Map<string, Job[]>()
+  for (const j of jobs) {
+    const ws = jobWorkspace(j)
+    const list = by.get(ws)
+    if (list) list.push(j)
+    else by.set(ws, [j])
+  }
+  const ids = [
+    ...order.filter((id) => id && by.has(id)),
+    ...[...by.keys()].filter((id) => id && !order.includes(id)),
+  ]
+  if (by.has('')) ids.push('')
+  return ids.map((workspace) => ({
+    workspace,
+    jobs: by.get(workspace) as Job[],
+  }))
+}
+
+// The jobs whose after names job: those that wait on it, however done
+export function jobsNeeding(job: Job, jobs: readonly Job[]): Job[] {
+  return jobs.filter((j) => j.after?.includes(job.id))
+}
+
+// The ids of the jobs that wait on id, however far round: picking one of
+// them for id to wait on would make a cycle
+export function jobDependents(id: string, jobs: readonly Job[]): Set<string> {
+  const found = new Set<string>()
+  const stack = [id]
+  while (stack.length > 0) {
+    const cur = stack.pop() as string
+    for (const j of jobs)
+      if (!found.has(j.id) && j.after?.includes(cur)) {
+        found.add(j.id)
+        stack.push(j.id)
+      }
+  }
+  found.delete(id)
+  return found
+}
+
 export function groupJobs(jobs: readonly Job[]): JobGroups {
   const groups: JobGroups = {
     waiting: [],
@@ -52,6 +139,12 @@ export function groupJobs(jobs: readonly Job[]): JobGroups {
         groups.finished.push(j)
     }
   }
+  // Each open column by priority; the finished ones keep their order
+  groups.waiting = sortByPriority(groups.waiting)
+  groups.unread = sortByPriority(groups.unread)
+  groups.running = sortByPriority(groups.running)
+  groups.review = sortByPriority(groups.review)
+  groups.todo = sortTodo(groups.todo)
   return groups
 }
 

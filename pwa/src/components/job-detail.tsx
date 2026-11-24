@@ -10,6 +10,7 @@ import {
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import type { SessionGroup } from '../types/session'
 import { copyText } from '../utils/copy-text'
 import { formatAgo } from '../utils/format-ago'
 import { ciSetNumbers } from '../utils/job-ci'
@@ -19,12 +20,15 @@ import {
   grantLeft,
   grantUsed,
   jobPaneRef,
+  jobsNeeding,
+  jobWorkspace,
+  workspaceName,
 } from '../utils/jobs'
 import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { JobCISection } from './job-ci-section'
-import { Button, IconButton } from './ui/button'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 // A history line's words, by its kind; one this version does not know is
@@ -49,6 +53,10 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   ci: 'jobs.event.ci',
   ci_sent: 'jobs.event.ci_sent',
   ci_failed_send: 'jobs.event.ci_failed_send',
+  priority: 'jobs.event.priority',
+  after: 'jobs.event.after',
+  workspace: 'jobs.event.workspace',
+  deps: 'jobs.event.deps',
 }
 
 interface Props {
@@ -66,6 +74,12 @@ interface Props {
   canEndGrants?: boolean
   // The server follows the jobs' pull requests
   ciAvailable?: boolean
+  // Every job held: those this one waits on and those waiting on it
+  jobs?: readonly Job[]
+  // The workspaces, for their names
+  groups?: readonly SessionGroup[]
+  // Opens another job's details
+  onOpenJob?: (id: string) => void
 }
 
 // What a full client knows of one job, under the title its panel gives it:
@@ -80,6 +94,9 @@ export function JobDetail({
   onGrants,
   canEndGrants,
   ciAvailable,
+  jobs = [],
+  groups = [],
+  onOpenJob,
 }: Props) {
   const { t } = useT()
   // The grant whose end waits for a yes, and how the last end went
@@ -131,6 +148,45 @@ export function JobDetail({
     .flatMap((g) => (g.uses ?? []).map((u) => ({ ...u, kind: g.kind })))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
   const events = [...(job.events ?? [])].reverse()
+  const workspace = jobWorkspace(job)
+  // The jobs it waits on as set (done ones too), and those waiting on it
+  const after = (job.after ?? []).map(
+    (id) => jobs.find((j) => j.id === id) ?? id,
+  )
+  const neededBy = jobsNeeding(job, jobs)
+  const jobLink = (j: Job | string) => (
+    <li
+      key={typeof j === 'string' ? j : j.id}
+      className="flex items-baseline gap-2"
+    >
+      {typeof j === 'string' ? (
+        <span className="min-w-0 flex-1 text-fg-muted">
+          {t('jobs.detail.jobGone')}
+        </span>
+      ) : (
+        <>
+          <span className="min-w-0 flex-1 break-words">
+            {onOpenJob ? (
+              <button
+                type="button"
+                onClick={() => onOpenJob(j.id)}
+                className={`rounded-control text-left text-accent hover:underline ${FOCUS_RING}`}
+              >
+                {visibleUnsafe(j.title)}
+              </button>
+            ) : (
+              visibleUnsafe(j.title)
+            )}
+          </span>
+          <span
+            className={`shrink-0 ${j.state === 'failed' || j.state === 'abandoned' ? 'text-danger' : 'text-fg-muted'}`}
+          >
+            {t(JOB_STATE_WORDS[j.state])}
+          </span>
+        </>
+      )}
+    </li>
+  )
   const ago = (at: string) => {
     const ms = Date.parse(at)
     return Number.isFinite(ms) ? formatAgo(Math.max(0, now - ms), t) : ''
@@ -222,6 +278,20 @@ export function JobDetail({
             )}
           </span>
         </Row>
+        {(job.priority === 'high' || job.priority === 'low') && (
+          <Row label={t('jobs.detail.priority')}>
+            {t(
+              job.priority === 'high'
+                ? 'jobs.priority.high'
+                : 'jobs.priority.low',
+            )}
+          </Row>
+        )}
+        {workspace && (
+          <Row label={t('jobs.detail.workspace')}>
+            {workspaceName(workspace, groups)}
+          </Row>
+        )}
         {agent && <Row label={t('jobs.detail.agent')}>{agent}</Row>}
         {branch && (
           <Row label={t('jobs.detail.branch')}>
@@ -245,6 +315,20 @@ export function JobDetail({
           </Row>
         )}
       </dl>
+      {after.length > 0 && (
+        <Section label={t('jobs.detail.waitsOn')}>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[12px]">
+            {after.map((j) => jobLink(j))}
+          </ul>
+        </Section>
+      )}
+      {neededBy.length > 0 && (
+        <Section label={t('jobs.detail.neededBy')}>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[12px]">
+            {neededBy.map((j) => jobLink(j))}
+          </ul>
+        </Section>
+      )}
       {ciAvailable && <JobCISection job={job} now={now} />}
       {job.prompt && (
         <Section label={t('jobs.card.prompt')}>

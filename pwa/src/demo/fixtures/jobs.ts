@@ -1,7 +1,9 @@
-// The demo's plan: three jobs an orchestrator handed out, one running in
-// web's Claude Code with a grant to run its tests, one done in acme-api's
-// with its turn not read yet, and one waiting for the user's review whose
-// pull request's docs check failed.
+// The demo's plan: jobs an orchestrator handed out, one running in web's
+// Claude Code with a grant to run its tests, one done in acme-api's with its
+// turn not read yet (high priority), one waiting for the user's review whose
+// pull request's docs check failed, and three to do: the release notes,
+// which wait on that review, the announcement (low priority, no workspace),
+// which waits on the notes, and a search box for web, ready to start.
 import type { Job } from '../../hooks/use-mux-api'
 import { ACME_ROOT, DEMO_HOME } from './workspace'
 
@@ -65,6 +67,7 @@ export function demoJobs(now: number): DemoJob[] {
       prompt: 'Add a per-IP rate limit to POST /login, with table tests.',
       state: 'active',
       createdBy: 'claude',
+      priority: 'high',
       workspace: 'w1',
       agent: agent('w1:p1', 'acme-api:claude', 'w1'),
       unread: true,
@@ -116,6 +119,43 @@ export function demoJobs(now: number): DemoJob[] {
       ],
       created: at(180),
       updated: at(90),
+    },
+    {
+      id: 'e4f5061728394a5b',
+      // i18n-ignore: demo data, as an agent wrote it
+      title: 'Write the v2 release notes',
+      prompt: 'Summarise the v2 API changes for the changelog.',
+      state: 'todo',
+      createdBy: 'claude',
+      workspace: 'w1',
+      after: ['d3e4f5061728394a'],
+      events: [{ at: at(60), kind: 'created' }],
+      created: at(60),
+      updated: at(60),
+    },
+    {
+      id: 'f5061728394a5b6c',
+      // i18n-ignore: demo data, as an agent wrote it
+      title: 'Announce v2 on the blog',
+      state: 'todo',
+      createdBy: 'pwa',
+      priority: 'low',
+      after: ['e4f5061728394a5b'],
+      events: [{ at: at(50), kind: 'created' }],
+      created: at(50),
+      updated: at(50),
+    },
+    {
+      id: '061728394a5b6c7d',
+      // i18n-ignore: demo data, as an agent wrote it
+      title: 'Search box for the settings page',
+      prompt: 'Add a search field that filters the settings sections.',
+      state: 'todo',
+      createdBy: 'claude',
+      workspace: 'w2',
+      events: [{ at: at(30), kind: 'created' }],
+      created: at(30),
+      updated: at(30),
     },
   ]
 }
