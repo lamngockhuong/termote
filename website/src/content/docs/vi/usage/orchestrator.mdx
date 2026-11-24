@@ -269,10 +269,13 @@ gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải 
 (`pnpm --filter a node x.js` sẽ chạy node: muốn cho chạy script `lint` của bạn thì cấp
 `pnpm --filter a lint`); lệnh cargo chỉ được là `build`, `test`, `check`, `clippy` hay `fmt` (với từ
 nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn lệnh `install` của nó build một
-crate do agent nêu tên);
+crate do agent nêu tên); lệnh go chỉ được là `build`, `test`, `vet`, `fmt`, `list`, `mod` hay `version`
+(lệnh `run` và `install` của nó build một module do agent nêu tên, ở phiên bản bất kỳ); lệnh `install` của
+pip, gem và lệnh `link` của npm không được kèm tên một gói cần cài;
 file nằm trong worktree, không đi qua liên kết nào, và không
 phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
-`package.json`, các file khóa phụ thuộc, `.env`...). Mọi trường hợp khác đều bị từ chối và quay về
+`package.json`, các file khóa phụ thuộc, pipeline CI, `justfile`, `.env`...). File nằm trong thư mục mà
+`core.hooksPath` của kho trỏ tới cũng được tính là file do git hook chạy. Mọi trường hợp khác đều bị từ chối và quay về
 bạn như trước. Mỗi câu trả lời hiện trên thẻ của việc và trong nhật ký kiểm toán của server.
 
 <Aside type="caution">

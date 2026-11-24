@@ -23,7 +23,7 @@ Part of the [security invariants](README.md): other termote servers reached over
   is held as a browser's: a view role gets the brief, `PATCH` and `DELETE` need `updated`, `/event`
   is 403 `socket_only`, a job it makes is `createdBy: "pwa"` from a browser origin and `"machine"`
   from any other (`TestJobLedgerOverBridge`); adding, closing or reporting an orchestrator's question
-  is 403 `socket_only`, and an answer to one is taken from a browser origin only (403
+  is 403 `socket_only`, and an answer to one, or its dismissal, is taken from a browser origin only (403
   `ask_browser_only` otherwise, see Orchestrator asks); a snapshot read over the
   bridge carries no `settingsProposal` and `caps.settingsProposals` false, so a machine's settings
   proposal never reaches a browser open on it through another termote. `hostGuard` takes
@@ -122,7 +122,7 @@ Part of the [security invariants](README.md): other termote servers reached over
   match the allowlist (`snapshot`, `overview`, `activity`, `system`, `stream-token`, `stream`,
   `health`, `uploads`, `files/places`, `tabs*`, `panes*`, `groups*`, `worktrees*`, `tasks*`,
   `templates*`, `recent-groups*`, of the job ledger `jobs`, `jobs/{id}` and `jobs/{id}/ci` only, and of
-  the orchestrator's questions `asks` with `GET`/`HEAD` and `asks/{id}/answer` only: the one
+  the orchestrator's questions `asks` with `GET`/`HEAD`, `asks/{id}/answer` and `asks/{id}/dismiss` only: the one
   method check of the allowlist, `machineAsksAdd`),
   hold no `.`/`..` segment, empty segment, `%2F` or `%5C`, else 404
   `machine_route_forbidden` (so never `devices*`, `signins*`, `push*`, `login-links`, `logout`,

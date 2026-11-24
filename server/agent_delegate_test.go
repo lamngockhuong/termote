@@ -101,6 +101,8 @@ func newDelegateTest(t *testing.T, screen, transcript string) *delegateTest {
 	t.Helper()
 	shortConfirm(t)
 	jt := newJobsTest(t)
+	rr := newTestRoots()
+	jt.agent.files = &filesAPI{git: rr.git, roots: rr}
 	wt := t.TempDir()
 	jt.agent.wm = &fakeWorktreeMux{list: WorktreeList{Worktrees: []Worktree{{Path: wt, Branch: "feat", Linked: true, GroupID: "w1"}}}}
 	writeFile(t, filepath.Join(wt, "notes.txt"), "hello\nworld\n")
@@ -270,6 +272,42 @@ func TestDelegatedEdit(t *testing.T) {
 	dt2.grant("edit", "", 30)
 	if code, out := dt2.answer(); code != http.StatusConflict || out["reason"] != "symlink" {
 		t.Errorf("symlink = %d %v", code, out)
+	}
+}
+
+// A file in the folder the repository's core.hooksPath names runs at the
+// user's next commit: refused, as a hook config's scripts are. The value
+// the server's own git sets (-c) is not the repository's.
+func TestDelegatedEditHooksPath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hooksPath string
+		reason    string
+	}{
+		"the work tree's top": {".", "denied_path"},
+		"an absolute path":    {"WT", "denied_path"},
+		"another folder":      {"tools/hooks", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newDelegateTest(t, delegateScreen(t, "edit"), "")
+			gitIn(t, dt.wt, "init", "-q")
+			gitIn(t, dt.wt, "config", "core.hooksPath", strings.ReplaceAll(tc.hooksPath, "WT", dt.wt))
+			os.WriteFile(dt.path, []byte(jobsTranscript+toolUseLine("toolu_e", "Edit",
+				map[string]any{"file_path": filepath.Join(dt.wt, "notes.txt"), "old_string": "world", "new_string": "there"}, false)), 0o600)
+			dt.grant("edit", "", 30)
+			code, out := dt.answer()
+			if tc.reason == "" {
+				if code != http.StatusNoContent {
+					t.Errorf("= %d %v, want answered", code, out)
+				}
+				return
+			}
+			if code != http.StatusConflict || out["reason"] != tc.reason {
+				t.Errorf("= %d %v, want %s", code, out, tc.reason)
+			}
+			if keys := dt.keys(); len(keys) != 0 {
+				t.Errorf("keys sent: %v", keys)
+			}
+		})
 	}
 }
 

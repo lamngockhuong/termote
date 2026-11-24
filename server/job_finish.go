@@ -275,7 +275,17 @@ func (a *agentAPI) finishCheck(ctx context.Context, j job, in jobFinishInput) (f
 			_, own := a.m.(worktreeMux)
 			shows := slices.Contains(named, p.group.ID)
 			if !own {
-				shows = sameAllowPath(groupFolder(p.group), j.Worktree.Dir) || dirInTree(j.Worktree.Dir, groupFolder(p.group))
+				// The repository of that folder, as RemoveWorktree reads it:
+				// a folder inside the job's worktree may belong to another
+				// worktree nested in it, which the checks below never read.
+				shows = false
+				if dir := groupFolder(p.group); dir != "" && dirInTree(j.Worktree.Dir, dir) {
+					repo, ok, err := repoInfo(ctx, a.files.roots, dir)
+					if err != nil {
+						return finishPlan{}, err
+					}
+					shows = ok && sameAllowPath(repo.Top, j.Worktree.Dir)
+				}
 			}
 			if len(p.group.Tabs) > 1 || !shows {
 				return finishPlan{}, errFinishWorktreeShared

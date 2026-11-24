@@ -880,6 +880,34 @@ func TestJobFinishRecheck(t *testing.T) {
 	}
 }
 
+// The workspace's first pane in a folder of the job's worktree that is
+// another repository's worktree (an ignored folder): removing the
+// workspace's worktree would remove that one, which no check read. Refused
+// for that reason, not only because ls-files happens to list a nested
+// repository among the ignored .env files.
+func TestJobFinishNestedWorktree(t *testing.T) {
+	ft := newFinishTest(t, true)
+	ft.merged()
+	other := filepath.Join(filepath.Dir(ft.repo.main), "other")
+	nested := filepath.Join(ft.repo.wt, "node_modules", "x")
+	gitIn(t, filepath.Dir(other), "init", "-q", "-b", "main", other)
+	gitIn(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "one")
+	gitIn(t, other, "worktree", "add", "-q", "-b", "side", nested)
+	ft.f.mu.Lock()
+	ft.f.snap.Groups[1].Tabs[0].Panes[0].Process.Cwd = nested
+	ft.f.mu.Unlock()
+	code, out := ft.finish(map[string]any{"close": true, "removeWorktree": true})
+	if code != http.StatusConflict || out["code"] != "finish_worktree_shared" {
+		t.Errorf("finish = %d %v", code, out)
+	}
+	if len(ft.wm.removed) > 0 || len(ft.ff.closed) > 0 {
+		t.Errorf("removed %v, closed %v", ft.wm.removed, ft.ff.closed)
+	}
+	if _, err := os.Stat(nested); err != nil {
+		t.Errorf("nested worktree gone: %v", err)
+	}
+}
+
 // The agent's pane outside the worktree: its tab closes on its own, then
 // the worktree no workspace shows goes with git.
 func TestJobFinishTabOutsideWorktree(t *testing.T) {

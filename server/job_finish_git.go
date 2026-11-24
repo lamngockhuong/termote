@@ -44,7 +44,7 @@ var headSHARe = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 const finishEnvPathspec = ":(glob)**/.env*"
 
 // readFinishTree reads the worktree t names: refused unless it is a linked
-// worktree below the home dir, still on t's branch.
+// worktree, not the home dir nor one holding it, still on t's branch.
 func readFinishTree(ctx context.Context, git *gitRunner, rr *rootResolver, home string, t jobTree) (finishTree, error) {
 	if jobDirTooWide(t.Dir, home) {
 		return finishTree{}, errWorktreeNotLinked

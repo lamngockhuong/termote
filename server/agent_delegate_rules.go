@@ -50,6 +50,11 @@ var delegateInterpreters = []string{
 	// registry, and "docker compose up" reads a compose file the agent can
 	// edit, which may mount the whole machine.
 	"docker", "podman", "nerdctl", "docker-compose", "podman-compose",
+	// Wrappers that run the program named after them (corepack runs a
+	// package manager past the rules above; bundle install evaluates the
+	// Gemfile, Ruby), and task runners that run a file the agent can edit,
+	// as make does.
+	"corepack", "bundle", "poetry", "pipenv", "conda", "mise", "rake", "just", "task",
 }
 
 // delegateSubcommands are programs whose command, the word after the
@@ -60,8 +65,14 @@ var delegateInterpreters = []string{
 // (rustup's) may come before the command; after the grant's prefix it is
 // an option like any other. build and test still run code the agent can
 // edit (build.rs, its tests), as any build or test command does.
+//
+// go's run and install build and run a module the agent names, at any
+// version (go run x@latest), generate runs the commands its source names,
+// tool any tool, and env -w writes GOFLAGS (-toolexec) for every later go
+// command.
 var delegateSubcommands = map[string][]string{
 	"cargo": {"build", "test", "check", "clippy", "fmt"},
+	"go":    {"build", "test", "vet", "fmt", "list", "mod", "version"},
 }
 
 // delegateRunners are package managers with a word that runs any package:
@@ -142,9 +153,17 @@ func commandWord(words []string, first string) int {
 // which no edit grant covers. Refused when any word after one is no option
 // ("npm i x", "pnpm add -D x"); an install with no package ("npm ci",
 // "pnpm install --frozen-lockfile", "pnpm --filter a install") installs
-// what the lockfile holds. npm's list holds its aliases of install.
+// what the lockfile holds. npm's list holds its aliases of install, and
+// install-test (it), which takes install's arguments and then runs the
+// tests, with the unique starts of its name, and link, which installs a
+// package it names that is not linked yet. pip (any versioned name, pip3.12)
+// and gem build and install a package, running its setup code; a
+// requirements file the agent can edit names packages too.
 var delegateInstallers = map[string][]string{
-	"npm":  {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add"},
+	"npm": {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add",
+		"install-test", "install-tes", "install-te", "install-t", "it", "link", "ln"},
+	"pip":  {"install"},
+	"gem":  {"install", "i"},
 	"pnpm": {"install", "i", "add"},
 	"yarn": {"install", "add"},
 	"bun":  {"install", "i", "add", "a"},
@@ -154,6 +173,9 @@ var delegateInstallers = map[string][]string{
 // option letters even without a dash (GNU tar: "tar xIf ./x.sh a.tar"
 // runs ./x.sh), so that word is an option when it comes after the prefix.
 var delegateBundledOptions = []string{"tar"}
+
+// pipNameRe: pip under any of its versioned names (pip3, pip3.12).
+var pipNameRe = regexp.MustCompile(`^pip[0-9.]*$`)
 
 // interpreterVersionRe: a versioned name of an interpreter (python3.12).
 var interpreterVersionRe = regexp.MustCompile(`^(python|pypy|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
@@ -208,7 +230,11 @@ func checkDelegateCommand(cmd, prefix string) string {
 			}
 		}
 	}
-	if inst, ok := delegateInstallers[first]; ok {
+	installer := first
+	if pipNameRe.MatchString(first) {
+		installer = "pip"
+	}
+	if inst, ok := delegateInstallers[installer]; ok {
 		for i := 1; i < len(words); i++ {
 			if slices.Contains(inst, strings.ToLower(words[i])) &&
 				slices.ContainsFunc(words[i+1:], func(w string) bool { return !strings.HasPrefix(w, "-") }) {
@@ -298,6 +324,12 @@ var delegateDeniedNames = []string{
 	// folder's .exrc and .nvim.lua; MSBuild imports Directory.Build.* into
 	// every project below it.
 	"gemini.md", "mise.toml", ".mise.toml", ".exrc", ".nvim.lua", "directory.build.props", "directory.build.targets",
+	// More of the same: CI pipelines run on the next push (as
+	// .github/workflows), a rust-toolchain file's path runs as cargo,
+	// mise's local config, vim's other folder configs, and the files the
+	// task runners and Ruby's tools run (as the Makefile).
+	".gitlab-ci.yml", "jenkinsfile", "rust-toolchain", "rust-toolchain.toml", "mise.local.toml", ".mise.local.toml",
+	".vimrc", ".nvimrc", "_exrc", "justfile", ".justfile", "taskfile.yml", "taskfile.yaml", "gemfile", "rakefile",
 }
 
 // delegateHookConfigs are the files that make git hooks run a program:
@@ -374,7 +406,9 @@ var delegateDeniedDirs = []string{".git", ".claude", ".codex", ".opencode", ".ag
 	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules",
 	// Agent and editor settings that run or instruct: Gemini CLI, Cursor,
 	// a dev container's commands.
-	".gemini", ".cursor", ".devcontainer"}
+	".gemini", ".cursor", ".devcontainer",
+	// CircleCI's pipeline, and mise's other config folders.
+	".circleci", ".mise", ".config/mise", ".config/mise.toml"}
 
 // checkDelegatePath is "" when rel, a path relative to a grant's dir, may
 // be edited under it, else the refusal code. Only the names are read here;

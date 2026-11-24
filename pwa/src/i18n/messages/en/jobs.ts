@@ -244,7 +244,7 @@ export default {
   'jobs.grant.problem.chars':
     'Use plain words with one space between them: no quotes, no ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # and no tab',
   'jobs.grant.problem.interpreter':
-    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, or an install that names a package such as pnpm add x…): it cannot be granted',
+    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, go run, or an install that names a package such as pnpm add x or pip install x…): it cannot be granted',
   'jobs.grant.oneWord':
     'One word covers every command of {word}. A longer prefix is safer',
   'jobs.grant.editHint':
@@ -254,7 +254,7 @@ export default {
   'jobs.grant.editNeedsWorktree':
     'This job has no worktree: a grant to edit files needs one',
   'jobs.grant.editDenied':
-    'Never covered: agent settings (.claude/, .codex/, .opencode/, .agents/, .mcp.json, opencode.json, CLAUDE.md, AGENTS.md), .git, .cargo/, package.json, lockfiles, Makefile, .env files, git hooks (.lefthook/, lefthook.yml, lefthook-local.yml, .husky/, .githooks/), editor settings (.vscode/, .idea/), .github/workflows/, .github/actions/ and node_modules/',
+    'Never covered: agent settings (.claude/, .codex/, .opencode/, .agents/, .mcp.json, opencode.json, CLAUDE.md, AGENTS.md), .git, .cargo/, package.json, lockfiles, Makefile, justfile, CI pipelines, .env files, git hooks (.lefthook/, lefthook.yml, lefthook-local.yml, .husky/, .githooks/, the folder core.hooksPath names), editor settings (.vscode/, .idea/), .github/workflows/, .github/actions/ and node_modules/',
   'jobs.grant.duration': 'For',
   'jobs.grant.untilDone': 'Until the job ends (24 h at most)',
   'jobs.grant.forMinutes': '{n} minutes',

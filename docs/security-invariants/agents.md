@@ -985,8 +985,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
 - **Dialog delegation** (`server/job_grants.go`, `server/agent_delegate*.go`, `handleAnswer`):
   a grant is made and revoked (`POST /api/mux/jobs/{id}/grants`, `DELETE .../grants/{gid}`) only by
   a browser signed in with the password or as a full paired device (`canGrant`: `authSession` or
-  `authDevice` with role full, not the local socket); the CLI, the bridge (`machineForbiddenPath`),
-  Basic auth and a server without sign-in get 403 `grant_pwa_only`, and there is no CLI command that
+  `authDevice` with role full, not the local socket); the CLI, Basic auth and a server without sign-in get
+  403 `grant_pwa_only`, and the bridge 403 `machine_forbidden` before any handler (`machineForbiddenPath`), and there is no CLI command that
   makes one; the Machine proxy does not forward `jobs/{id}/grants*` either (404
   `machine_route_forbidden`), so another termote's PWA shows a machine's grants read only and says they
   are given on that machine. This is the user's say given where the user reads the job, not a wall against a process
@@ -999,7 +999,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   each. A grant still unexpired that a change ends without a revoke of its own is logged `audit:
   grant_revoked` with a `reason` (`agent_changed`, `job_finished`, `job_removed` for an unfinished job
   a browser removes, `replaced` for a `ci` grant a newer one ends), `by` and `via` (`auditWho`:
-  `machine:<origin>` for another termote's bridge, as on `grant_created` and a revoke), once the change is
+  `machine:<origin>` for another termote's bridge, whose `PATCH` and `DELETE` of a job end grants; it
+  never reaches the grant routes), once the change is
   written; a `PATCH` or `DELETE` over the bridge ends grants as a browser's would: it can only take
   power away; expiry and a pane that no longer runs the agent change nothing stored (checked at each use,
   `grantInForce`, `jobAgent.matches`) and leave no line. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
@@ -1023,7 +1024,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `--upload-pack`, `-x`, `difftool`, `bisect run`), `sed` and `ed` (a script such as `1e./x.sh`
   runs a program) and the container engines `docker`, `podman`, `nerdctl`, `docker-compose` and
   `podman-compose` (`docker run <image>` runs any image of a registry, `docker compose up` reads a
-  compose file the agent can edit, which may mount the whole machine), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
+  compose file the agent can edit, which may mount the whole machine), the wrappers `corepack` (it runs a
+  package manager past these rules), `bundle` (its install evaluates the Gemfile, Ruby), `poetry`, `pipenv`,
+  `conda` and `mise`, and the task runners `rake`, `just` and `task` (they run a file the agent can edit, as
+  `make` does), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
   exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
   `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
   init x`; nor `config`, `c` or `set` of `npm`, `pnpm`, `yarn` (`config` only), which write the
@@ -1036,7 +1040,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `un` and `se`, its aliases of install, uninstall and search (`delegateAbbrevNames`, the PWA's `ABBREV_NAMES`); the lists
   of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
   it followed by any word that is no option (`delegateInstallers`, the PWA's `INSTALLERS`: `npm i x`, its
-  other aliases of install, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
+  other aliases of install, `install-test` and its alias `it` (install's arguments, then the tests) with
+  the unique starts of that name, and `link`/`ln`, which installs a package it names; `pip` under any
+  versioned name (`pip3.12`, `pipNameRe`) and `gem` with `install`, which build a package and run its setup
+  code, `pip install -r requirements.txt` included, since the agent can edit that file, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
   runs its install scripts and writes `package.json` and the lockfile, which no edit grant covers; an
   install of the lockfile alone, `npm ci`, `pnpm install --frozen-lockfile`, `pnpm --filter a install`, is
   not refused), and `cargo`'s command, the word after its name past one rustup `+toolchain` at most, is
@@ -1044,7 +1051,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   PWA's `SUBCOMMANDS`: cargo runs any other word as the program `cargo-<x>` it finds on `PATH`, and
   `cargo install` fetches and builds a crate the agent names; `cargo add`, `cargo run`, an option before
   the command (`cargo -C build install x`) and the aliases `b`, `t`, `c`, which a cargo config may
-  redefine, are refused; after the grant's prefix a `+toolchain` is an option like any other) (`interpreter`;
+  redefine, are refused; after the grant's prefix a `+toolchain` is an option like any other), and `go`'s
+  is `build`, `test`, `vet`, `fmt`, `list`, `mod` or `version` (`go run` and `go install` build and run a
+  module the agent names at any version, `go run x@latest`; `go generate` runs the commands its source
+  names, `go tool` any tool, `go env -w` writes `GOFLAGS`, `-toolexec`, for every later go command)
+  (`interpreter`;
   the same four checks hold a grant's prefix when it is made); pnpm and yarn run a word that is no command of
   theirs as a script or, without one, as a program (`pnpm --filter a node x.js` runs node), so the
   word that picks the command (`commandWord`: past options, an option without `=` and not of
@@ -1074,7 +1085,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   short name or stream, nothing case folding or Windows maps onto another name), not a
   denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
   `.opencode`, `.agents`, `.gemini`, `.cursor`, `.devcontainer`, `.husky`, `.githooks`, `.lefthook`,
-  `.vscode`, `.idea`, `.cargo`,
+  `.vscode`, `.idea`, `.cargo`, `.circleci`, `.mise`, `.config/mise`, `.config/mise.toml`,
+  `.gitlab-ci.yml`, `Jenkinsfile`, `rust-toolchain`, `rust-toolchain.toml`, `mise.local.toml`,
+  `.mise.local.toml`, `.vimrc`, `.nvimrc`, `_exrc`, `justfile`, `.justfile`, `Taskfile.yml`,
+  `Taskfile.yaml`, `Gemfile`, `Rakefile`,
   `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
   `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, `mise.toml`, `.mise.toml`, `.exrc`,
   `.nvim.lua`, `Directory.Build.props`, `Directory.Build.targets`, `.envrc`, `.env*`, `package.json`, lockfiles,
@@ -1085,7 +1099,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   of any extension, `.pre-commit-config.yaml` or a script of `.husky` at that directory's root, 64
   KB of each and 64 of `.husky`'s, matched by the end of the path, `../scripts/x.sh` denying every
   `scripts/x.sh`, since it would run at the user's next commit, past the grant: `denied_path`; what
-  such a script runs in turn is not followed), and no component on the way, the last included, is a
+  such a script runs in turn is not followed; nor a file in a folder `core.hooksPath` names for the
+  grant's repository, read through `gitRunner` without the value it sets itself (scope `command`), a
+  relative one from the top of the work tree, `checkDelegateHooksPath`; a config git cannot read
+  denies the edit), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
@@ -1197,11 +1214,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   lacks the job's folder 409 `changed`. Any group there but the job tab's, a second tab in it, or a
   group the backend would remove another worktree of (Herdr: its list does not name the group for
   the job's folder; tmux, Zellij, herdr-core: the group's first pane, which `RemoveWorktree` takes
-  the worktree from, is not in the job's folder) is 409 `finish_worktree_shared`; `by`'s pane in one, or
+  the worktree from, is not in the job's folder, or is in another worktree nested in it: the top of
+  that pane's repository must be the job's folder) is 409 `finish_worktree_shared`; `by`'s pane in one, or
   in the worktree's folder, is 409 `finish_self`; the job's tab in the worktree without `close` is
   400 `finish_needs_close`, and `close` alone on the last tab of a workspace in the job's worktree
   400 `finish_needs_remove` (the workspace would go with it). git then reads the worktree
-  (`readFinishTree`, argv through `gitRunner` only): the folder from the ledger, below the home dir
+  (`readFinishTree`, argv through `gitRunner` only): the folder from the ledger, not the home dir nor one holding it
   (`jobDirTooWide`), a linked worktree whose top is that folder, still on the job's branch (409
   `changed`, `not_linked`, 404 `not_found`); dirty as the worktree routes count it (409 `dirty`; on
   Windows a CRLF checkout made by git with Git for Windows' `core.autocrlf` is not dirty, see
@@ -1244,9 +1262,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   user on the socket (an agent in another pane told to by a prompt injection too) can name the
   orchestrator's pane: `finish_not_mine` keeps one orchestrator from finishing another's job by
   mistake, it is no access control, as for `stop` and `send`; what a finish removes is bounded by
-  the checks above (only a clean worktree whose work is pushed or merged, made by the job). Accepted
+  the checks above (only a clean worktree whose work is pushed or merged; "made by the job" is what the CLI said
+  when the start recorded it, a claim like `by`, so it keeps a finish from removing a worktree the
+  job only opened again by mistake, not from a process of the user). Accepted
   gaps: ignored files go with the worktree (`.env*` refused); the push ref is local and may be stale
   (it refuses rather than removes); a tab opened through `/api/mux/tabs` between the last check and
-  the close (milliseconds, outside the slot) is closed with the workspace. A server's worst case is
+  the close (milliseconds, outside the slot) is closed with the workspace; a file a process outside the
+  mux writes into the worktree between the last dirty check and `git worktree remove --force` (milliseconds;
+  the force keeps git's own status from running the repository's filters) goes with it. A server's worst case is
   about 100 s (20 s CI, 5 s pane lock, 5 s slot, 60 s remove, 5 s close); the CLI waits 120 s and
   never sends again.

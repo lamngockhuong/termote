@@ -198,7 +198,7 @@ export default {
   'jobs.grant.problem.chars':
     'Chỉ dùng các từ thường, cách nhau đúng một dấu cách: không có dấu nháy, không có ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # và không có tab',
   'jobs.grant.problem.interpreter':
-    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, hay lệnh cài một gói như pnpm add x…): không thể ủy quyền cho nó',
+    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, go run, hay lệnh cài một gói như pnpm add x hoặc pip install x…): không thể ủy quyền cho nó',
   'jobs.grant.oneWord':
     'Một từ bao gồm mọi lệnh của {word}. Tiền tố dài hơn thì an toàn hơn',
   'jobs.grant.editHint':
@@ -208,7 +208,7 @@ export default {
   'jobs.grant.editNeedsWorktree':
     'Việc này không có worktree, mà ủy quyền sửa file thì cần có',
   'jobs.grant.editDenied':
-    'Không bao giờ bao gồm: cấu hình của agent (.claude/, .codex/, .opencode/, .agents/, .mcp.json, opencode.json, CLAUDE.md, AGENTS.md), .git, .cargo/, package.json, các lockfile, Makefile, các file .env, git hook (.lefthook/, lefthook.yml, lefthook-local.yml, .husky/, .githooks/), cấu hình trình soạn thảo (.vscode/, .idea/), .github/workflows/, .github/actions/ và node_modules/',
+    'Không bao giờ bao gồm: cấu hình của agent (.claude/, .codex/, .opencode/, .agents/, .mcp.json, opencode.json, CLAUDE.md, AGENTS.md), .git, .cargo/, package.json, các lockfile, Makefile, justfile, pipeline CI, các file .env, git hook (.lefthook/, lefthook.yml, lefthook-local.yml, .husky/, .githooks/, thư mục core.hooksPath trỏ tới), cấu hình trình soạn thảo (.vscode/, .idea/), .github/workflows/, .github/actions/ và node_modules/',
   'jobs.grant.duration': 'Thời hạn',
   'jobs.grant.untilDone': 'Tới khi việc kết thúc (tối đa 24 giờ)',
   'jobs.grant.forMinutes': '{n} phút',
