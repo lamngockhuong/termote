@@ -47,13 +47,16 @@ const (
 	// jobsDoneKeep: a finished job not changed in this long is dropped at
 	// the next write.
 	jobsDoneKeep = 30 * 24 * time.Hour
-	// maxJobsRead bounds the file as read.
-	maxJobsRead = 32 << 20
 	// jobBody fits a job whose prompt and note JSON escape to six bytes each
 	// at worst would not: 32 KB is the route's limit, the fields' own are
 	// checked after.
 	jobBody = 32 << 10
 )
+
+// maxJobsRead bounds the file as read, and so as written: a write that
+// would make it larger is refused (errJobsFull), so the file is never one
+// every later write fails to read. A variable so tests can shorten it.
+var maxJobsRead int64 = 32 << 20
 
 // jobsLockWait bounds the wait for another process's write; a variable so
 // tests can shorten it.
@@ -77,6 +80,7 @@ var (
 	errTooManyJobs     = &codedError{"too_many_jobs", fmt.Sprintf("up to %d jobs", maxJobs), http.StatusConflict}
 	errJobsTooLarge    = &codedError{"too_large", "request body too large", http.StatusRequestEntityTooLarge}
 	errJobUnfinished   = &codedError{"job_unfinished", "only a done, failed or abandoned job can be removed here", http.StatusConflict}
+	errJobsFull        = &codedError{"jobs_full", "the jobs file is full: remove finished jobs first", http.StatusConflict}
 )
 
 func invalidJob(msg string) *codedError {
@@ -358,6 +362,10 @@ func (s *jobStore) change(op func([]job) ([]job, error)) error {
 	data, err := json.Marshal(jobFile{V: jobsFormat, Jobs: next})
 	if err != nil {
 		return err
+	}
+	if int64(len(data)) > maxJobsRead {
+		log.Printf("jobs: a write of %d bytes refused, over %d", len(data), maxJobsRead)
+		return errJobsFull
 	}
 	if err := writeStateFile("jobs", s.dir, "jobs", s.path(), data, false); err != nil {
 		return fmt.Errorf("write %s: %w", jobsFile, err)

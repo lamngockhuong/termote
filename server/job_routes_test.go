@@ -298,6 +298,12 @@ func TestJobUnreadFromTranscript(t *testing.T) {
 	if code, _ := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "read", "cursor": "forged.x"}); code != http.StatusBadRequest {
 		t.Errorf("unsigned cursor = %d", code)
 	}
+	// The read mark is a time, never text of any length.
+	for _, ts := range []string{"later", "2026-11-23T09:05:00.000Z" + strings.Repeat("<", 64)} {
+		if code, _ := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "read", "lastTs": ts, "cursor": cursor}); code != http.StatusBadRequest {
+			t.Errorf("lastTs %.30q = %d", ts, code)
+		}
+	}
 	// A new conversation in the same agent (/clear) is a turn not read.
 	jt.f.mu.Lock()
 	jt.f.session.ID = "22222222-2222-4333-8444-555555555555"

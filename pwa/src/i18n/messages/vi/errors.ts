@@ -105,6 +105,7 @@ export default {
   'errors.job_no_agent': 'Không có agent nào chạy trong pane đó',
   'errors.job_not_found': 'Việc này không còn tồn tại',
   'errors.job_unfinished': 'Chỉ xóa được việc đã xong, thất bại hoặc bị bỏ',
+  'errors.jobs_full': 'Kế hoạch đã đầy. Hãy xóa bớt các việc đã xong trước',
   'errors.jobs_unavailable': 'Máy chủ này không có kế hoạch việc',
   'errors.last_pane': 'Muốn đóng pane cuối cùng của tab thì hãy đóng tab',
   'errors.layout_busy': 'herdr-app vừa thay đổi bố cục. Hãy thử lại',

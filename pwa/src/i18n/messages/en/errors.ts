@@ -111,6 +111,7 @@ export default {
   'errors.job_not_found': 'This job no longer exists',
   'errors.job_unfinished':
     'Only a done, failed or abandoned job can be removed',
+  'errors.jobs_full': 'The plan is full. Remove finished jobs first',
   'errors.jobs_unavailable': 'The plan is not available on this server',
   'errors.last_pane': "A tab's last pane is closed by closing the tab",
   'errors.layout_busy': 'herdr-app changed the layout meanwhile. Try again',

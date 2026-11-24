@@ -208,3 +208,41 @@ func TestJobTextChecks(t *testing.T) {
 		t.Error("tsAfter")
 	}
 }
+
+// A write that would make the file larger than a read accepts is refused,
+// and the file stays readable: the jobs can still be changed and removed.
+func TestJobStoreWriteBounded(t *testing.T) {
+	orig := maxJobsRead
+	maxJobsRead = 64 << 10
+	t.Cleanup(func() { maxJobsRead = orig })
+	s, dir := newTestJobStore(t)
+	note := strings.Repeat("<", maxJobNote/6)
+	var made []job
+	var err error
+	for range maxJobs {
+		var j job
+		if j, err = s.create(job{Title: "a", State: "todo", Note: note}); err != nil {
+			break
+		}
+		made = append(made, j)
+	}
+	if !errors.Is(err, errJobsFull) || len(made) == 0 {
+		t.Fatalf("after %d jobs: %v", len(made), err)
+	}
+	fi, err := os.Stat(filepath.Join(dir, jobsFile))
+	if err != nil || fi.Size() > maxJobsRead {
+		t.Fatalf("file %v %v", fi, err)
+	}
+	if _, err := newJobStore(dir); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if _, err := s.update(made[0].ID, "", func(j *job) error { j.Note += note; return nil }); !errors.Is(err, errJobsFull) {
+		t.Errorf("a larger job: %v", err)
+	}
+	if err := s.remove(made[0].ID, "", false); err != nil {
+		t.Errorf("remove: %v", err)
+	}
+	if _, err := s.create(job{Title: "b", State: "todo"}); err != nil {
+		t.Errorf("create once there is room: %v", err)
+	}
+}

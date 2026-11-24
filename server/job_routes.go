@@ -322,6 +322,11 @@ func (a *agentAPI) handleJobEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		conv = c.Session
+		// Kept on the job: a time, never text of any length.
+		if _, err := time.Parse(time.RFC3339Nano, in.LastTS); in.LastTS != "" && (err != nil || len(in.LastTS) > 64) {
+			writeJobError(w, invalidJob("lastTs is not a time"))
+			return
+		}
 	}
 	j, err := a.jobs.update(id, "", func(j *job) error {
 		switch in.Kind {

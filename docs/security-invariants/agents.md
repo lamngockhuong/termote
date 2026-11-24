@@ -788,7 +788,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
   hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
   `codedError` codes (`job_not_found`, `job_conflict` with the job as it is, `too_many_jobs`,
-  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500. `GET` is same-site
+  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500; the file is read up to
+  32 MB (`maxJobsRead`) and a write that would make it larger is refused with 409 `jobs_full`, so the
+  file stays one every later write can read and a job can still be removed. `GET` is same-site
   (`crossSiteRejection`) for every role; a view-only client gets `id, title, state, branch, live,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
@@ -807,7 +809,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`TestJobDeleteFinishedOnlyOnSocket`). `termote agents job remove` and `jobs prune` refuse an
   unfinished job before sending anything and send the `updated` they read; `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
-  with a cursor that verifies (`decodeCursor`). `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
+  with a cursor that verifies (`decodeCursor`) and a `lastTs` that is empty or an RFC 3339 time of 64
+  bytes at most. `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
   10^9, 10 attached at most, one change). A browser's job is always `createdBy: "pwa"`; a
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
