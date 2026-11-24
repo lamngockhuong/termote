@@ -91,6 +91,7 @@ termote agents jobs [--mine] [--all] [--json] # sổ việc: pane, trạng thái
 termote agents job show <id>                 # prompt, ghi chú, ủy quyền và lịch sử của việc
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>               # xóa một việc đã xong, thất bại hoặc bị bỏ khỏi sổ việc
+termote agents job finish <id> --close --remove-worktree   # khi bạn đồng ý: đóng tab, xóa worktree của việc
 termote agents jobs prune --older-than 7d    # xóa mọi việc đã kết thúc không đổi trong 7 ngày (--dry-run chỉ liệt kê)
 termote agents wait --job <id>...            # tới khi agent của một việc cần orchestrator
 termote agents wait --mine                   # như trên, với mọi việc chưa xong do pane của nó tạo
@@ -270,6 +271,33 @@ worktree vẫn là việc của bạn.
   chưa đăng nhập, phần chi tiết của việc sẽ báo. Ở [chế độ container](/vi/installation/docker/),
   server không theo dõi pull request.
 </Aside>
+
+## Dọn một việc đã xong
+
+Khi bạn đã xem một việc đang chờ xem lại, orchestrator hỏi bạn có dọn nó không, kèm tên tab, thư mục
+worktree và nhánh của việc. Bạn đồng ý thì nó chạy:
+
+```bash
+termote agents job finish <id> --close --remove-worktree   # việc không có worktree thì chỉ --close
+```
+
+Lệnh đóng tab của việc và xóa worktree bằng đúng các lệnh mà PWA dùng để đóng tab và xóa worktree,
+rồi chuyển việc từ cần xem lại sang đã xong. Termote kiểm tra hết trước, chỉ cần một điều không đạt
+là không đóng gì:
+
+- việc được giao từ chính pane của orchestrator, và đang chờ xem lại hoặc đã kết thúc;
+- agent của việc đang nghỉ (không làm, không chờ hộp thoại, không còn gì chạy nền) và lượt cuối của
+  nó đã được đọc; agent đã thoát thì còn lại shell, shell đó cũng được đóng;
+- trong tab không còn gì khác đang chạy, và không có tab hay workspace nào khác làm việc trong worktree;
+- lần mở agent của việc đã tạo worktree đó (worktree bạn có từ trước thì để bạn tự quyết);
+- worktree không có thay đổi chưa commit hay file chưa theo dõi, các commit đã nằm trên nhánh đã push
+  hoặc là head của một pull request đã merge, và không có file `.env` nào bị git bỏ qua.
+
+Các file git bỏ qua trong worktree (cơ sở dữ liệu cục bộ, `node_modules`, kết quả build) bị xóa theo.
+Nhánh chỉ bị xóa khi một pull request đã merge của việc có head trùng với head của worktree; nếu
+không, nhánh được giữ và lệnh nói rõ lý do. Nếu tab đã đóng mà xóa worktree không thành, lệnh báo
+điều đó; chạy lại đúng lệnh ấy sẽ xóa nốt. Trên psmux và herdr-core, termote không biết lệnh chạy
+trong pane nào nên từ chối: hãy đóng tab và xóa worktree trong PWA.
 
 ## Dừng
 

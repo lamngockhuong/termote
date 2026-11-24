@@ -171,6 +171,7 @@ termote agents wait --job <id>...              # 0: a turn not read yet, 3: a di
 termote agents wait --mine                     # the same over every unfinished job made from your pane (needs self)
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>                 # a finished job only; jobs prune [--older-than 7d] [--dry-run]: every finished one
+termote agents job finish <id> --close --remove-worktree   # after the user's yes: close its tab, remove the worktree it made
 termote agents answer <pane> --delegated       # Yes, this once, under the user's grant; 9: no grant covers it
 termote agents job ci <id> [--refresh]          # the job's pull requests and their checks, as the server's gh read them
 termote agents job ci <id> --send               # after the user says so: the failed checks to its agent; 10: none failed, 11: agent gone
@@ -200,7 +201,12 @@ is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's 
 its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
 agent is done; leave `done` to the user. The ledger is the user's history: remove finished jobs
 (`job remove <id>`, `jobs prune`) only when the user asks; an unfinished one is refused, so
-`job set <id> --state abandoned` it first. A turn that ends with a question for the user written in
+`job set <id> --state abandoned` it first. Once the user has looked at a job in `review` and says
+yes, `job finish <id> --close --remove-worktree` (or `--close` alone for a job without a worktree)
+closes its tab and removes its worktree, only when the agent is at rest, its last turn was read and
+the worktree is clean with its commits pushed or merged; files git ignores there go with it, and the
+branch goes only once a merged pull request has its head. It sets `review` to `done`; never clean
+up with `herdr`, `tmux` or `git` instead. A turn that ends with a question for the user written in
 its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks
 it (`read --json`: `endsWithQuestion`); ask the user and `send` their answer instead.
 

@@ -92,6 +92,7 @@ termote agents jobs [--mine] [--all] [--json] # the job ledger: each job's pane,
 termote agents job show <id>                 # its prompt, note, grants and history
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>               # remove a done, failed or abandoned job from the ledger
+termote agents job finish <id> --close --remove-worktree   # after your yes: close its tab, remove its worktree
 termote agents jobs prune --older-than 7d    # every finished job not changed for 7 days (--dry-run lists them)
 termote agents wait --job <id>...            # until one of the jobs' agents needs the orchestrator
 termote agents wait --mine                   # the same, over every unfinished job made from its pane
@@ -270,6 +271,33 @@ done**; removing the worktree stays yours.
   missing or signed out, the job's details say so. In [container mode](/installation/docker/)
   pull requests are not followed.
 </Aside>
+
+## Clean up a finished job
+
+Once you have looked at a job in review, the orchestrator asks whether to clean it up, naming its
+tab, its worktree's folder and its branch. With your yes it runs:
+
+```bash
+termote agents job finish <id> --close --remove-worktree   # --close alone for a job without a worktree
+```
+
+It closes the job's tab and removes the worktree, through the same calls as the PWA's close and
+remove, and moves the job from review to done. Termote checks everything first and closes nothing
+when one check fails:
+
+- the job was started from the orchestrator's own pane, and is in review or finished;
+- its agent is at rest (not working, no dialog, nothing in the background) and its last turn was
+  read; an agent that exited leaves a shell, which closes too;
+- nothing else runs in the tab, and no other tab or workspace works in the worktree;
+- the job's start made the worktree (one you had before is left to you);
+- the worktree has no uncommitted or untracked change, its commits are on the pushed branch or are
+  the head of a merged pull request, and it holds no `.env` file git ignores.
+
+Files git ignores in the worktree (local databases, `node_modules`, build output) are removed with
+it. The branch is deleted only when a merged pull request of the job has the worktree's head;
+otherwise it stays and the command says why. A remove that fails after the tab closed says so; the
+same command run again removes the rest. On psmux and herdr-core termote cannot tell which pane the
+command runs in, so it refuses: close the tab and remove the worktree in the PWA.
 
 ## Stop
 
