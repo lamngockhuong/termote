@@ -7,7 +7,7 @@ export default {
   'jobs.readFailed': 'Không đọc được kế hoạch. Đang hiện bản đọc gần nhất',
   'jobs.none': 'Chưa có việc nào',
   'jobs.noneHint':
-    'Hãy thêm một việc, hoặc để một agent điều phối lên kế hoạch',
+    'Hãy thêm một việc, hoặc để một <link>agent điều phối</link> lên kế hoạch',
   'jobs.noneOpen': 'Mọi việc đều đã kết thúc',
   'jobs.outdated.title': 'Termote trên máy này quá cũ để hiện kế hoạch',
   'jobs.outdated.hint':
@@ -234,4 +234,19 @@ export default {
   'jobs.asks.more_other': 'Xem thêm {count} câu khác',
   'jobs.asks.less': 'Chỉ hiện câu đầu',
   'jobs.asks.scrollMore': 'Cuộn xuống các câu bên dưới',
+  'jobs.setup.open': 'Kế hoạch được lập thế nào',
+  'jobs.setup.title': 'Để agent lập kế hoạch',
+  'jobs.setup.intro':
+    'Nút Thêm việc thêm việc ngay. Khi có skill orchestrator, một agent Claude Code hoặc Codex sẽ lên kế hoạch và giao việc cho các pane của bạn.',
+  'jobs.setup.fromTermote': 'Từ Termote',
+  'jobs.setup.asPlugin': 'Dạng plugin',
+  'jobs.setup.claude': 'Claude Code',
+  'jobs.setup.codex': 'Codex',
+  'jobs.setup.oneWay':
+    'Chỉ chọn một cách, đừng dùng cả hai: dùng cả hai thì agent thấy skill hai lần.',
+  'jobs.setup.where': 'Chạy các lệnh trên máy đang chạy Termote.',
+  'jobs.setup.native':
+    'Orchestrator cần Termote chạy native (termote start). Trong container, termote agents báo là không hỗ trợ.',
+  'jobs.setup.docs': 'Hướng dẫn orchestrator',
+  'jobs.setup.copy': 'Sao chép {command}',
 } satisfies Translation<typeof en>

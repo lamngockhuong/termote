@@ -7,7 +7,9 @@ export default {
   'jobs.readFailed': 'Could not read the plan. Showing the last one read',
   // The empty plan: a title, then a line under it
   'jobs.none': 'No job yet',
-  'jobs.noneHint': 'Add one, or let an orchestrator agent plan the work',
+  // <link> opens the sheet on setting up the orchestrator
+  'jobs.noneHint':
+    'Add one, or let an <link>orchestrator agent</link> plan the work',
   'jobs.noneOpen': 'Every job is finished',
   // A machine open through Machines runs a Termote from before the plan
   'jobs.outdated.title': 'Termote on this machine is too old to show the plan',
@@ -262,4 +264,22 @@ export default {
   'jobs.asks.more_other': 'Show {count} more questions',
   'jobs.asks.less': 'Show only the first',
   'jobs.asks.scrollMore': 'Scroll to the questions below',
+  // The ? button of the Plan and the sheet it opens: how an agent fills the
+  // Plan once the termote-orchestrator skill is installed
+  'jobs.setup.open': 'How the Plan gets filled',
+  'jobs.setup.title': 'Let an agent fill the Plan',
+  'jobs.setup.intro':
+    'New job adds a job now. With the orchestrator skill, a Claude Code or Codex agent plans the work and hands the jobs to your panes.',
+  'jobs.setup.fromTermote': 'From Termote',
+  'jobs.setup.asPlugin': 'As a plugin',
+  'jobs.setup.claude': 'Claude Code',
+  'jobs.setup.codex': 'Codex',
+  'jobs.setup.oneWay':
+    'Pick one way, not both: with both, the agent sees the skill twice.',
+  'jobs.setup.where': 'Run the commands on the machine that runs Termote.',
+  'jobs.setup.native':
+    'The orchestrator needs Termote running natively (termote start). In a container, termote agents is not supported.',
+  'jobs.setup.docs': 'Orchestrator guide',
+  // {command}: the line the button copies
+  'jobs.setup.copy': 'Copy {command}',
 }
