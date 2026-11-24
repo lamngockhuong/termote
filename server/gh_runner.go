@@ -33,6 +33,10 @@ import (
 
 const (
 	ghTimeout = 20 * time.Second
+	// ghWaitDelay: once gh exits or its timeout passes, its output pipes
+	// are closed after this long, so a child of gh still holding them
+	// never holds the call (and a slot of ghParallel) past it.
+	ghWaitDelay = time.Second
 	// ghOutputMax bounds what gh prints.
 	ghOutputMax = 1 << 20
 	// ghParallel calls run at once.
@@ -224,6 +228,7 @@ func (g *ghRunner) run(ctx context.Context, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(cctx, bin, slices.Concat(g.prefix, args)...)
 		cmd.Dir = g.dir
 		cmd.Env = ghEnv()
+		cmd.WaitDelay = ghWaitDelay
 		var out limitedBuffer
 		out.max = ghOutputMax
 		var stderr limitedBuffer

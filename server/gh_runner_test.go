@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -27,6 +29,9 @@ type fakeGhReply struct {
 	Err     string `json:"err"`
 	Code    int    `json:"code"`
 	SleepMS int    `json:"sleepMs"`
+	// HoldMS: a child of the fake keeps its stdout open this long after
+	// the fake exits.
+	HoldMS int `json:"holdMs"`
 }
 
 type fakeGhCall struct {
@@ -55,9 +60,53 @@ func TestGhFake(t *testing.T) {
 		r = fakeGhReply{Err: "unknown call", Code: 1}
 	}
 	time.Sleep(time.Duration(r.SleepMS) * time.Millisecond)
+	if r.HoldMS > 0 {
+		hold := exec.Command(os.Args[0], "-test.run=^TestGhHolder$")
+		hold.Env = append(os.Environ(), fmt.Sprintf("GH_HOLD_MS=%d", r.HoldMS))
+		hold.Stdout, hold.Stderr = os.Stdout, os.Stderr
+		if hold.Start() == nil {
+			os.WriteFile(filepath.Join(dir, "holder.pid"), []byte(strconv.Itoa(hold.Process.Pid)), 0o600)
+		}
+	}
 	os.Stdout.WriteString(r.Out)
 	os.Stderr.WriteString(r.Err)
 	os.Exit(r.Code)
+}
+
+// TestGhHolder is the fake gh's child that holds its stdout.
+func TestGhHolder(t *testing.T) {
+	ms, err := strconv.Atoi(os.Getenv("GH_HOLD_MS"))
+	if err != nil {
+		t.Skip("the fake gh's child, run by TestGhRunnerChildHoldsPipe")
+	}
+	time.Sleep(time.Duration(ms) * time.Millisecond)
+}
+
+// A child of gh that keeps its output open does not hold the call: the
+// pipes close ghWaitDelay after gh exits.
+func TestGhRunnerChildHoldsPipe(t *testing.T) {
+	f, g := newFakeGh(t)
+	t.Cleanup(func() {
+		if b, err := os.ReadFile(filepath.Join(f.dir, "holder.pid")); err == nil {
+			if pid, err := strconv.Atoi(string(b)); err == nil {
+				if p, err := os.FindProcess(pid); err == nil {
+					p.Kill()
+				}
+			}
+		}
+	})
+	f.reply("pr view 1 --repo=github.com/o/r --json="+ghPRFields, fakeGhReply{Out: `{"number":1,"state":"OPEN"}`, HoldMS: 30000})
+	start := time.Now()
+	_, err := g.viewPR(context.Background(), testRepo, 1)
+	if took := time.Since(start); took > ghWaitDelay+5*time.Second {
+		t.Errorf("the call took %s", took)
+	}
+	if _, statErr := os.Stat(filepath.Join(f.dir, "holder.pid")); statErr != nil {
+		t.Fatalf("no child was started: %v", statErr)
+	}
+	if !errors.Is(err, errGhFailed) {
+		t.Errorf("err = %v", err)
+	}
 }
 
 func newFakeGh(t *testing.T) (*fakeGh, *ghRunner) {

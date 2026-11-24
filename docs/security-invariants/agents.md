@@ -936,7 +936,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the OS user the server runs as, and keeps no token (the service passes `GH_CONFIG_DIR`, never
   `GH_TOKEN`). `ghRunner` is the only place `gh` runs: found on the service's `PATH` or in
   package managers' dirs (a regular executable file, not world-writable on Unix), argv only, no
-  shell, `cmd.Dir` the jobs' state dir and never a repository, a 20 s timeout, 1 MB of output,
+  shell, `cmd.Dir` the jobs' state dir and never a repository, a 20 s timeout, its output pipes
+  closed 1 s after gh exits or the timeout passes (`cmd.WaitDelay`, so a child of gh holding them
+  never holds a call or a slot), 1 MB of output,
   two calls at once, 1200 an hour for the whole server and none for 15 minutes after GitHub's
   rate limit, an environment without `GIT_*`, `TERMOTE_*`, `GH_HOST`, `GH_REPO`,
   `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, with prompts, pager, colour and the update
