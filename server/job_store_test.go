@@ -74,13 +74,13 @@ func TestJobStoreUpdateConflict(t *testing.T) {
 	if _, err := s.update(j.ID, stamp, func(*job) error { return nil }); !errors.As(err, &conflict) || conflict.job.Note != "n" {
 		t.Errorf("stale: %v", err)
 	}
-	if err := s.remove(j.ID, stamp, false); !errors.As(err, &conflict) {
+	if _, err := s.remove(j.ID, stamp, false); !errors.As(err, &conflict) {
 		t.Errorf("stale remove: %v", err)
 	}
 	if _, err := s.update("nope", "", func(*job) error { return nil }); !errors.Is(err, errJobNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
-	if err := s.remove("nope", "", false); !errors.Is(err, errJobNotFound) {
+	if _, err := s.remove("nope", "", false); !errors.Is(err, errJobNotFound) {
 		t.Errorf("unknown remove: %v", err)
 	}
 	// A failed op changes nothing.
@@ -100,7 +100,7 @@ func TestJobStoreUpdateConflict(t *testing.T) {
 func TestJobStoreRemoveFinishedOnly(t *testing.T) {
 	s, _ := newTestJobStore(t)
 	active, _ := s.create(job{Title: "a", State: "active"})
-	if err := s.remove(active.ID, "", true); !errors.Is(err, errJobUnfinished) {
+	if _, err := s.remove(active.ID, "", true); !errors.Is(err, errJobUnfinished) {
 		t.Errorf("active: %v", err)
 	}
 	if _, ok := s.job(active.ID); !ok {
@@ -108,11 +108,11 @@ func TestJobStoreRemoveFinishedOnly(t *testing.T) {
 	}
 	for _, state := range []string{"done", "failed", "abandoned"} {
 		j, _ := s.create(job{Title: state, State: state})
-		if err := s.remove(j.ID, j.Updated.Format(time.RFC3339Nano), true); err != nil {
+		if _, err := s.remove(j.ID, j.Updated.Format(time.RFC3339Nano), true); err != nil {
 			t.Errorf("%s: %v", state, err)
 		}
 	}
-	if err := s.remove(active.ID, "", false); err != nil {
+	if _, err := s.remove(active.ID, "", false); err != nil {
 		t.Errorf("active without the limit: %v", err)
 	}
 	if _, ok := s.job(active.ID); ok {
@@ -239,7 +239,7 @@ func TestJobStoreWriteBounded(t *testing.T) {
 	if _, err := s.update(made[0].ID, "", func(j *job) error { j.Note += note; return nil }); !errors.Is(err, errJobsFull) {
 		t.Errorf("a larger job: %v", err)
 	}
-	if err := s.remove(made[0].ID, "", false); err != nil {
+	if _, err := s.remove(made[0].ID, "", false); err != nil {
 		t.Errorf("remove: %v", err)
 	}
 	if _, err := s.create(job{Title: "b", State: "todo"}); err != nil {

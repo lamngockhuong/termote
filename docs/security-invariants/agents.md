@@ -844,7 +844,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   moved to a pane elsewhere); it is a bash prefix the
   command rules accept or "edit", lasts 1 minute to 24 hours, and ends when revoked, expired, the job
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
-  each. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
+  each. A grant still unexpired that a change ends without a revoke of its own is logged `audit:
+  grant_revoked` with a `reason` (`agent_changed`, `job_finished`, `job_removed` for an unfinished job
+  a browser removes, `replaced` for a `ci` grant a newer one ends) and `by`, once the change is
+  written; expiry and a pane that no longer runs the agent change nothing stored (checked at each use,
+  `grantInForce`, `jobAgent.matches`) and leave no line. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
   under the pane's lock it reads the session again (`sessionNow`) and the screen, requires the
   `promptId` to be the dialog on screen now (`promptIs`), then refuses with 409
   `delegation_out_of_scope` and a `reason`, sending no key, unless all hold: the agent is Claude
@@ -915,7 +919,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
   (the dialog's signature checked again before the key). The use is kept on the grant and as a
   `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
-  the grant, job, pane, path, the command's SHA-256, never the command, and `confirmed`: once the key
+  the grant, job, pane, path, the command's SHA-256, never the command, `confirmed`, `by` (`socket`)
+  and `peer_pid`, the pid of the process at the socket's other end as the kernel gave it when the
+  connection was accepted (`connPeerPID`: `SO_PEERCRED`, `LOCAL_PEERPID`, the named pipe's client;
+  0 when unknown, and the process may have exited since): once the key
   that answers is sent the use is recorded even when the dialog is not seen to close
   (`answer_not_confirmed`, `keySent`), with `confirmed="false"`, since the answer may still take
   effect; a refusal before the key records nothing. Over the local socket, with Basic auth (the
@@ -928,7 +935,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
   or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
   and the key still lets that one answer through. Every answer to a permission dialog over the socket, Basic auth or the bridge is logged as
-  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by)
+  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by,
+  peer_pid)
   once its key is sent, also when the dialog then stays open (`confirmed="false"`,
   `TestDelegatedAnswerNotConfirmed`, `TestCLIAnswerAuditedOnceSent`).
   A grant of kind `ci` (Job pull requests) answers no dialog: `grantsFor` takes a grant of the

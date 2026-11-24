@@ -462,10 +462,11 @@ func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) 
 // setOnReview has f told of every job that moves to review.
 func (s *jobStore) setOnReview(f func(id string)) { s.onReview.Store(&f) }
 
-// remove deletes job id; finishedOnly refuses one that is not finished,
-// checked under the lock that deletes it.
-func (s *jobStore) remove(id, updated string, finishedOnly bool) error {
-	return s.change(func(list []job) ([]job, error) {
+// remove deletes job id and returns it as it was; finishedOnly refuses one
+// that is not finished, checked under the lock that deletes it.
+func (s *jobStore) remove(id, updated string, finishedOnly bool) (job, error) {
+	var gone job
+	err := s.change(func(list []job) ([]job, error) {
 		i := slices.IndexFunc(list, func(j job) bool { return j.ID == id })
 		if i < 0 {
 			return nil, errJobNotFound
@@ -476,8 +477,10 @@ func (s *jobStore) remove(id, updated string, finishedOnly bool) error {
 		if finishedOnly && !jobFinished(list[i].State) {
 			return nil, errJobUnfinished
 		}
+		gone = list[i].clone()
 		return slices.Delete(list, i, i+1), nil
 	})
+	return gone, err
 }
 
 // renameGroup follows a Zellij group renamed from from to to, as the

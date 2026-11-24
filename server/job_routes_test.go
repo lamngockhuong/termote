@@ -725,3 +725,58 @@ func TestJobLiveIdleBackground(t *testing.T) {
 		t.Errorf("mode row: %v", l)
 	}
 }
+
+// A grant a change ends without a revoke of its own (another agent, the
+// job finished or removed) is logged as revoked, with the reason; one that
+// had expired is not.
+func TestJobImplicitRevocationsAudited(t *testing.T) {
+	jt := newJobsTest(t)
+	logs := captureLog(t)
+	later := time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)
+	earlier := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	addGrant := func(id, gid, expires string) {
+		t.Helper()
+		if _, err := jt.agent.jobs.update(id, "", func(j *job) error {
+			j.Grants = append(j.Grants, grant{ID: gid, Kind: "bash", Expires: expires})
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
+	addGrant(id, "g0", earlier)
+	addGrant(id, "g1", later)
+	// The job's agent is another one than the pane's now.
+	jt.agent.jobs.update(id, "", func(j *job) error { j.Agent.PID = 7; return nil })
+	if code, out := jt.do("socket", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"pane": "w1:pa"}); code != http.StatusOK {
+		t.Fatalf("give = %d %v", code, out)
+	}
+	addGrant(id, "g2", later)
+	if code, out := jt.do("socket", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"state": "done"}); code != http.StatusOK {
+		t.Fatalf("done = %d %v", code, out)
+	}
+	other := jt.create(map[string]any{"title": "Lexer", "state": "active"})["id"].(string)
+	addGrant(other, "g3", later)
+	var updated string
+	for _, j := range jt.list() {
+		if j["id"] == other {
+			updated = j["updated"].(string)
+		}
+	}
+	if code, out := jt.do("full", http.MethodDelete, "/api/mux/jobs/"+other+"?updated="+url.QueryEscape(updated), nil); code != http.StatusOK {
+		t.Fatalf("remove = %d %v", code, out)
+	}
+	text := logs.String()
+	for _, want := range []string{
+		`audit: grant_revoked grant="g1" job="` + id + `" reason="agent_changed" by=`,
+		`audit: grant_revoked grant="g2" job="` + id + `" reason="job_finished" by=`,
+		`audit: grant_revoked grant="g3" job="` + other + `" reason="job_removed" by=`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no %q in\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `grant="g0"`) {
+		t.Errorf("an expired grant logged as revoked:\n%s", text)
+	}
+}

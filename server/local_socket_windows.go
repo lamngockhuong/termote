@@ -109,3 +109,17 @@ func dialSocketOS(_ string, name string) (net.Conn, error) {
 	}
 	return c, nil
 }
+
+// connPeerPID is the pid of the client of c (a connection on the local
+// named pipe), or 0.
+func connPeerPID(c net.Conn) int {
+	f, ok := c.(interface{ Fd() uintptr })
+	if !ok {
+		return 0
+	}
+	var pid uint32
+	if windows.GetNamedPipeClientProcessId(windows.Handle(f.Fd()), &pid) != nil {
+		return 0
+	}
+	return int(pid)
+}

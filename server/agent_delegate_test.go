@@ -309,7 +309,7 @@ func TestDelegatedAnswerNotConfirmed(t *testing.T) {
 			t.Errorf("no %q in\n%s", want, text)
 		}
 	}
-	if !regexp.MustCompile(`audit: dialog_delegated grant="` + g + `" .* command_sha256="[0-9a-f]{64}" confirmed="false"`).MatchString(text) {
+	if !regexp.MustCompile(`audit: dialog_delegated grant="` + g + `" .* command_sha256="[0-9a-f]{64}" confirmed="false" by="socket" peer_pid="0"`).MatchString(text) {
 		t.Errorf("dialog_delegated without confirmed=false:\n%s", text)
 	}
 	if strings.Contains(text, `confirmed="true"`) {

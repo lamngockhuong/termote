@@ -143,6 +143,7 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, errGrantOutsideWorktree)
 		return
 	}
+	var replaced []string
 	j, err := a.jobs.update(id, "", func(j *job) error {
 		if jobFinished(j.State) || j.Agent == nil || !sameJobAgent(*j.Agent, *cur.Agent) {
 			return invalidJob("the job changed: look at it again")
@@ -154,10 +155,14 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 			}
 			g.Dir = j.Worktree.Dir
 		}
+		replaced = nil
 		if g.Kind == "ci" {
 			// One ci grant per job: a new one ends the one before.
 			for i := range j.Grants {
 				if j.Grants[i].Kind == "ci" && j.Grants[i].Revoked == "" {
+					if grantUnexpired(j.Grants[i], now) {
+						replaced = append(replaced, j.Grants[i].ID)
+					}
 					j.Grants[i].Revoked = now.UTC().Format(activityTimeFormat)
 				}
 			}
@@ -170,6 +175,9 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJobError(w, err)
 		return
+	}
+	for _, gid := range replaced {
+		auditf("grant_revoked", "grant", gid, "job", id, "reason", "replaced", "by", auditBy(auth))
 	}
 	auditf("grant_created", "grant", g.ID, "job", id, "kind", g.Kind, "prefix", g.Prefix, "expires", g.Expires, "by", auditBy(auth))
 	w.Header().Set("Content-Type", "application/json")

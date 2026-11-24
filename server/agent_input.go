@@ -1220,17 +1220,19 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var f *agentFailure
 	if err == nil || (errors.As(err, &f) && f.keySent) {
 		confirmed := err == nil
+		// Who answered: the socket names the process at its other end.
+		via := "socket"
+		if !socket {
+			via = auditBy(auth)
+		}
+		peer := localPeerPID(r.Context())
 		if body.Delegated {
-			a.recordDelegation(paneID, d, confirmed)
+			a.recordDelegation(paneID, d, confirmed, via, peer)
 		}
 		if cli && rec != nil && rec.prompt.Kind == "permission" {
-			via := "socket"
-			if !socket {
-				via = auditBy(auth)
-			}
 			auditf("dialog_answer", "pane", paneID, "agent", rec.session.Agent, "dialog", rec.prompt.Title,
 				"option", optionLabel(rec.prompt, choice), "delegated", body.Delegated, "grant", d.grantID,
-				"confirmed", confirmed, "by", via)
+				"confirmed", confirmed, "by", via, "peer_pid", peer)
 		}
 	}
 	if err != nil {
