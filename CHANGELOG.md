@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.32.0](https://github.com/lamngockhuong/termote/compare/v2.31.0...v2.32.0) (2026-11-24)
+
+
+### Features
+
+* **cli:** agents wait --mine waits on every unfinished job made from this pane ([#941](https://github.com/lamngockhuong/termote/issues/941)) ([fdb0104](https://github.com/lamngockhuong/termote/commit/fdb01044a3d37d38b018b707bc8ac4aa081bc17c))
+* **cli:** wait on every unfinished job made from this pane with agents wait --mine ([fdb0104](https://github.com/lamngockhuong/termote/commit/fdb01044a3d37d38b018b707bc8ac4aa081bc17c))
+* job ledger for the orchestrator, Plan section, dialog grants ([#925](https://github.com/lamngockhuong/termote/issues/925)) ([5a16e69](https://github.com/lamngockhuong/termote/commit/5a16e69203692a34906c2d7e90786c503608fa5d))
+* orchestrator that coordinates the agents in other panes ([#912](https://github.com/lamngockhuong/termote/issues/912)) ([3a3c73d](https://github.com/lamngockhuong/termote/commit/3a3c73d31453b724c29c2f6ccee370d178a0254b))
+* orchestrator waits on several agents, stops one, reviews its diff, starts it in a worktree ([#916](https://github.com/lamngockhuong/termote/issues/916)) ([c792d66](https://github.com/lamngockhuong/termote/commit/c792d66725b31b35de8b06bd21dc1bb586ab274f))
+* pull requests and CI of the orchestrator's jobs, failed checks sent to the agent ([#944](https://github.com/lamngockhuong/termote/issues/944)) ([df6d56e](https://github.com/lamngockhuong/termote/commit/df6d56eee0d28d71536b6340cf66dcb9a3e44ae3))
+* **pwa:** agent overview in Agents and Plan tabs, card figures, job details ([#932](https://github.com/lamngockhuong/termote/issues/932)) ([81aa66d](https://github.com/lamngockhuong/termote/commit/81aa66d5a1141f3c3ed64dc5e78dc4701a771510))
+* **pwa:** quote text selected in the Chat into the composer ([#923](https://github.com/lamngockhuong/termote/issues/923)) ([dbbd82a](https://github.com/lamngockhuong/termote/commit/dbbd82a4ce2d920ab796da61f85738d8bfb21594))
+* **pwa:** send one message to several agents from the overview ([#914](https://github.com/lamngockhuong/termote/issues/914)) ([3d176b3](https://github.com/lamngockhuong/termote/commit/3d176b3489b37d64d27114ee2b85c0e0ac5a0c2b))
+* read a Claude Code subagent's conversation from its row ([#926](https://github.com/lamngockhuong/termote/issues/926)) ([77cc227](https://github.com/lamngockhuong/termote/commit/77cc2275a9d6882ef4a0f086b239f1c519e04d8e))
+* remove finished jobs from the CLI; the socket removes finished jobs only ([#940](https://github.com/lamngockhuong/termote/issues/940)) ([edd0c13](https://github.com/lamngockhuong/termote/commit/edd0c1320cea730b9d447a84b61833e36966720a))
+* **server:** hand an agent its first message as it starts ([#913](https://github.com/lamngockhuong/termote/issues/913)) ([a4b7a8f](https://github.com/lamngockhuong/termote/commit/a4b7a8f174d333ddbbe06d65659997e7e2df8362))
+* **server:** start an agent from the Chat view on tmux, Zellij and hc ([#911](https://github.com/lamngockhuong/termote/issues/911)) ([37f1c12](https://github.com/lamngockhuong/termote/commit/37f1c121ba4f9d3555c6c68c8d06ca7ffbfc4202))
+
+
+### Bug Fixes
+
+* agents wait follows a moved tab, start refuses a Windows prompt first, one Stop toast ([#917](https://github.com/lamngockhuong/termote/issues/917)) ([e196ad0](https://github.com/lamngockhuong/termote/commit/e196ad040636346b332c2a08d841293815a96701))
+* job ledger follow-ups (wait --job idle, moved jobs, branch clash, usage, own pane) ([#927](https://github.com/lamngockhuong/termote/issues/927)) ([8fbcf45](https://github.com/lamngockhuong/termote/commit/8fbcf45bbd6ea8762cbc30df4cf4de3e710711c8))
+* mark a turn that ends with a question; skills status gives the skill's SHA-256 ([#933](https://github.com/lamngockhuong/termote/issues/933)) ([ff197ad](https://github.com/lamngockhuong/termote/commit/ff197adc99c236bb20e5b95ec4d1c2d3adbde869))
+* orchestrator waits per pane, stop only stops a running turn ([#922](https://github.com/lamngockhuong/termote/issues/922)) ([f4312c1](https://github.com/lamngockhuong/termote/commit/f4312c19a166b321579e28099f691cfc05920a62))
+* **pwa:** border the active tab, and no focus ring on a renamed tab ([#952](https://github.com/lamngockhuong/termote/issues/952)) ([b621801](https://github.com/lamngockhuong/termote/commit/b6218015dc18bd8c52c396d7b3e67f6bc51fb0a8))
+* **pwa:** keep a job's status line clear of the sheet header on a phone ([#936](https://github.com/lamngockhuong/termote/issues/936)) ([c4b5dc5](https://github.com/lamngockhuong/termote/commit/c4b5dc51b03eac517b16a690406978e8499da7e8))
+* **pwa:** keep the queue's card on a dialog's next tab and after the last wait ([#947](https://github.com/lamngockhuong/termote/issues/947)) ([d0b6e49](https://github.com/lamngockhuong/termote/commit/d0b6e49550e48adb3c927b45d1c3cf4bac7219ca)), closes [#935](https://github.com/lamngockhuong/termote/issues/935)
+* **pwa:** keep the wifi icon whole while a stream opens ([#908](https://github.com/lamngockhuong/termote/issues/908)) ([6353783](https://github.com/lamngockhuong/termote/commit/63537837aacc7ca426daa8c783b091f41b7b8bbb))
+* **pwa:** list the agents used last first, blocked ones by longest wait ([#929](https://github.com/lamngockhuong/termote/issues/929)) ([ce9edc1](https://github.com/lamngockhuong/termote/commit/ce9edc150aa298e9d7c32f8e28c8f8c92db9c8d3))
+* **pwa:** show the plan's empty state as a panel with an icon and a hint ([#951](https://github.com/lamngockhuong/termote/issues/951)) ([f6b3825](https://github.com/lamngockhuong/termote/commit/f6b3825a3860e71e511d6763118fcbe77feeda9e))
+* **pwa:** stop the Herdr terminal view scrolling into a stale screen; Unicode 11 widths ([#946](https://github.com/lamngockhuong/termote/issues/946)) ([3a44424](https://github.com/lamngockhuong/termote/commit/3a444244824ad6630910c1e478718c01d6f602af))
+* read the line that ends a Claude Code turn over blank rows ([#930](https://github.com/lamngockhuong/termote/issues/930)) ([25e7f1c](https://github.com/lamngockhuong/termote/commit/25e7f1c385b3af4cac2741f8444085308b49c721))
+* **server:** agents diff prints status labels without control characters ([#920](https://github.com/lamngockhuong/termote/issues/920)) ([951fce4](https://github.com/lamngockhuong/termote/commit/951fce495d1131e5fd69c20dd8d03bf21c823f18))
+* **server:** agents start --worktree names what stays on every failure ([#918](https://github.com/lamngockhuong/termote/issues/918)) ([5026d90](https://github.com/lamngockhuong/termote/commit/5026d90e36021b1f14147b6a9cb2f6d0c585448b))
+* **server:** agents wait reports the next question of a dialog as a dialog ([#921](https://github.com/lamngockhuong/termote/issues/921)) ([a4b051f](https://github.com/lamngockhuong/termote/commit/a4b051f57c4029e7b07c8fe91987badd110ff6fb))
+* **server:** close the remaining low-severity delegation, ledger and audit gaps ([#949](https://github.com/lamngockhuong/termote/issues/949)) ([afc34a7](https://github.com/lamngockhuong/termote/commit/afc34a7a85859e6f13947712216507bfaae2faa6))
+* **server:** hold delegated commands to their grant's options and log every sent answer ([#942](https://github.com/lamngockhuong/termote/issues/942)) ([acd1995](https://github.com/lamngockhuong/termote/commit/acd19950670efae3480e2cfa6a82a6ffb07aa6ef))
+* **server:** let the binary the service runs answer machine whereami ([#910](https://github.com/lamngockhuong/termote/issues/910)) ([2b1c7f4](https://github.com/lamngockhuong/termote/commit/2b1c7f4992a59a666a1e83387d6702a7784dd580))
+* **server:** no C-c into a new tab when termote agents start starts an agent ([#915](https://github.com/lamngockhuong/termote/issues/915)) ([2e395ae](https://github.com/lamngockhuong/termote/commit/2e395aec7ecf28695347b402086cde9f0db1ce7b))
+* **server:** read background work off Claude Code's mode row ([#945](https://github.com/lamngockhuong/termote/issues/945)) ([b7b0356](https://github.com/lamngockhuong/termote/commit/b7b0356a45aa298d26fcf94c642dc5730ef9e140))
+* **server:** refuse container engines and cargo commands beyond build and test in dialog grants ([#953](https://github.com/lamngockhuong/termote/issues/953)) ([22bf101](https://github.com/lamngockhuong/termote/commit/22bf101b5510dc9f2e5adf71829cd939cebe6d6d))
+* **server:** refuse edits of files git hooks run, more configs, and gawk, mawk, gmake ([#950](https://github.com/lamngockhuong/termote/issues/950)) ([b2f00d5](https://github.com/lamngockhuong/termote/commit/b2f00d57e0477e3f3ce02c81c3a635cab7d222d7))
+* **server:** tighten dialog grants and take only a branch as a branch diff's base ([#948](https://github.com/lamngockhuong/termote/issues/948)) ([b61dfad](https://github.com/lamngockhuong/termote/commit/b61dfadd37f1056e2330528641063f2c526b018e))
+* wait keeps waiting on a pane whose ended turn left background work ([#928](https://github.com/lamngockhuong/termote/issues/928)) ([83cd55c](https://github.com/lamngockhuong/termote/commit/83cd55c43560680feb6cfaa1408735b613835f64))
+
 ## [2.31.0](https://github.com/lamngockhuong/termote/compare/v2.30.0...v2.31.0) (2026-11-21)
 
 
