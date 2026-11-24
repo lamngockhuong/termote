@@ -1423,6 +1423,28 @@ describe('OverviewScreen, the tabs', () => {
     expect(cardNames().join(' ')).not.toMatch(/web/)
   })
 
+  it("leaves a hidden workspace's questions out of the Plan's count", async () => {
+    mockFetchJobs.mockResolvedValue({
+      jobs: [
+        { ...job('a', 'idle'), workspace: 'g2' },
+        { ...job('b', 'idle'), workspace: 'g1' },
+      ],
+      readOnly: false,
+      canGrant: true,
+      serverNow: '',
+    })
+    mockFetchAsks.mockResolvedValue({
+      asks: [
+        { id: 'Q1', state: 'open', created: '', job: 'a' },
+        { id: 'Q2', state: 'open', created: '', job: 'b' },
+      ],
+      readOnly: true,
+    })
+    renderScreen({ hiddenGroupIds: new Set(['g2']) })
+    await act(async () => {})
+    expect(planTab()).toHaveAccessibleName('Plan, 1 open, 1 waiting')
+  })
+
   it('counts the questions waiting on the Plan, and opens on it while they wait', async () => {
     mockFetchAsks.mockResolvedValue({
       asks: [

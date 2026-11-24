@@ -21,7 +21,7 @@ import { stuckFor } from '../utils/agent-stuck'
 import { asksOverviewPlan } from '../utils/deep-link'
 import { visibleGroups, visibleSessions } from '../utils/hidden-workspaces'
 import { jobOfPane } from '../utils/job-of-pane'
-import { groupJobs, jobWorkspace } from '../utils/jobs'
+import { groupJobs, jobWorkspace, visibleAsks } from '../utils/jobs'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
 import {
@@ -155,8 +155,12 @@ export function OverviewScreen({
   // Without a job ledger there is no Plan, and no tabs
   const jobs = useJobs()
   // The questions orchestrators asked that wait for an answer: the Plan
-  // shows them, and its tab counts them
-  const openAsks = jobs.asks.filter((a) => a.state === 'open').length
+  // shows them, and its tab counts them (not those of a hidden workspace)
+  const openAsks = visibleAsks(
+    jobs.asks.filter((a) => a.state === 'open'),
+    jobs.jobs,
+    hiddenGroupIds,
+  ).length
   // The tab shown: the Plan the address asks for, else Agents for a card
   // asked for, else the Plan while questions wait there (the badge on the
   // overview's button led here), else the one this browser looked at last

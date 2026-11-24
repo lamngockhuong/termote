@@ -6,7 +6,10 @@ import { IconButton } from './ui/button'
 // How many questions orchestrators asked wait for the user, on whatever
 // opens the agent overview (whose Plan answers them): a count on a button,
 // a dot on a menu's trigger. Each reads the open asks itself, so only a
-// screen that offers the overview polls them.
+// screen that offers the overview polls them. hiddenGroupIds: the workspaces
+// hidden from what is drawn, whose jobs' asks are not counted.
+
+const NO_IDS: ReadonlySet<string> = new Set()
 
 // The count as a badge; nothing while none wait. Hidden from screen
 // readers: the control it sits on says the count in words.
@@ -34,12 +37,14 @@ export function AsksCountBadge({
 export function OverviewButton({
   onClick,
   pressed,
+  hiddenGroupIds = NO_IDS,
 }: {
   onClick: () => void
   pressed: boolean
+  hiddenGroupIds?: ReadonlySet<string>
 }) {
   const { t } = useT()
-  const count = useOpenAsks().open.length
+  const count = useOpenAsks(hiddenGroupIds).open.length
   const label =
     count > 0
       ? `${t('common.overview')}, ${t('common.asksWaiting', { count })}`
@@ -59,8 +64,12 @@ export function OverviewButton({
 }
 
 // A dot on the mobile view menu's trigger while questions wait.
-export function AsksDot() {
-  const count = useOpenAsks().open.length
+export function AsksDot({
+  hiddenGroupIds = NO_IDS,
+}: {
+  hiddenGroupIds?: ReadonlySet<string>
+}) {
+  const count = useOpenAsks(hiddenGroupIds).open.length
   if (count <= 0) return null
   return (
     <span
@@ -73,9 +82,13 @@ export function AsksDot() {
 
 // The overview's entry in the mobile view menu: its name, then the count
 // waiting, as a badge and in words.
-export function OverviewMenuLabel() {
+export function OverviewMenuLabel({
+  hiddenGroupIds = NO_IDS,
+}: {
+  hiddenGroupIds?: ReadonlySet<string>
+}) {
   const { t } = useT()
-  const count = useOpenAsks().open.length
+  const count = useOpenAsks(hiddenGroupIds).open.length
   return (
     <span className="flex flex-1 items-center gap-2">
       {t('common.overview')}

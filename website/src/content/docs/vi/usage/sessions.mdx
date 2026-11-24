@@ -278,8 +278,9 @@ của chúng, nhưng một liên kết tới tab (hoặc lựa chọn đã lưu 
 Muốn danh sách gọn hơn, hay không để tên dự án lọt vào ảnh chụp màn hình, hãy chọn **Hide** trong
 menu **⋯** của workspace (session tmux hay Zellij cũng có mục này). Workspace đó biến khỏi sidebar,
 mục **Agents** của bố cục compact, command palette, [overview agent](/vi/usage/overview/) (thẻ agent,
-nhật ký hoạt động và các job của Plan) và danh sách gần đây trong hộp **New workspace**. Các linked
-worktree của repository cũng bị ẩn theo.
+nhật ký hoạt động, các job của Plan và câu hỏi về các job đó; số đếm trên nút overview và khung chat
+của orchestrator cũng bỏ chúng ra) và danh sách gần đây trong hộp **New workspace**. Các linked worktree của repository
+cũng bị ẩn theo.
 
 - Dưới danh sách có một dòng cho biết đang ẩn bao nhiêu workspace. Bấm **Show** thì chúng hiện lại
   đúng chỗ cũ, mỗi cái kèm biểu tượng con mắt gạch chéo, cho tới khi bạn bấm **Hide again** hoặc tải
@@ -305,6 +306,7 @@ workspace. Ngoài ra còn mấy giới hạn sau:
   thư mục đổi lúc không có trang nào mở. Session Zellij đổi tên bên ngoài Termote cũng hiện lại, vì
   id của nó đổi theo tên.
 - Thông báo job vẫn hiện tiêu đề của job.
+- Câu hỏi của orchestrator không gắn với job nào thì luôn hiện.
 - Với Zellij, thanh địa chỉ chứa id của session, tức là tên của nó mã hoá base64.
 - Web Push chỉ bỏ tên sau khi trình duyệt chạy service worker mới: bấm **Reload** khi Termote báo có
   phiên bản mới.

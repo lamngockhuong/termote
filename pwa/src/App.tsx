@@ -1117,6 +1117,7 @@ export default function App({
     ...viewContext,
     isMobile,
     clockOffset,
+    hiddenGroupIds: shownIds,
     notify,
     showView,
     openSettings,
@@ -2459,6 +2460,7 @@ export default function App({
             viewId={currentView.id}
             onViewChange={changeView}
             onOpenOverview={focus ? undefined : openOverview}
+            hiddenGroupIds={shownIds}
             onOpenInMain={focus ? openInMain : undefined}
             paneMenu={rail ? undefined : paneMenu}
             toolbar={rail ? 'right' : 'header'}

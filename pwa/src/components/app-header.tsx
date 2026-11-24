@@ -76,6 +76,9 @@ interface Props {
   // Opens the overview of every agent (mobile: from the view menu; the
   // desktop has it in the sidebar)
   onOpenOverview?: () => void
+  // Workspaces hidden from what is drawn: the overview's count leaves out
+  // their jobs' asks
+  hiddenGroupIds?: ReadonlySet<string>
   // How full the open pane's agent is (HeaderUsageChip); renders nothing
   // when it has nothing to show
   usageChip?: ReactNode
@@ -153,6 +156,7 @@ function MobileHeader(p: Props) {
         value={p.viewId}
         onChange={p.onViewChange}
         onOpenOverview={p.onOpenOverview}
+        hiddenGroupIds={p.hiddenGroupIds}
       />
       <SettingsMenu
         {...p.menu}

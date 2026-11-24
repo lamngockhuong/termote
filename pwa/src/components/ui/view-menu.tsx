@@ -10,6 +10,8 @@ interface Props<T extends string> {
   onChange: (id: T) => void
   // Adds the overview of every agent, below the views
   onOpenOverview?: () => void
+  // Workspaces hidden from what is drawn: their jobs' asks are not counted
+  hiddenGroupIds?: ReadonlySet<string>
 }
 
 // The mobile header's view switch: one button showing the current view's icon
@@ -20,6 +22,7 @@ export function ViewMenu<T extends string>({
   value,
   onChange,
   onOpenOverview,
+  hiddenGroupIds,
 }: Props<T>) {
   const { t } = useT()
   if (views.length < 2 && !onOpenOverview) return null
@@ -31,7 +34,7 @@ export function ViewMenu<T extends string>({
       trigger={
         <span className="relative inline-flex">
           <current.Icon size={17} aria-hidden="true" />
-          {onOpenOverview && <AsksDot />}
+          {onOpenOverview && <AsksDot hiddenGroupIds={hiddenGroupIds} />}
         </span>
       }
     >
@@ -53,7 +56,7 @@ export function ViewMenu<T extends string>({
             icon={<LayoutDashboard size={17} />}
             onSelect={onOpenOverview}
           >
-            <OverviewMenuLabel />
+            <OverviewMenuLabel hiddenGroupIds={hiddenGroupIds} />
           </MenuItem>
         </MenuGroup>
       )}

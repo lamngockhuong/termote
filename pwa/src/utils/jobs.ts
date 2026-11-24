@@ -56,6 +56,21 @@ export function jobWorkspace(job: Job): string {
   return job.workspaceNow || job.workspace || ''
 }
 
+// asks without those about a job of a hidden workspace (its text may name
+// the project, and the job is not shown to open). An ask with no job, or
+// about a job not in jobs, is kept.
+export function visibleAsks<T extends { job?: string }>(
+  asks: T[],
+  jobs: readonly Job[],
+  hidden: ReadonlySet<string>,
+): T[] {
+  if (hidden.size === 0) return asks
+  const hiddenJobs = new Set(
+    jobs.filter((j) => hidden.has(jobWorkspace(j))).map((j) => j.id),
+  )
+  return asks.filter((a) => !a.job || !hiddenJobs.has(a.job))
+}
+
 // What a workspace is called: its group's name, else its id as the server
 // keeps it (a group closed since, or not in the snapshot yet)
 export function workspaceName(

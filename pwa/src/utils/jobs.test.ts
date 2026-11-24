@@ -17,6 +17,7 @@ import {
   safePRUrl,
   sortByPriority,
   sortTodo,
+  visibleAsks,
   workspaceName,
 } from './jobs'
 import { visibleUnsafe } from './unsafe-chars'
@@ -264,6 +265,34 @@ describe('workspaces', () => {
     expect(
       jobWorkspace(job('a', { workspace: 'w1', workspaceNow: 'w2' })),
     ).toBe('w2')
+  })
+
+  it("leaves out the asks about a hidden workspace's jobs", () => {
+    const jobs = [
+      job('a', { workspace: 'w1' }),
+      job('b', { workspace: 'w1', workspaceNow: 'w2' }),
+      job('c'),
+    ]
+    const asks = [
+      { id: 'Q1', job: 'a' },
+      { id: 'Q2', job: 'b' },
+      { id: 'Q3', job: 'c' },
+      { id: 'Q4' },
+      { id: 'Q5', job: 'gone' },
+    ]
+    expect(visibleAsks(asks, jobs, new Set())).toBe(asks)
+    expect(visibleAsks(asks, jobs, new Set(['w2'])).map((a) => a.id)).toEqual([
+      'Q1',
+      'Q3',
+      'Q4',
+      'Q5',
+    ])
+    expect(visibleAsks(asks, jobs, new Set(['w1'])).map((a) => a.id)).toEqual([
+      'Q2',
+      'Q3',
+      'Q4',
+      'Q5',
+    ])
   })
 
   it('is named by its group, else by its id', () => {

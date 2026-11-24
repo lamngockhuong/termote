@@ -22,6 +22,7 @@ import {
   jobFinished,
   jobsByWorkspace,
   jobWorkspace,
+  visibleAsks,
   workspaceName,
 } from '../utils/jobs'
 import { sessionAge } from '../utils/session-age'
@@ -133,6 +134,8 @@ export function OverviewJobs({
   const jobs = hiding
     ? store.jobs.filter((j) => !hiddenGroupIds.has(jobWorkspace(j)))
     : store.jobs
+  // Nor the questions about those jobs: their text may name the project
+  const asks = visibleAsks(store.asks, store.jobs, hiddenGroupIds)
   const pickable = hiding
     ? groups.filter((g) => !hiddenGroupIds.has(g.id))
     : groups
@@ -380,12 +383,12 @@ export function OverviewJobs({
           </p>
         )}
         <OverviewAsks
-          asks={store.asks}
+          asks={asks}
           readOnly={!canWrite || store.asksReadOnly}
           outdated={store.asksOutdated}
           now={now}
           onOpenJob={canWrite ? openJob : undefined}
-          openableJobs={new Set(store.jobs.map((j) => j.id))}
+          openableJobs={new Set(jobs.map((j) => j.id))}
         />
         {byWorkspace && jobs.length > 0 && (
           <JobWorkspaceFilter

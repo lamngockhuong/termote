@@ -1321,7 +1321,11 @@ export function SessionSidebar({
 
   // Desktop: every agent at a glance
   const overviewButton = onOpenOverview && (
-    <OverviewButton onClick={onOpenOverview} pressed={!!overviewOpen} />
+    <OverviewButton
+      onClick={onOpenOverview}
+      pressed={!!overviewOpen}
+      hiddenGroupIds={hiddenSet}
+    />
   )
 
   const filterBar = showFilterBar && (

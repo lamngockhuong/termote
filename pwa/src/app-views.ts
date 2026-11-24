@@ -48,6 +48,9 @@ export interface ViewProps extends ViewContext {
   isMobile: boolean
   // The server's clock minus this device's (ms), for times the server wrote
   clockOffset?: number
+  // Workspaces hidden from what is drawn (the groups' ids): the questions
+  // about their jobs are left out
+  hiddenGroupIds?: ReadonlySet<string>
   // A short notice (a toast), with a button (Undo) or a tone when given
   notify: (message: string, options?: NotifyOptions) => void
   // Switches to another view of the pane (the terminal, as a way out)

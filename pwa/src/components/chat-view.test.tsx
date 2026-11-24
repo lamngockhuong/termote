@@ -55,10 +55,16 @@ vi.mock('./chat-asks', () => ({
   ChatAsks: ({
     paneId,
     clockOffset,
+    hiddenGroupIds,
   }: {
     paneId: string
     clockOffset: number
-  }) => <p data-testid="chat-asks">{`${paneId} ${clockOffset}`}</p>,
+    hiddenGroupIds?: ReadonlySet<string>
+  }) => (
+    <p data-testid="chat-asks">
+      {`${paneId} ${clockOffset} ${[...(hiddenGroupIds ?? [])].join(',')}`}
+    </p>
+  ),
 }))
 vi.mock('../hooks/use-agent-transcript', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-agent-transcript')>()),
@@ -175,8 +181,8 @@ describe('ChatView', () => {
     set({ entries: [entry(0)] })
     const { rerender } = render(<ChatView {...props} clockOffset={1500} />)
     expect(screen.getByTestId('chat-asks')).toHaveTextContent('0 1500')
-    rerender(<ChatView {...props} />)
-    expect(screen.getByTestId('chat-asks')).toHaveTextContent('0 0')
+    rerender(<ChatView {...props} hiddenGroupIds={new Set(['w2'])} />)
+    expect(screen.getByTestId('chat-asks')).toHaveTextContent('0 0 w2')
     rerender(<ChatView {...props} readOnly />)
     expect(screen.queryByTestId('chat-asks')).toBeNull()
   })
