@@ -15,13 +15,26 @@ import { useNow } from '../hooks/use-now'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { Trans } from '../i18n/trans'
+import type { SessionGroup } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
-import { groupJobs, jobFinished } from '../utils/jobs'
+import {
+  groupJobs,
+  jobFinished,
+  jobsByWorkspace,
+  jobWorkspace,
+  workspaceName,
+} from '../utils/jobs'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, JobCard, jobBranch } from './job-card'
 import { JobDetail } from './job-detail'
 import { type JobAgentChoice, JobEditSheet } from './job-edit-sheet'
 import { JobGrantSheet } from './job-grant-sheet'
+import {
+  effectiveFilter,
+  filterJobs,
+  JobWorkspaceFilter,
+  usePlanView,
+} from './job-workspace-filter'
 import { OrchestratorSetupSheet } from './orchestrator-setup-sheet'
 import { OverviewAsks } from './overview-asks'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -49,6 +62,8 @@ interface Props {
   detailSlot?: HTMLElement | null
   // Closes the Activity column
   onCloseActivity?: () => void
+  // The workspaces: their names on the cards, and the filter's
+  groups?: SessionGroup[]
 }
 
 type OpenGroup = 'unread' | 'running' | 'review' | 'todo'
@@ -85,6 +100,8 @@ const GROUP_DOT = {
 
 const TH = 'px-3 py-2 font-medium'
 
+const NO_GROUPS: SessionGroup[] = []
+
 // The overview's Plan: the jobs an orchestrator agent handed out, kept by
 // the server (use-jobs.ts), in columns by what they need from the user
 // (on a phone one under another), the finished ones in a table. A full
@@ -100,6 +117,7 @@ export function OverviewJobs({
   wide,
   detailSlot,
   onCloseActivity,
+  groups = NO_GROUPS,
 }: Props) {
   const { t } = useT()
   const store = useJobs()
@@ -122,6 +140,17 @@ export function OverviewJobs({
     ? store.jobs.find((j) => j.id === selectedId)
     : undefined
   const editorOpen = editing !== undefined || granting !== null
+  // The workspace shown and the grouping, unless the server keeps no
+  // workspace a client sets (an older one): every job then, flat
+  const [view, setView] = usePlanView()
+  const byWorkspace = store.jobFields.includes('workspace')
+  // A workspace with no job now shows every workspace; the choice stays
+  // saved, for when its job is listed there again (a workspace opened again,
+  // a list read before its repository was known)
+  const filter = byWorkspace
+    ? effectiveFilter(view.filter, store.jobs, groups)
+    : 'all'
+  const grouped = byWorkspace && view.grouped
 
   useEffect(() => {
     if (!focus || !shown) return
@@ -165,7 +194,9 @@ export function OverviewJobs({
       </section>
     )
   if (store.unavailable || (!store.loaded && !store.error)) return null
-  const groups = groupJobs(store.jobs)
+  const shownJobs = filterJobs(store.jobs, filter)
+  const jobGroups = groupJobs(shownJobs)
+  const groupIds = groups.map((g) => g.id)
   // An ask's job opens as its card would, never closed by it
   const openJob = (id: string) => {
     setSelectedId(id)
@@ -186,8 +217,16 @@ export function OverviewJobs({
         now={now}
         onSelect={canWrite ? choose : undefined}
         selected={job.id === selected?.id}
+        workspace={
+          jobWorkspace(job)
+            ? workspaceName(jobWorkspace(job), groups)
+            : undefined
+        }
       />
     </li>
+  )
+  const cards = (jobs: Job[]) => (
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">{jobs.map(card)}</ul>
   )
   // Keyed by group, not by its heading: a count changing keeps the column,
   // and the focus on its cards
@@ -205,10 +244,19 @@ export function OverviewJobs({
         />
         {heading}
       </h4>
-      {jobs.length > 0 ? (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {jobs.map(card)}
-        </ul>
+      {jobs.length > 0 && grouped ? (
+        jobsByWorkspace(jobs, groupIds).map((w) => (
+          <div key={w.workspace} className="flex flex-col gap-1.5">
+            <h5 className="m-0 truncate text-[11px] font-medium text-fg-subtle">
+              {w.workspace
+                ? workspaceName(w.workspace, groups)
+                : t('jobs.filter.none')}
+            </h5>
+            {cards(w.jobs)}
+          </div>
+        ))
+      ) : jobs.length > 0 ? (
+        cards(jobs)
       ) : (
         <p className="m-0 rounded-panel border border-dashed border-border-strong px-3 py-4 text-center text-[12px] text-fg-subtle">
           {empty}
@@ -217,15 +265,15 @@ export function OverviewJobs({
     </div>
   )
   const open =
-    groups.waiting.length +
-    OPEN_GROUPS.reduce((n, g) => n + groups[g].length, 0)
-  const emptyGroups = OPEN_GROUPS.filter((g) => groups[g].length === 0)
+    jobGroups.waiting.length +
+    OPEN_GROUPS.reduce((n, g) => n + jobGroups[g].length, 0)
+  const emptyGroups = OPEN_GROUPS.filter((g) => jobGroups[g].length === 0)
 
   // The finished jobs' table leaves out a column no row has a value for
   const finishedCols = {
-    tree: groups.finished.some((j) => jobBranch(j)),
-    changes: groups.finished.some((j) => j.diff),
-    updated: groups.finished.some((j) =>
+    tree: jobGroups.finished.some((j) => jobBranch(j)),
+    changes: jobGroups.finished.some((j) => j.diff),
+    updated: jobGroups.finished.some((j) =>
       Number.isFinite(Date.parse(j.updated)),
     ),
   }
@@ -247,6 +295,9 @@ export function OverviewJobs({
       onEdit={setEditing}
       canEndGrants={store.canGrant}
       ciAvailable={store.ciAvailable}
+      jobs={store.jobs}
+      groups={groups}
+      onOpenJob={openJob}
       onGrants={
         !jobFinished(selected.state) &&
         (selected.agent || selected.grants?.length)
@@ -311,6 +362,14 @@ export function OverviewJobs({
           onOpenJob={canWrite ? openJob : undefined}
           openableJobs={new Set(store.jobs.map((j) => j.id))}
         />
+        {byWorkspace && store.jobs.length > 0 && (
+          <JobWorkspaceFilter
+            jobs={store.jobs}
+            groups={groups}
+            view={{ filter, grouped }}
+            onChange={setView}
+          />
+        )}
         {store.loaded && open === 0 && (
           <div className="flex flex-col items-center gap-1.5 rounded-panel border border-dashed border-border-strong px-4 py-8 text-center">
             {store.jobs.length === 0 ? (
@@ -356,23 +415,23 @@ export function OverviewJobs({
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] items-start gap-3.5">
               {column(
                 'waiting',
-                t('jobs.group.waiting', { count: groups.waiting.length }),
-                groups.waiting,
+                t('jobs.group.waiting', { count: jobGroups.waiting.length }),
+                jobGroups.waiting,
                 t('jobs.waitingNone'),
               )}
               {OPEN_GROUPS.map(
                 (g) =>
-                  groups[g].length > 0 &&
+                  jobGroups[g].length > 0 &&
                   column(
                     g,
-                    t(GROUP_WORDS[g], { count: groups[g].length }),
-                    groups[g],
+                    t(GROUP_WORDS[g], { count: jobGroups[g].length }),
+                    jobGroups[g],
                   ),
               )}
             </div>
           </>
         )}
-        {groups.finished.length > 0 && (
+        {jobGroups.finished.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <Button
               size="sm"
@@ -387,7 +446,7 @@ export function OverviewJobs({
                 aria-hidden="true"
                 className={showFinished ? 'rotate-180' : ''}
               />
-              {t('jobs.group.finished', { count: groups.finished.length })}
+              {t('jobs.group.finished', { count: jobGroups.finished.length })}
             </Button>
             {showFinished && (
               <div
@@ -422,7 +481,7 @@ export function OverviewJobs({
                     </tr>
                   </thead>
                   <tbody>
-                    {groups.finished.map((job) => {
+                    {jobGroups.finished.map((job) => {
                       const title = visibleUnsafe(job.title)
                       const branch = jobBranch(job)
                       const isSelected = job.id === selected?.id
@@ -518,6 +577,9 @@ export function OverviewJobs({
         <JobEditSheet
           job={editing}
           agents={agents}
+          jobs={store.jobs}
+          groups={groups}
+          fields={store.jobFields}
           onClose={() => setEditing(undefined)}
         />
       )}

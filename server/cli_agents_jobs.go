@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -38,10 +39,10 @@ var (
 // The usage of each job command, as agentsUsage lists it (a test checks),
 // printed with a refusal of that command instead of every agents command.
 const (
-	jobsUsage      = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--all] [--json]"
-	jobAddUsage    = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--json]"
+	jobsUsage      = "usage: termote agents jobs [--workspace <id | name>] [--mine] [--ready] [--all] [--json]"
+	jobAddUsage    = "usage: termote agents job add --title <title> [--pane <pane>] [--note <text | ->] [--priority high|normal|low] [--after <job>]... [--workspace <id | name>] [--json]"
 	jobShowUsage   = "usage: termote agents job show <id> [--json]"
-	jobSetUsage    = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]..."
+	jobSetUsage    = "usage: termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]... [--priority high|normal|low] [--after <job>]... [--no-after <job>]... [--workspace <id | name> | --no-workspace]"
 	jobCIUsage     = "usage: termote agents job ci <id> [--refresh] [--send] [--json]"
 	jobRemoveUsage = "usage: termote agents job remove <id>"
 	jobsPruneUsage = "usage: termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]"
@@ -55,27 +56,98 @@ type jobsListing struct {
 	Jobs      []jobView `json:"jobs"`
 	ReadOnly  bool      `json:"readOnly"`
 	ServerNow string    `json:"serverNow"`
+	// JobFields: the job fields the server reads beyond the first ones
+	// (priority, after, workspace); none from an older server.
+	JobFields []string `json:"jobFields"`
 }
 
-// jobsGet reads the ledger: every job with all, else the unfinished ones.
-// The snapshot is read first: what each job's agent does comes from the
-// server's last one, which nothing else may have read lately (no page
-// open).
+// jobsGet reads the ledger: every job with all, else the unfinished ones,
+// newest first, as the lookups that take the newest job of a pane or a
+// worktree expect. The snapshot is read first: what each job's agent does
+// comes from the server's last one, which nothing else may have read lately
+// (no page open).
 func (c *cli) jobsGet(port int, all bool) ([]jobView, error) {
 	l, err := c.jobsListingGet(port, all)
+	slices.SortStableFunc(l.Jobs, func(a, b jobView) int { return b.Created.Compare(a.Created) })
 	return l.Jobs, err
 }
 
-// jobsListingGet is jobsGet with the server's clock.
+// jobsListingGet is the ledger in the server's order (by priority, the
+// jobs to do oldest first) with the server's clock.
 func (c *cli) jobsListingGet(port int, all bool) (jobsListing, error) {
+	return c.jobsQuery(port, all, false)
+}
+
+// jobsQuery is jobsListingGet keeping, with ready, only the jobs to do that
+// wait on nothing.
+func (c *cli) jobsQuery(port int, all, ready bool) (jobsListing, error) {
 	c.agentsSnapshot(port)
 	var l jobsListing
-	path := "/api/mux/jobs"
+	q := url.Values{}
 	if all {
-		path += "?all=1"
+		q.Set("all", "1")
+	}
+	if ready {
+		q.Set("ready", "1")
+	}
+	path := "/api/mux/jobs"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
 	}
 	err := c.agentsGet(port, path, &l)
 	return l, err
+}
+
+// jobIDFlag collects the job ids of a repeated --after or --no-after.
+func jobIDFlag(dst *[]string) func(string) error {
+	return func(s string) error {
+		if !validTemplateID(s) {
+			return fmt.Errorf("%q is not a job id (job --after names jobs, 16 hex digits, unlike wait <pane>@<seq>; see: termote agents jobs)", plainText(s))
+		}
+		*dst = append(*dst, s)
+		return nil
+	}
+}
+
+// priorityFlag reads --priority.
+func priorityFlag(dst *string) func(string) error {
+	return func(s string) error {
+		if !slices.Contains(jobPriorities, s) {
+			return fmt.Errorf("--priority is high, normal or low")
+		}
+		*dst = s
+		return nil
+	}
+}
+
+// priorityText is a job's priority as printed.
+func priorityText(p string) string { return cmp.Or(plainText(p), "normal") }
+
+// waitsText names each job of ids with its state in list, those failed or
+// abandoned with what to do about them.
+func waitsText(list []jobView, ids []string, failed []string) string {
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		st := "gone"
+		if j, ok := findJob(list, id); ok {
+			st = j.State
+		}
+		part := plainText(id) + " (" + plainText(st)
+		if slices.Contains(failed, id) {
+			part += ": the user decides whether to drop it or abandon this job"
+		}
+		parts = append(parts, part+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
+// workspaceText is the name of workspace id in s, with its id, or the id
+// alone when s does not show it.
+func workspaceText(s Snapshot, id string) string {
+	if i := groupIndex(s.Groups, id); i >= 0 && s.Groups[i].Name != "" && s.Groups[i].Name != id {
+		return plainText(s.Groups[i].Name) + " (" + plainText(id) + ")"
+	}
+	return plainText(id)
 }
 
 // findJob is the job with id in list.
@@ -240,10 +312,11 @@ func (c *cli) agentsJobs(args []string) error {
 		return c.agentsJobsPrune(args[1:])
 	}
 	var ws string
-	mine, all, asJSON := false, false, false
+	mine, all, ready, asJSON := false, false, false, false
 	fs := c.newFlagSet("agents jobs")
 	fs.StringVar(&ws, "workspace", "", "")
 	fs.BoolVar(&mine, "mine", false, "")
+	fs.BoolVar(&ready, "ready", false, "")
 	fs.BoolVar(&all, "all", false, "")
 	fs.BoolVar(&asJSON, "json", false, "")
 	pos, err := parseArgs(fs, args)
@@ -276,12 +349,12 @@ func (c *cli) agentsJobs(args []string) error {
 			return err
 		}
 	}
-	list, err := c.jobsGet(port, all)
+	l, err := c.jobsQuery(port, all, ready)
 	if err != nil {
 		return err
 	}
-	list = slices.DeleteFunc(list, func(j jobView) bool {
-		return (mine && j.CreatedBy != self) || (ws != "" && j.Workspace != group.ID)
+	list := slices.DeleteFunc(l.Jobs, func(j jobView) bool {
+		return (mine && j.CreatedBy != self) || (ws != "" && j.Workspace != group.ID && j.WorkspaceNow != group.ID)
 	})
 	if asJSON {
 		if list == nil {
@@ -292,6 +365,9 @@ func (c *cli) agentsJobs(args []string) error {
 	filter := "unfinished jobs"
 	if all {
 		filter = "every job"
+	}
+	if ready {
+		filter = "jobs ready to start"
 	}
 	if mine {
 		filter += ", made from this pane"
@@ -306,7 +382,7 @@ func (c *cli) agentsJobs(args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "JOB\tTITLE\tSTATE\tPANE\tAGENT\tUNREAD\tBRANCH\tPR\tDIR\tUPDATED")
+	fmt.Fprintln(tw, "JOB\tTITLE\tSTATE\tPRI\tAFTER\tWS\tPANE\tAGENT\tUNREAD\tBRANCH\tPR\tDIR\tUPDATED")
 	for _, j := range list {
 		pane, branch, dir := "-", "-", "-"
 		if j.Live.PaneID != "" {
@@ -323,10 +399,38 @@ func (c *cli) agentsJobs(args []string) error {
 		if j.Live.Unread {
 			unread = "yes"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", plainText(j.ID), clipLine(plainText(j.Title), 48), plainText(j.State), pane,
-			dash(c.liveText(j.Live)), dash(unread), branch, dash(ciShort(j.CISummary)), dir, sinceText(j.Updated.Format(time.RFC3339)))
+		pri := "-"
+		if j.Priority != "" {
+			pri = plainText(j.Priority)
+		}
+		wsName, wsID := "-", cmp.Or(j.WorkspaceNow, j.Workspace)
+		if wsID != "" {
+			wsName = plainText(wsID)
+			if i := groupIndex(s.Groups, wsID); i >= 0 && s.Groups[i].Name != "" {
+				wsName = clipLine(plainText(s.Groups[i].Name), 20)
+			}
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", plainText(j.ID), clipLine(plainText(j.Title), 40), plainText(j.State),
+			pri, afterShort(j), wsName, pane, dash(c.liveText(j.Live)), dash(unread), branch, dash(ciShort(j.CISummary)), dir, sinceText(j.Updated.Format(time.RFC3339)))
 	}
 	return tw.Flush()
+}
+
+// afterShort is what j still waits on, as the table prints it: a failed or
+// abandoned one marked !, past three a count.
+func afterShort(j jobView) string {
+	var parts []string
+	for i, id := range j.WaitsOn {
+		if i == 3 {
+			parts = append(parts, fmt.Sprintf("+%d", len(j.WaitsOn)-3))
+			break
+		}
+		if slices.Contains(j.WaitsOnFailed, id) {
+			id += "!"
+		}
+		parts = append(parts, plainText(id))
+	}
+	return dash(strings.Join(parts, " "))
 }
 
 // liveText is what the job's agent does, as printed.
@@ -372,12 +476,16 @@ func (c *cli) agentsJob(args []string) error {
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
-	var title, pane, note string
+	var title, pane, note, priority, ws string
+	var after []string
 	asJSON, hasNote := false, false
 	fs := c.newFlagSet("agents job add")
 	fs.StringVar(&title, "title", "", "")
 	fs.StringVar(&pane, "pane", "", "")
 	fs.Func("note", "", func(s string) error { note, hasNote = s, true; return nil })
+	fs.Func("priority", "", priorityFlag(&priority))
+	fs.Func("after", "", jobIDFlag(&after))
+	fs.StringVar(&ws, "workspace", "", "")
 	fs.BoolVar(&asJSON, "json", false, "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -401,6 +509,19 @@ func (c *cli) agentsJobAdd(args []string) error {
 	if by := c.selfKey(s); by != "" {
 		body["createdBy"] = by
 	}
+	if priority != "" {
+		body["priority"] = priority
+	}
+	if len(after) > 0 {
+		body["after"] = after
+	}
+	var group Group
+	if ws != "" {
+		if group, err = resolveGroup(s, ws); err != nil {
+			return err
+		}
+		body["workspace"] = group.ID
+	}
 	if hasNote {
 		if note, err = c.readText(note); err != nil {
 			return err
@@ -412,6 +533,9 @@ func (c *cli) agentsJobAdd(args []string) error {
 		if err != nil {
 			return err
 		}
+		if ws != "" && group.ID != p.group.ID {
+			return usageError("--workspace %s is not the workspace of pane %s; leave --workspace out\n%s", plainText(ws), plainText(p.pane.ID), jobAddUsage)
+		}
 		body["pane"] = p.pane.ID
 		body["workspace"] = p.group.ID
 	}
@@ -422,8 +546,25 @@ func (c *cli) agentsJobAdd(args []string) error {
 	if asJSON {
 		return writeJSON(c.out, j)
 	}
-	c.infof("Added job %s: %s (%s)", plainText(j.ID), plainText(j.Title), plainText(j.State))
+	c.infof("Added job %s: %s (%s)", plainText(j.ID), plainText(j.Title), jobOrderText(j))
 	return nil
+}
+
+// jobOrderText is a job's state, with its priority when not normal and the
+// jobs it waits on.
+func jobOrderText(j jobView) string {
+	parts := []string{plainText(j.State)}
+	if j.Priority != "" {
+		parts = append(parts, plainText(j.Priority))
+	}
+	if len(j.After) > 0 {
+		ids := make([]string, len(j.After))
+		for i, id := range j.After {
+			ids[i] = plainText(id)
+		}
+		parts = append(parts, "after "+strings.Join(ids, " "))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (c *cli) agentsJobShow(args []string) error {
@@ -454,6 +595,24 @@ func (c *cli) agentsJobShow(args []string) error {
 	}
 	fmt.Fprintf(c.out, "Job %s: %s\n", plainText(j.ID), plainText(j.Title))
 	fmt.Fprintf(c.out, "State: %s; made by %s %s\n", plainText(j.State), plainText(j.CreatedBy), sinceText(j.Created.Format(time.RFC3339)))
+	fmt.Fprintf(c.out, "Priority: %s\n", priorityText(j.Priority))
+	if len(j.WaitsOn) > 0 {
+		fmt.Fprintf(c.out, "Waits on: %s\n", waitsText(list, j.WaitsOn, j.WaitsOnFailed))
+	}
+	if done := len(j.After) - len(j.WaitsOn); done > 0 {
+		fmt.Fprintf(c.out, "After: %d job(s) done\n", done)
+	}
+	if j.Workspace != "" {
+		s, _ := c.agentsSnapshot(port)
+		if j.WorkspaceNow != "" {
+			fmt.Fprintf(c.out, "Workspace: %s (%s was closed; the same repository)\n", workspaceText(s, j.WorkspaceNow), plainText(j.Workspace))
+		} else {
+			fmt.Fprintf(c.out, "Workspace: %s\n", workspaceText(s, j.Workspace))
+		}
+	}
+	if j.Repo != "" {
+		fmt.Fprintf(c.out, "Repository: %s\n", plainText(c.tildeDir(j.Repo)))
+	}
 	if j.Agent != nil {
 		unread := ""
 		if j.Live.Unread {
@@ -500,9 +659,10 @@ func (c *cli) agentsJobShow(args []string) error {
 }
 
 func (c *cli) agentsJobSet(args []string) error {
-	var state, pane, title, note string
+	var state, pane, title, note, priority, ws string
 	var addPRs, removePRs []int
-	hasNote := false
+	var addAfter, removeAfter []string
+	hasNote, noWS := false, false
 	fs := c.newFlagSet("agents job set")
 	fs.StringVar(&state, "state", "", "")
 	fs.StringVar(&pane, "pane", "", "")
@@ -510,6 +670,11 @@ func (c *cli) agentsJobSet(args []string) error {
 	fs.Func("note", "", func(s string) error { note, hasNote = s, true; return nil })
 	fs.Func("pr", "", prNumberFlag(&addPRs))
 	fs.Func("no-pr", "", prNumberFlag(&removePRs))
+	fs.Func("priority", "", priorityFlag(&priority))
+	fs.Func("after", "", jobIDFlag(&addAfter))
+	fs.Func("no-after", "", jobIDFlag(&removeAfter))
+	fs.StringVar(&ws, "workspace", "", "")
+	fs.BoolVar(&noWS, "no-workspace", false, "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
@@ -517,8 +682,13 @@ func (c *cli) agentsJobSet(args []string) error {
 	switch {
 	case len(pos) != 1:
 		return usageError("job set takes one job id\n%s", jobSetUsage)
-	case state == "" && pane == "" && title == "" && !hasNote && len(addPRs) == 0 && len(removePRs) == 0:
-		return usageError("job set needs --state, --title, --note, --pane, --pr or --no-pr\n%s", jobSetUsage)
+	case state == "" && pane == "" && title == "" && !hasNote && len(addPRs) == 0 && len(removePRs) == 0 &&
+		priority == "" && len(addAfter) == 0 && len(removeAfter) == 0 && ws == "" && !noWS:
+		return usageError("job set needs --state, --title, --note, --pane, --pr, --no-pr, --priority, --after, --no-after, --workspace or --no-workspace\n%s", jobSetUsage)
+	case ws != "" && noWS:
+		return usageError("--workspace and --no-workspace go one at a time\n%s", jobSetUsage)
+	case noWS && pane != "":
+		return usageError("--pane gives the job the pane's workspace; leave --no-workspace out\n%s", jobSetUsage)
 	}
 	if state != "" && (!slices.Contains(jobStates, state) || state == "todo") {
 		return usageError("--state is active, review, done, failed or abandoned")
@@ -554,10 +724,40 @@ func (c *cli) agentsJobSet(args []string) error {
 	if len(removePRs) > 0 {
 		body["removePrs"] = removePRs
 	}
+	if priority != "" {
+		body["priority"] = priority
+	}
+	if len(addAfter) > 0 || len(removeAfter) > 0 {
+		next, err := nextAfter(before.After, addAfter, removeAfter)
+		if err != nil {
+			return err
+		}
+		// The list as read: a change made meanwhile is a job_conflict, never
+		// overwritten.
+		body["after"] = next
+		body["updated"] = before.Updated.Format(time.RFC3339Nano)
+	}
+	var group Group
+	if ws != "" {
+		s, err := c.agentsSnapshot(port)
+		if err != nil {
+			return err
+		}
+		if group, err = resolveGroup(s, ws); err != nil {
+			return err
+		}
+		body["workspace"] = group.ID
+	}
+	if noWS {
+		body["workspace"] = ""
+	}
 	if pane != "" {
 		p, err := c.agentsOtherPane(port, pane, jobSelfPane)
 		if err != nil {
 			return err
+		}
+		if ws != "" && group.ID != p.group.ID {
+			return usageError("--workspace %s is not the workspace of pane %s; leave --workspace out\n%s", plainText(ws), plainText(p.pane.ID), jobSetUsage)
 		}
 		body["pane"] = p.pane.ID
 	}
@@ -565,11 +765,28 @@ func (c *cli) agentsJobSet(args []string) error {
 	if err != nil {
 		return err
 	}
-	c.infof("Job %s: %s (%s)", plainText(j.ID), plainText(j.Title), plainText(j.State))
+	c.infof("Job %s: %s (%s)", plainText(j.ID), plainText(j.Title), jobOrderText(j))
 	if ended := grantsEnded(before.job, j.job); ended > 0 {
 		c.infof("%d grant(s) of the job ended with this change; only the user can give new ones, from the PWA", ended)
 	}
 	return nil
+}
+
+// nextAfter is after with add appended and remove taken out, refusing a
+// remove that after does not hold.
+func nextAfter(after, add, remove []string) ([]string, error) {
+	for _, id := range remove {
+		if !slices.Contains(after, id) {
+			return nil, usageError("the job does not wait on %s; see: termote agents job show <id>", plainText(id))
+		}
+	}
+	next := []string{}
+	for _, id := range slices.Concat(after, add) {
+		if !slices.Contains(remove, id) && !slices.Contains(next, id) {
+			next = append(next, id)
+		}
+	}
+	return next, nil
 }
 
 // agentsJobRemove removes a finished job from the ledger, as read: one the

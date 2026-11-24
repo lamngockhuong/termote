@@ -40,6 +40,15 @@ export default {
   'jobs.table.worktree': 'Worktree',
   'jobs.table.changes': 'Changes',
   'jobs.table.updated': 'Updated',
+  // The workspace filter above the columns (job-workspace-filter.tsx)
+  'jobs.filter.label': 'Workspace shown',
+  'jobs.filter.all': 'All workspaces',
+  'jobs.filter.none': 'No workspace',
+  'jobs.filter.group': 'Group by workspace',
+  // A job's priority; normal is not marked on a card
+  'jobs.priority.high': 'High priority',
+  'jobs.priority.normal': 'Normal priority',
+  'jobs.priority.low': 'Low priority',
   // A job's state, as the ledger keeps it
   'jobs.state.todo': 'To do',
   'jobs.state.active': 'Active',
@@ -75,6 +84,14 @@ export default {
   'jobs.card.dir': 'Worktree folder',
   'jobs.card.delegated': 'Answered under a grant',
   'jobs.card.history': 'History',
+  // The jobs a job waits on (after) that are not done yet. Never "blocked"
+  // nor "waiting on you": those are an agent waiting on a dialog
+  'jobs.card.waitsOn_one': 'Waits on {count} job',
+  'jobs.card.waitsOn_other': 'Waits on {count} jobs',
+  'jobs.card.waitsOnFailed_one': '{count} failed or abandoned',
+  'jobs.card.waitsOnFailed_other': '{count} failed or abandoned',
+  // For a screen reader, before the workspace's name the card shows
+  'jobs.card.workspace': 'In workspace {name}',
   // A job's details (components/job-detail.tsx); {ago}: "3 min ago"
   'jobs.detail.close': 'Close the details',
   'jobs.detail.state': 'State',
@@ -92,6 +109,13 @@ export default {
   'jobs.detail.idCopied': 'Copied',
   'jobs.detail.idCopyFailed': 'Could not copy',
   'jobs.detail.grantsCount': 'Grants · {count}',
+  'jobs.detail.priority': 'Priority',
+  'jobs.detail.workspace': 'Workspace',
+  // The jobs it waits on, and those that wait on it
+  'jobs.detail.waitsOn': 'Waits on',
+  'jobs.detail.neededBy': 'Needed by',
+  // An id in after the plan no longer has
+  'jobs.detail.jobGone': 'A job no longer in the plan',
   // A history line, by its kind
   'jobs.event.created': 'Added',
   'jobs.event.started': 'Started',
@@ -112,6 +136,10 @@ export default {
   'jobs.event.ci': 'Checks',
   'jobs.event.ci_sent': 'Failed checks sent to the agent',
   'jobs.event.ci_failed_send': 'Failed checks not sent',
+  'jobs.event.priority': 'Priority changed',
+  'jobs.event.after': 'Jobs it waits on changed',
+  'jobs.event.workspace': 'Workspace changed',
+  'jobs.event.deps': 'A job it waited on left the plan',
   // The editor
   'jobs.edit.title': 'Edit {title}',
   'jobs.edit.titleLabel': 'Title',
@@ -125,6 +153,23 @@ export default {
   'jobs.edit.paneNone': 'No agent yet',
   'jobs.edit.paneEndsGrants':
     'Giving the job to another agent ends every grant it has',
+  'jobs.edit.priorityLabel': 'Priority',
+  'jobs.edit.priority.high': 'High',
+  'jobs.edit.priority.normal': 'Normal',
+  'jobs.edit.priority.low': 'Low',
+  // The jobs it waits on: it is ready to start once they are all done
+  'jobs.edit.afterLabel': 'Waits on',
+  'jobs.edit.afterHint': 'The job is ready to start once each of these is done',
+  'jobs.edit.afterSearch': 'Find a job by its title',
+  'jobs.edit.afterNone': 'No other unfinished job',
+  'jobs.edit.afterNoMatch': 'No job matches',
+  'jobs.edit.afterMax': 'A job waits on {max} jobs at most',
+  // Beside a job that cannot be picked: it waits on this one already
+  'jobs.edit.afterDependent': 'Waits on this job',
+  'jobs.edit.workspaceLabel': 'Workspace',
+  'jobs.edit.workspaceNone': 'No workspace',
+  // A job with an agent or a worktree keeps its workspace
+  'jobs.edit.workspaceBound': 'Set when the job started',
   'jobs.edit.titleEmpty': 'Give the job a title',
   'jobs.edit.titleLong': 'The title is longer than {max} characters',
   'jobs.edit.conflict':

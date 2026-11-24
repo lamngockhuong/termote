@@ -83,9 +83,13 @@ chọn. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút n
 Khi một [orchestrator](/vi/usage/orchestrator/) giao việc, tab **Kế hoạch** hiện sổ việc của nó
 thành các cột theo mức cần bạn: **Đang chờ bạn** (agent đang ở một hộp thoại) luôn hiện, rồi tới
 xong mà chưa đọc, đang chạy, cần xem lại và chưa làm. Dòng phía trên các cột đếm số việc đang mở
-và ghi tên những nhóm chưa có việc nào. Trên điện thoại, các cột xếp chồng lên nhau. Thẻ của mỗi việc hiện tiêu đề
+và ghi tên những nhóm chưa có việc nào. Trên điện thoại, các cột xếp chồng lên nhau. Mỗi cột xếp theo mức ưu tiên; trong cột
+chưa làm, những việc không còn chờ gì đứng trước. Thẻ của mỗi việc hiện tiêu đề
 và trạng thái, agent của nó đang làm gì, pane và branch, số liệu diff gần nhất và các ủy quyền còn
-hiệu lực. **Đã kết thúc** mở ra một bảng các việc đã kết thúc: việc, trạng thái, worktree, thay đổi
+hiệu lực. Thẻ còn có dấu ưu tiên cao hoặc thấp, **Chờ** kèm số việc nó còn chờ (màu đỏ khi một trong số đó thất
+bại hoặc bị bỏ, màu nhạt khi việc đã chạy, lúc ấy chỉ để ghi thứ tự) và workspace của việc. Phía
+trên các cột có bộ lọc chỉ hiện việc của một workspace (hoặc việc không thuộc workspace nào), và
+**Nhóm theo workspace** chia mỗi cột theo workspace; trình duyệt này nhớ cả hai lựa chọn. **Đã kết thúc** mở ra một bảng các việc đã kết thúc: việc, trạng thái, worktree, thay đổi
 và lần cập nhật cuối.
 
 Nút **?** ở đầu tab (và dòng gợi ý khi Kế hoạch còn trống) mở hướng dẫn
@@ -95,14 +99,17 @@ skill thì nút **Thêm việc** vẫn thêm việc bằng tay được.
 Chạm vào một việc (thẻ của nó, hoặc tiêu đề trong bảng) để mở chi tiết. Trên màn hình rộng, chi tiết
 nằm cạnh các cột, thế chỗ cột Activity (mở Activity thì chi tiết đóng lại); trên điện thoại, chi tiết
 là một sheet. Trong đó có nút mở pane của việc, **Ủy quyền** và **Sửa**, rồi tới trạng thái, agent,
-branch, thư mục worktree, diff gần nhất, prompt, ghi chú, các ủy quyền còn hiệu lực, các hộp thoại
+branch, thư mục worktree, diff gần nhất, mức ưu tiên, workspace, các việc nó chờ và các việc chờ nó
+(chạm vào một việc trong đó để mở chi tiết của nó). Tiếp theo là prompt, ghi chú, các ủy quyền còn hiệu lực, các hộp thoại
 đã được trả lời theo ủy quyền và lịch sử của việc. Mỗi ủy quyền còn hiệu lực ghi lúc nó hết hạn và
 đã được dùng mấy lần; nút **Thu hồi** chấm dứt nó sau khi bạn xác nhận (chỉ ở nơi bạn cấp được ủy
 quyền, xem bên dưới).
 
 - **Thêm việc** tạo một việc chưa làm, có tiêu đề, prompt và ghi chú: orchestrator nhận nó
   bằng `termote agents start --job <id>` khi bạn bảo nó.
-- **Sửa** đổi tiêu đề, prompt, ghi chú, trạng thái hoặc agent được giao việc. Giao cho agent khác
+- **Sửa** đổi tiêu đề, prompt, ghi chú, trạng thái, mức ưu tiên, các việc nó chờ (việc nào đang chờ
+  việc này thì không chọn được, nên không thể tạo vòng tròn), workspace (chỉ khi chưa có agent hay
+  worktree nào nhận việc; sau đó workspace là nơi việc được bắt đầu) hoặc agent được giao việc. Giao cho agent khác
   thì mọi ủy quyền của việc chấm dứt. Nếu orchestrator vừa đổi việc trong lúc bạn sửa, form nạp lại
   việc như hiện tại và báo cho bạn.
 - **Ủy quyền** cho phép orchestrator trả lời thay bạn một loại hộp thoại xin quyền của agent được
@@ -116,7 +123,8 @@ quyền, xem bên dưới).
 
 Khi orchestrator chuyển một việc sang cần xem lại, thiết bị bật thông báo sẽ nhận được thông báo
 đẩy; chạm vào thông báo sẽ mở tab Kế hoạch. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) chỉ
-thấy tiêu đề, trạng thái, pane và branch của từng việc, và chạm vào việc không mở gì cả.
+thấy tiêu đề, trạng thái, pane, branch, mức ưu tiên, các việc nó chờ và workspace của từng việc,
+và chạm vào việc không mở gì cả.
 
 ## Dừng một agent
 

@@ -180,8 +180,10 @@ settings <cmd>       PWA settings an agent may propose: schema [--json], propose
 agents <cmd>         The agents in the panes, for an orchestrator agent (native only, local socket): list, read, send,
                      wait <pane>@<seq>... | --job <id>... | --mine, answer [--delegated], stop --cursor, diff [--stat] [--base],
                      start --workspace <id> --kind <kind> [--worktree <branch> [--base <ref>]] [--title | --job <id>],
-                     jobs [--mine], jobs prune [--older-than] [--dry-run], job add|show|set [--pr <n>]|remove
+                     jobs [--mine] [--ready], jobs prune [--older-than] [--dry-run], job add|show|set [--pr <n>]|remove
                      (the job ledger, server/job_store.go; remove and prune: finished jobs only),
+                     job add|set [--priority] [--after <job>] [--no-after <job>] [--workspace] [--no-workspace]
+                     (its order and workspace, server/job_deps.go),
                      job ci <id> [--refresh] [--send] (its pull requests via the user's gh, server/job_ci.go),
                      job finish <id> [--close] [--remove-worktree] (after the user's yes, server/job_finish.go)
 skills <cmd>         The embedded orchestrator skill for Claude Code and Codex: install, uninstall [--agent], status

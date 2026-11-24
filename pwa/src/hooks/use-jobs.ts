@@ -12,6 +12,8 @@ import {
   fetchJobs,
   type GrantKind,
   type Job,
+  type JobField,
+  type JobOrderChange,
   type JobState,
   jobCI,
   RequestError,
@@ -34,6 +36,9 @@ export interface JobsState {
   canGrant: boolean
   // The server follows the jobs' pull requests (never in a container)
   ciAvailable: boolean
+  // The fields beyond the first ones the server takes: the editors of the
+  // others, and the workspace filter, are hidden
+  jobFields: JobField[]
   // Server time minus this device's (ms), from the last read
   clockOffset: number
   loaded: boolean
@@ -60,6 +65,7 @@ const INITIAL: JobsState = {
   readOnly: false,
   canGrant: false,
   ciAvailable: false,
+  jobFields: [],
   clockOffset: 0,
   loaded: false,
   error: false,
@@ -106,6 +112,8 @@ async function readJobs(): Promise<void> {
       readOnly: list.readOnly,
       canGrant: list.canGrant,
       ciAvailable: list.ciAvailable,
+      // None from a list without them
+      jobFields: list.jobFields ?? [],
       clockOffset: Number.isNaN(server) ? 0 : server - Date.now(),
       loaded: true,
       error: false,
@@ -285,11 +293,13 @@ const saved = async (job: Promise<Job>) => {
 }
 
 // Adds a todo job. Throws RequestError.
-export function addJob(j: {
-  title: string
-  prompt?: string
-  note?: string
-}): Promise<Job> {
+export function addJob(
+  j: {
+    title: string
+    prompt?: string
+    note?: string
+  } & JobOrderChange,
+): Promise<Job> {
   return write(() => saved(createJob(j)))
 }
 
@@ -297,7 +307,7 @@ export function addJob(j: {
 // reading the jobs again).
 export function changeJob(
   job: Job,
-  change: {
+  change: JobOrderChange & {
     title?: string
     prompt?: string
     note?: string

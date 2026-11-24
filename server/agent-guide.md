@@ -166,7 +166,10 @@ termote agents diff <pane> --stat              # its commits since the base, the
 termote agents stop <pane> --cursor <cursor>   # end its turn, as Esc (cursor from read --json)
 termote agents start --workspace <id> --kind claude 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-tests --title 'Fix the tests' 'Fix the failing tests'
-termote agents jobs                            # the job ledger: each job's pane, status, unread turn, branch, dir
+termote agents jobs                            # the job ledger, by priority: each job's pane, status, unread turn, branch, dir
+termote agents jobs --ready                    # the jobs to do that wait on nothing, highest priority first
+termote agents job add --title 'Docs' --priority high --after <job> --workspace <id>   # --after names jobs, unlike wait <pane>@<seq>
+termote agents job set <id> --priority low --no-after <job>   # also --after <job>, --workspace <id> or --no-workspace
 termote agents wait --job <id>...              # 0: a turn not read yet, 3: a dialog not reported yet, 4: timeout, 5: gone, 6: all idle and read
 termote agents wait --mine                     # the same over every unfinished job made from your pane (needs self)
 termote agents job set <id> --state review --note 'What was done'
@@ -199,7 +202,13 @@ limit (Claude Code stops an ordinary command after 10 minutes at most). `wait --
 reports a turn you have not `read` however long ago it ended, a dialog once, and a job whose agent
 is gone (`job set <id> --pane <pane>` or `--state abandoned`); when every job's agent is idle,
 its last turn was read and nothing it started runs in the background, it says there is nothing to wait for (exit 6) rather than wait out the timeout. Set `review` with a note when an
-agent is done; leave `done` to the user. The ledger is the user's history: remove finished jobs
+agent is done; leave `done` to the user. Record the work you split up with `job add` (`--priority`,
+`--after <job>` for the order, `--workspace` while no agent has it yet: once a job has an agent or a
+worktree its workspace is fixed). At the start of a session, after each job reaches `review` and after
+each `job finish`, pick the next job with `jobs --ready` (the user's jobs from the PWA too; `--mine` or
+`--workspace <id>` narrows it), highest priority first: `start --job` refuses a job that still waits on another. A job waiting on a failed or abandoned
+one is the user's call: ask with `ask add --job <id>`, never drop the dependency yourself. `--after` on a
+running or finished job only notes the order; it never holds up a state change or `job finish`. The ledger is the user's history: remove finished jobs
 (`job remove <id>`, `jobs prune`) only when the user asks; an unfinished one is refused, so
 `job set <id> --state abandoned` it first. Once the user has looked at a job in `review` and says
 yes, `job finish <id> --close --remove-worktree` (or `--close` alone for a job without a worktree)

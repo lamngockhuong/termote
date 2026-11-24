@@ -55,6 +55,7 @@ function loaded(over: Partial<JobsState> = {}): JobsState {
     readOnly: false,
     canGrant: true,
     ciAvailable: true,
+    jobFields: [],
     clockOffset: 0,
     loaded: true,
     error: false,
@@ -102,6 +103,7 @@ const finished = () => screen.getByRole('button', { name: /^Finished · / })
 
 describe('OverviewJobs', () => {
   beforeEach(() => {
+    localStorage.clear()
     HTMLDialogElement.prototype.showModal = vi.fn(function (
       this: HTMLDialogElement,
     ) {
@@ -573,5 +575,145 @@ describe('OverviewJobs', () => {
       rerender(<OverviewJobs {...props} focus={{}} />)
     })
     expect(scroll).toHaveBeenCalledTimes(2)
+  })
+
+  describe('priority, dependencies and workspaces', () => {
+    const GROUPS = [
+      { id: 'w1', name: 'acme-api' },
+      { id: 'w2', name: 'web' },
+    ]
+    const FIELDS: JobsState['jobFields'] = ['priority', 'after', 'workspace']
+    const PLANNED = [
+      job('a', { workspace: 'w1' }),
+      job('b', { priority: 'low', workspace: 'w2' }),
+      job('c', { priority: 'high', waitsOn: ['a'], after: ['a'] }),
+      job('d', { priority: 'high', workspace: 'gone1' }),
+      job('e', { state: 'review', workspace: 'w2' }),
+      job('f', { state: 'review', priority: 'high', workspace: 'w1' }),
+      job('g', { state: 'done', workspace: 'w1' }),
+    ]
+    const planned = (over: Partial<JobsState> = {}, readOnly = false) =>
+      show({ jobs: PLANNED, jobFields: FIELDS, ...over }, readOnly, undefined, {
+        groups: GROUPS,
+      })
+    const filter = () =>
+      screen.getByRole('combobox', { name: 'Workspace shown' })
+    const groupSwitch = () =>
+      screen.getByRole('switch', { name: 'Group by workspace' })
+
+    it('sorts each column by priority, the ready jobs to do first', () => {
+      planned()
+      expect(titles('To do · 4')).toEqual(['job d', 'job a', 'job b', 'job c'])
+      expect(titles('To review · 2')).toEqual(['job f', 'job e'])
+    })
+
+    it("labels each card with its workspace's name, else its id", () => {
+      planned()
+      const card = (t: string) => screen.getByRole('article', { name: t })
+      expect(
+        within(card('job a')).getByText('In workspace acme-api'),
+      ).toBeInTheDocument()
+      expect(
+        within(card('job d')).getByText('In workspace gone1'),
+      ).toBeInTheDocument()
+      expect(within(card('job c')).queryByText(/In workspace/)).toBeNull()
+      expect(within(card('job c')).getByText('Waits on 1 job')).toBeVisible()
+      expect(within(card('job d')).getByText('High priority')).toBeVisible()
+    })
+
+    it('filters by workspace, remembering the choice in this browser', () => {
+      const { unmount } = planned()
+      expect(filter()).toHaveValue('all')
+      expect(
+        within(filter())
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['All workspaces', 'acme-api', 'web', 'gone1', 'No workspace'])
+      fireEvent.change(filter(), { target: { value: 'ws:w2' } })
+      expect(titles('To do · 1')).toEqual(['job b'])
+      expect(titles('To review · 1')).toEqual(['job e'])
+      expect(screen.getByText('2 open jobs')).toBeVisible()
+      unmount()
+      planned()
+      expect(filter()).toHaveValue('ws:w2')
+      fireEvent.change(filter(), { target: { value: 'none' } })
+      expect(titles('To do · 1')).toEqual(['job c'])
+      // The finished ones are filtered too
+      fireEvent.change(filter(), { target: { value: 'ws:w1' } })
+      expect(finished()).toHaveTextContent('Finished · 1')
+    })
+
+    it('falls back to every workspace when the one chosen has no job any more', () => {
+      localStorage.setItem(
+        'termote-plan-view:',
+        JSON.stringify({ filter: 'ws:w9', grouped: false }),
+      )
+      planned()
+      expect(filter()).toHaveValue('all')
+      expect(titles('To do · 4')).toHaveLength(4)
+      // Kept for when a job is listed there again
+      expect(JSON.parse(localStorage.getItem('termote-plan-view:')!)).toEqual({
+        filter: 'ws:w9',
+        grouped: false,
+      })
+    })
+
+    it('splits each column by workspace under a heading', () => {
+      planned()
+      fireEvent.click(groupSwitch())
+      expect(groupSwitch()).toHaveAttribute('aria-checked', 'true')
+      const todo = column('To do · 4')
+      expect(
+        within(todo)
+          .getAllByRole('heading', { level: 5 })
+          .map((h) => h.textContent),
+      ).toEqual(['acme-api', 'web', 'gone1', 'No workspace'])
+      const sub = (name: string) =>
+        within(within(todo).getByRole('heading', { name }).parentElement!)
+          .getAllByRole('article')
+          .map((a) => a.getAttribute('aria-label'))
+      expect(sub('acme-api')).toEqual(['job a'])
+      expect(sub('No workspace')).toEqual(['job c'])
+      expect(JSON.parse(localStorage.getItem('termote-plan-view:')!)).toEqual({
+        filter: 'all',
+        grouped: true,
+      })
+    })
+
+    it('gives a view-only device the labels and the filter', () => {
+      planned({}, true)
+      expect(filter()).toBeVisible()
+      expect(screen.getAllByText('In workspace acme-api').length).toBe(2)
+    })
+
+    it('hides the filter, and groups nothing, on a server without workspaces', () => {
+      localStorage.setItem(
+        'termote-plan-view:',
+        JSON.stringify({ filter: 'ws:w2', grouped: true }),
+      )
+      planned({ jobFields: ['priority'] })
+      expect(
+        screen.queryByRole('combobox', { name: 'Workspace shown' }),
+      ).toBeNull()
+      expect(titles('To do · 4')).toHaveLength(4)
+      expect(screen.queryByRole('heading', { level: 5 })).toBeNull()
+    })
+
+    it('opens a job it waits on from the details, and offers the editor its fields', () => {
+      planned()
+      pick('job c')
+      const details = screen.getByRole('dialog', { name: 'job c' })
+      fireEvent.click(within(details).getByRole('button', { name: 'job a' }))
+      const a = screen.getByRole('dialog', { name: 'job a' })
+      expect(within(a).getByText('Needed by')).toBeVisible()
+      fireEvent.click(within(a).getByRole('button', { name: 'Edit job a' }))
+      const editor = screen.getByRole('dialog', { name: 'Edit job a' })
+      expect(
+        within(editor).getByRole('radiogroup', { name: 'Priority' }),
+      ).toBeVisible()
+      expect(
+        within(editor).getByRole('combobox', { name: 'Workspace' }),
+      ).toHaveValue('w1')
+    })
   })
 })

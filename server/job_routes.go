@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +65,14 @@ type jobLive struct {
 type jobView struct {
 	job
 	Live jobLive `json:"live"`
+	// WaitsOn: the jobs of After not done yet; WaitsOnFailed, those of them
+	// failed or abandoned. Ready: a job to do that waits on nothing.
+	WaitsOn       []string `json:"waitsOn,omitempty"`
+	WaitsOnFailed []string `json:"waitsOnFailed,omitempty"`
+	Ready         bool     `json:"ready,omitempty"`
+	// WorkspaceNow: the open group of the job's repository it is shown
+	// under while its workspace is gone (job_repo.go).
+	WorkspaceNow string `json:"workspaceNow,omitempty"`
 	// CISummary: what the job's card shows of its pull requests.
 	CISummary *jobCISummary `json:"ciSummary,omitempty"`
 	// CIChecked: when its pull requests were last read or tried (kept in
@@ -79,6 +89,14 @@ type jobBrief struct {
 	Branch  string    `json:"branch,omitempty"`
 	Live    jobLive   `json:"live"`
 	Updated time.Time `json:"updated"`
+	// Priority, After, WaitsOn, Workspace: ids and an enum, never text a
+	// job's author wrote.
+	Priority      string   `json:"priority,omitempty"`
+	After         []string `json:"after,omitempty"`
+	WaitsOn       []string `json:"waitsOn,omitempty"`
+	WaitsOnFailed []string `json:"waitsOnFailed,omitempty"`
+	Workspace     string   `json:"workspace,omitempty"`
+	WorkspaceNow  string   `json:"workspaceNow,omitempty"`
 	// CISummary: the colour and numbers of the job's pull requests, never a check
 	// name, a link or an error; none where the branch is hidden.
 	CISummary *jobCISummary `json:"ciSummary,omitempty"`
@@ -96,13 +114,18 @@ type jobWorktreeInput struct {
 }
 
 type jobInput struct {
-	Title     *string           `json:"title"`
-	Prompt    *string           `json:"prompt"`
-	Note      *string           `json:"note"`
-	State     *string           `json:"state"`
-	Pane      *string           `json:"pane"`
-	CreatedBy string            `json:"createdBy"`
-	Workspace string            `json:"workspace"`
+	Title     *string `json:"title"`
+	Prompt    *string `json:"prompt"`
+	Note      *string `json:"note"`
+	State     *string `json:"state"`
+	Pane      *string `json:"pane"`
+	CreatedBy string  `json:"createdBy"`
+	Priority  *string `json:"priority"`
+	// After replaces the jobs the job waits on (the CLI computes the list
+	// from the one it read, sending its updated).
+	After *[]string `json:"after"`
+	// Workspace: absent keeps it, "" clears it.
+	Workspace *string           `json:"workspace"`
 	Worktree  *jobWorktreeInput `json:"worktree"`
 	// AddPRs, RemovePRs: pull requests attached and detached by number.
 	AddPRs    []int  `json:"addPrs"`
@@ -231,7 +254,13 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, invalidJob("updated is required"))
 		return
 	}
-	// Resolved before the store's lock: the pane's agent and the worktree.
+	order, err := validJobOrder(id, in)
+	if err != nil {
+		writeJobError(w, err)
+		return
+	}
+	// Resolved before the store's lock: the pane's agent, the worktree and
+	// the workspace named.
 	var agent *jobAgent
 	if in.Pane != nil {
 		ag, err := a.jobAgentFor(*in.Pane)
@@ -246,12 +275,26 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, err)
 		return
 	}
+	ws, err := a.jobWorkspaceFor(in, agent, tree)
+	if err != nil {
+		writeJobError(w, err)
+		return
+	}
 	base := a.readMark(agent)
+	snap, repos := a.jobAnchors()
 	// The grants this change ends, by reason, logged once it is written.
 	var ended map[string][]string
-	j, err := a.jobs.update(id, in.Updated, func(j *job) error {
+	j, err := a.jobs.updateWith(id, in.Updated, func(list []job, j *job) error {
 		ended = map[string][]string{}
+		before := j.Workspace
+		defer func() { a.anchorJob(j, before, snap, repos) }()
 		if err := applyJobInput(j, in); err != nil {
+			return err
+		}
+		if err := a.applyJobOrder(list, j, order); err != nil {
+			return err
+		}
+		if err := a.applyJobWorkspace(j, agent, ws); err != nil {
 			return err
 		}
 		if err := applyPRPins(a.jobs, j, in.AddPRs, in.RemovePRs); err != nil {
@@ -373,7 +416,9 @@ func (a *agentAPI) handleJobEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	snap, repos := a.jobAnchors()
 	j, err := a.jobs.update(id, "", func(j *job) error {
+		a.anchorJob(j, j.Workspace, snap, repos)
 		switch in.Kind {
 		case "read":
 			// Only ever forward: a read that saw less than one recorded
@@ -435,28 +480,167 @@ func (a *agentAPI) newJob(r *http.Request, in jobInput) (job, error) {
 	if err := applyJobInput(&j, in); err != nil {
 		return job{}, err
 	}
-	j.Workspace = clipJobText(in.Workspace, 256)
+	order, err := validJobOrder("", in)
+	if err != nil {
+		return job{}, err
+	}
+	j.Priority = order.priority
+	j.After = order.after
+	var agent *jobAgent
 	if in.Pane != nil {
 		ag, err := a.jobAgentFor(*in.Pane)
 		if err != nil {
 			return job{}, err
 		}
-		base := a.readMark(&ag)
-		j.Agent = &ag
-		j.ReadTS, j.ReadConv = base.ts, base.conv
-		if in.State == nil {
-			j.State = "active"
-		}
-		if j.Workspace == "" {
-			j.Workspace = ag.GroupID
-		}
+		agent = &ag
 	}
 	tree, err := a.jobTreeFor(r, in.Worktree)
 	if err != nil {
 		return job{}, err
 	}
+	ws, err := a.jobWorkspaceFor(in, agent, tree)
+	if err != nil {
+		return job{}, err
+	}
+	j.Workspace = ws.name
+	if agent != nil {
+		base := a.readMark(agent)
+		j.Agent = agent
+		j.ReadTS, j.ReadConv = base.ts, base.conv
+		if in.State == nil {
+			j.State = "active"
+		}
+		j.Workspace = ws.bound
+	}
 	j.Worktree = tree
+	snap, repos := a.jobAnchors()
+	a.anchorJob(&j, "", snap, repos)
 	return j, nil
+}
+
+// jobOrder is a request's priority and after, checked as far as they can be
+// without the other jobs.
+type jobOrder struct {
+	priority string
+	after    []string
+	setPrio  bool
+	setAfter bool
+}
+
+func validJobOrder(id string, in jobInput) (jobOrder, error) {
+	var o jobOrder
+	if in.Priority != nil {
+		p, err := validJobPriority(*in.Priority)
+		if err != nil {
+			return o, err
+		}
+		o.priority, o.setPrio = p, true
+	}
+	if in.After != nil {
+		after, err := validJobAfter(id, *in.After)
+		if err != nil {
+			return o, err
+		}
+		o.after, o.setAfter = after, true
+	}
+	return o, nil
+}
+
+// applyJobOrder sets o on j, the after list checked against the jobs as the
+// file holds them now, with an event for what changed.
+func (a *agentAPI) applyJobOrder(list []job, j *job, o jobOrder) error {
+	if o.setAfter {
+		if err := checkAfter(list, j.ID, o.after); err != nil {
+			return err
+		}
+		var diff []string
+		for _, id := range o.after {
+			if !slices.Contains(j.After, id) {
+				diff = append(diff, "+"+id)
+			}
+		}
+		for _, id := range j.After {
+			if !slices.Contains(o.after, id) {
+				diff = append(diff, "-"+id)
+			}
+		}
+		j.After = o.after
+		if len(diff) > 0 {
+			a.jobs.addEvent(j, "after", strings.Join(diff, " "))
+		}
+	}
+	if o.setPrio && o.priority != j.Priority {
+		j.Priority = o.priority
+		a.jobs.addEvent(j, "priority", cmp.Or(o.priority, "normal"))
+	}
+	return nil
+}
+
+// jobWorkspace is the workspace a request names (name, set: it names one,
+// "" included) and the one a job given a pane gets (bound): the pane's
+// group, or for a worktree the server found, the workspace it was made from.
+type jobWorkspace struct {
+	name  string
+	set   bool
+	bound string
+}
+
+// jobWorkspaceFor checks the workspace in names: an open group, and with a
+// pane, that group's. Nothing is written yet.
+func (a *agentAPI) jobWorkspaceFor(in jobInput, agent *jobAgent, tree *jobTree) (jobWorkspace, error) {
+	var ws jobWorkspace
+	if in.Workspace != nil {
+		ws.name, ws.set = clipJobText(*in.Workspace, 256), true
+		if ws.name != "" && !a.groupOpen(ws.name) {
+			return ws, errJobWorkspaceUnknown
+		}
+	}
+	if agent != nil {
+		ws.bound = agent.GroupID
+		if tree != nil && in.Worktree != nil {
+			ws.bound = in.Worktree.Source
+		}
+		if ws.set && ws.name != ws.bound {
+			return ws, errJobWorkspaceBound
+		}
+	}
+	return ws, nil
+}
+
+// applyJobWorkspace sets j's workspace: a job given its first agent gets
+// the agent's (ws.bound); otherwise the one named, refused for a job that
+// has an agent or a worktree unless it is the same.
+func (a *agentAPI) applyJobWorkspace(j *job, agent *jobAgent, ws jobWorkspace) error {
+	next := j.Workspace
+	switch {
+	case agent != nil:
+		if j.Agent == nil {
+			next = ws.bound
+		}
+	case ws.set && ws.name != j.Workspace:
+		if j.Agent != nil || j.Worktree != nil {
+			return errJobWorkspaceBound
+		}
+		next = ws.name
+	}
+	if next != j.Workspace {
+		j.Workspace = next
+		a.jobs.addEvent(j, "workspace", next)
+	}
+	return nil
+}
+
+// groupOpen: id names a group of the tracker's last snapshot, else of a new
+// one (a workspace just made may not be in the last yet).
+func (a *agentAPI) groupOpen(id string) bool {
+	snap, _ := a.activity.lastSnapshot()
+	if groupIndex(snap.Groups, id) >= 0 {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), muxTimeout)
+	defer cancel()
+	snap, err := a.m.Snapshot(ctx)
+	return err == nil && groupIndex(snap.Groups, id) >= 0
 }
 
 // applyJobInput sets the fields in names on j.
@@ -597,20 +781,32 @@ func jobDirTooWide(dir, home string) bool {
 	return err == nil && (rel == "." || !strings.HasPrefix(rel, ".."))
 }
 
+// jobFields are the job fields this server reads from a client beyond the
+// first ones: a client hides the editors of those an older server lacks.
+var jobFields = []string{"priority", "after", "workspace"}
+
 // listJobs answers the ledger: unfinished jobs, or every one with all=1,
-// of one workspace with workspace=<id>.
+// of one workspace with workspace=<id>, only those ready to start with
+// ready=1, by priority (sortJobs).
 func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	list, readOnly := a.jobs.jobs()
+	sortJobs(list)
 	q := r.URL.Query()
-	all, ws := q.Get("all") == "1", q.Get("workspace")
+	all, ws, ready := q.Get("all") == "1", q.Get("workspace"), q.Get("ready") == "1"
 	snap, _ := a.activity.lastSnapshot()
 	viewOnly := isViewOnly(r)
+	// A view-only read starts no repository lookup, as its snapshot does not.
+	repos := a.groupRepos(snap, !viewOnly)
+	now := make(map[string]string, len(list))
+	for _, j := range list {
+		now[j.ID] = workspaceNow(snap, repos, j)
+	}
 	// A server that does not follow pull requests (a container) shows none
 	// it read before.
 	ciOn := a.ci.available()
 	var shown []job
 	for _, j := range list {
-		if (!all && jobFinished(j.State)) || (ws != "" && j.Workspace != ws) {
+		if (!all && jobFinished(j.State)) || (ws != "" && j.Workspace != ws && now[j.ID] != ws) || (ready && !jobReady(list, j)) {
 			continue
 		}
 		shown = append(shown, j)
@@ -621,7 +817,9 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	for i, j := range shown {
 		live := lives[i]
 		if viewOnly {
-			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated}
+			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated,
+				Priority: j.Priority, After: j.After, Workspace: j.Workspace, WorkspaceNow: now[j.ID]}
+			b.WaitsOn, b.WaitsOnFailed = jobWaits(list, j)
 			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir, b.Live.OutsideWorktree = "", "", "", false
 			if live.branchHidden {
 				b.Live.Branch = ""
@@ -636,30 +834,38 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 			brief = append(brief, b)
 			continue
 		}
-		full = append(full, a.jobViewOf(j, live))
+		v := a.jobViewOf(list, j, live)
+		v.WorkspaceNow = now[j.ID]
+		full = append(full, v)
 	}
-	now := time.Now().UTC().Format(activityTimeFormat)
+	serverNow := time.Now().UTC().Format(activityTimeFormat)
 	if viewOnly {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": ciOn})
+		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": serverNow, "ciAvailable": ciOn, "jobFields": jobFields})
 		return
 	}
 	if full == nil {
 		full = []jobView{}
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r),
-		"ciAvailable": ciOn})
+	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": serverNow, "canGrant": canGrant(r),
+		"ciAvailable": ciOn, "jobFields": jobFields})
 }
 
 func (a *agentAPI) viewJob(j job) jobView {
 	snap, _ := a.activity.lastSnapshot()
-	return a.jobViewOf(j, a.jobLiveIn(snap, j))
+	list, _ := a.jobs.jobs()
+	v := a.jobViewOf(list, j, a.jobLiveIn(snap, j))
+	v.WorkspaceNow = workspaceNow(snap, a.groupRepos(snap, false), j)
+	return v
 }
 
-func (a *agentAPI) jobViewOf(j job, live jobLive) jobView {
+// jobViewOf is j for a full client, what it waits on read from list.
+func (a *agentAPI) jobViewOf(list []job, j job, live jobLive) jobView {
 	v := jobView{job: j, Live: live}
+	v.WaitsOn, v.WaitsOnFailed = jobWaits(list, j)
+	v.Ready = jobReady(list, j)
 	if a.ci.available() {
 		v.CISummary = ciSummary(j.CI)
 	}

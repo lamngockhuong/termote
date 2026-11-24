@@ -1,3 +1,4 @@
+import { ChevronsDown, ChevronsUp, Link2, SquareStack } from 'lucide-react'
 import { useId } from 'react'
 import type { Job, JobLiveStatus, JobState } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
@@ -51,10 +52,55 @@ export function jobBranch(job: Job): string | undefined {
   return tree?.branch ?? job.branch ?? job.live.branch
 }
 
+// A job's priority marker, high and low only (normal is unmarked)
+export function JobPriorityMark({ job }: { job: Job }) {
+  const { t } = useT()
+  if (job.priority !== 'high' && job.priority !== 'low') return null
+  const high = job.priority === 'high'
+  const Icon = high ? ChevronsUp : ChevronsDown
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[11px] ${high ? 'font-medium text-warning' : 'text-fg-subtle'}`}
+    >
+      <Icon size={13} aria-hidden="true" />
+      {t(high ? 'jobs.priority.high' : 'jobs.priority.low')}
+    </span>
+  )
+}
+
+// What a job still waits on: "Waits on 2 jobs", flagged when one of them
+// failed or was abandoned while the job is still to do. On a job already
+// started or finished it only informs (it never holds a state back).
+export function JobWaitsChip({ job }: { job: Job }) {
+  const { t } = useT()
+  const count = job.waitsOn?.length ?? 0
+  if (count === 0) return null
+  const failed = job.waitsOnFailed?.length ?? 0
+  const todo = job.state === 'todo'
+  const tone = !todo
+    ? 'border-border text-fg-subtle'
+    : failed > 0
+      ? 'border-danger/50 text-danger'
+      : 'border-border-strong text-fg'
+  return (
+    <span
+      data-testid="job-waits"
+      className={`inline-flex items-center gap-1 rounded-full border px-2 text-[11px] ${tone}`}
+    >
+      <Link2 size={12} aria-hidden="true" />
+      {t('jobs.card.waitsOn', { count })}
+      {failed > 0 && ` · ${t('jobs.card.waitsOnFailed', { count: failed })}`}
+    </span>
+  )
+}
+
 interface Props {
   job: Job
   // Server time (ms)
   now: number
+  // The name of the job's workspace (its group's, else its id); none for a
+  // job without one
+  workspace?: string
   // Opens the job's details; absent on a view-only device, whose card has
   // nothing to press
   onSelect?: (job: Job) => void
@@ -65,7 +111,7 @@ interface Props {
 // One job of the Plan: its title and state, what its agent does, its pane
 // and branch, and (a full client) its last diff and grants in force. A full
 // client's card is one button opening the job's details.
-export function JobCard({ job, now, onSelect, selected }: Props) {
+export function JobCard({ job, now, onSelect, selected, workspace }: Props) {
   const { t } = useT()
   const detailsId = useId()
   const title = visibleUnsafe(job.title)
@@ -84,6 +130,12 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
     .filter(Boolean)
     .join(' · ')
 
+  const marks =
+    job.priority === 'high' ||
+    job.priority === 'low' ||
+    (job.waitsOn?.length ?? 0) > 0 ||
+    !!workspace
+
   const body = (
     <>
       <span className="flex w-full items-center gap-2">
@@ -95,6 +147,23 @@ export function JobCard({ job, now, onSelect, selected }: Props) {
         </span>
       </span>
       <span id={detailsId} className="contents">
+        {marks && (
+          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2.5 gap-y-1">
+            <JobPriorityMark job={job} />
+            <JobWaitsChip job={job} />
+            {workspace && (
+              <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-fg-muted">
+                <SquareStack size={12} aria-hidden="true" />
+                <span className="sr-only">
+                  {t('jobs.card.workspace', { name: workspace })}
+                </span>
+                <span aria-hidden="true" className="truncate">
+                  {workspace}
+                </span>
+              </span>
+            )}
+          </span>
+        )}
         {status && live && <span className={LIVE_TONE[status]}>{live}</span>}
         {(ref || branch || job.ciSummary) && (
           <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2.5 gap-y-1 font-term text-[11px] text-fg-muted">

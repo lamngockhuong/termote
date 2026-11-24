@@ -98,15 +98,24 @@ type jobConflict struct {
 // view-only client sees it. Agent names the agent working on it; Worktree,
 // the git worktree made for it, is only ever written by the server.
 type job struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	Prompt    string    `json:"prompt,omitempty"`
-	Note      string    `json:"note,omitempty"`
-	State     string    `json:"state"`
-	CreatedBy string    `json:"createdBy"`
-	Workspace string    `json:"workspace,omitempty"`
-	Agent     *jobAgent `json:"agent,omitempty"`
-	Worktree  *jobTree  `json:"worktree,omitempty"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Prompt    string `json:"prompt,omitempty"`
+	Note      string `json:"note,omitempty"`
+	State     string `json:"state"`
+	CreatedBy string `json:"createdBy"`
+	// Priority: high, low, or empty for normal (job_deps.go).
+	Priority string `json:"priority,omitempty"`
+	// After: the jobs this one waits on, in the order added.
+	After []string `json:"after,omitempty"`
+	// Workspace: a client sets it only while the job has no agent and no
+	// worktree; after that only the server does.
+	Workspace string `json:"workspace,omitempty"`
+	// Repo: the main checkout of the workspace's repository, written by
+	// the server only (job_repo.go).
+	Repo     string    `json:"repo,omitempty"`
+	Agent    *jobAgent `json:"agent,omitempty"`
+	Worktree *jobTree  `json:"worktree,omitempty"`
 	// ReadTS, ReadConv: the last entry time and conversation of the turn
 	// the orchestrator read last (termote agents read); a later entry, or
 	// another conversation, is a turn it has not read.
@@ -164,7 +173,9 @@ type jobDiff struct {
 // jobEvent is one line of a job's history: kind is created, started,
 // continued, sent, read, answered, stopped, diff, state, agent, note,
 // grant, revoked, delegated, pr (attached or detached), ci (a check failed,
-// every pull request merged), ci_sent or ci_failed_send.
+// every pull request merged), ci_sent, ci_failed_send, finished,
+// finish_partial, priority, after (+id or -id), workspace or deps (a job it
+// waited on left the ledger).
 type jobEvent struct {
 	At   string `json:"at"`
 	Kind string `json:"kind"`
@@ -330,6 +341,7 @@ func (j job) clone() job {
 		j.Diff = &d
 	}
 	j.CI = j.CI.clone()
+	j.After = slices.Clone(j.After)
 	j.Events = slices.Clone(j.Events)
 	j.Grants = slices.Clone(j.Grants)
 	for i := range j.Grants {
@@ -384,6 +396,7 @@ func (s *jobStore) changeFile(op func(f *jobFile) error) error {
 	}
 	cutoff := s.now().Add(-jobsDoneKeep)
 	f.Jobs = slices.DeleteFunc(f.Jobs, func(j job) bool { return jobFinished(j.State) && j.Updated.Before(cutoff) })
+	s.pruneAfter(&f)
 	pruneAsks(&f, cutoff)
 	data, err := json.Marshal(f)
 	if err != nil {
@@ -424,6 +437,9 @@ func (s *jobStore) addEvent(j *job, kind, text string) {
 // create adds j (its ID, times and first event set here).
 func (s *jobStore) create(j job) (job, error) {
 	err := s.change(func(list []job) ([]job, error) {
+		if err := checkAfter(list, "", j.After); err != nil {
+			return nil, err
+		}
 		if len(list) >= maxJobs {
 			// Finished jobs make room, oldest first.
 			if i := oldestFinished(list); i >= 0 {
@@ -436,7 +452,12 @@ func (s *jobStore) create(j job) (job, error) {
 		j.Created = s.stamp(time.Time{})
 		j.Updated = j.Created
 		s.addEvent(&j, "created", "")
-		return append(list, j), nil
+		list = append(list, j)
+		// A job it waits on dropped for room leaves its after now, so the
+		// job returned is the one written.
+		s.pruneAfterJobs(list)
+		j = list[len(list)-1].clone()
+		return list, nil
 	})
 	if err == nil && j.State == "review" {
 		if f := s.onReview.Load(); f != nil {
@@ -459,6 +480,12 @@ func oldestFinished(list []job) int {
 // update runs op on the job with id, refusing a stale updated (when one is
 // given) with the job as it is, and stamps it.
 func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) {
+	return s.updateWith(id, updated, func(_ []job, j *job) error { return op(j) })
+}
+
+// updateWith is update for an op that reads the other jobs too (the list
+// as the file holds it now, j among them).
+func (s *jobStore) updateWith(id, updated string, op func(list []job, j *job) error) (job, error) {
 	var saved job
 	var before string
 	err := s.change(func(list []job) ([]job, error) {
@@ -470,7 +497,7 @@ func (s *jobStore) update(id, updated string, op func(*job) error) (job, error) 
 			return nil, &jobConflict{codedError{"job_conflict", "the job was changed elsewhere", http.StatusConflict}, list[i]}
 		}
 		before = list[i].State
-		if err := op(&list[i]); err != nil {
+		if err := op(list, &list[i]); err != nil {
 			return nil, err
 		}
 		list[i].Updated = s.stamp(list[i].Updated)

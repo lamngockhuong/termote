@@ -21,9 +21,12 @@ const plan = (page: Page) => page.getByRole('region', { name: 'Plan' })
 // A job's details, opened from its card: beside the columns on a wide
 // screen, a sheet on a narrow one
 async function details(page: Page, title: string) {
-  await plan(page).getByRole('article', { name: title }).getByRole('button', { name: title }).click()
   const panel = page.getByRole('complementary', { name: title })
     .or(page.getByRole('dialog', { name: title }))
+  // A card that is open already closes on a tap
+  if (!(await panel.isVisible())) {
+    await plan(page).getByRole('article', { name: title }).getByRole('button', { name: title }).click()
+  }
   await expect(panel).toBeVisible()
   return panel
 }
@@ -40,11 +43,19 @@ async function listJobs(request: APIRequestContext): Promise<ListedJob[] | null>
   return ((await res.json()) as { jobs: ListedJob[] }).jobs
 }
 
+// Removes a job as read; a state-changing route takes JSON only
+async function removeJob(request: APIRequestContext, j: ListedJob) {
+  const res = await request.delete(`/api/mux/jobs/${j.id}?updated=${encodeURIComponent(j.updated)}`, {
+    headers: { 'Content-Type': 'application/json' },
+  })
+  expect(res.ok(), `remove ${j.title}`).toBe(true)
+}
+
 test.describe('the Plan, on the server', () => {
   test.afterEach(async ({ request }) => {
     for (const j of (await listJobs(request)) ?? []) {
       if (!j.title.endsWith(tag)) continue
-      await request.delete(`/api/mux/jobs/${j.id}?updated=${encodeURIComponent(j.updated)}`)
+      await removeJob(request, j)
     }
   })
 
@@ -68,6 +79,80 @@ test.describe('the Plan, on the server', () => {
     await expect(card).toContainText('Review')
     const listed = (await listJobs(request))?.find((j) => j.title === title)
     expect(listed, 'saved on the server').toMatchObject({ state: 'review' })
+  })
+
+  test('orders the jobs and follows what each waits on', async ({ page, request }) => {
+    test.skip((await listJobs(request)) === null, 'the server keeps no job ledger')
+    const add = async (title: string) => {
+      const res = await request.post('/api/mux/jobs', { data: { title } })
+      expect(res.status()).toBe(201)
+      return ((await res.json()) as { job: ListedJob }).job
+    }
+    const a = await add(`e2e first ${tag}`)
+    await add(`e2e second ${tag}`)
+    const b = `e2e second ${tag}`
+    await open(page)
+    // Both to do, so one column: the Plan's cards in order
+    const titles = () => plan(page).getByRole('article').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+
+    // High priority: first in To do
+    await (await details(page, b)).getByRole('button', { name: `Edit ${b}` }).click()
+    let edit = page.getByRole('dialog', { name: `Edit ${b}` })
+    await edit.getByRole('radio', { name: 'High' }).click()
+    await edit.getByRole('button', { name: 'Save' }).click()
+    await expect(edit).toBeHidden()
+    await expect.poll(async () => (await titles()).filter((t) => t === b || t === a.title)).toEqual([b, a.title])
+    await expect(plan(page).getByRole('article', { name: b })).toContainText('High priority')
+
+    // B waits on A; A cannot then wait on B
+    await (await details(page, b)).getByRole('button', { name: `Edit ${b}` }).click()
+    edit = page.getByRole('dialog', { name: `Edit ${b}` })
+    await edit.getByRole('group', { name: 'Waits on' }).getByRole('checkbox', { name: a.title }).check()
+    await edit.getByRole('button', { name: 'Save' }).click()
+    await expect(edit).toBeHidden()
+    const card = plan(page).getByRole('article', { name: b })
+    await expect(card).toContainText('Waits on 1 job')
+    await (await details(page, a.title)).getByRole('button', { name: `Edit ${a.title}` }).click()
+    edit = page.getByRole('dialog', { name: `Edit ${a.title}` })
+    await expect(edit.getByRole('group', { name: 'Waits on' }).getByRole('checkbox', { name: b })).toBeDisabled()
+
+    // A done: B waits on nothing; A removed: B's history says so
+    await edit.getByRole('combobox', { name: 'State' }).selectOption('done')
+    await edit.getByRole('button', { name: 'Save' }).click()
+    await expect(edit).toBeHidden()
+    await expect(card).not.toContainText('Waits on')
+    await removeJob(request, (await listJobs(request))?.find((j) => j.id === a.id) as ListedJob)
+    await page.reload()
+    await page.getByRole('tab', { name: /^Plan/ }).click()
+    await expect(await details(page, b)).toContainText('A job it waited on left the plan')
+  })
+
+  test('sets a workspace and filters the Plan by it', async ({ page, request }) => {
+    test.skip((await listJobs(request)) === null, 'the server keeps no job ledger')
+    const snap = (await (await request.get('/api/mux/snapshot')).json()) as { groups: { id: string; name: string }[] }
+    const ws = snap.groups[0]
+    test.skip(!ws, 'the server shows no workspace')
+    const title = `e2e workspace ${tag}`
+    const other = `e2e elsewhere ${tag}`
+    await request.post('/api/mux/jobs', { data: { title } })
+    await request.post('/api/mux/jobs', { data: { title: other } })
+    await open(page)
+    await (await details(page, title)).getByRole('button', { name: `Edit ${title}` }).click()
+    const edit = page.getByRole('dialog', { name: `Edit ${title}` })
+    await edit.getByRole('combobox', { name: 'Workspace' }).selectOption(ws.id)
+    await edit.getByRole('button', { name: 'Save' }).click()
+    await expect(edit).toBeHidden()
+    await expect(plan(page).getByRole('article', { name: title })).toContainText(ws.name || ws.id)
+
+    const filter = plan(page).getByRole('combobox', { name: 'Workspace shown' })
+    await filter.selectOption(`ws:${ws.id}`)
+    await expect(plan(page).getByRole('article', { name: title })).toBeVisible()
+    await expect(plan(page).getByRole('article', { name: other })).toHaveCount(0)
+    // Remembered by this browser
+    await page.reload()
+    await page.getByRole('tab', { name: /^Plan/ }).click()
+    await expect(plan(page).getByRole('combobox', { name: 'Workspace shown' })).toHaveValue(`ws:${ws.id}`)
+    await expect(plan(page).getByRole('article', { name: other })).toHaveCount(0)
   })
 })
 
@@ -105,6 +190,7 @@ function fakeLedger(page: Page) {
             serverNow: new Date().toISOString(),
             canGrant: true,
             ciAvailable: true,
+            jobFields: ['priority', 'after', 'workspace'],
           })
         }
         if (req.method() === 'POST' && path.endsWith('/grants')) {
@@ -129,6 +215,18 @@ function fakeLedger(page: Page) {
 }
 
 test.describe('the Plan, answered here', () => {
+  test('keeps the workspace of a job with an agent, and its order only noted', async ({ page }) => {
+    const ledger = fakeLedger(page)
+    await ledger.install()
+    await open(page)
+    const title = `e2e grant ${tag}`
+    await (await details(page, title)).getByRole('button', { name: `Edit ${title}` }).click()
+    const edit = page.getByRole('dialog', { name: `Edit ${title}` })
+    const ws = edit.getByRole('combobox', { name: 'Workspace' })
+    await expect(ws).toBeDisabled()
+    await expect(edit.getByText('Set when the job started')).toBeVisible()
+  })
+
   test('gives a grant to run a typed prefix, and ends it', async ({ page }) => {
     const ledger = fakeLedger(page)
     await ledger.install()
@@ -201,9 +299,14 @@ test.describe('the Plan, answered here', () => {
               branch: 'feat/e2e',
               live: { status: 'idle', paneId: '%e2e', ref: 'e2e:claude' },
               updated: new Date().toISOString(),
+              priority: 'high',
+              after: ['fedcba9876543210'],
+              waitsOn: ['fedcba9876543210'],
+              workspace: 'e2e-ws',
             },
           ],
           readOnly: true,
+          jobFields: ['priority', 'after', 'workspace'],
           serverNow: new Date().toISOString(),
         }),
       }),
@@ -211,6 +314,9 @@ test.describe('the Plan, answered here', () => {
     await open(page)
     const card = plan(page).getByRole('article', { name: `e2e view ${tag}` })
     await expect(card).toContainText('feat/e2e')
+    await expect(card).toContainText('High priority')
+    await expect(card).toContainText('Waits on 1 job')
+    await expect(card).toContainText('e2e-ws')
     await expect(plan(page).getByRole('button', { name: 'New job' })).toHaveCount(0)
     await expect(card.getByRole('button')).toHaveCount(0)
   })

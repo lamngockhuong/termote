@@ -87,7 +87,10 @@ termote agents diff <pane> [--stat]          # commit của branch kể từ bas
 termote agents stop <pane> --cursor <cursor> # dừng lượt đang chạy, như Esc (cursor lấy từ read --json)
 termote agents start --workspace <id> --kind claude --name tests 'Write the tests'
 termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix the login test'
-termote agents jobs [--mine] [--all] [--json] # sổ việc: pane, trạng thái, lượt chưa đọc, branch của từng việc
+termote agents jobs [--mine] [--all] [--json] # sổ việc theo mức ưu tiên: pane, trạng thái, lượt chưa đọc, branch của từng việc
+termote agents jobs --ready                  # các việc chưa làm không còn chờ việc nào: việc nên bắt đầu tiếp
+termote agents job add --title 'Docs' --priority high --after <job> --workspace <id>
+termote agents job set <id> --priority low --no-after <job>   # hoặc --after <job>, --workspace, --no-workspace
 termote agents job show <id>                 # prompt, ghi chú, ủy quyền và lịch sử của việc
 termote agents job set <id> --state review --note 'What was done'
 termote agents job remove <id>               # xóa một việc đã xong, thất bại hoặc bị bỏ khỏi sổ việc
@@ -171,6 +174,26 @@ việc nó giao thêm sau khi đã chuyển sang `review`, đều được theo 
 được báo một lần, không bao giờ cản các việc khác, và lệnh chỉ báo không còn gì để chờ khi không việc
 nào còn agent có thể kết thúc lượt. Ở nơi Termote không xác định được pane của nó (`herdr-core`, psmux,
 Windows), `wait --mine` bị từ chối và orchestrator phải kê tên các việc bằng `--job`.
+
+### Mức ưu tiên, thứ tự và workspace
+
+Mỗi việc có một mức ưu tiên (`high`, `normal` hoặc `low`, đặt bằng `--priority`) và có thể chờ các
+việc khác (`--after <job>` nhận id của việc; mốc `<pane>@<seq>` của `wait` thì chỉ pane, hai thứ khác
+nhau). `jobs` liệt kê việc theo mức ưu tiên, việc chưa làm thì cũ trước, kèm những việc mỗi việc còn
+chờ (đánh dấu `!` nếu việc được chờ đã thất bại hoặc bị bỏ) và workspace của nó. `jobs --ready` chỉ
+giữ những việc chưa làm không còn chờ gì: orchestrator chọn việc tiếp theo ở đây khi bắt đầu phiên,
+sau mỗi lần một việc sang cần xem lại và sau mỗi `job finish`, vì dọn xong một việc có thể làm các
+việc chờ nó sẵn sàng. Chỉ việc đã `done` mới cho các việc sau bắt đầu; việc thất bại hay bị bỏ vẫn
+giữ chúng chờ cho tới khi bạn quyết (bỏ phụ thuộc bằng `job set <id> --no-after <job>`, hoặc bỏ luôn
+việc đang chờ). `start --job` từ chối việc còn đang chờ và nêu tên những việc nó chờ. Một việc không
+thể chờ chính nó, chờ việc không còn tồn tại, hay chờ vòng tròn; việc bị xóa khỏi sổ thì tự rời khỏi
+danh sách chờ của các việc khác. Với việc đang chạy, đang chờ xem lại hay đã kết thúc, `--after`
+chỉ ghi lại thứ tự: nó không bao giờ cản việc đổi trạng thái hay `job finish`.
+
+Workspace của việc (`--workspace <id | tên>`) đặt được khi chưa có agent nào nhận việc. Khi việc đã
+có agent hoặc worktree, workspace là nơi việc được bắt đầu (với worktree là workspace tạo ra
+worktree đó) và không còn sửa tay được. Nếu workspace ấy bị đóng rồi mở lại trên cùng repository
+với id mới, việc sẽ hiện dưới workspace mới.
 
 Tab Kế hoạch trong [Tổng quan](/vi/usage/overview/#kế-hoạch) hiện đúng sổ việc ấy. Ở đó bạn còn
 thêm được việc để orchestrator nhận (`start --job <id>`), và mở chi tiết một việc để sửa hay cấp ủy
@@ -300,7 +323,7 @@ termote agents job finish <id> --close --remove-worktree   # việc không có w
 ```
 
 Lệnh đóng tab của việc và xóa worktree bằng đúng các lệnh mà PWA dùng để đóng tab và xóa worktree,
-rồi chuyển việc từ cần xem lại sang đã xong. Termote kiểm tra hết trước, chỉ cần một điều không đạt
+rồi chuyển việc từ cần xem lại sang đã xong; nhờ vậy các việc đang chờ nó có thể sẵn sàng. Termote kiểm tra hết trước, chỉ cần một điều không đạt
 là không đóng gì:
 
 - việc được giao từ chính pane của orchestrator, và đang chờ xem lại hoặc đã kết thúc;

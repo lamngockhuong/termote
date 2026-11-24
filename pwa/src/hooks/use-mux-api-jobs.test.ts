@@ -55,6 +55,7 @@ describe('job requests', () => {
       serverNow: 'now',
       canGrant: true,
       ciAvailable: true,
+      jobFields: ['priority', 'after', 'workspace'],
     })
     expect(await fetchJobs()).toEqual({
       jobs: [JOB],
@@ -62,6 +63,7 @@ describe('job requests', () => {
       serverNow: 'now',
       canGrant: true,
       ciAvailable: true,
+      jobFields: ['priority', 'after', 'workspace'],
     })
     expect(sent[0]).toEqual({ url: '/api/mux/jobs?all=1', method: 'GET' })
   })
@@ -74,6 +76,54 @@ describe('job requests', () => {
       serverNow: '',
       canGrant: false,
       ciAvailable: false,
+      jobFields: [],
+    })
+  })
+
+  it('keeps the job fields it knows, and the new ones of each job', async () => {
+    const planned = {
+      ...JOB,
+      priority: 'high',
+      after: ['b1'],
+      waitsOn: ['b1'],
+      waitsOnFailed: ['b1'],
+      ready: false,
+      workspace: 'w1',
+    }
+    mockFetch({
+      jobs: [planned],
+      jobFields: ['after', 'later', 3, 'workspace'],
+    })
+    const list = await fetchJobs()
+    expect(list.jobFields).toEqual(['after', 'workspace'])
+    expect(list.jobs[0]).toEqual(planned)
+  })
+
+  it('sends the priority, the jobs waited on and the workspace', async () => {
+    let sent = mockFetch({ job: JOB }, 201)
+    await createJob({
+      title: 'T',
+      priority: 'high',
+      after: ['b1'],
+      workspace: 'w1',
+    })
+    expect(sent[0].body).toEqual({
+      title: 'T',
+      priority: 'high',
+      after: ['b1'],
+      workspace: 'w1',
+    })
+    sent = mockFetch({ job: JOB })
+    await updateJob('a1', {
+      priority: 'normal',
+      after: [],
+      workspace: '',
+      updated: 'u1',
+    })
+    expect(sent[0]).toEqual({
+      url: '/api/mux/jobs/a1',
+      method: 'PATCH',
+      body: { priority: 'normal', after: [], workspace: '', updated: 'u1' },
     })
   })
 

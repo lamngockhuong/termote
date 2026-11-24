@@ -3202,9 +3202,20 @@ export interface JobEvent {
   text?: string
 }
 
+// A job's priority as stored: normal is absent. JOB_PRIORITIES are the
+// choices a client sends, normal included.
+export type JobPriority = 'high' | 'low'
+export const JOB_PRIORITIES = ['high', 'normal', 'low'] as const
+export type JobPriorityChoice = (typeof JOB_PRIORITIES)[number]
+
+// The job fields a server reads from a client beyond the first ones
+// (jobFields): an older one lacks them, and their editors are hidden.
+export type JobField = 'priority' | 'after' | 'workspace'
+const JOB_FIELDS: readonly string[] = ['priority', 'after', 'workspace']
+
 // A job as the server lists it. A view-only client gets id, title, state,
-// branch, live and updated only. updated is sent back as read with a change
-// or a delete.
+// branch, live, updated, priority, after, waitsOn, waitsOnFailed and
+// workspace only. updated is sent back as read with a change or a delete.
 export interface Job {
   id: string
   title: string
@@ -3216,7 +3227,20 @@ export interface Job {
   prompt?: string
   note?: string
   createdBy?: string
+  // The workspace (group id) the job belongs to; workspaceNow: the one it
+  // is in now when the server found it again under another id
   workspace?: string
+  workspaceNow?: string
+  priority?: JobPriority
+  // The jobs it waits on (ids), as set
+  after?: string[]
+  // Of after, the jobs not done yet, and of those the failed or abandoned
+  // ones (computed by the server). Never called blocked: that is an agent
+  // waiting on a dialog
+  waitsOn?: string[]
+  waitsOnFailed?: string[]
+  // To do and waits on nothing (full clients)
+  ready?: boolean
   agent?: JobAgent
   worktree?: JobWorktree
   readTs?: string
@@ -3245,6 +3269,9 @@ export interface JobList {
   canGrant: boolean
   // The server follows the jobs' pull requests (never in a container)
   ciAvailable: boolean
+  // The fields beyond the first ones this server takes (none from an older
+  // one)
+  jobFields: JobField[]
 }
 
 async function jobRequest(
@@ -3268,27 +3295,45 @@ export async function fetchJobs(): Promise<JobList> {
     serverNow: typeof body.serverNow === 'string' ? body.serverNow : '',
     canGrant: body.canGrant === true,
     ciAvailable: body.ciAvailable === true,
+    jobFields: Array.isArray(body.jobFields)
+      ? body.jobFields.filter(
+          (f: unknown): f is JobField =>
+            typeof f === 'string' && JOB_FIELDS.includes(f),
+        )
+      : [],
   }
+}
+
+// What a job's priority, dependencies and workspace are set to: priority
+// normal clears it, after replaces the whole list (20 at most), workspace
+// '' clears it.
+export interface JobOrderChange {
+  priority?: JobPriorityChoice
+  after?: string[]
+  workspace?: string
 }
 
 // Adds a todo job, for the orchestrator to take up (termote agents start
 // --job). Throws RequestError (job_invalid, too_many_jobs, newer_format,
-// busy).
-export async function createJob(j: {
-  title: string
-  prompt?: string
-  note?: string
-}): Promise<Job> {
+// busy, job_cycle, job_after_missing, job_workspace_unknown).
+export async function createJob(
+  j: {
+    title: string
+    prompt?: string
+    note?: string
+  } & JobOrderChange,
+): Promise<Job> {
   return (await jobRequest(`${apiBase()}/jobs`, 'POST', j)).job
 }
 
 // Changes the job as it was when updated was read. pane: the pane whose
 // agent takes it over (job_no_agent when none runs there), which ends every
 // grant of the job. Throws RequestError: job_conflict carries the job as it
-// is now, job_not_found when it was removed.
+// is now, job_not_found when it was removed, job_workspace_bound for a
+// job with an agent or a worktree given another workspace.
 export async function updateJob(
   id: string,
-  change: {
+  change: JobOrderChange & {
     title?: string
     prompt?: string
     note?: string
