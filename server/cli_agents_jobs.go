@@ -354,7 +354,7 @@ func (c *cli) agentsJobs(args []string) error {
 		return err
 	}
 	list := slices.DeleteFunc(l.Jobs, func(j jobView) bool {
-		return (mine && j.CreatedBy != self) || (ws != "" && j.Workspace != group.ID)
+		return (mine && j.CreatedBy != self) || (ws != "" && j.Workspace != group.ID && j.WorkspaceNow != group.ID)
 	})
 	if asJSON {
 		if list == nil {
@@ -403,10 +403,10 @@ func (c *cli) agentsJobs(args []string) error {
 		if j.Priority != "" {
 			pri = plainText(j.Priority)
 		}
-		wsName := "-"
-		if j.Workspace != "" {
-			wsName = plainText(j.Workspace)
-			if i := groupIndex(s.Groups, j.Workspace); i >= 0 && s.Groups[i].Name != "" {
+		wsName, wsID := "-", cmp.Or(j.WorkspaceNow, j.Workspace)
+		if wsID != "" {
+			wsName = plainText(wsID)
+			if i := groupIndex(s.Groups, wsID); i >= 0 && s.Groups[i].Name != "" {
 				wsName = clipLine(plainText(s.Groups[i].Name), 20)
 			}
 		}
@@ -604,7 +604,14 @@ func (c *cli) agentsJobShow(args []string) error {
 	}
 	if j.Workspace != "" {
 		s, _ := c.agentsSnapshot(port)
-		fmt.Fprintf(c.out, "Workspace: %s\n", workspaceText(s, j.Workspace))
+		if j.WorkspaceNow != "" {
+			fmt.Fprintf(c.out, "Workspace: %s (%s was closed; the same repository)\n", workspaceText(s, j.WorkspaceNow), plainText(j.Workspace))
+		} else {
+			fmt.Fprintf(c.out, "Workspace: %s\n", workspaceText(s, j.Workspace))
+		}
+	}
+	if j.Repo != "" {
+		fmt.Fprintf(c.out, "Repository: %s\n", plainText(c.tildeDir(j.Repo)))
 	}
 	if j.Agent != nil {
 		unread := ""

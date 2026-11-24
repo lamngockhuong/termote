@@ -350,7 +350,9 @@ func (a *agentAPI) worktreeGroups(ctx context.Context, snap Snapshot, j job) (gr
 	}
 	listed, found := false, false
 	var sources []string
-	for _, id := range []string{j.Worktree.GroupID, j.Workspace} {
+	// A workspace closed and opened again: the group of the job's
+	// repository now; the worktree's folder must still be in its list.
+	for _, id := range []string{j.Worktree.GroupID, j.Workspace, workspaceNow(snap, a.groupRepos(snap, false), j)} {
 		if id != "" && exists(id) && a.wm.ValidGroupID(id) && !slices.Contains(sources, id) {
 			sources = append(sources, id)
 		}

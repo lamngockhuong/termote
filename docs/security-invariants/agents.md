@@ -883,7 +883,18 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   being ignored, it is held to the pane's group (`TestJobWorkspaceRoutes`, `TestJobWorkspaceFromPane`,
   `TestJobWorkspaceOfWorktreeStart`, `TestJobFinishRetryFromSourceWorkspace`). The events `priority`,
   `after`, `workspace` and `deps` are written by the server only (not in `jobEventKinds`). Listings
-  are by priority (`sortJobs`) and carry `jobFields`, the fields this server reads.
+  are by priority (`sortJobs`) and carry `jobFields`, the fields this server reads. A job's `repo`
+  (`server/job_repo.go`) is the main checkout of its workspace's repository as the git nester has it
+  cached for the group's first folder: written by the server only (a `repo` key in a body is
+  ignored), never sent to a view-only client (as `dir`), never used to open a file or run git, and
+  no git runs in a request for it (a view-only read starts no lookup). While a job's workspace is not
+  open, a listing shows it under the first open group of the same repository (`workspaceNow`, a main
+  checkout before a linked worktree; an id, sent to every role) and `?workspace=` matches it; the
+  stored workspace moves there at the job's next write, never at a read, and never over a workspace
+  that write set: that rewrite is the one change of a bound job's workspace besides its first agent,
+  and only ever to a group whose folder resolves to the job's own `repo`. Job finish lists worktrees
+  from that group too and still removes only a folder that list names (`TestJobRepoRecorded`,
+  `TestJobRepoWorkspaceNow`, `TestJobFinishAfterWorkspaceRecreated`).
 - **Orchestrator asks** (`/api/mux/asks*`, `POST /api/mux/asks/{id}/dismiss` among them,
   `server/ask_store.go`, `server/ask_routes.go`, `server/cli_agents_ask.go`): an ask is `open`,
   `answered` or `dismissed`. The orchestrator's questions for the user live in `jobs.json` (`asks`,

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -187,5 +188,24 @@ func TestAgentsJobSetUnknownWorkspace(t *testing.T) {
 	j := addJob(t, tc, "--title", "x")
 	if err := tc.dispatch("agents", []string{"job", "set", j.ID, "--workspace", "nope"}); err == nil || !strings.Contains(err.Error(), "no workspace is named") {
 		t.Errorf("unknown: %v", err)
+	}
+}
+
+// A job whose workspace was closed and opened again is found by the new
+// one, and show names both and its repository.
+func TestAgentsJobWorkspaceNow(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(Snapshot{Backend: "herdr", Groups: []Group{{ID: "w5", Name: "app"}}}))
+	j := jobView{job: job{ID: jid(1), Title: "A", State: "todo", Workspace: "w1", Repo: filepath.Join(tc.home, "src", "app")}, WorkspaceNow: "w5"}
+	s.set("GET /api/mux/jobs", jsonAnswer(map[string]any{"jobs": []jobView{j}}))
+	if got := jobsOf(t, tc, "--workspace", "app"); len(got) != 1 {
+		t.Errorf("filter %+v", got)
+	}
+	if table := jobLine(t, tc, "jobs"); !strings.Contains(table, "app") {
+		t.Errorf("table:\n%s", table)
+	}
+	show := jobLine(t, tc, "job", "show", j.ID)
+	if !strings.Contains(show, "Workspace: app (w5) (w1 was closed; the same repository)") || !strings.Contains(show, "Repository: ~/src/app") {
+		t.Errorf("show:\n%s", show)
 	}
 }

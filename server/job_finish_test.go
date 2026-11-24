@@ -1076,3 +1076,48 @@ func TestJobFinishRetryWithoutSource(t *testing.T) {
 	ft.wm.removed, ft.ff.closed = nil, nil
 	ft.refused("no source", map[string]any{"close": true, "removeWorktree": true}, http.StatusServiceUnavailable, "busy")
 }
+
+// The workspace a job ran from closed and opened again under a new id: a
+// finish lists the worktrees from the group of the job's repository, and
+// still removes nothing when that list lacks the job's folder.
+func TestJobFinishAfterWorkspaceRecreated(t *testing.T) {
+	for _, listed := range []bool{true, false} {
+		ft := newFinishTest(t, true)
+		fr := &fakeRepos{repos: map[string]gitRepoInfo{filepath.Join(ft.repo.home, "repo"): {Top: ft.repo.main, Main: ft.repo.main}}}
+		ft.agent.nester = newTestNester(fr.lookup)
+		ft.merged()
+		ft.agent.m = finishHerdr{ft.ff, ft.wm}
+		ft.set(func(j *job) { j.Repo = ft.repo.main })
+		ft.wm.removeErr = errWorktreeInUse
+		ft.finish(map[string]any{"close": true, "removeWorktree": true})
+		ft.wm.removeErr = nil
+		ft.f.mu.Lock()
+		ft.f.snap.Groups[0].ID = "w3"
+		for i := range ft.f.snap.Groups[0].Tabs {
+			ft.f.snap.Groups[0].Tabs[i].Panes[0].ID = strings.Replace(ft.f.snap.Groups[0].Tabs[i].Panes[0].ID, "w1:", "w3:", 1)
+		}
+		ft.f.mu.Unlock()
+		ft.set(func(j *job) { j.CreatedBy = "w3:self" })
+		deadline := time.Now().Add(5 * time.Second)
+		for snap, _ := ft.agent.m.Snapshot(context.Background()); len(ft.agent.groupRepos(snap, true)) == 0; {
+			if time.Now().After(deadline) {
+				t.Fatal("repository not looked up")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		ft.snapshot()
+		if !listed {
+			ft.wm.list.Worktrees = ft.wm.list.Worktrees[:1]
+			ft.wm.removed, ft.ff.closed = nil, nil
+			b := map[string]any{"updated": ft.job().Updated.Format(time.RFC3339Nano), "by": "w3:self", "close": true, "removeWorktree": true}
+			if code, out := ft.do("socket", http.MethodPost, "/api/mux/jobs/"+ft.id+"/finish", b); code != http.StatusConflict || out["code"] != "changed" || len(ft.wm.removed) > 0 {
+				t.Errorf("another repository's list = %d %v %v", code, out, ft.wm.removed)
+			}
+			continue
+		}
+		b := map[string]any{"updated": ft.job().Updated.Format(time.RFC3339Nano), "by": "w3:self", "close": true, "removeWorktree": true}
+		if code, out := ft.do("socket", http.MethodPost, "/api/mux/jobs/"+ft.id+"/finish", b); code != http.StatusOK || out["worktreeRemoved"] != true {
+			t.Errorf("again = %d %v", code, out)
+		}
+	}
+}

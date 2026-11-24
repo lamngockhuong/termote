@@ -70,6 +70,9 @@ type jobView struct {
 	WaitsOn       []string `json:"waitsOn,omitempty"`
 	WaitsOnFailed []string `json:"waitsOnFailed,omitempty"`
 	Ready         bool     `json:"ready,omitempty"`
+	// WorkspaceNow: the open group of the job's repository it is shown
+	// under while its workspace is gone (job_repo.go).
+	WorkspaceNow string `json:"workspaceNow,omitempty"`
 	// CISummary: what the job's card shows of its pull requests.
 	CISummary *jobCISummary `json:"ciSummary,omitempty"`
 	// CIChecked: when its pull requests were last read or tried (kept in
@@ -93,6 +96,7 @@ type jobBrief struct {
 	WaitsOn       []string `json:"waitsOn,omitempty"`
 	WaitsOnFailed []string `json:"waitsOnFailed,omitempty"`
 	Workspace     string   `json:"workspace,omitempty"`
+	WorkspaceNow  string   `json:"workspaceNow,omitempty"`
 	// CISummary: the colour and numbers of the job's pull requests, never a check
 	// name, a link or an error; none where the branch is hidden.
 	CISummary *jobCISummary `json:"ciSummary,omitempty"`
@@ -277,10 +281,13 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := a.readMark(agent)
+	snap, repos := a.jobAnchors()
 	// The grants this change ends, by reason, logged once it is written.
 	var ended map[string][]string
 	j, err := a.jobs.updateWith(id, in.Updated, func(list []job, j *job) error {
 		ended = map[string][]string{}
+		before := j.Workspace
+		defer func() { a.anchorJob(j, before, snap, repos) }()
 		if err := applyJobInput(j, in); err != nil {
 			return err
 		}
@@ -409,7 +416,9 @@ func (a *agentAPI) handleJobEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	snap, repos := a.jobAnchors()
 	j, err := a.jobs.update(id, "", func(j *job) error {
+		a.anchorJob(j, j.Workspace, snap, repos)
 		switch in.Kind {
 		case "read":
 			// Only ever forward: a read that saw less than one recorded
@@ -504,6 +513,8 @@ func (a *agentAPI) newJob(r *http.Request, in jobInput) (job, error) {
 		j.Workspace = ws.bound
 	}
 	j.Worktree = tree
+	snap, repos := a.jobAnchors()
+	a.anchorJob(&j, "", snap, repos)
 	return j, nil
 }
 
@@ -784,12 +795,18 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 	all, ws, ready := q.Get("all") == "1", q.Get("workspace"), q.Get("ready") == "1"
 	snap, _ := a.activity.lastSnapshot()
 	viewOnly := isViewOnly(r)
+	// A view-only read starts no repository lookup, as its snapshot does not.
+	repos := a.groupRepos(snap, !viewOnly)
+	now := make(map[string]string, len(list))
+	for _, j := range list {
+		now[j.ID] = workspaceNow(snap, repos, j)
+	}
 	// A server that does not follow pull requests (a container) shows none
 	// it read before.
 	ciOn := a.ci.available()
 	var shown []job
 	for _, j := range list {
-		if (!all && jobFinished(j.State)) || (ws != "" && j.Workspace != ws) || (ready && !jobReady(list, j)) {
+		if (!all && jobFinished(j.State)) || (ws != "" && j.Workspace != ws && now[j.ID] != ws) || (ready && !jobReady(list, j)) {
 			continue
 		}
 		shown = append(shown, j)
@@ -801,7 +818,7 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 		live := lives[i]
 		if viewOnly {
 			b := jobBrief{ID: j.ID, Title: j.Title, State: j.State, Live: live, Updated: j.Updated,
-				Priority: j.Priority, After: j.After, Workspace: j.Workspace}
+				Priority: j.Priority, After: j.After, Workspace: j.Workspace, WorkspaceNow: now[j.ID]}
 			b.WaitsOn, b.WaitsOnFailed = jobWaits(list, j)
 			b.Live.LastTS, b.Live.EntryTS, b.Live.Dir, b.Live.OutsideWorktree = "", "", "", false
 			if live.branchHidden {
@@ -817,20 +834,22 @@ func (a *agentAPI) listJobs(w http.ResponseWriter, r *http.Request) {
 			brief = append(brief, b)
 			continue
 		}
-		full = append(full, a.jobViewOf(list, j, live))
+		v := a.jobViewOf(list, j, live)
+		v.WorkspaceNow = now[j.ID]
+		full = append(full, v)
 	}
-	now := time.Now().UTC().Format(activityTimeFormat)
+	serverNow := time.Now().UTC().Format(activityTimeFormat)
 	if viewOnly {
 		if brief == nil {
 			brief = []jobBrief{}
 		}
-		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": now, "ciAvailable": ciOn, "jobFields": jobFields})
+		jsonOK(w, map[string]any{"jobs": brief, "readOnly": true, "serverNow": serverNow, "ciAvailable": ciOn, "jobFields": jobFields})
 		return
 	}
 	if full == nil {
 		full = []jobView{}
 	}
-	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": now, "canGrant": canGrant(r),
+	jsonOK(w, map[string]any{"jobs": full, "readOnly": readOnly, "serverNow": serverNow, "canGrant": canGrant(r),
 		"ciAvailable": ciOn, "jobFields": jobFields})
 }
 

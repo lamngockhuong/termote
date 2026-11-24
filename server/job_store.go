@@ -110,9 +110,12 @@ type job struct {
 	After []string `json:"after,omitempty"`
 	// Workspace: a client sets it only while the job has no agent and no
 	// worktree; after that only the server does.
-	Workspace string    `json:"workspace,omitempty"`
-	Agent     *jobAgent `json:"agent,omitempty"`
-	Worktree  *jobTree  `json:"worktree,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+	// Repo: the main checkout of the workspace's repository, written by
+	// the server only (job_repo.go).
+	Repo     string    `json:"repo,omitempty"`
+	Agent    *jobAgent `json:"agent,omitempty"`
+	Worktree *jobTree  `json:"worktree,omitempty"`
 	// ReadTS, ReadConv: the last entry time and conversation of the turn
 	// the orchestrator read last (termote agents read); a later entry, or
 	// another conversation, is a turn it has not read.
