@@ -203,7 +203,7 @@ export const THEMES = {
 // Weight of a chosen accent under selected text: selectionForeground keeps
 // 4.5:1 on it over the terminal background of every style
 // (terminal-view.test.tsx).
-export const ACCENT_SELECTION_ALPHA = { light: 0.28, dark: 0.32 }
+const ACCENT_SELECTION_ALPHA = { light: 0.28, dark: 0.32 }
 
 // xterm.js needs a concrete colour, not var(): the background comes from the
 // --tm-term-bg token of the current style and theme, the palette from THEMES.

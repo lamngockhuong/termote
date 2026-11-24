@@ -128,4 +128,19 @@ describe('SegmentedControl', () => {
     expect(radio('Teal')).toHaveClass('border-transparent')
     expect(radio('Teal')).toHaveClass('pointer-coarse:size-touch')
   })
+
+  it('draws chips as pills, the selected one filled', () => {
+    render(
+      <SegmentedControl
+        label="Filter"
+        variant="chips"
+        options={OPTIONS}
+        value="dark"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('radiogroup')).toHaveClass('flex-wrap')
+    expect(radio('Dark theme')).toHaveClass('bg-fg')
+    expect(radio('Light theme')).toHaveClass('bg-surface')
+  })
 })
