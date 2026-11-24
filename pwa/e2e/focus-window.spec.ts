@@ -166,9 +166,20 @@ test.describe('focus window', () => {
     const focus = await opened
     await expect(focus).toHaveURL(/\?solo=1$/)
     await expect(focus.getByRole('button', { name: 'Open in main window' })).toBeVisible()
-    await focus.getByRole('button', { name: 'Open in main window' }).click()
+    // The button's handler closes its own window, which can go before
+    // Playwright has finished the click: the click then rejects with "Target
+    // page, context or browser has been closed". That closing is the outcome
+    // under test, so only that rejection is let through, and the window must
+    // still close and the main window show the target.
+    const closed = focus.waitForEvent('close')
+    await focus
+      .getByRole('button', { name: 'Open in main window' })
+      .click()
+      .catch((e: unknown) => {
+        if (!/Target page, context or browser has been closed/.test(String(e))) throw e
+      })
     // The focus window closes; the main window shows its target, no solo
-    await expect.poll(() => focus.isClosed()).toBe(true)
+    await closed
     await expect(page).toHaveURL(new RegExp(`${link.slice(2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
   })
 
