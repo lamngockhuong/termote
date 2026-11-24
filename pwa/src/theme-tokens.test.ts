@@ -302,8 +302,8 @@ describe('accent colors', () => {
   ])
   const surfaces = ['--tm-bg', '--tm-surface', '--tm-surface-raised']
   const softBases = [...surfaces, '--tm-term-bg']
-  const softPct = (t: Map<string, string>) =>
-    Number.parseFloat(t.get('--tm-accent-soft-pct')!) / 100
+  const softAlpha = (t: Map<string, string>) =>
+    Number(t.get('--tm-accent-soft-alpha'))
 
   it('keeps every block in index.css equal to UI_ACCENTS', () => {
     for (const { a, light, dark } of accentBlocks) {
@@ -313,8 +313,9 @@ describe('accent colors', () => {
       ] as const) {
         expect(m.get('--tm-accent'), a.id).toBe(pair[0])
         expect(m.get('--tm-accent-fg'), a.id).toBe(pair[1])
+        const [r, g, b] = parseColor(pair[0]).rgb
         expect(m.get('--tm-accent-soft'), a.id).toBe(
-          'color-mix(in srgb, var(--tm-accent) var(--tm-accent-soft-pct), transparent)',
+          `rgb(${r} ${g} ${b} / var(--tm-accent-soft-alpha))`,
         )
       }
     }
@@ -380,7 +381,7 @@ describe('accent colors', () => {
     ({ accent, t }) => {
       const rgb = parseColor(accent).rgb
       for (const bg of softBases) {
-        const ratio = contrast(accent, over(rgb, softPct(t), t.get(bg)!))
+        const ratio = contrast(accent, over(rgb, softAlpha(t), t.get(bg)!))
         expect(ratio, bg).toBeGreaterThanOrEqual(3)
         expect(ratio, bg).toBeGreaterThanOrEqual(autoSoftWorst)
       }

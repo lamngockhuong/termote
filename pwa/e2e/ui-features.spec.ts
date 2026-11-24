@@ -194,6 +194,188 @@ test.describe('ui style setting', () => {
   })
 })
 
+test.describe('accent color', () => {
+  // [style, --tm-accent of the style in light, in dark]
+  const own = [
+    ['neutral', '#4f46e5', '#818cf8'],
+    ['terminal', '#0d7a41', '#3ddc84'],
+    ['native', '#0062cc', '#4c9cf8'],
+  ] as const
+  const TEAL = { light: '#0f766e', dark: '#2dd4bf' }
+  const accentToken = (page: Page) =>
+    page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tm-accent').trim())
+
+  for (const [style, ownLight, ownDark] of own) {
+    for (const mode of ['light', 'dark'] as const) {
+      test(`applies a saved accent over the ${style} ${mode} style before the app runs`, async ({ page }) => {
+        await page.addInitScript(
+          ([s, m]) => {
+            localStorage.setItem('termote-theme', m)
+            localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: s, uiAccent: 'teal' }))
+          },
+          [style, mode] as const,
+        )
+        // With every app script blocked, only the inline script in index.html runs
+        await page.route('**/*', (route) =>
+          route.request().resourceType() === 'script' ? route.abort() : route.continue(),
+        )
+        await page.goto('/')
+        await expect(page.locator('html')).toHaveAttribute('data-accent', 'teal')
+        await expect(page.locator('html')).toHaveAttribute('data-ui-style', style)
+        expect(await accentToken(page)).toBe(TEAL[mode])
+      })
+    }
+
+    test(`keeps the ${style} accent without a known accent`, async ({ page }) => {
+      await page.addInitScript((s) => {
+        localStorage.setItem('termote-theme', 'dark')
+        localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: s, uiAccent: 'gold' }))
+      }, style)
+      await page.route('**/*', (route) =>
+        route.request().resourceType() === 'script' ? route.abort() : route.continue(),
+      )
+      await page.goto('/')
+      await expect(page.locator('html')).not.toHaveAttribute('data-accent', /.*/)
+      expect(await accentToken(page)).toBe(ownDark)
+      await page.evaluate(() => document.documentElement.classList.replace('dark', 'light'))
+      expect(await accentToken(page)).toBe(ownLight)
+    })
+  }
+
+  test('picking an accent in Settings applies at once and survives a reload', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('seeded')) {
+        localStorage.clear()
+        localStorage.setItem('termote-theme', 'dark')
+        sessionStorage.setItem('seeded', '1')
+      }
+    })
+    await page.goto('/')
+    await waitForTerminal(page)
+    await expect(page.locator('html')).not.toHaveAttribute('data-accent', /.*/)
+
+    await openSettingsGroup(page, 'Appearance')
+    const group = page.getByRole('radiogroup', { name: 'Accent color' })
+    await expect(group.getByRole('radio', { name: 'Follow style' })).toHaveAttribute('aria-checked', 'true')
+    await group.getByRole('radio', { name: 'Pink' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'pink')
+    expect(await accentToken(page)).toBe('#f472b6')
+    expect((await storedSettings(page)).uiAccent).toBe('pink')
+
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await waitForTerminal(page)
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'pink')
+    await openSettingsGroup(page, 'Appearance')
+    await page
+      .getByRole('radiogroup', { name: 'Accent color' })
+      .getByRole('radio', { name: 'Follow style' })
+      .click()
+    await expect(page.locator('html')).not.toHaveAttribute('data-accent', /.*/)
+    expect(await accentToken(page)).toBe('#818cf8')
+  })
+
+  // The cursor takes the accent with either renderer. The DOM renderer draws
+  // it as an element; WebGL on a canvas, read back from a screenshot.
+  for (const gpuRenderer of [false, true]) {
+    test.describe(gpuRenderer ? 'terminal cursor (WebGL)' : 'terminal cursor (DOM)', () => {
+      test.use({ gpuRenderer })
+
+      test('takes the accent color', async ({ page, context }) => {
+        await page.addInitScript(() => {
+          const w = window as unknown as { __termoteE2E?: boolean; __termoteSoftwareWebgl?: boolean }
+          w.__termoteE2E = true
+          w.__termoteSoftwareWebgl = true
+          localStorage.setItem('termote-theme', 'dark')
+          localStorage.setItem('termote-settings', JSON.stringify({ uiAccent: 'teal' }))
+        })
+        await page.goto('/')
+        await waitForTerminal(page)
+        const probeWebgl = () =>
+          page.evaluate(
+            () =>
+              !!(window as unknown as { __termoteTerms?: { webgl: () => boolean }[] }).__termoteTerms?.[0]?.webgl(),
+          )
+        await expect.poll(probeWebgl, { timeout: 10000 }).toBe(gpuRenderer)
+        await page.locator('[data-testid="terminal-view"] .xterm-helper-textarea').focus()
+
+        if (!gpuRenderer) {
+          // Focused it is a filled block; it blinks, so look until it is on
+          await expect
+            .poll(
+              () =>
+                page
+                  .locator('[data-testid="terminal-view"] .xterm-cursor')
+                  .first()
+                  .evaluate((el) => {
+                    const style = getComputedStyle(el)
+                    return [style.backgroundColor, style.outlineColor]
+                  }),
+              { timeout: 10000 },
+            )
+            .toContain('rgb(45, 212, 191)')
+          return
+        }
+
+        // Count the pixels of the screen that are the teal of the cursor
+        // (#2dd4bf), on a blank page with no CSP to decode the PNG
+        const decoder = await context.newPage()
+        const tealPixels = async () => {
+          const png = await page.locator('[data-testid="terminal-view"] .xterm-screen').screenshot()
+          return decoder.evaluate(async (b64) => {
+            const img = new Image()
+            img.src = `data:image/png;base64,${b64}`
+            await img.decode()
+            const canvas = document.createElement('canvas')
+            canvas.width = img.width
+            canvas.height = img.height
+            const ctx = canvas.getContext('2d')!
+            ctx.drawImage(img, 0, 0)
+            const { data } = ctx.getImageData(0, 0, img.width, img.height)
+            let n = 0
+            for (let i = 0; i < data.length; i += 4) {
+              if (Math.abs(data[i] - 45) + Math.abs(data[i + 1] - 212) + Math.abs(data[i + 2] - 191) < 24) n++
+            }
+            return n
+          }, png.toString('base64'))
+        }
+        await expect.poll(tealPixels, { timeout: 10000 }).toBeGreaterThan(20)
+      })
+    })
+  }
+
+  test.describe('on a narrow phone', () => {
+    test.use({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true })
+
+    test('the accent row wraps without scrolling sideways', async ({ page }) => {
+      await page.goto('/')
+      await waitForTerminal(page)
+      await openFromMenu(page, 'Settings')
+      await page.getByRole('button', { name: 'Appearance' }).click()
+      const group = page.getByRole('radiogroup', { name: 'Accent color' })
+      await expect(group).toBeVisible()
+      const box = (await group.boundingBox())!
+      expect(box.x + box.width).toBeLessThanOrEqual(360)
+      // Every swatch is a whole touch target, on two rows
+      const radios = await group.getByRole('radio').all()
+      expect(radios).toHaveLength(8)
+      for (const r of radios) {
+        const b = (await r.boundingBox())!
+        expect(b.width).toBeGreaterThanOrEqual(44)
+        expect(b.x + b.width).toBeLessThanOrEqual(360)
+      }
+      // Nothing in the sheet scrolls sideways
+      const wide = await page.getByRole('dialog').evaluate((dialog) =>
+        [dialog, ...dialog.querySelectorAll('*')]
+          .filter((el) => el.scrollWidth > el.clientWidth + 1)
+          .filter((el) => ['auto', 'scroll'].includes(getComputedStyle(el).overflowX))
+          .map((el) => el.className),
+      )
+      expect(wide).toEqual([])
+    })
+  })
+})
+
 test.describe('terminal stream', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
