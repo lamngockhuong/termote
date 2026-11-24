@@ -3372,3 +3372,83 @@ export async function revokeGrant(id: string, grantId: string): Promise<Job> {
     )
   ).job
 }
+
+// Whether the orchestrator that asked still runs in its pane (open asks)
+export interface AskLive {
+  status: 'running' | 'gone'
+  paneId?: string
+  ref?: string
+}
+
+// A question an orchestrator agent asked the user (termote agents ask). A
+// view-only client gets id, state, job and created only. updated is sent
+// back as read with an answer.
+export interface Ask {
+  id: string
+  state: 'open' | 'answered'
+  created: string
+  // The job it is about, by id, and that job's title
+  job?: string
+  jobTitle?: string
+  text?: string
+  choices?: string[]
+  createdBy?: string
+  agent?: JobAgent
+  answer?: string
+  // The choice answered, 1-based
+  choice?: number
+  answeredBy?: 'pwa' | 'agent'
+  reported?: boolean
+  updated?: string
+  live?: AskLive
+}
+
+export interface AskList {
+  asks: Ask[]
+  // View-only: the open asks' ids, no content, no answer
+  readOnly: boolean
+}
+
+// Every ask the server keeps, answered ones too. Throws RequestError
+// (jobs_unavailable; 404 from a server without asks).
+export async function fetchAsks(): Promise<AskList> {
+  const res = await fetch(`${apiBase()}/asks`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  const body = await res.json()
+  return {
+    asks: Array.isArray(body.asks) ? body.asks : [],
+    readOnly: body.readOnly === true,
+  }
+}
+
+// Answers the ask as it was when updated was read, with a choice (1-based)
+// or with text, typed into the orchestrator's input box; queued when it was
+// working. recorded: the answer was saved too. Throws RequestError
+// (ask_conflict, ask_closed, ask_busy, ask_no_agent, input_has_draft...).
+export async function answerAsk(
+  id: string,
+  answer: { updated: string } & (
+    | { choice: number; text?: never }
+    | { text: string; choice?: never }
+  ),
+): Promise<{ ask: Ask; queued: boolean; recorded: boolean }> {
+  const res = await fetch(
+    `${apiBase()}/asks/${encodeURIComponent(id)}/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(answer),
+      // It waits for the pane and pastes, as a message does: the server's
+      // own budget bounds it
+    },
+  )
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return {
+    ask: body.ask,
+    queued: body.queued === true,
+    recorded: body.recorded === true,
+  }
+}

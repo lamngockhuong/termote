@@ -671,7 +671,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
 - **Agents CLI** (`termote agents list|read|send|wait|answer|stop|diff|start`, `server/cli_agents*.go`):
   every command calls a route the PWA uses (`snapshot`, `overview`, `activity`, `agent/transcript`,
   `agent/message`, `agent/prompt`, `agent/answer`, `agent/interrupt`, `tabs`, `agent/start`,
-  `files/changes`, `files/diff`, `files/branch`, `files/branch/diff`, `worktrees`, `worktrees/open`)
+  `files/changes`, `files/diff`, `files/branch`, `files/branch/diff`, `worktrees`, `worktrees/open`,
+  and `asks*` for `ask add|list|close`, which name this command's own pane only: one the environment
+  does not name for sure is refused, see Orchestrator asks)
   over the local socket only (`socketRequestWithin`),
   never TCP: no password is read, sent or printed, and the routes keep every guard and check of their
   own entries (the request carries no `Origin` or `Sec-Fetch-Site`, so it is the CLI the guards
@@ -836,8 +838,60 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   ends every grant it has. Moving a job to `review` queues a Web Push of kind `job_review` with the
   job id only (never its title or prompt), only while a device can be sent one
   (`notifyJobReview`), whether the job moved there or was made in it. Zellij renames move the
-  ledger's ids as the tracker's (`renameGroup`). In container mode the ledger exists but only the
+  ledger's ids as the tracker's (`renameGroup`), a job's `createdBy` and the asks' keys too. The
+  file also holds the orchestrator's asks (see Orchestrator asks). In container mode the ledger exists but only the
   PWA writes it (`termote agents` does not run there).
+- **Orchestrator asks** (`/api/mux/asks*`, `server/ask_store.go`, `server/ask_routes.go`,
+  `server/cli_agents_ask.go`): the orchestrator's questions for the user live in `jobs.json` (`asks`,
+  `askSeq`), under `jobs.lock` with the jobs, with the Job ledger's file rules (format 1; a corrupt
+  file never overwritten, a newer one read only: every ask write is 409 `newer_format`). An older
+  Termote that writes the file drops `asks` and `askSeq` (its jobs stay); ids restart at Q1 then, so
+  "an id is never given twice" holds only without a downgrade. Ids are `Q<n>` from `askSeq`, past
+  every id the file holds, and a path id is checked against `^Q[1-9][0-9]{0,8}$` before the store is
+  read (`ask_not_found`). Limits: text 500 runes (line breaks and tabs kept), up to 6 choices of 80
+  runes each on one line, no two the same, an answer 2 KB, 20 open asks per orchestrator and 200 in
+  the file (409 `too_many_asks`; answered ones make room, oldest first), 8 KB bodies (413
+  `too_large`); control, hidden and bidi characters removed on the way in (`cleanJobText`); errors
+  as `codedError` codes (`ask_not_found`, `ask_closed` and `ask_conflict` with the ask as it is,
+  `too_many_asks`, `ask_invalid`, `ask_busy`, `ask_no_agent`). Pruning at every write: once every
+  job whose `createdBy` is an orchestrator's key is finished, its answered asks go (but an answer
+  from the PWA `wait --mine` has not reported) and its open asks of a job; an open ask of no job
+  stays, and an orchestrator with no job is never pruned; any ask not changed for 30 days goes.
+  Add, close and reported are the local socket's alone (`requireWriteRole` first, then 403
+  `socket_only`, as a bridge connection gets too): the body names the orchestrator's pane, whose
+  agent the server looks up (`jobAgentFor`, `job_no_agent`); `createdBy` is that pane's activity
+  key and `agent` its identity, never a value from the request, and every add, close and list that
+  names a pane gives that pane's open asks its agent now (`repinAsks`, only an agent of the
+  same kind), so a `/clear` or resume still gets the answers. The limit: an agent of the same
+  kind that later runs at a reused pane address (tmux restarted) and runs an ask command takes the
+  open asks over, as it would read the questions in that pane's scrollback. Any process of the user's can reach the socket and name the
+  orchestrator's pane, as it can `agents send` there: asks are not refused by `peer_pid`; the audit
+  lines `ask_added` and `ask_closed` carry `ask`, `pane` and `peer_pid`, never the text, and the
+  PWA shows the pane that asked. A close only reaches an ask of the named pane's key; closing one the PWA answered marks it
+  reported (409 `ask_closed`, with the answer), and `ask close` tries again for a few seconds on
+  `ask_busy`. `GET` is
+  same-site (`crossSiteRejection`); a full client gets every ask with, for an open one, `live`
+  (`running` only while the pane at its key runs the agent that asked, `jobAgent.matches`, from the
+  tracker's last snapshot and the cached lookup) and the job's title; a view-only client gets the
+  open asks' `id, state, job, created` only. Answering (`POST /api/mux/asks/{id}/answer`, a full
+  client: `writeGuard` same-site JSON, `requireWriteRole` first, exactly one of `choice` or `text`)
+  reserves the ask in memory (a second answer or a close meanwhile is 409 `ask_busy`; nothing about
+  the send is written to the file, so a server that stops mid-send leaves no ask stuck), checks the
+  ask is open and `updated` matches, then types a fixed English message into the orchestrator's
+  input box as `sendCI` does: the pane found by the ask's key, its lock, the session read again
+  under it, the snapshot read again and `matches` (else 409 `ask_no_agent`), `sendMessage` with no
+  draft replaced (`input_has_draft` and the other refusals leave the ask open). The message is
+  `Answer to Qn: <text>` or `Answer to Qn (choice k): <label>`, the label taken from the stored
+  ask, never the client. Only then is the answer recorded; a record that fails is logged and
+  answered 200 `recorded: false` (the orchestrator closes the ask on the message). The audit line
+  `ask_answered` carries `ask` and `by` (`auditBy`), never the answer. The PWA shows the text and
+  choices as plain text (`visibleUnsafe`, `whitespace-pre-wrap`), never Markdown, a link or an
+  action. The machine proxy does not forward `asks*` (`machineRouteRe`,
+  `TestAskRoutesNotForwarded`): a question is answered in the PWA of the server that holds it.
+  `answer` itself needs the write role only, not a browser: a process on the local socket (`by`
+  socket) or a full bridge connection can answer too, as either can already send to the
+  orchestrator's pane; the record says `answeredBy: pwa` then. In
+  container mode the routes exist but nothing adds an ask (`termote agents` does not run there).
 - **Dialog delegation** (`server/job_grants.go`, `server/agent_delegate*.go`, `handleAnswer`):
   a grant is made and revoked (`POST /api/mux/jobs/{id}/grants`, `DELETE .../grants/{gid}`) only by
   a browser signed in with the password or as a full paired device (`canGrant`: `authSession` or

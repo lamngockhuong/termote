@@ -850,6 +850,17 @@ jobs:
           TERMOTE_PASS: ${{ env.E2E_MACHINE_PASS }}
         run: pnpm exec playwright test machines.spec --workers=1
 
+      # The orchestrator's questions are added over the local socket, which
+      # only a native server (a saved config) opens: the machine above, on
+      # 7681 without sign-in, its tmux under its own TMUX_TMPDIR.
+      - name: Run Playwright (orchestrator questions)
+        working-directory: pwa
+        env:
+          TERMOTE_PORT: "7681"
+          TERMOTE_E2E_ASKS: "1"
+          TERMOTE_E2E_STATE: ${{ runner.temp }}/machine/state
+        run: TMUX_SOCKET="$RUNNER_TEMP/machine/tmux/tmux-$(id -u)/default" pnpm exec playwright test orchestrator-asks --workers=1
+
       - name: Logs
         if: failure()
         run: cat "$RUNNER_TEMP/machine/serve.log" "$RUNNER_TEMP/main/serve.log" || true

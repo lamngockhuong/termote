@@ -49,9 +49,9 @@ func (c *cli) agentsWaitMine(args []string) error {
 	if err != nil {
 		return err
 	}
-	self := c.selfKey(s)
+	self, pane := c.selfKey(s), c.selfPaneID(s)
 	if self == "" {
 		return fmt.Errorf("--mine needs to know this command's pane, and its environment does not say for sure (herdr-core, psmux, Windows, or another pane's variables); name the jobs instead: termote agents wait --job <id>... (see termote agents jobs)")
 	}
-	return c.waitJobs(port, jobWait{self: self}, timeout)
+	return c.waitJobs(port, jobWait{self: self, pane: pane}, timeout)
 }

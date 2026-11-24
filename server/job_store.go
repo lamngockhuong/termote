@@ -167,9 +167,14 @@ type jobEvent struct {
 	Text string `json:"text,omitempty"`
 }
 
+// jobFile is the ledger as saved. Asks (ask_store.go) share the file and
+// its lock, so a write that drops them for finished jobs reads both at once.
+// A version before them reads the file and drops the asks when it writes.
 type jobFile struct {
-	V    int   `json:"v"`
-	Jobs []job `json:"jobs"`
+	V      int   `json:"v"`
+	Jobs   []job `json:"jobs"`
+	Asks   []ask `json:"asks,omitempty"`
+	AskSeq int   `json:"askSeq,omitempty"`
 }
 
 // jobStore keeps the ledger as taskStore keeps the tasks: a file that
@@ -186,6 +191,8 @@ type jobStore struct {
 	writeMu sync.Mutex
 	mu      sync.Mutex
 	list    []job
+	asks    []ask
+	askSeq  int
 	// readOnly: the file is a newer version's
 	readOnly bool
 	modTime  time.Time
@@ -250,6 +257,7 @@ func (s *jobStore) reloadLocked() error {
 		return err
 	}
 	s.list = f.Jobs
+	s.asks, s.askSeq = f.Asks, f.AskSeq
 	s.readOnly = f.V > jobsFormat
 	s.modTime, s.size = time.Time{}, 0
 	if fi != nil {
@@ -330,6 +338,20 @@ func (j job) clone() job {
 // drops the finished jobs past jobsDoneKeep and writes the result. On any
 // failure nothing changes.
 func (s *jobStore) change(op func([]job) ([]job, error)) error {
+	return s.changeFile(func(f *jobFile) error {
+		next, err := op(f.Jobs)
+		if err != nil {
+			return err
+		}
+		f.Jobs = next
+		return nil
+	})
+}
+
+// changeFile is change for an op that reads or changes the asks too. After
+// op, the finished jobs past jobsDoneKeep are dropped, then the asks they
+// leave with nothing to wait for (pruneAsks).
+func (s *jobStore) changeFile(op func(f *jobFile) error) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	unlock, err := lockStateFile(filepath.Join(s.dir, jobsLock), jobsLockWait)
@@ -349,17 +371,17 @@ func (s *jobStore) change(op func([]job) ([]job, error)) error {
 	if s.readOnly {
 		return errJobsNewer
 	}
-	list := make([]job, len(s.list))
+	f := jobFile{V: jobsFormat, Jobs: make([]job, len(s.list)), Asks: cloneAsks(s.asks), AskSeq: s.askSeq}
 	for i, j := range s.list {
-		list[i] = j.clone()
+		f.Jobs[i] = j.clone()
 	}
-	next, err := op(list)
-	if err != nil {
+	if err := op(&f); err != nil {
 		return err
 	}
 	cutoff := s.now().Add(-jobsDoneKeep)
-	next = slices.DeleteFunc(next, func(j job) bool { return jobFinished(j.State) && j.Updated.Before(cutoff) })
-	data, err := json.Marshal(jobFile{V: jobsFormat, Jobs: next})
+	f.Jobs = slices.DeleteFunc(f.Jobs, func(j job) bool { return jobFinished(j.State) && j.Updated.Before(cutoff) })
+	pruneAsks(&f, cutoff)
+	data, err := json.Marshal(f)
 	if err != nil {
 		return err
 	}
@@ -370,7 +392,7 @@ func (s *jobStore) change(op func([]job) ([]job, error)) error {
 	if err := writeStateFile("jobs", s.dir, "jobs", s.path(), data, false); err != nil {
 		return fmt.Errorf("write %s: %w", jobsFile, err)
 	}
-	s.list = next
+	s.list, s.asks, s.askSeq = f.Jobs, f.Asks, f.AskSeq
 	s.modTime, s.size = time.Time{}, 0
 	if fi, err := os.Lstat(s.path()); err == nil {
 		s.modTime, s.size = fi.ModTime(), fi.Size()
@@ -484,12 +506,22 @@ func (s *jobStore) remove(id, updated string, finishedOnly bool) (job, error) {
 }
 
 // renameGroup follows a Zellij group renamed from from to to, as the
-// activity tracker does: every id the jobs keep that starts with the group's
-// moves with it.
+// activity tracker does: every id the jobs and the asks keep that starts
+// with the group's moves with it, the orchestrator's key too (CreatedBy),
+// so jobs --mine and the asks still find their pane.
 func (s *jobStore) renameGroup(from, to string) {
-	err := s.change(func(list []job) ([]job, error) {
+	err := s.changeFile(func(f *jobFile) error {
+		list := f.Jobs
+		for i := range f.Asks {
+			q := &f.Asks[i]
+			q.CreatedBy = renamedGroupID(q.CreatedBy, from, to)
+			q.Agent.Key = renamedGroupID(q.Agent.Key, from, to)
+			q.Agent.PaneID = renamedGroupID(q.Agent.PaneID, from, to)
+			q.Agent.GroupID = renamedGroupID(q.Agent.GroupID, from, to)
+		}
 		for i := range list {
 			j := &list[i]
+			j.CreatedBy = renamedGroupID(j.CreatedBy, from, to)
 			j.Workspace = renamedGroupID(j.Workspace, from, to)
 			if j.Agent != nil {
 				j.Agent.Key = renamedGroupID(j.Agent.Key, from, to)
@@ -506,7 +538,7 @@ func (s *jobStore) renameGroup(from, to string) {
 				a.GroupID = renamedGroupID(a.GroupID, from, to)
 			}
 		}
-		return list, nil
+		return nil
 	})
 	if err != nil {
 		log.Printf("jobs: rename %s: %v", from, err)

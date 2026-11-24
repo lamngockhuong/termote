@@ -175,6 +175,9 @@ termote agents answer <pane> --delegated       # Yes, this once, under the user'
 termote agents job ci <id> [--refresh]          # the job's pull requests and their checks, as the server's gh read them
 termote agents job ci <id> --send               # after the user says so: the failed checks to its agent; 10: none failed, 11: agent gone
 termote agents job set <id> --pr <number>       # attach a pull request of another branch (--no-pr <number> detaches)
+termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>   # prints Q3 (needs self)
+termote agents ask list                        # your questions still open, by id (--all: answered ones too)
+termote agents ask close Q3 --answer 'Yes'     # the user answered in the conversation or in a tab
 ```
 
 termote keeps a job ledger for you: every `start` records a job (`--title`, never the prompt:
@@ -200,6 +203,15 @@ agent is done; leave `done` to the user. The ledger is the user's history: remov
 `job set <id> --state abandoned` it first. A turn that ends with a question for the user written in
 its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks
 it (`read --json`: `endsWithQuestion`); ask the user and `send` their answer instead.
+
+Record every question you ask the user with `ask add` first (`--job <id>` when it is about a job,
+`--choice` for each option) and ask it by the id it prints; `ask list` is what still waits on the
+user, kept by the server across a compacted conversation, so never number questions yourself. The
+user may answer in the PWA's Plan (Waiting on you): the answer arrives in your input box as
+`Answer to Q3: ...` or `Answer to Q3 (choice 2): ...`, and `wait --mine` reports it once; whatever
+way the user answers, run `ask close Q3 --answer '...'` (closing one already answered is not an
+error). `read` says when the user wrote in a job's pane after its question was asked
+(`read --json`: `openAsks`, `userWroteAfter`). Without `self` the ask commands are refused.
 
 The server follows each unfinished job's pull requests with the user's own `gh` login (not in a
 container): those of the job's branch, and any you attach with `job set <id> --pr <number>`.

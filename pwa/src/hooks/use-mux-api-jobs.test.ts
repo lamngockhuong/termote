@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  answerAsk,
   createGrant,
   createJob,
   deleteJob,
+  fetchAsks,
   fetchJobs,
   jobCI,
   RequestError,
@@ -161,5 +163,61 @@ describe('job requests', () => {
     await expect(jobCI('a', 'send')).rejects.toMatchObject({
       code: 'ci_nothing_failed',
     })
+  })
+})
+
+const ASK = {
+  id: 'Q1',
+  state: 'open',
+  text: 'Which way?',
+  created: 'c',
+  updated: 'u1',
+}
+
+describe('ask requests', () => {
+  it('lists every ask, a missing list as none', async () => {
+    const sent = mockFetch({ asks: [ASK], readOnly: true })
+    expect(await fetchAsks()).toEqual({ asks: [ASK], readOnly: true })
+    expect(sent[0]).toEqual({ url: '/api/mux/asks', method: 'GET' })
+    mockFetch({ asks: null })
+    expect(await fetchAsks()).toEqual({ asks: [], readOnly: false })
+  })
+
+  it('throws the refusal of a read', async () => {
+    mockFetch({}, 404)
+    await expect(fetchAsks()).rejects.toMatchObject({ status: 404, code: '' })
+  })
+
+  it('answers an ask with a choice or text, naming the version read', async () => {
+    const sent = mockFetch({
+      ask: { ...ASK, state: 'answered' },
+      queued: true,
+      recorded: true,
+    })
+    expect(await answerAsk('Q 1', { choice: 2, updated: 'u1' })).toEqual({
+      ask: { ...ASK, state: 'answered' },
+      queued: true,
+      recorded: true,
+    })
+    expect(sent[0]).toEqual({
+      url: '/api/mux/asks/Q%201/answer',
+      method: 'POST',
+      body: { choice: 2, updated: 'u1' },
+    })
+    mockFetch({ ask: ASK })
+    expect(await answerAsk('Q1', { text: 'yes', updated: 'u1' })).toEqual({
+      ask: ASK,
+      queued: false,
+      recorded: false,
+    })
+  })
+
+  it('throws the refusal of an answer', async () => {
+    mockFetch({ code: 'input_has_draft', error: 'x' }, 409)
+    const err = await answerAsk('Q1', { text: 'yes', updated: 'u1' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({ status: 409, code: 'input_has_draft' })
   })
 })

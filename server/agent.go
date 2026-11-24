@@ -456,6 +456,10 @@ type agentAPI struct {
 	// jobs is the job ledger, nil when it cannot be kept; wm makes and
 	// lists worktrees, for the directory of a job's. Set by buildServer.
 	jobs *jobStore
+	// asking holds the asks an answer from the PWA is being sent for
+	// (ask_routes.go): in memory only, so a server that stops mid-send
+	// leaves no ask stuck.
+	asking askReservations
 	// ci follows the jobs' pull requests (job_ci.go); nil in a container
 	// or without the files routes.
 	ci *ciPoller

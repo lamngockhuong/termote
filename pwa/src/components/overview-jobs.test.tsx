@@ -13,6 +13,7 @@ vi.mock('../hooks/use-jobs', () => ({
   removeJob: vi.fn(),
   grantJob: vi.fn(),
   revokeJobGrant: vi.fn(),
+  answerQuestion: vi.fn(),
 }))
 
 const agent = { key: 'k', paneId: '%1', kind: 'claude' }
@@ -58,6 +59,8 @@ function loaded(over: Partial<JobsState> = {}): JobsState {
     loaded: true,
     error: false,
     unavailable: false,
+    asks: [],
+    asksReadOnly: false,
     ...over,
   }
 }
@@ -284,6 +287,62 @@ describe('OverviewJobs', () => {
     pick('job u')
     expect(screen.getByRole('dialog', { name: 'job u' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Open pane x:y' })).toBeNull()
+  })
+
+  it("shows the open questions above the columns, a question's job opening its details", () => {
+    show({
+      asks: [
+        {
+          id: 'Q1',
+          state: 'open',
+          text: 'Which way?',
+          job: 'w',
+          jobTitle: 'job w',
+          created: new Date().toISOString(),
+          updated: 'q',
+        },
+        { id: 'Q2', state: 'answered', created: '', text: 'done' },
+      ],
+    })
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    expect(
+      within(waiting)
+        .getAllByRole('article')
+        .map((a) => a.ariaLabel),
+    ).toEqual(['Q1'])
+    fireEvent.click(within(waiting).getByRole('button', { name: 'job w' }))
+    expect(screen.getByRole('dialog', { name: 'job w' })).toBeVisible()
+  })
+
+  it("opens a question's job beside the columns on a wide screen, closing the Activity", () => {
+    const onCloseActivity = vi.fn()
+    show(
+      {
+        asks: [
+          {
+            id: 'Q1',
+            state: 'open',
+            text: 'Which way?',
+            job: 'w',
+            jobTitle: 'job w',
+            created: new Date().toISOString(),
+            updated: 'q',
+          },
+        ],
+      },
+      false,
+      undefined,
+      { wide: true, onCloseActivity },
+    )
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    fireEvent.click(within(waiting).getByRole('button', { name: 'job w' }))
+    expect(onCloseActivity).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('complementary', { name: 'job w' })).toBeVisible()
+  })
+
+  it('shows no questions section with none open', () => {
+    show({ asks: [{ id: 'Q2', state: 'answered', created: '' }] })
+    expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
   })
 
   it('offers no way to change or open anything on a view-only device', () => {

@@ -1,5 +1,6 @@
 import type {
   ActivityEvent,
+  Ask,
   MuxGroup,
   MuxPane,
   MuxTab,
@@ -66,6 +67,9 @@ export interface DemoState {
   userTasks: UserTask[]
   // The plan's jobs (routes-jobs.ts)
   jobs: DemoJob[]
+  // The orchestrators' questions (routes-jobs.ts); none in the demo, where
+  // no orchestrator runs to ask one
+  asks: Ask[]
   runs: Map<string, DemoRun>
   recentGroups: RecentGroup[]
   activity: ActivityEvent[]
@@ -116,6 +120,7 @@ export function createState(now: () => number = Date.now): DemoState {
       },
     ],
     jobs: demoJobs(t),
+    asks: [],
     runs: new Map(),
     recentGroups: [],
     activity: [],

@@ -330,6 +330,10 @@ no sign-in, port 7681) and this server with `TERMOTE_E2E_MACHINE_BRIDGE` joining
 `XDG_STATE_HOME`: they write the service.json of a stand-in OpenCode service there (`pwa/e2e/fake-opencode.ts`,
 127.0.0.1:7689) and refuse a real one's. CI's main E2E job sets it.
 
+`pwa/e2e/orchestrator-asks.spec.ts` skips unless `TERMOTE_E2E_ASKS=1` (with `TMUX_SOCKET` and
+`TERMOTE_E2E_STATE`): it adds questions over the server's local socket, which only a native server (a
+saved config) opens, so CI's `e2e-machines` job runs it against that job's native machine server (7681).
+
 `pwa/e2e/hc.spec.ts` skips unless `TERMOTE_E2E_HC=1` (with `HC_SOCKET`, `HC_SESSION`,
 `TERMOTE_E2E_HC_DIR` and `TERMOTE_PASS`): CI's `e2e-hc` job runs it against hc 0.1.16 (sha256 pinned)
 on its own socket, `HOME` and XDG dirs, `headless = "80x24"` in that core's config, and the server

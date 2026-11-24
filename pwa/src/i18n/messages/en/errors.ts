@@ -17,6 +17,13 @@ export default {
     'Only you choose an answer that always allows something, in the dialog itself',
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',
+  'errors.ask_busy': 'An answer to this question is being sent. Try again',
+  'errors.ask_closed': 'This question was answered already',
+  'errors.ask_conflict': 'The question was changed elsewhere meanwhile',
+  'errors.ask_invalid': 'The question cannot take this answer',
+  'errors.ask_no_agent':
+    'The orchestrator that asked no longer runs. Answer it in its terminal',
+  'errors.ask_not_found': 'This question no longer exists',
   'errors.base_not_found': 'The base names no commit',
   'errors.base_required': 'Name a base branch: this is the main worktree',
   'errors.branch_exists':
@@ -207,6 +214,8 @@ export default {
   'errors.timeout': 'It took too long. Try again',
   'errors.too_large': 'The file is too large',
   'errors.too_many': 'The limit is reached. Delete one first',
+  'errors.too_many_asks':
+    'Too many questions wait for an answer. Answer or close one first',
   'errors.too_many_codes':
     'Too many pairing codes are waiting. Use one or wait 5 minutes',
   'errors.too_many_devices': 'Too many paired devices. Revoke one first',

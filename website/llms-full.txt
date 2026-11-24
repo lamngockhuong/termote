@@ -3150,6 +3150,22 @@ When Termote knows the orchestrator’s own pane (`self`), the orchestrator wait
 
 You see the same ledger in the [Overview](/usage/overview/#plan)’s Plan tab, where you can also add a job for the orchestrator to take up (`start --job <id>`), and open a job’s details to edit it or give grants. The card of an agent working on a job names the job.
 
+## Questions waiting on you
+
+[Section titled “Questions waiting on you”](#questions-waiting-on-you)
+
+The orchestrator records every question it puts to you with `termote agents ask add` before it asks, and asks it by the id that prints (`Q3`). Termote keeps the list, so the ids stay the same after the conversation is compacted or the server restarts, an answered question is never asked again, and each reply ends with only the questions still open (`termote agents ask list`).
+
+You can answer here in the conversation, in an agent’s tab, or in the Plan tab of the [Overview](/usage/overview/#plan): its “Waiting on you” section shows each open question with the pane that asked, its job, and a button for each choice or a box for your own words. Termote types your answer into the orchestrator’s input box as `Answer to Q3: ...` (or `Answer to Q3 (choice 2): ...`), and the orchestrator closes the question with `termote agents ask close Q3`. A draft you left in the orchestrator’s input box is never replaced: the answer is refused and the question stays open until you send or clear the draft. When the orchestrator that asked no longer runs, the PWA says so and you answer it in its terminal. A view-only device sees how many questions wait and their ids, never their text.
+
+```bash
+termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>
+termote agents ask list
+termote agents ask close Q3 --answer 'Later'
+```
+
+Any program you run can name the orchestrator’s pane on the local socket, as it can already send the orchestrator a message, so the PWA shows which pane asked each question.
+
 ## Grants for permission dialogs
 
 [Section titled “Grants for permission dialogs”](#grants-for-permission-dialogs)
