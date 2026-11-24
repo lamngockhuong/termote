@@ -339,3 +339,35 @@ func TestCheckDelegateFile(t *testing.T) {
 		t.Errorf("no dir = %q", got)
 	}
 }
+
+func TestCheckDelegateHook(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "lefthook.yml"), `pre-commit:
+  commands:
+    i18n:
+      root: "pwa/"
+      run: sh ../scripts/staged-files.sh node scripts/check-i18n.mjs
+`)
+	writeFile(t, filepath.Join(dir, ".husky", "pre-push"), "./tools/Lint.sh\n")
+	writeFile(t, filepath.Join(dir, ".pre-commit-config.yaml"), "repos:\n- repo: local\n  hooks:\n  - id: x\n    entry: python hooks/check.py\n")
+	for rel, want := range map[string]string{
+		"pwa/scripts/check-i18n.mjs": "denied_path",
+		"scripts/staged-files.sh":    "denied_path",
+		"tools/lint.sh":              "denied_path",
+		"hooks/check.py":             "denied_path",
+		"src/a.ts":                   "",
+		"scripts/other.sh":           "",
+		"pwa/scripts/check.mjs":      "",
+	} {
+		if got := checkDelegateHook(dir, rel); got != want {
+			t.Errorf("checkDelegateHook(%q) = %q, want %q", rel, got, want)
+		}
+	}
+	// No hook config: nothing more is denied.
+	if got := checkDelegateHook(t.TempDir(), "scripts/staged-files.sh"); got != "" {
+		t.Errorf("no config = %q", got)
+	}
+	if got := checkDelegateHook(filepath.Join(dir, "missing"), "a.ts"); got != "denied_path" {
+		t.Errorf("missing dir = %q", got)
+	}
+}
