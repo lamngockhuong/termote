@@ -5,7 +5,11 @@ import { LOCALES } from '../i18n'
 import { tFor } from '../i18n/i18n-context'
 import { cleanName, notificationContent } from '../utils/agent-notify'
 import { OVERVIEW_PLAN_HASH } from '../utils/deep-link'
-import { HIDDEN_URL, hiddenKey } from '../utils/hidden-workspaces'
+import {
+  HIDDEN_URL,
+  hiddenGroupIds,
+  hiddenKey,
+} from '../utils/hidden-workspaces'
 import { LOCALE_CACHE, LOCALE_URL } from '../utils/notify-locale'
 import { NOTIFY_WORKER_VERSION } from '../utils/notify-permission'
 
@@ -336,6 +340,66 @@ describe('notify-sw.js', () => {
           expect(shown, name).toBe(page.options.body)
           expect(shown, name).toBe('claude · build')
         }
+      })
+
+      it("leaves out a hidden checkout's linked worktree", async () => {
+        const snapshot = {
+          groups: [
+            { id: '$1', name: 'repo', tabs: [] },
+            {
+              id: '$5',
+              name: 'repo-fix',
+              worktree: { linked: true, parent: '$1' },
+              tabs: [
+                {
+                  id: '$5:1',
+                  name: 'edit',
+                  panes: [{ id: '%9', agent: { name: 'claude' } }],
+                },
+              ],
+            },
+          ],
+        }
+        const event = {
+          groupId: '$5',
+          tabId: '$5:1',
+          paneId: '%9',
+          kind: 'done',
+        }
+        keepHidden(JSON.stringify([hiddenKey('', 'repo')]))
+        const shown = await body(event, snapshot as typeof SNAPSHOT)
+        const page = notificationContent(
+          { ...event, kind: 'done', agentName: 'claude' },
+          [{ id: '$5:1', name: 'edit', icon: '', description: '' }],
+          [
+            { id: '$1', name: 'repo' },
+            {
+              id: '$5',
+              name: 'repo-fix',
+              worktree: { linked: true, parent: '$1' },
+            },
+          ],
+          tFor('en'),
+          hiddenGroupIds(
+            [
+              { id: '$1', name: 'repo' },
+              {
+                id: '$5',
+                name: 'repo-fix',
+                worktree: { linked: true, parent: '$1' },
+              },
+            ],
+            [hiddenKey('', 'repo')],
+            '',
+          ),
+        )
+        expect(shown).toBe(page.options.body)
+        expect(shown).toBe('claude · edit')
+        // Another checkout hidden: the worktree keeps its name
+        keepHidden(JSON.stringify([hiddenKey('', 'other')]))
+        expect(await body(event, snapshot as typeof SNAPSHOT)).toBe(
+          'claude · repo-fix / edit',
+        )
       })
 
       it("hides by the push's machine", async () => {

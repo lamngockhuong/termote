@@ -65,9 +65,15 @@ export function useHiddenWorkspaces(groups: readonly SessionGroup[]) {
     (group: SessionGroup) => {
       const key = hiddenKey(machineId, group.name)
       update((prev) => (prev.includes(key) ? prev : [...prev, key]))
-      void closeHiddenNotifications(group.id, machineId)
+      // Its linked worktrees are hidden with it
+      for (const g of [
+        group,
+        ...groups.filter((w) => w.worktree?.parent === group.id),
+      ]) {
+        void closeHiddenNotifications(g.id, machineId)
+      }
     },
-    [machineId, update],
+    [groups, machineId, update],
   )
 
   // A linked worktree hidden with its repository checkout is shown again
@@ -85,11 +91,23 @@ export function useHiddenWorkspaces(groups: readonly SessionGroup[]) {
     [groups, machineId, update],
   )
 
-  // A workspace created with a hidden one's name is shown.
+  // A workspace created with a hidden one's name is shown. No name (a
+  // herdr-core space takes its folder's): nothing to forget.
   const forgetName = useCallback(
     (name: string) => {
+      if (!name.trim()) return
       const key = hiddenKey(machineId, name)
       update((prev) => prev.filter((k) => k !== key))
+    },
+    [machineId, update],
+  )
+
+  // A group renamed from this page: its key follows the new name, also
+  // where the name is the id (a Zellij session's id is its name, encoded)
+  const rename = useCallback(
+    (oldName: string | undefined, newName: string) => {
+      if (oldName === undefined) return
+      update((prev) => renameHiddenKey(prev, machineId, oldName, newName))
     },
     [machineId, update],
   )
@@ -99,14 +117,23 @@ export function useHiddenWorkspaces(groups: readonly SessionGroup[]) {
 
   // A hidden group renamed while this page is open (here, by tmux
   // rename-session, in herdr-app, or an unnamed hc session following its
-  // folder) keeps its id: the key follows the new name. Not while the old
-  // name is still open under another id (tmux numbered its sessions anew).
+  // folder) keeps its id: the key follows the new name. Only between two
+  // reads of the same ids: tmux started again numbers its sessions anew
+  // from $0, so an id that came back, or a list that changed meanwhile
+  // (emptied, restored one by one), is no rename. Nor while the old name is
+  // still open under another id.
   const lastNames = useRef<Map<string, string> | null>(null)
   useEffect(() => {
-    if (groups.length === 0) return
     const before = lastNames.current
-    lastNames.current = new Map(groups.map((g) => [g.id, g.name]))
-    if (!before) return
+    lastNames.current = groups.length
+      ? new Map(groups.map((g) => [g.id, g.name]))
+      : null
+    if (
+      !before ||
+      before.size !== groups.length ||
+      groups.some((g) => !before.has(g.id))
+    )
+      return
     const open = new Set(groups.map((g) => hiddenKey(machineId, g.name)))
     update((prev) => {
       let next = prev
@@ -151,6 +178,7 @@ export function useHiddenWorkspaces(groups: readonly SessionGroup[]) {
     hide,
     unhide,
     forgetName,
+    rename,
     reveal,
     rehide,
   }

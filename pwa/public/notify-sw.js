@@ -251,7 +251,13 @@
     const group = snap.groups?.find((g) => g.id === ev.groupId)
     const tab = group?.tabs?.find((t) => t.id === ev.tabId)
     const pane = tab?.panes?.find((p) => p.id === ev.paneId)
-    const hide = !hidden || hidden.has(hiddenKeyOf(machine, group?.name))
+    // A linked worktree is hidden with its repository checkout, as
+    // hiddenGroupIds does
+    const parent = snap.groups?.find((g) => g.id === group?.worktree?.parent)
+    const hide =
+      !hidden ||
+      hidden.has(hiddenKeyOf(machine, group?.name)) ||
+      (!!parent && hidden.has(hiddenKeyOf(machine, parent.name)))
     return {
       group: hide ? undefined : group?.name,
       tab: tab?.name,

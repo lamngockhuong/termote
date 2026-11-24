@@ -134,8 +134,6 @@ describe('useHiddenWorkspaces', () => {
   it('follows a hidden group renamed while the page is open', () => {
     const { result, rerender } = render([api, web])
     act(() => result.current.hide(api))
-    // An empty list (reconnecting) leaves the names it knows
-    rerender({ g: [] })
     rerender({ g: [{ id: '$1', name: 'backend' }, web] })
     expect(result.current.keys).toEqual([hiddenKey('', 'backend')])
     expect([...result.current.hiddenIds]).toEqual(['$1'])
@@ -147,6 +145,59 @@ describe('useHiddenWorkspaces', () => {
       ],
     })
     expect(result.current.keys).toEqual([hiddenKey('', 'backend')])
+  })
+
+  it('moves nothing when tmux started again and numbered its sessions anew', () => {
+    const { result, rerender } = render([
+      { id: '$0', name: 'api' },
+      { id: '$1', name: 'web' },
+    ])
+    act(() => result.current.hide({ id: '$0', name: 'api' }))
+    // Restarted: nothing, then web first under $0
+    rerender({ g: [] })
+    rerender({ g: [{ id: '$0', name: 'web' }] })
+    expect(result.current.keys).toEqual([hiddenKey('', 'api')])
+    // Restored one by one, without a list in between
+    rerender({
+      g: [
+        { id: '$0', name: 'web' },
+        { id: '$1', name: 'api' },
+      ],
+    })
+    rerender({ g: [{ id: '$1', name: 'web' }] })
+    expect(result.current.keys).toEqual([hiddenKey('', 'api')])
+    rerender({
+      g: [
+        { id: '$1', name: 'web' },
+        { id: '$2', name: 'docs' },
+      ],
+    })
+    expect(result.current.keys).toEqual([hiddenKey('', 'api')])
+  })
+
+  it('renames a key from this page, also when the id changes (Zellij)', () => {
+    const { result, rerender } = render([{ id: 'zYXBp', name: 'api' }])
+    act(() => result.current.hide({ id: 'zYXBp', name: 'api' }))
+    // A group it does not know changes nothing
+    act(() => result.current.rename(undefined, 'x'))
+    act(() => result.current.rename('api', 'backend'))
+    rerender({ g: [{ id: 'zYmFja2VuZA', name: 'backend' }] })
+    expect([...result.current.hiddenIds]).toEqual(['zYmFja2VuZA'])
+  })
+
+  it("closes the notifications of a hidden checkout's worktrees too", () => {
+    const { result } = render([api, web, fix])
+    act(() => result.current.hide(web))
+    expect(close).toHaveBeenCalledWith('$2', '')
+    expect(close).toHaveBeenCalledWith('$3', '')
+    expect(close).not.toHaveBeenCalledWith('$1', '')
+  })
+
+  it('forgets nothing for a workspace made without a name', () => {
+    const { result } = render([{ id: '$1', name: '' }])
+    act(() => result.current.hide({ id: '$1', name: '' }))
+    act(() => result.current.forgetName(''))
+    expect(result.current.keys).toEqual([hiddenKey('', '')])
   })
 
   it('moves nothing when the old name is still open under another id', () => {

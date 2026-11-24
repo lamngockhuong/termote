@@ -733,7 +733,12 @@ export default function App({
       ? {
           kind: groupKind,
           onNew: () => setNewGroupOpen(true),
-          onRename: renameGroup,
+          onRename: async (id, name) => {
+            const old = groups.find((g) => g.id === id)?.name
+            await renameGroup(id, name)
+            // A hidden one stays hidden under its new name
+            hidden.rename(old, name)
+          },
           onClose: setPendingGroupCloseId,
           canRename: (id) => namedGroups && !isDefaultGroup(id),
           ...worktreeActions,
@@ -780,10 +785,10 @@ export default function App({
   // Mobile chip: tabs waiting on the user besides the one on screen.
   const blockedElsewhere = useMemo(
     () =>
-      sessions.filter(
+      shownSessions.filter(
         (s) => s.id !== activeSession.id && matchesFilter(s, 'needs-you'),
       ).length,
-    [sessions, activeSession.id],
+    [shownSessions, activeSession.id],
   )
 
   // Views offered for this pane; one that stops being offered gives way to
