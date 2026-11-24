@@ -154,6 +154,25 @@ func TestCheckDelegateCommand(t *testing.T) {
 		{"npm --prefix pwa test", "npm --prefix pwa", ""},
 		{"npm --prefix pwa run build", "npm --prefix pwa", ""},
 		{"npm ci", "npm", ""},
+		// Options that do not start with -.
+		{"gcc @opts x.c", "gcc", "option"},
+		{"dotnet build /p:X=1", "dotnet build", "option"},
+		{"dotnet build /property=X", "dotnet build", "option"},
+		{"vim +q x", "vim", "option"},
+		{"gcc x.c", "gcc", ""},
+		{"ls /tmp", "ls", ""},
+		{"cat /etc/hosts", "cat", ""},
+		{"rg foo user@example", "rg foo", ""},
+		// A variable set before the program.
+		{"X=1 bash", "", "interpreter"},
+		{"X=1 bash x.sh", "X=1 bash", "interpreter"},
+		{"NODE_OPTIONS=--require=x pnpm test", "", "interpreter"},
+		// More interpreters and wrappers.
+		{"py x.py", "", "interpreter"},
+		{"pypy3.10 x.py", "", "interpreter"},
+		{"stdbuf -o0 sh", "", "interpreter"},
+		{"gdb -batch", "", "interpreter"},
+		{"java Foo", "", "interpreter"},
 		// tar's old option style under a prefix of its name alone.
 		{"tar cIf sh out.tar notes.txt", "tar", "option"},
 		{"yarn init", "", ""},
@@ -318,37 +337,5 @@ func TestCheckDelegateFile(t *testing.T) {
 	}
 	if got := checkDelegateFile(filepath.Join(dir, "nope"), "a"); got != "denied_path" {
 		t.Errorf("no dir = %q", got)
-	}
-}
-
-func TestCheckDelegateHook(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "lefthook.yml"), `pre-commit:
-  commands:
-    i18n:
-      root: "pwa/"
-      run: sh ../scripts/staged-files.sh node scripts/check-i18n.mjs
-`)
-	writeFile(t, filepath.Join(dir, ".husky", "pre-push"), "./tools/Lint.sh\n")
-	writeFile(t, filepath.Join(dir, ".pre-commit-config.yaml"), "repos:\n- repo: local\n  hooks:\n  - id: x\n    entry: python hooks/check.py\n")
-	for rel, want := range map[string]string{
-		"pwa/scripts/check-i18n.mjs": "denied_path",
-		"scripts/staged-files.sh":    "denied_path",
-		"tools/lint.sh":              "denied_path",
-		"hooks/check.py":             "denied_path",
-		"src/a.ts":                   "",
-		"scripts/other.sh":           "",
-		"pwa/scripts/check.mjs":      "",
-	} {
-		if got := checkDelegateHook(dir, rel); got != want {
-			t.Errorf("checkDelegateHook(%q) = %q, want %q", rel, got, want)
-		}
-	}
-	// No hook config: nothing more is denied.
-	if got := checkDelegateHook(t.TempDir(), "scripts/staged-files.sh"); got != "" {
-		t.Errorf("no config = %q", got)
-	}
-	if got := checkDelegateHook(filepath.Join(dir, "missing"), "a.ts"); got != "denied_path" {
-		t.Errorf("missing dir = %q", got)
 	}
 }

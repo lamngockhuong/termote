@@ -129,7 +129,7 @@ export default {
   'jobs.grant.kindEdit': 'Sửa file',
   'jobs.grant.prefix': 'Tiền tố lệnh',
   'jobs.grant.prefixHint':
-    'Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, và với tiền tố chỉ có tar thì không có từ đầu tiên sau tar, vì tar đọc từ đó là tùy chọn). Hãy tự gõ tiền tố, kèm luôn các tùy chọn cần dùng',
+    'Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:, và với tiền tố chỉ có tar thì không có từ đầu tiên sau tar, vì tar đọc từ đó là tùy chọn). Hãy tự gõ tiền tố, kèm luôn các tùy chọn cần dùng',
   'jobs.grant.runsCode':
     'Lệnh test, build hay script chạy mã mà agent sửa được: pnpm test chạy các file test và mọi thứ package.json khai báo cho test, go test chạy test của package. Chỉ ủy quyền khi bạn chấp nhận để agent chạy mã đó',
   'jobs.grant.problem.empty': 'Hãy gõ tiền tố lệnh',

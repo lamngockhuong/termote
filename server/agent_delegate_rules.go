@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -39,6 +38,8 @@ var delegateInterpreters = []string{
 	"watch", "make",
 	// sed and ed run a program from their script (sed's e command, ed's !).
 	"sed", "ed",
+	// More interpreters, and wrappers that run the program named after them.
+	"gsed", "pythonw", "py", "pypy", "pypy3", "java", "jshell", "rscript", "julia", "tclsh", "wish", "expect", "osascript", "stdbuf", "setsid", "flock", "strace", "ltrace", "gdb", "lldb", "valgrind", "chroot", "unshare", "nsenter", "runuser", "pkexec", "ionice", "taskset", "chrt", "xvfb-run", "systemd-run", "caffeinate",
 	// git runs any program through its options (--upload-pack, -x,
 	// --exec, difftool, bisect run, submodule foreach) and its config.
 	"git",
@@ -136,7 +137,7 @@ var delegateInstallers = map[string][]string{
 var delegateBundledOptions = []string{"tar"}
 
 // interpreterVersionRe: a versioned name of an interpreter (python3.12).
-var interpreterVersionRe = regexp.MustCompile(`^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
+var interpreterVersionRe = regexp.MustCompile(`^(python|pypy|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
 
 // commandName is a command's first word as its program is found: its base
 // name, lowercased, without a Windows extension.
@@ -165,6 +166,12 @@ func checkDelegateCommand(cmd, prefix string) string {
 	// compares word for word.
 	if strings.Join(words, " ") != cmd {
 		return "chars"
+	}
+	// A variable set before the program (X=1 bash) is what env does: the
+	// program is not the first word, and the variable can make any one run
+	// another (NODE_OPTIONS, LD_PRELOAD).
+	if strings.Contains(words[0], "=") {
+		return "interpreter"
 	}
 	first := commandName(words[0])
 	if slices.Contains(delegateInterpreters, first) || interpreterVersionRe.MatchString(first) {
@@ -200,7 +207,7 @@ func checkDelegateCommand(cmd, prefix string) string {
 	// another one through its own (rg --pre=x, tar --to-command=x, go test
 	// -exec=x), so only what the user typed in the prefix chooses options.
 	for _, w := range strings.Fields(cmd[len(prefix):]) {
-		if strings.HasPrefix(w, "-") {
+		if optionLike(w) {
 			return "option"
 		}
 	}
@@ -225,6 +232,19 @@ func checkDelegateCommand(cmd, prefix string) string {
 	return ""
 }
 
+// optionLike is a word a program may read as an option: -x, and also
+// @file (a response file of options: gcc @opts, javac, dotnet), +cmd (vim
+// +q, less +F) and /name: (MSBuild's /p:X=1, dotnet build's).
+func optionLike(w string) bool {
+	if strings.HasPrefix(w, "-") || strings.HasPrefix(w, "@") || strings.HasPrefix(w, "+") {
+		return true
+	}
+	return windowsOptionRe.MatchString(w)
+}
+
+// windowsOptionRe is an option written /name: or /name=.
+var windowsOptionRe = regexp.MustCompile(`^/[A-Za-z][A-Za-z0-9-]*[:=]`)
+
 // maxGrantCommand bounds a delegated command; maxGrantPrefix a grant's
 // prefix.
 const (
@@ -247,9 +267,8 @@ var delegateDeniedNames = []string{
 	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
 }
 
-// delegateHookConfigs are the files that make git hooks run a program:
-// lefthook's (also denied names) and pre-commit's. checkDelegateHook reads
-// them, and the scripts of .husky, for the files they run.
+// delegateHookConfigs are lefthook's configs, every extension it reads:
+// denied names, since a hook runs what they say at the user's next commit.
 var delegateHookConfigs = func() []string {
 	var names []string
 	for _, base := range []string{"lefthook", "lefthook-local"} {
@@ -257,63 +276,10 @@ var delegateHookConfigs = func() []string {
 			names = append(names, base+ext, "."+base+ext)
 		}
 	}
-	return append(names, ".pre-commit-config.yaml")
+	return names
 }()
 
 func init() { delegateDeniedNames = append(delegateDeniedNames, delegateHookConfigs...) }
-
-// hookScriptRe is a word of a hook config that names a script file.
-var hookScriptRe = regexp.MustCompile(`[A-Za-z0-9_@+./-]+\.(?:sh|bash|zsh|js|mjs|cjs|ts|mts|cts|py|rb|pl|ps1|go)\b`)
-
-// maxHookConfig bounds what checkDelegateHook reads of one file, and
-// maxHookScripts how many of .husky's.
-const (
-	maxHookConfig  = 64 << 10
-	maxHookScripts = 64
-)
-
-// checkDelegateHook is "denied_path" when rel, under dir, is a file a git
-// hook of dir runs: named in a hook config at dir's root or in a script of
-// .husky, compared by the end of its path ("../scripts/x.sh" in a command
-// run from a subfolder denies every scripts/x.sh), since such a file runs
-// at the user's next commit or push, past the grant. A config dir does
-// not hold, or one too large, denies nothing more; what a hook script
-// reads in turn is not followed.
-func checkDelegateHook(dir, rel string) string {
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return "denied_path"
-	}
-	defer root.Close()
-	files := slices.Clone(delegateHookConfigs)
-	if d, err := root.Open(".husky"); err == nil {
-		names, _ := d.Readdirnames(maxHookScripts)
-		d.Close()
-		for _, n := range names {
-			files = append(files, ".husky/"+n)
-		}
-	}
-	rel = strings.ToLower(filepath.ToSlash(rel))
-	for _, name := range files {
-		f, err := root.Open(name)
-		if err != nil {
-			continue
-		}
-		b, _ := io.ReadAll(io.LimitReader(f, maxHookConfig))
-		f.Close()
-		for _, w := range hookScriptRe.FindAllString(string(b), -1) {
-			w = strings.ToLower(w)
-			for strings.HasPrefix(w, "./") || strings.HasPrefix(w, "../") {
-				w = w[strings.Index(w, "/")+1:]
-			}
-			w = strings.TrimPrefix(w, "/")
-			if w != "" && (rel == w || strings.HasSuffix(rel, "/"+w)) {
-				return "denied_path"
-			}
-		}
-	}
-	return ""
-}
 
 // delegateDeniedDirs are directories nothing under which a grant covers
 // ("/"-separated, lowercased, from the worktree's root down).

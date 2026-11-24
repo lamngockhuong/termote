@@ -186,4 +186,18 @@ describe('grantPrefixTooWide', () => {
     expect(grantPrefixTooWide('pnpm test')).toBe(false)
     expect(grantPrefixTooWide('')).toBe(false)
   })
+
+  it('refuses a variable set before the program, and more interpreters', () => {
+    for (const p of [
+      'X=1 bash',
+      'NODE_OPTIONS=x pnpm test',
+      'py',
+      'pypy3.10',
+      'stdbuf',
+      'gdb',
+      'java',
+    ])
+      expect(grantPrefixProblem(p), p).toBe('interpreter')
+    expect(grantPrefixProblem('gcc -O2')).toBeNull()
+  })
 })

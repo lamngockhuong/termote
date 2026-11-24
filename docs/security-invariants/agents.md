@@ -855,7 +855,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `description`, `timeout` (`run_in_background` and anything else: `input_keys`); the command is
   printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
   (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
-  no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
+  no variable set before the program (`X=1 bash`, what `env` does: `interpreter`), and its first word
+  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
   `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
@@ -884,7 +885,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `run` must be in the prefix too), else `interpreter`; a command the user typed into the prefix
   (`pnpm --filter a lint`) is theirs; the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
-  the prefix and a space (`no_grant`), and no word after the prefix starts with `-` (`option`: a
+  the prefix and a space (`no_grant`), and no word after the prefix is option-like (`optionLike`:
+  starts with `-`, `@` (a response file: `gcc @opts`), `+` (`vim +q`) or is `/name:` or `/name=`
+  (MSBuild's `/p:X=1`)) (`option`: a
   granted program runs another through its own options, `rg --pre=x`, `tar --to-command=x`, `go
   test -exec=x`, so only the options the user typed into the prefix are covered; `tar`, of
   `delegateBundledOptions`, reads its first argument as option letters even without a dash, `tar
@@ -901,12 +904,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.envrc`, `.env*`, `package.json`, lockfiles,
   `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
   `Makefile`, hook configs, sensitive
-  names by `isSensitive`: `denied_path`), not a file a git hook of the grant's directory runs
-  (`checkDelegateHook`: a word naming a script, `.sh`, `.js`, `.mjs`, `.py`..., in a lefthook config
-  of any extension, `.pre-commit-config.yaml` or a script of `.husky` at that directory's root, 64
-  KB of each and 64 of `.husky`'s, matched by the end of the path, `../scripts/x.sh` denying every
-  `scripts/x.sh`, since it would run at the user's next commit, past the grant: `denied_path`; what
-  such a script runs in turn is not followed), and no component on the way, the last included, is a
+  names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path

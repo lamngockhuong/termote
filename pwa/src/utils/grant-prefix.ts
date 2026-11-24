@@ -66,10 +66,43 @@ const INTERPRETERS = new Set([
   // sed and ed run a program from their script (sed's e command, ed's !)
   'sed',
   'ed',
+  // more interpreters, and wrappers that run the program named after them
+  'gsed',
+  'pythonw',
+  'py',
+  'pypy',
+  'pypy3',
+  'java',
+  'jshell',
+  'rscript',
+  'julia',
+  'tclsh',
+  'wish',
+  'expect',
+  'osascript',
+  'stdbuf',
+  'setsid',
+  'flock',
+  'strace',
+  'ltrace',
+  'gdb',
+  'lldb',
+  'valgrind',
+  'chroot',
+  'unshare',
+  'nsenter',
+  'runuser',
+  'pkexec',
+  'ionice',
+  'taskset',
+  'chrt',
+  'xvfb-run',
+  'systemd-run',
+  'caffeinate',
 ])
 
 // A versioned name of an interpreter: python3.12 (interpreterVersionRe)
-const VERSIONED = /^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
+const VERSIONED = /^(python|pypy|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
 
 // Package managers with a word that runs any package: pnpm dlx x, npm exec
 // x, also after options (pnpm -s exec x, pnpm --filter a exec x), so it is
@@ -156,6 +189,8 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   const words = p.split(' ')
   // One space between words, none around
   if (words.includes('')) return 'chars'
+  // A variable set before the program (X=1 bash) is what env does
+  if (words[0].includes('=')) return 'interpreter'
   const first = commandName(words[0])
   if (INTERPRETERS.has(first) || VERSIONED.test(first)) return 'interpreter'
   if (Object.hasOwn(RUNNERS, first)) {
