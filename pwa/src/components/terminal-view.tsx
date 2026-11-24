@@ -15,7 +15,12 @@ import { terminalShortcut } from '../hooks/use-shortcuts'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
-import { readToken, type UiStyle } from '../ui-style'
+import {
+  accentColor,
+  readToken,
+  type UiAccent,
+  type UiStyle,
+} from '../ui-style'
 import { backendIsPaneStream } from '../utils/backend'
 import { safeUrl } from '../utils/markdown-safety'
 import { recordSelection } from '../utils/pane-selection'
@@ -90,6 +95,8 @@ interface Props {
   theme?: 'light' | 'dark'
   // Current UI style: a change re-reads the background token.
   uiStyle?: UiStyle
+  // Accent color: other than 'auto', the cursor and the selection take it.
+  uiAccent?: UiAccent
   disableContextMenu?: boolean
   // View-only role: the terminal shows the pane but sends nothing typed.
   readOnly?: boolean
@@ -193,13 +200,35 @@ export const THEMES = {
   },
 }
 
+// Weight of a chosen accent under selected text: selectionForeground keeps
+// 4.5:1 on it over the terminal background of every style
+// (terminal-view.test.tsx).
+export const ACCENT_SELECTION_ALPHA = { light: 0.28, dark: 0.32 }
+
 // xterm.js needs a concrete colour, not var(): the background comes from the
 // --tm-term-bg token of the current style and theme, the palette from THEMES.
-// Without the stylesheet (tests) THEMES keeps its own background.
-export function terminalTheme(theme: 'light' | 'dark') {
+// Without the stylesheet (tests) THEMES keeps its own background. An accent
+// color other than 'auto' paints the cursor and the selection; it comes from
+// UI_ACCENTS, not the token, so it needs no stylesheet either.
+export function terminalTheme(
+  theme: 'light' | 'dark',
+  accent: UiAccent = 'auto',
+) {
   const background = readToken('--tm-term-bg')
-  if (!background) return THEMES[theme]
-  return { ...THEMES[theme], background, cursorAccent: background }
+  const base = background
+    ? { ...THEMES[theme], background, cursorAccent: background }
+    : THEMES[theme]
+  const color = accentColor(accent)
+  if (!color) return base
+  const hex = color[theme][0]
+  const [r, g, b] = [1, 3, 5].map((i) =>
+    Number.parseInt(hex.slice(i, i + 2), 16),
+  )
+  return {
+    ...base,
+    cursor: hex,
+    selectionBackground: `rgba(${r}, ${g}, ${b}, ${ACCENT_SELECTION_ALPHA[theme]})`,
+  }
 }
 
 // Lines of history xterm.js keeps when the backend does not scroll the pane.
@@ -313,6 +342,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       gpuRenderer = false,
       theme = 'dark',
       uiStyle,
+      uiAccent = 'auto',
       disableContextMenu = true,
       readOnly = false,
       spareToken = false,
@@ -354,6 +384,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     fontFamilyRef.current = fontFamily
     const gpuRendererRef = useRef(gpuRenderer)
     gpuRendererRef.current = gpuRenderer
+    const uiAccentRef = useRef(uiAccent)
+    uiAccentRef.current = uiAccent
     // The WebGL renderer while it is wanted (it may still be loading)
     const webglRef = useRef<WebglHandle | null>(null)
     // herdr (and herdr-core) fixes the pane size and answers terminal
@@ -734,7 +766,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       const term = new Terminal({
         fontSize: fontSizeRef.current,
         fontFamily: terminalFontFamily(fontFamilyRef.current),
-        theme: terminalTheme(theme),
+        theme: terminalTheme(theme, uiAccentRef.current),
         cursorBlink: true,
         scrollback: SCROLLBACK,
         // xterm.js sizes its scrollbar (and FitAddon the room it keeps for
@@ -841,8 +873,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: a new style changes the background token
     useEffect(() => {
-      setTerminalTheme(handleRef.current, terminalTheme(theme))
-    }, [theme, uiStyle])
+      setTerminalTheme(handleRef.current, terminalTheme(theme, uiAccent))
+    }, [theme, uiStyle, uiAccent])
 
     useEffect(() => {
       setTerminalFontSize(handleRef.current, fontSize)

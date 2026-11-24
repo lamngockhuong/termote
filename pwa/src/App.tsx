@@ -2624,6 +2624,7 @@ export default function App({
                           gpuRenderer: settings.gpuRenderer,
                           theme: resolvedTheme,
                           uiStyle: settings.uiStyle,
+                          uiAccent: settings.uiAccent,
                           disableContextMenu: settings.disableContextMenu,
                           copyOnSelect: settings.copyOnSelect,
                           onCopy: onTerminalCopy,
