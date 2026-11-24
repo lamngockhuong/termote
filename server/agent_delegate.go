@@ -204,7 +204,7 @@ func sameJobAgent(a, b jobAgent) bool {
 
 // checkDelegation decides whether the dialog on screen in pane p, run by
 // s, may be answered under a grant, and with which option.
-func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, screen string) (delegation, error) {
+func (a *agentAPI) checkDelegation(ctx context.Context, p snapPane, s AgentSession, sc agentScreen, screen string) (delegation, error) {
 	if s.Agent != "claude" {
 		return delegation{}, refuseDelegation("not_claude")
 	}
@@ -307,10 +307,54 @@ func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, s
 			why = code
 			continue
 		}
+		if code := a.checkDelegateHooksPath(ctx, g.grant.Dir, rel); code != "" {
+			why = code
+			continue
+		}
 		d.jobID, d.grantID, d.path = g.job, g.grant.ID, filepath.ToSlash(rel)
 		return d, nil
 	}
 	return delegation{}, refuseDelegation(why)
+}
+
+// checkDelegateHooksPath is "denied_path" when rel, under dir, is in a
+// folder core.hooksPath names for dir's repository (a repository may set
+// it to a folder of its own, tools/hooks): git runs the files there at the
+// user's next commit or push, past the grant. The value gitRunner sets
+// itself (-c, scope command) is not the repository's. A relative one is
+// read from the top of the work tree, where git runs hooks. A dir in no
+// repository runs no hook; a config git cannot read denies the edit.
+func (a *agentAPI) checkDelegateHooksPath(ctx context.Context, dir, rel string) string {
+	if a.files == nil {
+		return "denied_path"
+	}
+	repo, ok, err := repoInfo(ctx, a.files.roots, dir)
+	if err != nil {
+		return "denied_path"
+	}
+	if !ok {
+		return ""
+	}
+	out, truncated, err := a.files.git.output(ctx, gitCall{root: repo.Top, safeDir: repo.SafeDir, limit: 64 << 10},
+		"config", "-z", "--type=path", "--show-scope", "--get-all", "core.hooksPath")
+	if err != nil || truncated {
+		return "denied_path"
+	}
+	file := filepath.Join(dir, rel)
+	parts := strings.Split(string(out), "\x00")
+	for i := 0; i+1 < len(parts); i += 2 {
+		scope, hooks := parts[i], parts[i+1]
+		if scope == "command" || hooks == "" {
+			continue
+		}
+		if !filepath.IsAbs(hooks) {
+			hooks = filepath.Join(repo.Top, hooks)
+		}
+		if dirInTree(hooks, file) || dirInTree(hooks, filepath.Dir(file)) {
+			return "denied_path"
+		}
+	}
+	return ""
 }
 
 func anySubagentRunning(nodes []subagentNode) bool {
@@ -367,7 +411,7 @@ func (a *agentAPI) delegatedAnswer(ctx context.Context, wr agentWriter, paneID, 
 	if !ok {
 		return delegation{}, errTargetChanged
 	}
-	return a.checkDelegation(p, s, sc, screen)
+	return a.checkDelegation(ctx, p, s, sc, screen)
 }
 
 // paneNow is paneID's pane in the tracker's last snapshot, else in a new
