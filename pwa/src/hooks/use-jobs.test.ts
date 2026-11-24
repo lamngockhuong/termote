@@ -362,4 +362,50 @@ describe('useJobs', () => {
     ).rejects.toMatchObject({ code: 'input_has_draft' })
     expect(api.fetchAsks).toHaveBeenCalledTimes(3)
   })
+
+  it('lands only the latest read of the asks, keeping them on other refusals', async () => {
+    api.fetchJobs.mockResolvedValue(list([]))
+    let first = (_v: unknown) => {}
+    let fail = (_e: unknown) => {}
+    api.fetchAsks
+      .mockReturnValueOnce(new Promise((ok) => (first = ok)))
+      .mockReturnValueOnce(new Promise((_ok, no) => (fail = no)))
+      .mockResolvedValueOnce(asks([ask('new')]))
+      .mockRejectedValueOnce(refusal('busy', 500))
+    const { result } = renderHook(() => useJobs())
+    const a = reloadJobs()
+    const b = reloadJobs()
+    await act(() => reloadJobs())
+    first(asks([ask('old')]))
+    fail(new RequestError(404, '', 'not found'))
+    await act(() => Promise.all([a, b]))
+    expect(result.current.asks).toEqual([ask('new')])
+    // A refusal that is not a missing ledger keeps the last asks read
+    await act(() => reloadJobs())
+    expect(result.current.asks).toEqual([ask('new')])
+  })
+
+  it('shows an ask answered whatever the server answered with', async () => {
+    api.fetchJobs.mockResolvedValue(list([]))
+    const bare = ask('Q1', { updated: undefined })
+    api.fetchAsks.mockResolvedValue(asks([bare]))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+    // No ask in the answer: an ask with no version read sends an empty one
+    api.answerAsk.mockResolvedValueOnce({ queued: false, recorded: true })
+    await act(() => answerQuestion(bare, { choice: 1 }).then(() => {}))
+    expect(api.answerAsk).toHaveBeenCalledWith('Q1', {
+      choice: 1,
+      updated: '',
+    })
+    expect(result.current.asks[0]).toEqual({ ...bare, state: 'answered' })
+    // Another ask in the answer is not taken for this one
+    api.answerAsk.mockResolvedValueOnce({
+      ask: ask('Q9', { state: 'answered' }),
+      queued: false,
+      recorded: true,
+    })
+    await act(() => answerQuestion(bare, { choice: 2 }).then(() => {}))
+    expect(result.current.asks).toEqual([{ ...bare, state: 'answered' }])
+  })
 })

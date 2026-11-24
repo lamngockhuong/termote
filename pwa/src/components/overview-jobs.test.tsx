@@ -314,6 +314,32 @@ describe('OverviewJobs', () => {
     expect(screen.getByRole('dialog', { name: 'job w' })).toBeVisible()
   })
 
+  it("opens a question's job beside the columns on a wide screen, closing the Activity", () => {
+    const onCloseActivity = vi.fn()
+    show(
+      {
+        asks: [
+          {
+            id: 'Q1',
+            state: 'open',
+            text: 'Which way?',
+            job: 'w',
+            jobTitle: 'job w',
+            created: new Date().toISOString(),
+            updated: 'q',
+          },
+        ],
+      },
+      false,
+      undefined,
+      { wide: true, onCloseActivity },
+    )
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    fireEvent.click(within(waiting).getByRole('button', { name: 'job w' }))
+    expect(onCloseActivity).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('complementary', { name: 'job w' })).toBeVisible()
+  })
+
   it('shows no questions section with none open', () => {
     show({ asks: [{ id: 'Q2', state: 'answered', created: '' }] })
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()

@@ -282,4 +282,50 @@ describe('OverviewAsks', () => {
     await show([ask('Q1', { state: 'answered' })])
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
   })
+
+  it('sends no empty answer, nor a second one while one is sent', async () => {
+    await show([ask('Q1', { text: undefined, choices: undefined })])
+    const box = within(card('Q1')).getByRole('textbox')
+    const form = box.closest('form')!
+    // No text: the ask is shown with an empty body, and only a text answer
+    expect(within(card('Q1')).getAllByRole('button')).toHaveLength(1)
+    fireEvent.change(box, { target: { value: '  \n ' } })
+    fireEvent.submit(form)
+    expect(api.answerAsk).not.toHaveBeenCalled()
+    let done = (_v: unknown) => {}
+    api.answerAsk.mockReturnValue(new Promise((ok) => (done = ok)))
+    fireEvent.change(box, { target: { value: 'go' } })
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+    expect(api.answerAsk).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      done({
+        ask: ask('Q1', { state: 'answered' }),
+        queued: false,
+        recorded: true,
+      })
+    })
+  })
+
+  it('drops the note that an answer went out after a while', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      await show([ask('Q1')])
+      api.answerAsk.mockResolvedValue({
+        ask: ask('Q1', { state: 'answered' }),
+        queued: false,
+        recorded: true,
+      })
+      await act(async () => {
+        fireEvent.click(within(card('Q1')).getByRole('button', { name: 'Yes' }))
+      })
+      expect(within(region()).getByRole('status')).toHaveTextContent('Sent')
+      act(() => vi.advanceTimersByTime(8000))
+      expect(
+        screen.queryByRole('region', { name: 'Waiting on you' }),
+      ).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
