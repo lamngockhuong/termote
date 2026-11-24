@@ -509,7 +509,7 @@ describe('JobEditSheet', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
       })
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Việc này đã có agent hoặc worktree nên giữ nguyên workspace',
+        'Việc này đã có agent hoặc worktree nên không đổi được workspace',
       )
     })
   })

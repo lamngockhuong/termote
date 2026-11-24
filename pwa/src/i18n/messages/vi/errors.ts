@@ -5,15 +5,15 @@ export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
   'errors.agent_blocked': 'Agent đang chờ trả lời một hộp thoại',
   'errors.agent_no_turn':
-    'Màn hình không có dòng đang làm: có thể agent chỉ đang chờ việc chạy nền, hoặc bản Claude Code này vẽ dòng đó khác đi. Hãy xem pane',
-  'errors.agent_not_working': 'Agent không làm gì nên không có gì để dừng',
+    'Màn hình của agent không có dòng báo đang làm: có thể agent chỉ đang chờ việc chạy nền, hoặc bản Claude Code này hiển thị dòng đó khác. Hãy xem pane',
+  'errors.agent_not_working': 'Agent đang không làm gì nên không có gì để dừng',
   'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',
   'errors.answer_always_refused':
-    'Chỉ bạn mới chọn được câu trả lời luôn cho phép, ngay trong hộp thoại',
+    'Câu trả lời luôn cho phép chỉ bạn mới chọn được, ngay trong hộp thoại',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
   'errors.ask_browser_only':
-    'Termote khác chỉ trả lời hay bỏ qua câu hỏi từ trình duyệt, không bao giờ từ dòng lệnh của nó',
+    'Trên một Termote khác, câu hỏi chỉ được trả lời hay bỏ qua từ trình duyệt, không bao giờ từ dòng lệnh của nó',
   'errors.ask_busy': 'Đang gửi một câu trả lời cho câu hỏi này. Hãy thử lại',
   'errors.ask_closed': 'Câu hỏi này đã được trả lời hoặc bị bỏ qua',
   'errors.ask_conflict': 'Câu hỏi này vừa được thay đổi ở nơi khác',
@@ -29,15 +29,16 @@ export default {
     'Tên một nhánh khác trùng với một thư mục trong tên nhánh này, hoặc ngược lại (không thể có cùng lúc test và test/x). Hãy chọn tên khác',
   'errors.busy': 'Một thay đổi khác vẫn đang chạy. Hãy thử lại',
   'errors.changed': 'Đã thay đổi từ lúc đọc. Hãy xem lại',
-  'errors.ci_busy': 'Đang đọc GitHub quá nhiều. Thử lại sau một phút',
-  'errors.ci_failed': 'gh trên máy chủ không đọc được các pull request',
+  'errors.ci_busy':
+    'Đang gửi quá nhiều yêu cầu tới GitHub. Hãy thử lại sau một phút',
+  'errors.ci_failed': 'gh trên server không đọc được các pull request',
   'errors.ci_gh_auth':
-    'gh trên máy chủ chưa đăng nhập: hãy chạy gh auth login ở đó',
-  'errors.ci_gh_missing': 'Máy chủ chưa cài gh (GitHub CLI)',
+    'gh trên server chưa đăng nhập: hãy chạy gh auth login ở đó',
+  'errors.ci_gh_missing': 'Server chưa cài gh (GitHub CLI)',
   'errors.ci_no_repo':
-    'Branch của việc không nằm trên repo GitHub nào mà gh đã đăng nhập',
-  'errors.ci_nothing_failed': 'Không có check nào của các pull request bị lỗi',
-  'errors.ci_unavailable': 'Máy chủ này không theo dõi pull request',
+    'Nhánh của việc không nằm trên repo GitHub nào mà gh đã đăng nhập',
+  'errors.ci_nothing_failed': 'Không pull request nào có check không đạt',
+  'errors.ci_unavailable': 'Server này không theo dõi pull request',
   'errors.cli_only': 'Chỉ CLI termote trên máy đó làm được việc này',
   'errors.conflict': 'Đã bị sửa ở nơi khác',
   'errors.create_failed': 'Git không tạo được worktree',
@@ -45,7 +46,7 @@ export default {
   'errors.cross_device': 'Chỗ mới nằm trên một hệ thống file khác',
   'errors.default_session': 'Không đổi tên được phiên mặc định',
   'errors.delegation_out_of_scope':
-    'Không ủy quyền nào bao gồm hộp thoại này. Hãy tự trả lời',
+    'Không có ủy quyền nào áp dụng cho hộp thoại này. Hãy tự trả lời',
   'errors.delivered_not_submitted':
     'Chữ đã nằm trong ô nhập nhưng chưa được gửi',
   'errors.devices_not_revoked':
@@ -62,7 +63,8 @@ export default {
   'errors.finish_agent_changed': 'Pane của việc này giờ chạy một agent khác',
   'errors.finish_agent_working': 'Agent đang làm. Hãy chờ nó dừng',
   'errors.finish_failed': 'Không dọn được việc này',
-  'errors.finish_job_active': 'Chỉ dọn được việc cần xem lại hoặc đã kết thúc',
+  'errors.finish_job_active':
+    'Chỉ dọn được việc đang chờ xem lại hoặc đã kết thúc',
   'errors.finish_needs_close':
     'Tab của việc này nằm trong worktree. Hãy đóng cả tab',
   'errors.finish_needs_remove':
@@ -73,16 +75,16 @@ export default {
   'errors.finish_self':
     'Tab hoặc worktree của việc này chứa chính agent đang dọn nó',
   'errors.finish_self_unknown':
-    'termote không biết lệnh chạy trong pane nào. Hãy dọn trong ứng dụng',
+    'termote không biết lệnh này chạy trong pane nào. Hãy dọn trong ứng dụng',
   'errors.finish_tab_busy':
     'Một pane khác trong tab của việc này đang chạy chương trình',
   'errors.finish_unread': 'Câu trả lời cuối của agent chưa được đọc',
   'errors.finish_worktree_env':
-    'Worktree có file .env mà git bỏ qua, xóa worktree sẽ mất chúng',
+    'Worktree có file .env mà git bỏ qua; xóa worktree sẽ mất các file đó',
   'errors.finish_worktree_not_made':
-    'Worktree có từ trước khi giao việc. Hãy xóa nó trong danh sách worktree',
+    'Worktree đã có từ trước khi giao việc. Hãy xóa nó trong danh sách worktree',
   'errors.finish_worktree_shared':
-    'Một workspace hoặc tab khác đang làm việc trong worktree',
+    'Một workspace hoặc tab khác đang dùng worktree này',
   'errors.folder_reaches':
     'Thư mục chứa, hoặc nằm cạnh, liên kết có thể dẫn Windows sang máy khác. Hãy mở trực tiếp từ Windows',
   'errors.full_needs_password':
@@ -135,7 +137,7 @@ export default {
   'errors.invalid_template': 'Mẫu không hợp lệ',
   'errors.invalid_text': 'Chữ đang trống hoặc có ký tự điều khiển',
   'errors.invalid_validity': 'Thời hạn không hợp lệ',
-  'errors.job_after_missing': 'Một việc nó chờ không còn tồn tại',
+  'errors.job_after_missing': 'Một việc mà việc này chờ không còn tồn tại',
   'errors.job_conflict': 'Việc này vừa được thay đổi ở nơi khác',
   'errors.job_cycle': 'Các việc này sẽ chờ lẫn nhau',
   'errors.job_invalid': 'Việc này không nhận thay đổi đó',
@@ -143,10 +145,10 @@ export default {
   'errors.job_not_found': 'Việc này không còn tồn tại',
   'errors.job_unfinished': 'Chỉ xóa được việc đã xong, thất bại hoặc bị bỏ',
   'errors.job_workspace_bound':
-    'Việc này đã có agent hoặc worktree nên giữ nguyên workspace',
+    'Việc này đã có agent hoặc worktree nên không đổi được workspace',
   'errors.job_workspace_unknown': 'Không có workspace nào như vậy đang mở',
   'errors.jobs_full': 'Kế hoạch đã đầy. Hãy xóa bớt các việc đã xong trước',
-  'errors.jobs_unavailable': 'Máy chủ này không có kế hoạch việc',
+  'errors.jobs_unavailable': 'Server này không hỗ trợ kế hoạch',
   'errors.last_pane': 'Muốn đóng pane cuối cùng của tab thì hãy đóng tab',
   'errors.layout_busy': 'herdr-app vừa thay đổi bố cục. Hãy thử lại',
   'errors.lfs_pointer': 'File là một con trỏ Git LFS',
@@ -201,7 +203,7 @@ export default {
   'errors.prompt_changed': 'Màn hình đã đổi. Hãy xem lại hộp thoại',
   'errors.prompt_expired': 'Hộp thoại này đã được trả lời hoặc đã hết hạn',
   'errors.prompt_unsupported_shell':
-    'Shell này không nhận được prompt lúc khởi chạy (bash, zsh, sh, fish; không dùng được trên Windows)',
+    'Shell này không nhận prompt lúc khởi chạy (chỉ bash, zsh, sh, fish; không có trên Windows)',
   'errors.psmux_port_taken':
     'Chương trình của user khác đang giữ port của một phiên psmux. Xem log của server',
   'errors.psmux_ports_unverified':

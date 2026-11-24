@@ -26,7 +26,7 @@ export default {
   'settings.style.native': 'Theo hệ thống',
   'settings.accent': 'Màu nhấn',
   'settings.accentDesc':
-    'Nút, liên kết, mục đang chọn và con trỏ terminal. Theo style giữ màu riêng của mỗi style.',
+    'Nút, liên kết, mục đang chọn và con trỏ terminal. Khi chọn Theo style, mỗi style giữ màu riêng của nó.',
   'settings.accent.auto': 'Theo style',
   'settings.accent.indigo': 'Chàm',
   'settings.accent.blue': 'Xanh dương',
