@@ -1153,6 +1153,13 @@ func (m *herdrMux) CloseTab(ctx context.Context, tabID, key string) error {
 	}
 	err := m.rpc.call(ctx, "tab.close", map[string]string{"tab_id": tabID}, nil)
 	m.invalidate()
+	// Herdr asks for a confirmation (ui.confirm_close) before it closes the
+	// last tab of a workspace, which closes the workspace and, for a linked
+	// worktree, its group; its API takes none, so the user closes it there.
+	var he *herdrError
+	if errors.As(err, &he) && he.Code == "confirmation_required" {
+		return errTabConfirmRequired
+	}
 	return herdrInputError(err)
 }
 

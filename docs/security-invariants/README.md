@@ -82,6 +82,7 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 - Orchestrator asks
 - Dialog delegation
 - Job pull requests
+- Finishing a job
 
 ## [Files: reading and previews](files-read.md)
 

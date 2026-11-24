@@ -342,14 +342,21 @@ func (g *gitWorktreeMux) RemoveWorktree(ctx context.Context, groupID string, for
 			return err
 		}
 	}
-	if err := waitWorktreeFree(ctx, entries[i].Path); err != nil {
+	return removeFreedWorktree(ctx, g.git, repo, entries[i].Path)
+}
+
+// removeFreedWorktree deletes the linked worktree at path once nothing holds
+// a file of it open (Windows: waitWorktreeFree), in_use when something
+// still does.
+func removeFreedWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path string) error {
+	if err := waitWorktreeFree(ctx, path); err != nil {
 		if err != errWorktreeInUse {
-			log.Printf("worktree remove %s: %v", entries[i].Path, err)
+			log.Printf("worktree remove %s: %v", path, err)
 			err = errWorktreeFailed
 		}
 		return err
 	}
-	return removeWorktree(ctx, g.git, repo, entries[i].Path)
+	return removeWorktree(ctx, git, repo, path)
 }
 
 // branchExistsIn reports whether branch is a local branch of the repository

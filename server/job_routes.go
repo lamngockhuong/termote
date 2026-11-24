@@ -90,6 +90,9 @@ type jobWorktreeInput struct {
 	Source string `json:"source"`
 	Branch string `json:"branch"`
 	Base   string `json:"base"`
+	// Made: the start sending it made the worktree (not one it opened
+	// again), so job finish may remove it.
+	Made bool `json:"made"`
 }
 
 type jobInput struct {
@@ -128,6 +131,7 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs/{id}", a.handleJob)
 	mux.HandleFunc("/api/mux/jobs/{id}/event", a.handleJobEvent)
 	mux.HandleFunc("/api/mux/jobs/{id}/ci", a.handleJobCI)
+	mux.HandleFunc("/api/mux/jobs/{id}/finish", a.handleJobFinish)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
 	a.registerAskRoutes(mux)
@@ -262,6 +266,10 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 			ended["agent_changed"] = a.giveJob(j, *agent, base)
 		}
 		if tree != nil {
+			// A start going on in the worktree it made keeps it the job's.
+			if j.Worktree != nil && j.Worktree.Made && sameAllowPath(j.Worktree.Dir, tree.Dir) {
+				tree.Made = true
+			}
 			j.Worktree = tree
 		}
 		if jobFinished(j.State) {
@@ -556,7 +564,7 @@ func (a *agentAPI) jobTreeFor(r *http.Request, in *jobWorktreeInput) (*jobTree, 
 		if validBranchName(in.Base) {
 			base = in.Base
 		}
-		return &jobTree{Branch: in.Branch, Base: base, Dir: wt.Path, GroupID: wt.GroupID}, nil
+		return &jobTree{Branch: in.Branch, Base: base, Dir: wt.Path, GroupID: wt.GroupID, Made: in.Made}, nil
 	}
 	return nil, invalidJob("no such worktree")
 }

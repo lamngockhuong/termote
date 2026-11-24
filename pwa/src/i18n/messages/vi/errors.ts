@@ -55,6 +55,32 @@ export default {
   'errors.exists': 'Tên này đã được dùng',
   'errors.file_changed': 'File đã đổi từ lúc đọc',
   'errors.filtered': 'File được git xử lý qua filter. Hãy dùng terminal',
+  'errors.finish_agent_background':
+    'Agent vẫn còn việc chạy nền. Hãy chờ nó xong',
+  'errors.finish_agent_changed': 'Pane của việc này giờ chạy một agent khác',
+  'errors.finish_agent_working': 'Agent đang làm. Hãy chờ nó dừng',
+  'errors.finish_failed': 'Không dọn được việc này',
+  'errors.finish_job_active': 'Chỉ dọn được việc cần xem lại hoặc đã kết thúc',
+  'errors.finish_needs_close':
+    'Tab của việc này nằm trong worktree. Hãy đóng cả tab',
+  'errors.finish_needs_remove':
+    'Đây là tab cuối của workspace chứa worktree. Hãy xóa cả worktree',
+  'errors.finish_no_worktree': 'Việc này không có worktree',
+  'errors.finish_not_mine': 'Chỉ agent đã giao việc này mới dọn được nó ở đây',
+  'errors.finish_open_ask': 'Vẫn còn một câu hỏi về việc này đang chờ trả lời',
+  'errors.finish_self':
+    'Tab hoặc worktree của việc này chứa chính agent đang dọn nó',
+  'errors.finish_self_unknown':
+    'termote không biết lệnh chạy trong pane nào. Hãy dọn trong ứng dụng',
+  'errors.finish_tab_busy':
+    'Một pane khác trong tab của việc này đang chạy chương trình',
+  'errors.finish_unread': 'Câu trả lời cuối của agent chưa được đọc',
+  'errors.finish_worktree_env':
+    'Worktree có file .env mà git bỏ qua, xóa worktree sẽ mất chúng',
+  'errors.finish_worktree_not_made':
+    'Worktree có từ trước khi giao việc. Hãy xóa nó trong danh sách worktree',
+  'errors.finish_worktree_shared':
+    'Một workspace hoặc tab khác đang làm việc trong worktree',
   'errors.folder_reaches':
     'Thư mục chứa, hoặc nằm cạnh, liên kết có thể dẫn Windows sang máy khác. Hãy mở trực tiếp từ Windows',
   'errors.full_needs_password':
@@ -196,6 +222,8 @@ export default {
   'errors.step_not_confirmed': 'Tab không chuyển được',
   'errors.storage_full': 'Bộ nhớ trên máy host đã đầy',
   'errors.symlink': 'Đường dẫn này, hoặc một thư mục cha của nó, là symlink',
+  'errors.tab_confirm_required':
+    'Herdr cần xác nhận trước khi đóng tab này. Hãy đóng nó trong Herdr',
   'errors.tab_gone': 'Tab đã đóng',
   'errors.target_changed': 'Agent không còn ở pane này',
   'errors.task_not_found': 'Tác vụ này không còn nữa',
@@ -242,6 +270,7 @@ export default {
   'errors.windows_name':
     'Windows hiểu đường dẫn này theo cách khác (do có \\, dấu phẩy hoặc ký tự tương tự)',
   'errors.worktree_failed': 'Không thay đổi được worktree',
+  'errors.worktree_not_pushed': 'Worktree có commit chưa push và chưa merge',
   'errors.zellij_socket_dir':
     'Thư mục socket của Zellij không phải của riêng người dùng này',
   'errors.zellij_version_mismatch':

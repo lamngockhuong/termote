@@ -148,22 +148,45 @@ func validBase(s string) bool {
 	return s == "" || s == "HEAD" || validBranchName(s)
 }
 
+// worktreeSlot is the one slot every worktree create, open and remove
+// takes, the worktree routes' and job finish's (job_finish.go) alike, so
+// two never run at once.
+type worktreeSlot chan struct{}
+
+func newWorktreeSlot() worktreeSlot { return make(worktreeSlot, 1) }
+
+// take waits at most worktreeLockWait, and only while ctx lives, for the
+// slot; release gives it back. ok is false when it stayed taken.
+func (s worktreeSlot) take(ctx context.Context) (release func(), ok bool) {
+	timer := time.NewTimer(worktreeLockWait)
+	defer timer.Stop()
+	select {
+	case s <- struct{}{}:
+		return func() { <-s }, true
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return nil, false
+}
+
 // worktreeAPI serves /api/mux/worktrees*. Creates, opens and removes run one
-// at a time (sem has one slot), apart from the group routes' mutex.
+// at a time (sem, shared with job finish), apart from the group routes'
+// mutex.
 type worktreeAPI struct {
 	m       Mux
 	wm      worktreeMux // nil when the backend has none
 	git     *gitRunner
 	allowed hostAllowlist
-	sem     chan struct{}
+	sem     worktreeSlot
 }
 
 // registerWorktreeRoutes mounts the worktree routes. wm is the backend's
 // worktree implementation (worktreeMuxFor), nil for none. git is the files
-// routes' runner (the branch list and the existing-branch check). Patterns
-// carry no method so a wrong one gets a JSON 405.
-func registerWorktreeRoutes(mux *http.ServeMux, m Mux, wm worktreeMux, git *gitRunner, allowed hostAllowlist) {
-	a := &worktreeAPI{m: m, wm: wm, git: git, allowed: allowed, sem: make(chan struct{}, 1)}
+// routes' runner (the branch list and the existing-branch check); slot the
+// one worktree change slot. Patterns carry no method so a wrong one gets a
+// JSON 405.
+func registerWorktreeRoutes(mux *http.ServeMux, m Mux, wm worktreeMux, git *gitRunner, allowed hostAllowlist, slot worktreeSlot) {
+	a := &worktreeAPI{m: m, wm: wm, git: git, allowed: allowed, sem: slot}
 	mux.HandleFunc("/api/mux/worktrees", a.handleWorktrees)
 	mux.HandleFunc("/api/mux/worktrees/open", a.handleOpen)
 	mux.HandleFunc("/api/mux/worktrees/{id}", a.handleRemove)
@@ -453,21 +476,15 @@ func confirmedWorktree(wt Worktree, path, branch string) error {
 // runs under: it outlives the client (the change finishes, and the client
 // reads the list again) and is bounded by limit.
 func (a *worktreeAPI) acquire(w http.ResponseWriter, r *http.Request, limit time.Duration) (context.Context, func(), bool) {
-	timer := time.NewTimer(worktreeLockWait)
-	defer timer.Stop()
-	select {
-	case a.sem <- struct{}{}:
-	case <-timer.C:
-		worktreeFailure(w, "worktree", errWorktreeBusy)
-		return nil, nil, false
-	case <-r.Context().Done():
+	release, ok := a.sem.take(r.Context())
+	if !ok {
 		worktreeFailure(w, "worktree", errWorktreeBusy)
 		return nil, nil, false
 	}
 	// Fails only on a writer without a connection (tests).
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(limit + muxTimeout))
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), limit)
-	return ctx, func() { cancel(); <-a.sem }, true
+	return ctx, func() { cancel(); release() }, true
 }
 
 // listFailure is a worktree.list error: one that ran out of time changed

@@ -91,7 +91,7 @@ func newGitWorktreeFixture(t *testing.T, named bool) *gitWorktreeFixture {
 	gm := &gitWorktreeMux{m: f, git: rr.git, roots: rr, nest: newGitNester(rr), base: base, validName: nameCheck(named),
 		deny: []string{filepath.Join(base, "denied")}}
 	h := http.NewServeMux()
-	registerWorktreeRoutes(h, f, gm, rr.git, hostAllowlist{})
+	registerWorktreeRoutes(h, f, gm, rr.git, hostAllowlist{}, newWorktreeSlot())
 	return &gitWorktreeFixture{f: f, gm: gm, h: h, repo: repo, base: filepath.Join(base, filepath.Base(repo)), outer: outer}
 }
 

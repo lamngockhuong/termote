@@ -464,6 +464,9 @@ type agentAPI struct {
 	// or without the files routes.
 	ci *ciPoller
 	wm worktreeMux
+	// worktreeSlot is the worktree routes' change slot, which job finish
+	// takes too; set by buildServer.
+	worktreeSlot worktreeSlot
 	// instanceID: this server's id (the snapshot's instanceId); set by
 	// buildServer.
 	instanceID string

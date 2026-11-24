@@ -334,7 +334,7 @@ func (c *cli) tildeDir(dir string) string {
 
 func (c *cli) agentsJob(args []string) error {
 	if len(args) == 0 {
-		return usageError("agents job needs add, show, set, ci or remove\n%s\n%s\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage)
+		return usageError("agents job needs add, show, set, ci, remove or finish\n%s\n%s\n%s\n%s\n%s\n%s", jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage, jobFinishUsage)
 	}
 	switch args[0] {
 	case "add":
@@ -347,8 +347,10 @@ func (c *cli) agentsJob(args []string) error {
 		return c.agentsJobCI(args[1:])
 	case "remove":
 		return c.agentsJobRemove(args[1:])
+	case "finish":
+		return c.agentsJobFinish(args[1:])
 	}
-	return usageError("unknown agents job command: %s\n%s\n%s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage)
+	return usageError("unknown agents job command: %s\n%s\n%s\n%s\n%s\n%s\n%s", args[0], jobAddUsage, jobShowUsage, jobSetUsage, jobCIUsage, jobRemoveUsage, jobFinishUsage)
 }
 
 func (c *cli) agentsJobAdd(args []string) error {
@@ -1091,6 +1093,8 @@ type startRecord struct {
 	// todo: the job the user made, named by --job
 	todo         *jobView
 	branch, base string
+	// made: the start made the worktree (not one it opened again)
+	made bool
 }
 
 // defaultTitle never comes from the prompt: a view-only client sees titles.
@@ -1101,11 +1105,15 @@ func (r startRecord) defaultTitle() string {
 	return r.kind + " in " + r.group.Name
 }
 
-func (r startRecord) worktree() map[string]string {
+func (r startRecord) worktree() map[string]any {
 	if r.branch == "" {
 		return nil
 	}
-	return map[string]string{"source": r.group.ID, "branch": r.branch, "base": r.base}
+	wt := map[string]any{"source": r.group.ID, "branch": r.branch, "base": r.base}
+	if r.made {
+		wt["made"] = true
+	}
+	return wt
 }
 
 // recordStart writes the job of an agent started in t's pane: the job --job

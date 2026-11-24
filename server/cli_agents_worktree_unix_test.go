@@ -156,10 +156,17 @@ func TestAgentsStartWorktree(t *testing.T) {
 		!strings.Contains(posts, `/api/mux/panes/%7/agent/start {"kind":"claude","newTab":true,"prompt":"fix it"}`) || strings.Contains(posts, "/api/mux/tabs") {
 		t.Errorf("posts:\n%s", posts)
 	}
+	// The job says the start made its worktree (job finish may remove it).
+	if job := lastPost(s, "/api/mux/jobs "); !strings.Contains(job, `"worktree":{"base":"main","branch":"feat","made":true,"source":"w"}`) {
+		t.Errorf("job: %s", job)
+	}
 	// Run again: the worktree is there, so it is opened, not made again.
 	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`))
 	if err := start("--worktree", "feat", "again"); err != nil || countPosts(s, "/api/mux/worktrees ") != 2 || countPosts(s, "/api/mux/worktrees/open") != 1 {
 		t.Errorf("again: %v %s", err, tc.stdout)
+	}
+	if job := lastPost(s, "/api/mux/jobs "); !strings.Contains(job, `"worktree":{"base":"","branch":"feat","source":"w"}`) {
+		t.Errorf("job of a worktree opened again: %s", job)
 	}
 	// Its workspace was open already: the pane may hold the user's typing,
 	// so the start clears it first (no newTab).
