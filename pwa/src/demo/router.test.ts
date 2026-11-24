@@ -193,6 +193,55 @@ describe('router', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
+  it('lists no question, and answers one as the server does', async () => {
+    expect((await call('GET', '/asks')).body).toEqual({
+      asks: [],
+      readOnly: false,
+    })
+    state.asks.push({
+      id: 'Q1',
+      state: 'open',
+      text: 'Which?',
+      choices: ['A', 'B'],
+      created: '2026-11-04T07:00:00.000Z',
+      updated: 'u1',
+    })
+    const post = (body: unknown, id = 'Q1') =>
+      call('POST', `/asks/${id}/answer`, body)
+    expect((await post({ choice: 1 }, 'Q9')).body.code).toBe('ask_not_found')
+    expect((await post({ choice: 1, updated: 'old' })).body.code).toBe(
+      'ask_conflict',
+    )
+    expect((await post({ updated: 'u1' })).body.code).toBe('ask_invalid')
+    expect((await post({ updated: 'u1', choice: 3 })).body.code).toBe(
+      'ask_invalid',
+    )
+    expect((await post({ updated: 'u1', text: ' ' })).body.code).toBe(
+      'ask_invalid',
+    )
+    const ok = await post({ updated: 'u1', choice: 2 })
+    expect(ok.status).toBe(200)
+    expect(ok.body.ask).toMatchObject({
+      state: 'answered',
+      answer: 'B',
+      choice: 2,
+      answeredBy: 'pwa',
+    })
+    expect(
+      (await post({ updated: ok.body.ask.updated, text: 'x' })).body.code,
+    ).toBe('ask_closed')
+    state.asks.push({
+      id: 'Q2',
+      state: 'open',
+      text: 'Name?',
+      created: 'c',
+      updated: 'u2',
+    })
+    expect(
+      (await post({ updated: 'u2', text: ' parse ' }, 'Q2')).body.ask.answer,
+    ).toBe('parse')
+  })
+
   it('answers the snapshot with the demo workspaces', async () => {
     const { status, body } = await call('GET', '/snapshot')
     expect(status).toBe(200)

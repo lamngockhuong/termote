@@ -12,6 +12,13 @@ export default {
   'errors.answer_always_refused':
     'Chỉ bạn mới chọn được câu trả lời luôn cho phép, ngay trong hộp thoại',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
+  'errors.ask_busy': 'Đang gửi một câu trả lời cho câu hỏi này. Hãy thử lại',
+  'errors.ask_closed': 'Câu hỏi này đã được trả lời',
+  'errors.ask_conflict': 'Câu hỏi này vừa được thay đổi ở nơi khác',
+  'errors.ask_invalid': 'Câu hỏi này không nhận câu trả lời đó',
+  'errors.ask_no_agent':
+    'Orchestrator đặt câu hỏi này không còn chạy nữa. Hãy trả lời trong terminal của nó',
+  'errors.ask_not_found': 'Câu hỏi này không còn tồn tại',
   'errors.base_not_found': 'Nhánh gốc không trỏ tới commit nào',
   'errors.base_required': 'Hãy chọn nhánh gốc: đây là worktree chính',
   'errors.branch_exists':
@@ -201,6 +208,8 @@ export default {
   'errors.timeout': 'Quá thời gian chờ. Hãy thử lại',
   'errors.too_large': 'File quá lớn',
   'errors.too_many': 'Đã tới giới hạn. Hãy xóa bớt một mục trước',
+  'errors.too_many_asks':
+    'Có quá nhiều câu hỏi đang chờ trả lời. Hãy trả lời hoặc đóng bớt một câu trước',
   'errors.too_many_codes':
     'Có quá nhiều mã ghép đang chờ. Hãy dùng một mã hoặc chờ 5 phút',
   'errors.too_many_devices':

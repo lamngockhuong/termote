@@ -1,9 +1,12 @@
 import { useSyncExternalStore } from 'react'
 import { followOverview } from './use-agent-overview'
 import {
+  type Ask,
+  answerAsk,
   createGrant,
   createJob,
   deleteJob,
+  fetchAsks,
   fetchJobs,
   type GrantKind,
   type Job,
@@ -14,9 +17,10 @@ import {
   updateJob,
 } from './use-mux-api'
 
-// The job ledger (/api/mux/jobs?all=1), read right after each read of the
-// agent overview (use-agent-overview.ts): the same timer, stopped with it
-// while the page is hidden. One copy, shared by every reader.
+// The job ledger (/api/mux/jobs?all=1) and the orchestrators' questions
+// (/api/mux/asks), read right after each read of the agent overview
+// (use-agent-overview.ts): the same timer, stopped with it while the page is
+// hidden. One copy, shared by every reader.
 
 export interface JobsState {
   jobs: Job[]
@@ -36,6 +40,11 @@ export interface JobsState {
   // The server keeps no ledger (an older Termote, or none could be made):
   // the Plan section is not shown
   unavailable: boolean
+  // The orchestrators' questions, answered ones too; none from a server
+  // that keeps none. A failed read keeps the last ones read.
+  asks: Ask[]
+  // The asks were read view-only: ids only, no text
+  asksReadOnly: boolean
 }
 
 const INITIAL: JobsState = {
@@ -47,12 +56,15 @@ const INITIAL: JobsState = {
   loaded: false,
   error: false,
   unavailable: false,
+  asks: [],
+  asksReadOnly: false,
 }
 
 let state = INITIAL
 const listeners = new Set<() => void>()
 // Only the latest read lands: one begun before a write would undo it
 let readSeq = 0
+let askSeq = 0
 let stopFollowing: (() => void) | undefined
 
 function set(next: Partial<JobsState>) {
@@ -60,8 +72,13 @@ function set(next: Partial<JobsState>) {
   for (const fn of listeners) fn()
 }
 
-// Reads the jobs again. Never rejects.
+// Reads the jobs and the asks again, each on its own: a failed read of the
+// asks never touches the jobs. Never rejects.
 export async function reloadJobs(): Promise<void> {
+  await Promise.all([readJobs(), reloadAsks()])
+}
+
+async function readJobs(): Promise<void> {
   const id = ++readSeq
   try {
     const list = await fetchJobs()
@@ -83,6 +100,24 @@ export async function reloadJobs(): Promise<void> {
       err instanceof RequestError &&
       (err.status === 404 || err.code === 'jobs_unavailable')
     set({ error: true, unavailable })
+  }
+}
+
+// Reads the asks again. A server without them (404, an older Termote) or
+// without a ledger has none. Never rejects.
+async function reloadAsks(): Promise<void> {
+  const id = ++askSeq
+  try {
+    const list = await fetchAsks()
+    if (id !== askSeq) return
+    set({ asks: list.asks, asksReadOnly: list.readOnly })
+  } catch (err) {
+    if (id !== askSeq) return
+    if (
+      err instanceof RequestError &&
+      (err.status === 404 || err.code === 'jobs_unavailable')
+    )
+      set({ asks: [], asksReadOnly: false })
   }
 }
 
@@ -222,6 +257,40 @@ export function useCurrentJob(job: Job): Job {
   return jobs.find((j) => j.id === job.id) ?? job
 }
 
+// Answers ask as it was read, with a choice (1-based) or text; the ask is
+// shown answered at once. queued: the orchestrator was working and reads
+// it when it is ready. Throws RequestError: after ask_conflict, ask_closed
+// or ask_not_found the asks are read again first.
+export async function answerQuestion(
+  ask: Ask,
+  answer: { choice: number } | { text: string },
+): Promise<{ queued: boolean }> {
+  try {
+    const r = await answerAsk(ask.id, { ...answer, updated: ask.updated ?? '' })
+    askSeq++
+    // Not recorded (the server could not save it), the ask is still open
+    // there: the orchestrator has the answer and closes it itself, so it is
+    // not offered again until a read says otherwise
+    const answered: Ask =
+      r.ask?.id === ask.id && r.ask.state === 'answered'
+        ? r.ask
+        : { ...ask, state: 'answered' }
+    set({
+      asks: state.asks.map((a) => (a.id === ask.id ? answered : a)),
+    })
+    return { queued: r.queued }
+  } catch (err) {
+    if (
+      err instanceof RequestError &&
+      (err.code === 'ask_conflict' ||
+        err.code === 'ask_closed' ||
+        err.code === 'ask_not_found')
+    )
+      await reloadAsks()
+    throw err
+  }
+}
+
 // Forgets what was read (tests).
 export function resetJobs() {
   stopFollowing?.()
@@ -229,4 +298,5 @@ export function resetJobs() {
   listeners.clear()
   state = INITIAL
   readSeq = 0
+  askSeq = 0
 }

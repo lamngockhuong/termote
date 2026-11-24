@@ -79,6 +79,7 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 - Review comments
 - Agents CLI
 - Job ledger
+- Orchestrator asks
 - Dialog delegation
 - Job pull requests
 

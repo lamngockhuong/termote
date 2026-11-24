@@ -222,4 +222,23 @@ export default {
   'jobs.ci.allMerged':
     'Every pull request is merged or closed. Set the job done when you are happy with it, then remove its worktree from the workspace’s worktrees.',
   'jobs.ci.setDone': 'Set done',
+  // The orchestrators' questions above the columns (overview-asks.tsx);
+  // {ref}: the pane that asked, {id}: the question's id (Q3)
+  'jobs.asks.title': 'Waiting on you',
+  'jobs.asks.from': 'Asked from {ref}',
+  'jobs.asks.about': 'About',
+  'jobs.asks.choices': 'Choices for {id}',
+  'jobs.asks.answerLabel': 'Your answer to {id}',
+  'jobs.asks.send': 'Send',
+  'jobs.asks.sendFor': 'Send the answer to {id}',
+  'jobs.asks.sent': 'Sent',
+  'jobs.asks.queued': 'Sent; the orchestrator reads it when it is ready',
+  'jobs.asks.failed': 'Could not send the answer',
+  'jobs.asks.gone':
+    'The orchestrator that asked is no longer running; answer it in its terminal',
+  // A view-only device: how many, and their ids, never what they ask
+  'jobs.asks.viewOnly_one':
+    '{count} question waits on a device with full access',
+  'jobs.asks.viewOnly_other':
+    '{count} questions wait on a device with full access',
 }

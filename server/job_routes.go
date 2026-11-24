@@ -129,6 +129,7 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs/{id}/ci", a.handleJobCI)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
+	a.registerAskRoutes(mux)
 }
 
 func (a *agentAPI) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -740,10 +741,11 @@ func decodeJobBody(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 // writeJobError answers a codedError with its code, a conflict with the
-// job as it is now, and anything else with a generic 500, logged.
+// job (or ask) as it is now, and anything else with a generic 500, logged.
 func writeJobError(w http.ResponseWriter, err error) {
 	var (
 		conflict *jobConflict
+		askErr   *askError
 		ce       *codedError
 	)
 	body := map[string]any{}
@@ -752,6 +754,9 @@ func writeJobError(w http.ResponseWriter, err error) {
 	case errors.As(err, &conflict):
 		body["code"], body["error"], status = conflict.code, conflict.msg, conflict.status
 		body["job"] = conflict.job
+	case errors.As(err, &askErr):
+		body["code"], body["error"], status = askErr.code, askErr.msg, askErr.status
+		body["ask"] = askErr.ask
 	case errors.As(err, &ce):
 		body["code"], body["error"], status = ce.code, ce.msg, ce.status
 	default:

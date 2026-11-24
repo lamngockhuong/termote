@@ -41,7 +41,10 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]...
        termote agents job ci <id> [--refresh] [--send] [--json]
        termote agents job remove <id>
-       termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]`
+       termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]
+       termote agents ask add --text <question | -> [--choice <choice>]... [--job <id>] [--json]
+       termote agents ask list [--all] [--json]
+       termote agents ask close <Qn> [--answer <answer>]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
 // and 2 (usage). With several panes ending at once, the gravest wins. stop
@@ -120,6 +123,8 @@ func (c *cli) cmdAgents(args []string) error {
 		return c.agentsJobs(args[1:])
 	case "job":
 		return c.agentsJob(args[1:])
+	case "ask":
+		return c.agentsAsk(args[1:])
 	}
 	return usageError("unknown agents command: %s\n%s", args[0], agentsUsage)
 }
@@ -663,12 +668,18 @@ func (c *cli) agentsRead(args []string) error {
 	if err := c.agentsGet(port, panePath(p.pane.ID, "/agent/transcript"), &t); err != nil {
 		return err
 	}
+	// The open questions of the pane's job, and those the user may have
+	// answered in the pane since they were asked.
+	var openAsks, wroteAfter []string
 	if jobsErr != nil {
 		c.jobWarn(jobsErr)
-	} else if j, ok := paneJob(jobs, p.pane.ID); ok && t.Cursor != "" {
-		if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "read", LastTS: j.Live.LastTS, Cursor: t.Cursor}); err != nil {
-			c.jobWarn(err)
+	} else if j, ok := paneJob(jobs, p.pane.ID); ok {
+		if t.Cursor != "" {
+			if err := c.jobEvent(port, j.ID, jobEventInput{Kind: "read", LastTS: j.Live.LastTS, Cursor: t.Cursor}); err != nil {
+				c.jobWarn(err)
+			}
 		}
+		openAsks, wroteAfter = c.askHints(port, j, t.Entries)
 	}
 	entries := t.Entries
 	if !all {
@@ -678,8 +689,12 @@ func (c *cli) agentsRead(args []string) error {
 	if asJSON {
 		// cursor: the conversation read, which a stop names so it never
 		// reaches another session.
-		return writeJSON(c.out, map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "cursor": t.Cursor,
-			"endsWithQuestion": question, "entries": entries})
+		out := map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "cursor": t.Cursor,
+			"endsWithQuestion": question, "entries": entries}
+		if len(openAsks) > 0 {
+			out["openAsks"], out["userWroteAfter"] = openAsks, append([]string{}, wroteAfter...)
+		}
+		return writeJSON(c.out, out)
 	}
 	if len(entries) == 0 {
 		fmt.Fprintf(c.out, "%s (%s) has no messages yet.\n", plainText(p.ref()), plainText(p.pane.ID))
@@ -703,6 +718,9 @@ func (c *cli) agentsRead(args []string) error {
 	}
 	if question {
 		fmt.Fprintln(c.out, "[it ends with a question for the user: ask them, and send their answer]")
+	}
+	for _, id := range wroteAfter {
+		fmt.Fprintf(c.out, "[the user wrote in this pane after %s was asked; if that answers it: termote agents ask close %s --answer '…']\n", id, id)
 	}
 	return nil
 }

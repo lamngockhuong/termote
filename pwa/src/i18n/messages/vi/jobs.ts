@@ -203,4 +203,18 @@ export default {
   'jobs.ci.allMerged':
     'Mọi pull request đã merge hoặc đóng. Khi thấy ổn, hãy đặt việc là xong, rồi xoá worktree của nó trong danh sách worktree của workspace.',
   'jobs.ci.setDone': 'Đặt là xong',
+  'jobs.asks.title': 'Chờ bạn',
+  'jobs.asks.from': 'Hỏi từ {ref}',
+  'jobs.asks.about': 'Về việc',
+  'jobs.asks.choices': 'Các lựa chọn cho {id}',
+  'jobs.asks.answerLabel': 'Câu trả lời của bạn cho {id}',
+  'jobs.asks.send': 'Gửi',
+  'jobs.asks.sendFor': 'Gửi câu trả lời cho {id}',
+  'jobs.asks.sent': 'Đã gửi',
+  'jobs.asks.queued': 'Đã gửi; orchestrator sẽ đọc khi sẵn sàng',
+  'jobs.asks.failed': 'Không gửi được câu trả lời',
+  'jobs.asks.gone':
+    'Orchestrator đặt câu hỏi này không còn chạy; hãy trả lời trong terminal của nó',
+  'jobs.asks.viewOnly_other':
+    '{count} câu hỏi đang chờ trên một thiết bị có toàn quyền',
 } satisfies Translation<typeof en>

@@ -12,6 +12,7 @@ import { JOB_STATE_WORDS, JobCard, jobBranch } from './job-card'
 import { JobDetail } from './job-detail'
 import { type JobAgentChoice, JobEditSheet } from './job-edit-sheet'
 import { JobGrantSheet } from './job-grant-sheet'
+import { OverviewAsks } from './overview-asks'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 
@@ -124,6 +125,11 @@ export function OverviewJobs({
 
   if (store.unavailable || (!store.loaded && !store.error)) return null
   const groups = groupJobs(store.jobs)
+  // An ask's job opens as its card would, never closed by it
+  const openJob = (id: string) => {
+    setSelectedId(id)
+    if (wide) onCloseActivity?.()
+  }
   const choose = (job: Job) => {
     if (job.id === selectedId) {
       setSelectedId(null)
@@ -247,6 +253,13 @@ export function OverviewJobs({
             {t('jobs.readFailed')}
           </p>
         )}
+        <OverviewAsks
+          asks={store.asks}
+          readOnly={!canWrite || store.asksReadOnly}
+          now={now}
+          onOpenJob={canWrite ? openJob : undefined}
+          openableJobs={new Set(store.jobs.map((j) => j.id))}
+        />
         {store.loaded && open === 0 && (
           <div className="flex flex-col items-center gap-1.5 rounded-panel border border-dashed border-border-strong px-4 py-8 text-center">
             {store.jobs.length === 0 ? (

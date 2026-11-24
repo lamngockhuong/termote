@@ -175,6 +175,32 @@ Tab Kế hoạch trong [Tổng quan](/vi/usage/overview/#kế-hoạch) hiện đ
 thêm được việc để orchestrator nhận (`start --job <id>`), và mở chi tiết một việc để sửa hay cấp ủy
 quyền. Agent đang làm một việc thì thẻ của nó ghi kèm tiêu đề việc.
 
+## Câu hỏi chờ bạn
+
+Trước khi hỏi bạn điều gì, orchestrator ghi câu hỏi bằng `termote agents ask add` rồi hỏi bằng đúng
+ID lệnh đó in ra (`Q3`). Danh sách do Termote giữ, nên ID không đổi khi cuộc trò chuyện bị compact
+hay server khởi động lại, câu đã được trả lời không bị hỏi lại, và cuối mỗi câu trả lời chỉ còn các
+câu đang mở (`termote agents ask list`).
+
+Bạn trả lời ngay trong cuộc trò chuyện, trong tab của một agent, hoặc trong tab Kế hoạch của
+[Tổng quan](/vi/usage/overview/#kế-hoạch). Mục "Chờ bạn" ở đó liệt kê từng câu còn mở, kèm pane đã
+hỏi, việc liên quan, mỗi lựa chọn một nút, và một ô để bạn tự viết. Termote gõ câu trả lời vào ô
+nhập của orchestrator dưới dạng `Answer to Q3: ...` (hoặc `Answer to Q3 (choice 2): ...`), rồi
+orchestrator đóng câu hỏi bằng `termote agents ask close Q3`. Termote không bao giờ ghi đè chữ bạn
+đang gõ dở trong ô nhập của orchestrator: câu trả lời bị từ chối và câu hỏi vẫn mở cho tới khi bạn
+gửi hoặc xoá phần gõ dở. Nếu orchestrator đã hỏi không còn chạy, PWA báo điều đó và bạn trả lời
+trong terminal của nó. Thiết bị chỉ xem chỉ thấy có bao nhiêu câu đang chờ và ID của chúng, không
+thấy nội dung.
+
+```bash
+termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>
+termote agents ask list
+termote agents ask close Q3 --answer 'Later'
+```
+
+Chương trình nào bạn chạy cũng gọi được socket cục bộ với pane của orchestrator, giống như nó vốn
+đã gửi được tin nhắn cho orchestrator, nên PWA ghi rõ pane nào đã hỏi từng câu.
+
 ## Ủy quyền cho hộp thoại xin quyền
 
 Hộp thoại xin quyền (chạy lệnh, sửa file) là việc của bạn. Để một việc dài vẫn chạy tiếp khi bạn

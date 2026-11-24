@@ -293,7 +293,50 @@ const ci: Handler = (req) => {
   return json({ job: view(req.state, j), queued: false })
 }
 
+// The orchestrators' questions, as server/ask_routes.go answers a full
+// client: an answer names the version it read and one choice or text. The
+// demo has no orchestrator to type it to, so it is only recorded.
+const listAsks: Handler = (req) =>
+  json({ asks: req.state.asks, readOnly: false })
+
+const answerAsk: Handler = (req) => {
+  const q = req.state.asks.find((a) => a.id === req.params.id)
+  if (!q) return fail(404, 'ask_not_found', 'no such question')
+  if (q.state !== 'open')
+    return fail(409, 'ask_closed', 'the question was answered already', {
+      ask: q,
+    })
+  const { updated, choice, text } = req.body ?? {}
+  if (updated !== q.updated)
+    return fail(409, 'ask_conflict', 'the question was changed elsewhere', {
+      ask: q,
+    })
+  if ((choice === undefined) === (text === undefined))
+    return fail(400, 'ask_invalid', 'answer with a choice or with text')
+  let answer = typeof text === 'string' ? text.trim() : ''
+  if (choice !== undefined) {
+    if (
+      !Number.isInteger(choice) ||
+      choice < 1 ||
+      choice > (q.choices?.length ?? 0)
+    )
+      return fail(400, 'ask_invalid', 'no such choice')
+    answer = q.choices?.[choice - 1] ?? ''
+  }
+  if (!answer) return fail(400, 'ask_invalid', 'the answer is empty')
+  Object.assign(q, {
+    state: 'answered',
+    answer,
+    choice: choice ?? undefined,
+    answeredBy: 'pwa',
+    updated: iso(req.state),
+  })
+  return json({ ask: q, queued: false, recorded: true })
+}
+
 export const JOB_ROUTES: Record<string, Handler> = {
+  'GET /asks': listAsks,
+  'POST /asks/{id}/answer': answerAsk,
   'GET /jobs': list,
   'POST /jobs': create,
   'PATCH /jobs/{id}': update,

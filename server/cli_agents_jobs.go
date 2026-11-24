@@ -784,6 +784,9 @@ func (c *cli) agentsWaitJobs(args []string) error {
 type jobWait struct {
 	ids  []string
 	self string
+	// pane: the id of the pane of self, which marks the PWA's answers to
+	// its questions reported.
+	pane string
 }
 
 func (w jobWait) mine() bool { return w.self != "" }
@@ -823,6 +826,7 @@ func (c *cli) waitJobs(port int, w jobWait, timeout time.Duration) error {
 	// job's agent was last seen busy (from the start), as wait does for
 	// panes: the next turn starts a moment after background work ends.
 	var last []jobView
+	var lastOpen []string
 	lastIDs := w.ids
 	busyAt := start
 	for {
@@ -833,31 +837,44 @@ func (c *cli) waitJobs(port int, w jobWait, timeout time.Duration) error {
 			}
 		} else {
 			failures = 0
+			// wait --mine: the user's answers in the PWA to this pane's
+			// questions end the wait too, reported once.
+			var answers []askView
+			var open []string
+			if w.mine() {
+				answers, open = c.mineAsks(port, w.self)
+			}
 			ids := w.jobs(list)
 			ends, rest, skipped, err := c.jobEnds(port, list, ids, w.mine())
 			if err != nil {
 				return err
 			}
-			if len(ends) > 0 {
+			if len(ends) > 0 || len(answers) > 0 {
+				c.reportAskAnswers(port, w.pane, answers)
 				return c.jobsEnded(port, list, ids, ends, rest, w)
 			}
 			if len(rest) == 0 {
 				// wait --mine only: no job, or none whose agent can end a
 				// turn.
-				return c.jobsNone(list, skipped)
+				err := c.jobsNone(list, skipped)
+				c.openAsksLine(open)
+				return err
 			}
-			last, lastIDs = list, rest
+			last, lastIDs, lastOpen = list, rest, open
 			// An agent given work a moment ago may not have started yet:
 			// as wait does for panes, idle ends the wait only after the
 			// grace, or at the timeout.
 			if !jobsAllIdle(list, rest) {
 				busyAt = time.Now()
 			} else if time.Since(busyAt) >= agentsWaitGrace || !time.Now().Before(deadline) {
-				return c.jobsNothing(list, rest, skipped)
+				err := c.jobsNothing(list, rest, skipped)
+				c.openAsksLine(open)
+				return err
 			}
 		}
 		if !time.Now().Before(deadline) {
 			c.jobsStill(last, lastIDs, timeout, w)
+			c.openAsksLine(lastOpen)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
