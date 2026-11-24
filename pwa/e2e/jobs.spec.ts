@@ -154,6 +154,28 @@ test.describe('the Plan, on the server', () => {
     await expect(plan(page).getByRole('combobox', { name: 'Workspace shown' })).toHaveValue(`ws:${ws.id}`)
     await expect(plan(page).getByRole('article', { name: other })).toHaveCount(0)
   })
+
+  test('tells how long a finished job is kept', async ({ page, request }) => {
+    test.skip((await listJobs(request)) === null, 'the server keeps no job ledger')
+    const res = await request.get('/api/mux/jobs?all=1')
+    expect(await res.json()).toMatchObject({ finishedKeepSeconds: 2592000, jobsMax: 200 })
+    const made = await request.post('/api/mux/jobs', { data: { title: `e2e finished ${tag}` } })
+    expect(made.ok()).toBe(true)
+    const { job } = (await made.json()) as { job: ListedJob }
+    const done = await request.patch(`/api/mux/jobs/${job.id}`, { data: { state: 'done', updated: job.updated } })
+    expect(done.ok()).toBe(true)
+
+    await open(page)
+    const group = plan(page).getByRole('button', { name: /^Finished · / })
+    await group.click()
+    await expect(plan(page).getByText(
+      'A finished job not changed for 30 days is removed at the next change to the plan; changing a job keeps it. When the plan holds 200 jobs, the oldest finished one is removed first to make room.',
+    )).toBeVisible()
+    // Just finished: far from its keep time, so no row says it goes
+    const row = plan(page).getByRole('row', { name: new RegExp(`e2e finished ${tag}`) })
+    await expect(row).toBeVisible()
+    await expect(row).not.toContainText('may be removed')
+  })
 })
 
 // A ledger of one job whose agent runs, as a full client signed in with the
