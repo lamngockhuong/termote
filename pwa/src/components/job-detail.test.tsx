@@ -1,7 +1,13 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockRevoke } = vi.hoisted(() => ({ mockRevoke: vi.fn() }))
+const { mockRevoke, mockCopy } = vi.hoisted(() => ({
+  mockRevoke: vi.fn(),
+  mockCopy: vi.fn(),
+}))
+vi.mock('../utils/copy-text', () => ({
+  copyText: (...a: unknown[]) => mockCopy(...a),
+}))
 vi.mock('../hooks/use-jobs', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-jobs')>()),
   revokeJobGrant: (...a: unknown[]) => mockRevoke(...a),
@@ -38,6 +44,52 @@ const value = (label: string) =>
   screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement
 
 describe('JobDetail', () => {
+  it('shows the id and copies a line an agent can act on, saying how the copy went', async () => {
+    mockCopy.mockReset()
+    mockCopy.mockResolvedValueOnce('ok')
+    // A hidden character in the title is copied as the panel shows it
+    const j = job({ id: '3f2a9c1e0b7d4a55', title: 'Fix\u200b login' })
+    const { rerender } = render(<JobDetail job={j} now={NOW} />)
+    expect(value('ID')).toHaveTextContent('3f2a9c1e0b7d4a55')
+    const copy = screen.getByRole('button', {
+      name: 'Copy the ID of Fix⟨U+200B⟩ login',
+    })
+    await act(async () => fireEvent.click(copy))
+    expect(mockCopy).toHaveBeenCalledWith(
+      'termote job 3f2a9c1e0b7d4a55 ("Fix⟨U+200B⟩ login"); see: termote agents job show 3f2a9c1e0b7d4a55',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Copied')
+
+    // Another job's panel does not carry the last copy's word
+    rerender(<JobDetail job={job({ id: 'b' })} now={NOW} />)
+    expect(screen.queryByText('Copied')).toBeNull()
+
+    mockCopy.mockResolvedValueOnce('failed')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: /^Copy the ID of/ })),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not copy')
+  })
+
+  it('takes the word of the last copy away after a moment', async () => {
+    vi.useFakeTimers()
+    try {
+      mockCopy.mockReset()
+      mockCopy.mockResolvedValueOnce('ok')
+      render(<JobDetail job={job()} now={NOW} />)
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole('button', { name: /^Copy the ID of/ }),
+        ),
+      )
+      expect(screen.getByRole('status')).toHaveTextContent('Copied')
+      act(() => vi.advanceTimersByTime(2000))
+      expect(screen.queryByRole('status')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('shows the pull requests only where the server follows them, and what a ci grant sent', () => {
     const j = job({
       agent,
@@ -149,8 +201,11 @@ describe('JobDetail', () => {
     expect(screen.queryByRole('heading')).toBeNull()
     expect(
       [...document.querySelectorAll('dt')].map((d) => d.textContent),
-    ).toEqual(['State'])
-    expect(screen.queryByRole('button')).toBeNull()
+    ).toEqual(['State', 'ID'])
+    // Every job has an id, so its copy button is the only one
+    expect(
+      screen.getAllByRole('button').map((b) => b.getAttribute('title')),
+    ).toEqual(['Copy ID'])
   })
 
   it('names an agent it does not know by the kind the server recorded', () => {
