@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useJobs } from '../hooks/use-jobs'
 import type { Job } from '../hooks/use-mux-api'
 import { useNow } from '../hooks/use-now'
@@ -39,6 +40,10 @@ interface Props {
   // be a column (1280px)
   activityOpen?: boolean
   wide?: boolean
+  // Where a wide screen's job details go: a column beside the Overview's
+  // scrolling body, as the Activity is, so the details scroll on their own
+  // and the list's scrollbar is not beside theirs. None yet: no column
+  detailSlot?: HTMLElement | null
   // Closes the Activity column
   onCloseActivity?: () => void
 }
@@ -90,6 +95,7 @@ export function OverviewJobs({
   onFocused,
   activityOpen,
   wide,
+  detailSlot,
   onCloseActivity,
 }: Props) {
   const { t } = useT()
@@ -439,30 +445,34 @@ export function OverviewJobs({
           </div>
         )}
       </div>
-      {wide && detail && (
-        <aside
-          aria-labelledby={detailTitleId}
-          className="-my-3 -mr-3 flex w-[min(27.5rem,40%)] shrink-0 flex-col gap-4 self-stretch border-l border-border bg-surface px-5 py-4 ui-terminal:bg-bg"
-        >
-          <div className="flex items-start gap-2">
-            <h3
-              id={detailTitleId}
-              className="m-0 min-w-0 flex-1 break-words text-[17px] font-semibold"
-            >
-              {selectedTitle}
-            </h3>
-            <IconButton
-              size="sm"
-              onClick={() => setSelectedId(null)}
-              aria-label={t('jobs.detail.close')}
-              title={t('jobs.detail.close')}
-            >
-              <X size={16} aria-hidden="true" />
-            </IconButton>
-          </div>
-          {detail}
-        </aside>
-      )}
+      {wide &&
+        detail &&
+        detailSlot &&
+        createPortal(
+          <aside
+            aria-labelledby={detailTitleId}
+            className="flex w-[min(27.5rem,40%)] shrink-0 flex-col gap-4 overflow-y-auto border-l border-border bg-surface px-5 py-4 scrollbar-hover ui-terminal:bg-bg"
+          >
+            <div className="flex items-start gap-2">
+              <h3
+                id={detailTitleId}
+                className="m-0 min-w-0 flex-1 break-words text-[17px] font-semibold"
+              >
+                {selectedTitle}
+              </h3>
+              <IconButton
+                size="sm"
+                onClick={() => setSelectedId(null)}
+                aria-label={t('jobs.detail.close')}
+                title={t('jobs.detail.close')}
+              >
+                <X size={16} aria-hidden="true" />
+              </IconButton>
+            </div>
+            {detail}
+          </aside>,
+          detailSlot,
+        )}
       {/* On a narrow screen a sheet, out of the way while the job's editor
         or grants show (never two modals at once) */}
       <Sheet

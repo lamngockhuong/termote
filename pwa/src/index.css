@@ -486,8 +486,9 @@ body {
    ignores ::-webkit-scrollbar on an element that sets scrollbar-width or
    scrollbar-color, so the standard properties only go to browsers without the
    pseudo-elements (Firefox). .scrollbar-hover shows the thumb only while the
-   pointer is over the area or focus is inside it; the width never changes, so
-   the content does not shift. */
+   pointer is over the area or keyboard focus (:focus-visible) is in it: a
+   clicked button keeps its focus, and the thumb would stay after the pointer
+   left. The width never changes, so the content does not shift. */
 [data-classic-scrollbars] ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -516,12 +517,36 @@ body {
 }
 
 [data-classic-scrollbars] .scrollbar-hover:hover::-webkit-scrollbar-thumb,
-[data-classic-scrollbars] .scrollbar-hover:focus-within::-webkit-scrollbar-thumb {
+[data-classic-scrollbars] .scrollbar-hover:is(:focus-visible, :has(:focus-visible))::-webkit-scrollbar-thumb {
   background: var(--color-border-strong);
 }
 
 [data-classic-scrollbars] .scrollbar-hover::-webkit-scrollbar-thumb:hover {
   background: var(--color-fg-subtle);
+}
+
+/* Chrome on Windows does not repaint the thumb when only the area's :hover
+   changes, so the thumb above showed only under the pointer itself. With a
+   mouse the area has no scrollbar until it is hovered or focused: making one
+   is always painted, and the stable gutter keeps its width meanwhile. A
+   press that started in it keeps it (:active), so a selection dragged below
+   still scrolls it. Not with a touchscreen, whose drag hovers nothing and
+   would not scroll. */
+@media (hover: hover) and (not (any-pointer: coarse)) {
+  [data-classic-scrollbars] .scrollbar-hover {
+    scrollbar-gutter: stable;
+  }
+
+  /* The collapsed rail centres 40px icons in 56px: a gutter kept on one side
+     would push them off the centre of the buttons above it, and one on both
+     sides would leave no room for their focus ring */
+  [data-classic-scrollbars] .scrollbar-hover.scrollbar-hover-no-gutter {
+    scrollbar-gutter: auto;
+  }
+
+  [data-classic-scrollbars] .scrollbar-hover:not(:hover, :active, :focus-visible, :has(:focus-visible)) {
+    overflow-y: hidden;
+  }
 }
 
 @supports not selector(::-webkit-scrollbar) {
@@ -535,7 +560,7 @@ body {
   }
 
   [data-classic-scrollbars] .scrollbar-hover:hover,
-  [data-classic-scrollbars] .scrollbar-hover:focus-within {
+  [data-classic-scrollbars] .scrollbar-hover:is(:focus-visible, :has(:focus-visible)) {
     scrollbar-color: var(--color-border-strong) transparent;
   }
 

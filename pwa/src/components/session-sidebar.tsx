@@ -1534,7 +1534,7 @@ export function SessionSidebar({
               <Plus size={18} aria-hidden="true" />
             </IconButton>
           )}
-          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1 scrollbar-hover">
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1 scrollbar-hover scrollbar-hover-no-gutter">
             {showGroups ? (
               groups.map(renderRailGroup)
             ) : (

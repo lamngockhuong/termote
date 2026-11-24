@@ -334,7 +334,7 @@ describe('OverviewJobs', () => {
       },
       false,
       undefined,
-      { wide: true, onCloseActivity },
+      { wide: true, detailSlot: document.body, onCloseActivity },
     )
     const waiting = screen.getByRole('region', { name: 'Waiting on you' })
     fireEvent.click(within(waiting).getByRole('button', { name: 'job w' }))
@@ -421,6 +421,7 @@ describe('OverviewJobs', () => {
       agents: AGENTS,
       onOpenPane: vi.fn(),
       wide: true,
+      detailSlot: document.body,
       onCloseActivity,
     }
     store.state = loaded()
@@ -430,6 +431,10 @@ describe('OverviewJobs', () => {
     pick('job w')
     const aside = screen.getByRole('complementary', { name: 'job w' })
     expect(onCloseActivity).toHaveBeenCalledTimes(1)
+    // A column of its own beside the list, scrolling on its own
+    expect(aside.parentElement).toBe(document.body)
+    // Its scrollbar shows only under the pointer, as the sidebar's
+    expect(aside.className).toContain('scrollbar-hover')
     // Not a modal: no dialog
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(within(aside).getByRole('button', { name: 'Edit job w' }))
