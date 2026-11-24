@@ -242,6 +242,39 @@ describe('router', () => {
     ).toBe('parse')
   })
 
+  it('dismisses an open question as the server does', async () => {
+    state.asks.push({
+      id: 'Q1',
+      state: 'open',
+      text: 'Which?',
+      choices: ['A', 'B'],
+      created: 'c',
+      updated: 'u1',
+    })
+    const post = (body: unknown, id = 'Q1') =>
+      call('POST', `/asks/${id}/dismiss`, body)
+    expect((await post({ updated: 'u1' }, 'Q9')).body.code).toBe(
+      'ask_not_found',
+    )
+    expect((await post({ updated: 'old' })).body.code).toBe('ask_conflict')
+    expect((await post(undefined)).body.code).toBe('ask_conflict')
+    const ok = await post({ updated: 'u1' })
+    expect(ok.status).toBe(200)
+    expect(ok.body.ask).toMatchObject({ state: 'dismissed', answeredBy: 'pwa' })
+    expect(ok.body.ask.answer).toBeUndefined()
+    expect((await post({ updated: ok.body.ask.updated })).body.code).toBe(
+      'ask_closed',
+    )
+    expect(
+      (
+        await call('POST', '/asks/Q1/answer', {
+          updated: ok.body.ask.updated,
+          choice: 1,
+        })
+      ).body.code,
+    ).toBe('ask_closed')
+  })
+
   it('answers the snapshot with the demo workspaces', async () => {
     const { status, body } = await call('GET', '/snapshot')
     expect(status).toBe(200)

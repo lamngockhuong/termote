@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   fetchJobs: vi.fn(),
   fetchAsks: vi.fn(),
   answerAsk: vi.fn(),
+  dismissAsk: vi.fn(),
   createJob: vi.fn(),
   updateJob: vi.fn(),
   deleteJob: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('./use-mux-api', async (orig) => ({
   fetchJobs: () => api.fetchJobs(),
   fetchAsks: () => api.fetchAsks(),
   answerAsk: (id: string, a: unknown) => api.answerAsk(id, a),
+  dismissAsk: (id: string, u: string) => api.dismissAsk(id, u),
   createJob: (j: unknown) => api.createJob(j),
   updateJob: (id: string, c: unknown) => api.updateJob(id, c),
   deleteJob: (id: string, u: string) => api.deleteJob(id, u),
@@ -39,6 +41,7 @@ import {
   addJob,
   answerQuestion,
   changeJob,
+  dismissQuestion,
   grantJob,
   pinJobPRs,
   reloadJobs,
@@ -465,6 +468,57 @@ describe('useJobs', () => {
     // A refusal that is not a missing ledger keeps the last asks read
     await act(() => reloadJobs())
     expect(result.current.asks).toEqual([ask('new')])
+  })
+
+  it('dismisses an ask as read, no longer open before the next read', async () => {
+    api.fetchJobs.mockResolvedValue(list([]))
+    api.fetchAsks.mockResolvedValue(asks([ask('Q1'), ask('Q2')]))
+    const { result } = renderHook(() => useJobs())
+    const open = renderHook(() => useOpenAsks())
+    await act(() => reloadJobs())
+    expect(open.result.current.open).toHaveLength(2)
+    api.dismissAsk.mockResolvedValueOnce({
+      ask: ask('Q1', {
+        state: 'dismissed',
+        answeredBy: 'pwa',
+        updated: 'Q1-2',
+      }),
+    })
+    await act(() => dismissQuestion(ask('Q1')))
+    expect(api.dismissAsk).toHaveBeenCalledWith('Q1', 'Q1-1')
+    expect(result.current.asks.map((a) => [a.id, a.state])).toEqual([
+      ['Q1', 'dismissed'],
+      ['Q2', 'open'],
+    ])
+    expect(result.current.asks[0].updated).toBe('Q1-2')
+    expect(open.result.current.open).toHaveLength(1)
+    // No ask in the answer, or another one: shown dismissed all the same
+    const bare = ask('Q2', { updated: undefined })
+    api.dismissAsk.mockResolvedValueOnce({ ask: ask('Q9') })
+    await act(() => dismissQuestion(bare))
+    expect(api.dismissAsk).toHaveBeenLastCalledWith('Q2', '')
+    expect(result.current.asks[1]).toEqual({ ...bare, state: 'dismissed' })
+    expect(open.result.current.open).toHaveLength(0)
+  })
+
+  it('reads the asks again after a dismissal refused as stale, then throws', async () => {
+    api.fetchJobs.mockResolvedValue(list([]))
+    api.fetchAsks.mockResolvedValue(asks([ask('Q1', { updated: 'Q1-9' })]))
+    renderHook(() => useJobs())
+    for (const code of ['ask_conflict', 'ask_closed', 'ask_not_found']) {
+      api.dismissAsk.mockRejectedValueOnce(refusal(code))
+      await act(async () => {
+        await expect(dismissQuestion(ask('Q1'))).rejects.toMatchObject({
+          code,
+        })
+      })
+    }
+    expect(api.fetchAsks).toHaveBeenCalledTimes(3)
+    api.dismissAsk.mockRejectedValueOnce(refusal('ask_busy'))
+    await expect(dismissQuestion(ask('Q1'))).rejects.toMatchObject({
+      code: 'ask_busy',
+    })
+    expect(api.fetchAsks).toHaveBeenCalledTimes(3)
   })
 
   it('shows an ask answered whatever the server answered with', async () => {

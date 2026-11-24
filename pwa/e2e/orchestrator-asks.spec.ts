@@ -12,7 +12,7 @@ import { expect, test } from './fixtures'
 // adds a question, over the server's local socket, so the spec posts there
 // itself (<TERMOTE_E2E_STATE>/termote/run/<port>.sock, the server's own
 // XDG_STATE_HOME) naming the stand-in's pane; the answers go through the
-// PWA. Only a native server (a saved config) opens that socket, so the spec
+// PWA, as do the dismissals. Only a native server (a saved config) opens that socket, so the spec
 // runs only with TERMOTE_E2E_ASKS=1: CI sets it in the machines job, against
 // that job's native server. The server's other answers are
 // the Go tests'.
@@ -38,18 +38,19 @@ function transcriptText(dir: string): string {
 
 interface SocketReply {
   status: number
-  body: { ask?: { id: string }; code?: string }
+  body: { ask?: { id: string }; asks?: { id: string; state: string; answeredBy?: string }[]; code?: string }
 }
 
-// A POST over the server's local socket, as termote agents makes it.
-function overSocket(port: string, route: string, body: unknown): Promise<SocketReply> {
-  const data = JSON.stringify(body)
+// A POST (a GET without body) over the server's local socket, as termote
+// agents makes it.
+function overSocket(port: string, route: string, body?: unknown): Promise<SocketReply> {
+  const data = body === undefined ? '' : JSON.stringify(body)
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
         socketPath: path.join(stateDir as string, 'termote', 'run', `${port}.sock`),
         path: route,
-        method: 'POST',
+        method: body === undefined ? 'GET' : 'POST',
         headers: { Host: 'termote.local-socket', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
       },
       (res) => {
@@ -171,6 +172,33 @@ test.describe('orchestrator questions', () => {
     expect(transcriptText(claudeDir)).not.toContain(`Answer to ${id}`)
     // Ctrl+C clears the stand-in's box
     tmux('send-keys', '-t', pane, 'C-c')
+  })
+
+  test('a dismissal asks first, then takes the question off without typing', async ({ page }) => {
+    test.setTimeout(60_000)
+    const id = await ask(`Rename the package? ${tag}`, ['Yes', 'No'])
+    await openPlan(page)
+    const card = waiting(page).getByRole('article', { name: id })
+    await expect(card).toContainText(`Rename the package? ${tag}`)
+    // Cancelled: the question stays, its answer offered again
+    await card.getByRole('button', { name: `Dismiss ${id}` }).click()
+    const confirm = card.getByRole('group', { name: `Dismiss ${id}` })
+    await expect(confirm).toContainText(`Dismiss ${id}? The orchestrator is told you chose not to answer it.`)
+    await expect(card.getByRole('button', { name: 'Yes' })).toBeDisabled()
+    await confirm.getByRole('button', { name: 'Cancel' }).click()
+    await expect(confirm).toHaveCount(0)
+    await expect(card.getByRole('button', { name: 'Yes' })).toBeEnabled()
+    // Confirmed: the card goes and a note says so
+    await card.getByRole('button', { name: `Dismiss ${id}` }).click()
+    await confirm.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await expect(card).toHaveCount(0)
+    await expect(waiting(page).getByRole('status')).toHaveText(`${id} dismissed`)
+    // The server keeps it dismissed, for wait --mine to report
+    const list = await overSocket(port, '/api/mux/asks')
+    expect(list.body.asks?.find((q) => q.id === id)).toMatchObject({ state: 'dismissed', answeredBy: 'pwa' })
+    // Nothing reached the orchestrator's input box
+    expect(transcriptText(claudeDir)).not.toContain(`Answer to ${id}`)
+    expect(tmux('capture-pane', '-p', '-t', pane)).not.toContain(id)
   })
 
   test('text that looks like markup shows as it is', async ({ page }) => {

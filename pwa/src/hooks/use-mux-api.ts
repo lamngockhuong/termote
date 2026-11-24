@@ -3382,10 +3382,11 @@ export interface AskLive {
 
 // A question an orchestrator agent asked the user (termote agents ask). A
 // view-only client gets id, state, job and created only. updated is sent
-// back as read with an answer.
+// back as read with an answer or a dismissal. dismissed: the user chose in
+// the PWA not to answer it.
 export interface Ask {
   id: string
-  state: 'open' | 'answered'
+  state: 'open' | 'answered' | 'dismissed'
   created: string
   // The job it is about, by id, and that job's title
   job?: string
@@ -3451,4 +3452,25 @@ export async function answerAsk(
     queued: body.queued === true,
     recorded: body.recorded === true,
   }
+}
+
+// Dismisses the ask as it was when updated was read: nothing is typed into
+// the orchestrator's input box, wait --mine tells it. Throws RequestError
+// (ask_conflict, ask_closed, ask_busy...).
+export async function dismissAsk(
+  id: string,
+  updated: string,
+): Promise<{ ask: Ask }> {
+  const res = await fetch(
+    `${apiBase()}/asks/${encodeURIComponent(id)}/dismiss`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updated }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  )
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return { ask: body.ask }
 }

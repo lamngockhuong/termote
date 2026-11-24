@@ -20,7 +20,7 @@ export default {
   'errors.ask_browser_only':
     'Another Termote answers a question only from a browser, never from its command line',
   'errors.ask_busy': 'An answer to this question is being sent. Try again',
-  'errors.ask_closed': 'This question was answered already',
+  'errors.ask_closed': 'This question was answered or dismissed already',
   'errors.ask_conflict': 'The question was changed elsewhere meanwhile',
   'errors.ask_invalid': 'The question cannot take this answer',
   'errors.ask_no_agent':
