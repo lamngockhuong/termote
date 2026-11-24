@@ -259,6 +259,11 @@ test.describe('accent color', () => {
     await expect(group.getByRole('radio', { name: 'Follow style' })).toHaveAttribute('aria-checked', 'true')
     await group.getByRole('radio', { name: 'Pink' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-accent', 'pink')
+    // The selection ring keeps a gap around the dot: 2px border, 2px gap
+    const pink = group.getByRole('radio', { name: 'Pink' })
+    const ring = (await pink.boundingBox())!
+    const dot = (await pink.locator('[data-accent-dot]').boundingBox())!
+    expect(ring.width - dot.width).toBeGreaterThanOrEqual(8)
     expect(await accentToken(page)).toBe('#f472b6')
     expect((await storedSettings(page)).uiAccent).toBe('pink')
 

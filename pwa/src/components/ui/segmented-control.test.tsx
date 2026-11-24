@@ -124,7 +124,7 @@ describe('SegmentedControl', () => {
       />,
     )
     expect(screen.getByRole('radiogroup')).toHaveClass('flex-wrap')
-    expect(radio('Pink')).toHaveClass('rounded-full', 'border-fg')
+    expect(radio('Pink')).toHaveClass('rounded-full', 'border-fg', 'size-9')
     expect(radio('Teal')).toHaveClass('border-transparent')
     expect(radio('Teal')).toHaveClass('pointer-coarse:size-touch')
   })
