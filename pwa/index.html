@@ -22,11 +22,17 @@
         document.documentElement.classList.add(theme);
         // Same rule as resolveUiStyle in src/ui-style.ts.
         var style = 'neutral';
+        var accent = null;
         try {
-          var saved = JSON.parse(localStorage.getItem('termote-settings') || '{}').uiStyle;
+          var settings = JSON.parse(localStorage.getItem('termote-settings') || '{}');
+          var saved = settings.uiStyle;
           if (saved === 'terminal' || saved === 'native' || saved === 'neutral') style = saved;
+          // Same rule as resolveUiAccent in src/ui-style.ts ('auto' sets nothing).
+          var accents = ['indigo', 'blue', 'teal', 'green', 'orange', 'pink', 'violet'];
+          if (accents.indexOf(settings.uiAccent) >= 0) accent = settings.uiAccent;
         } catch (e) {}
         document.documentElement.setAttribute('data-ui-style', style);
+        if (accent) document.documentElement.setAttribute('data-accent', accent);
       })();
     </script>
   </head>

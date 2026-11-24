@@ -147,6 +147,20 @@ describe('useSettings', () => {
     )
   })
 
+  it('keeps the style accent unless a known accent was saved', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ uiAccent: 'gold', pollInterval: 10 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.uiAccent).toBe('auto')
+    act(() => result.current.updateSetting('uiAccent', 'teal'))
+    expect(result.current.settings.uiAccent).toBe('teal')
+    expect(JSON.parse(localStorage.getItem('termote-settings')!).uiAccent).toBe(
+      'teal',
+    )
+  })
+
   it('restores saved settings from localStorage', () => {
     localStorage.setItem(
       'termote-settings',

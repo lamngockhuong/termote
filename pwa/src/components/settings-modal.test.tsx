@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS: Settings = {
   languageNoticeSeen: false,
   hasSeenLocalhostNotice: false,
   terminalFont: '',
+  uiAccent: 'auto',
   uiStyle: 'neutral',
   driveTerminalSize: false,
   sidebarFilter: 'all',
@@ -457,6 +458,65 @@ describe('SettingsModal', () => {
     expect(
       screen.getByRole('radio', { name: 'Native', checked: true }),
     ).toBeInTheDocument()
+  })
+
+  it('offers follow style and seven accent colors, writing uiAccent', () => {
+    const { onUpdateSetting } = renderModal()
+    const group = screen.getByRole('radiogroup', { name: 'Accent color' })
+    const radios = within(group).getAllByRole('radio')
+    expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Follow style',
+      'Indigo',
+      'Blue',
+      'Teal',
+      'Green',
+      'Orange',
+      'Pink',
+      'Violet',
+    ])
+    expect(
+      within(group).getByRole('radio', { name: 'Follow style', checked: true }),
+    ).toBeInTheDocument()
+    expect(document.querySelector('[data-accent-name]')).toHaveTextContent(
+      'Follow style',
+    )
+    fireEvent.click(within(group).getByRole('radio', { name: 'Teal' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('uiAccent', 'teal')
+    fireEvent.keyDown(group, { key: 'End' })
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('uiAccent', 'violet')
+  })
+
+  it('keeps each style own accent on follow style and the previews', () => {
+    renderModal({
+      settings: { ...DEFAULT_SETTINGS, uiStyle: 'terminal', uiAccent: 'teal' },
+    })
+    expect(
+      screen.getByRole('radio', { name: 'Teal', checked: true }),
+    ).toBeInTheDocument()
+    expect(document.querySelector('[data-accent-name]')).toHaveTextContent(
+      'Teal',
+    )
+    // Follow style: terminal's green, not the chosen teal
+    const auto = document.querySelector<HTMLElement>(
+      '[data-accent-dot="auto"]',
+    )!
+    expect(auto.style.background).toContain('rgb(13, 122, 65)')
+    expect(auto.style.background).toContain('rgb(61, 220, 132)')
+    const teal = document.querySelector<HTMLElement>(
+      '[data-accent-dot="teal"]',
+    )!
+    expect(teal.style.background).toContain('rgb(15, 118, 110)')
+    const preview = (id: string) =>
+      document.querySelector<HTMLElement>(
+        `[data-preview="${id}"] [data-preview-accent]`,
+      )!
+    expect(preview('neutral').style.getPropertyValue('--preview-light')).toBe(
+      '#4f46e5',
+    )
+    expect(preview('native').style.getPropertyValue('--preview-dark')).toBe(
+      '#4c9cf8',
+    )
+    expect(preview('terminal')).not.toHaveClass('bg-accent')
   })
 
   it('shows one group at a time on desktop, switched from the left rail', () => {
@@ -1312,6 +1372,7 @@ describe('SettingsModal on a phone', () => {
       settings: {
         ...DEFAULT_SETTINGS,
         uiStyle: 'terminal',
+        uiAccent: 'pink',
         language: 'vi',
         imeSendBehavior: 'send-enter',
       },
@@ -1319,7 +1380,7 @@ describe('SettingsModal on a phone', () => {
     const nav = list()!
     expect(
       within(nav).getByRole('button', { name: 'Appearance' }),
-    ).toHaveAccessibleDescription('Terminal · Dark · Tiếng Việt')
+    ).toHaveAccessibleDescription('Terminal · Pink · Dark · Tiếng Việt')
     expect(
       within(nav).getByRole('button', { name: 'Keyboard' }),
     ).toHaveAccessibleDescription('Send + Enter')

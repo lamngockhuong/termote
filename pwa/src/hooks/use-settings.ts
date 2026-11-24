@@ -1,7 +1,14 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { type LanguageSetting, resolveLanguage } from '../i18n'
 import type { MessageKey } from '../i18n/messages/en'
-import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
+import {
+  DEFAULT_UI_ACCENT,
+  DEFAULT_UI_STYLE,
+  resolveUiAccent,
+  resolveUiStyle,
+  type UiAccent,
+  type UiStyle,
+} from '../ui-style'
 import {
   DEFAULT_STUCK_MINUTES,
   resolveStuckMinutes,
@@ -210,6 +217,7 @@ export interface Settings {
   toolbarPosition: ToolbarPosition // desktop: the controls in the header or on a right bar
   terminalFont: string // font installed on this device, tried before the defaults
   uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
+  uiAccent: UiAccent // accent color on every style; 'auto' keeps the style's own
   // herdr: size the pane to this device while it shows it (Caps.driveSize)
   driveTerminalSize: boolean
   // herdr, desktop: a split tab's panes side by side, as the desktop has them
@@ -258,6 +266,7 @@ export const DEFAULTS: Settings = {
   toolbarPosition: DEFAULT_TOOLBAR_POSITION,
   terminalFont: '',
   uiStyle: DEFAULT_UI_STYLE,
+  uiAccent: DEFAULT_UI_ACCENT,
   driveTerminalSize: false,
   herdrLayoutView: true,
   sidebarFilter: DEFAULT_SIDEBAR_FILTER,
@@ -331,6 +340,7 @@ export const SETTING_RESOLVERS: {
   toolbarPosition: resolveToolbarPosition,
   terminalFont: resolveTerminalFont,
   uiStyle: resolveUiStyle,
+  uiAccent: resolveUiAccent,
   driveTerminalSize: (v) => resolveBoolean('driveTerminalSize', v),
   herdrLayoutView: (v) => resolveBoolean('herdrLayoutView', v),
   sidebarFilter: resolveSidebarFilter,

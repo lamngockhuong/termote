@@ -25,6 +25,17 @@ export default {
   'settings.style.neutral': 'Neutral',
   'settings.style.terminal': 'Terminal',
   'settings.style.native': 'Native',
+  'settings.accent': 'Accent color',
+  'settings.accentDesc':
+    "Buttons, links, the selected item and the terminal cursor. Follow style keeps each style's own color.",
+  'settings.accent.auto': 'Follow style',
+  'settings.accent.indigo': 'Indigo',
+  'settings.accent.blue': 'Blue',
+  'settings.accent.teal': 'Teal',
+  'settings.accent.green': 'Green',
+  'settings.accent.orange': 'Orange',
+  'settings.accent.pink': 'Pink',
+  'settings.accent.violet': 'Violet',
   // Keyboard
   'settings.ime': 'Text input send behavior',
   'settings.ime.sendOnly': 'Send text only',

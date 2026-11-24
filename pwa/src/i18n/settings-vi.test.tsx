@@ -59,6 +59,7 @@ const SETTINGS: Settings = {
   languageNoticeSeen: false,
   hasSeenLocalhostNotice: false,
   terminalFont: '',
+  uiAccent: 'auto',
   uiStyle: 'neutral',
   driveTerminalSize: false,
   sidebarFilter: 'all',
@@ -133,6 +134,9 @@ describe('Settings in Vietnamese', () => {
     for (const group of ['Giao diện', 'Bàn phím', 'Terminal', 'Phiên', 'File'])
       expect(screen.getByRole('heading', { name: group })).toBeTruthy()
     expect(screen.getByRole('radio', { name: 'Trung tính' })).toBeTruthy()
+    expect(screen.getByRole('radiogroup', { name: 'Màu nhấn' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Theo style' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Xanh ngọc' })).toBeTruthy()
     expect(screen.getByRole('radio', { name: 'Chỉ gửi chữ' })).toBeTruthy()
     // The paste buffer's name without one from the backend
     expect(screen.getByRole('radio', { name: 'Buffer của phiên' })).toBeTruthy()
