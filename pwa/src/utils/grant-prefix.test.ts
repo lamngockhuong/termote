@@ -130,6 +130,14 @@ describe('grantPrefixProblem', () => {
       'pnpm config',
       'pnpm --filter termote c',
       'yarn config set',
+      // the registry with the user's login
+      'npm --prefix pwa publish',
+      'npm pub',
+      'npm tok',
+      'npm owner',
+      'npm login',
+      'pnpm --filter termote publish',
+      'yarn npm publish',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     for (const p of [
@@ -155,6 +163,9 @@ describe('grantPrefixProblem', () => {
       'cargo add serde',
       'npm in',
       'npm se react',
+      'npm add',
+      'npm un react',
+      'npm audit',
       'npm --prefix pwa test',
       'npm --prefix pwa run build',
       'pnpm --filter termote',

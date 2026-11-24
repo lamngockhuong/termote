@@ -864,9 +864,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   init x`; nor `config`, `c` or `set` of `npm`, `pnpm`, `yarn` (`config` only), which write the
   manager's own config outside the worktree and past the grant, `npm config set
   node-options=--require=x` loading `x` in every later npm script, nor npm's `pkg`, which writes
-  `package.json`; npm also runs a command from any unique start of its name, `npm exe x` being `npm
-  exec x`, so a word of two letters or more that starts one of npm's is refused too, but `in` and
-  `se`, its aliases of install and search (`delegateAbbrevNames`, the PWA's `ABBREV_NAMES`); the lists
+  `package.json`, nor what acts on the registry with the user's login (`publish`, `unpublish`,
+  `deprecate`, `dist-tag`, `owner`, `access`, `token`, `adduser`, `login`, `logout`, `team`, `star`;
+  pnpm hands them to npm; yarn's `npm`, `tag`); npm also runs a command from any unique start of its name, `npm exe x` being `npm
+  exec x`, so a word of two letters or more that starts one of npm's is refused too, but `in`, `add`,
+  `un` and `se`, its aliases of install, uninstall and search (`delegateAbbrevNames`, the PWA's `ABBREV_NAMES`); the lists
   of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
   it followed by any word that is no option (`delegateInstallers`, the PWA's `INSTALLERS`: `npm i x`, its
   other aliases of install, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
@@ -899,7 +901,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.envrc`, `.env*`, `package.json`, lockfiles,
   `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
   `Makefile`, hook configs, sensitive
-  names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
+  names by `isSensitive`: `denied_path`), not a file a git hook of the grant's directory runs
+  (`checkDelegateHook`: a word naming a script, `.sh`, `.js`, `.mjs`, `.py`..., in a lefthook config
+  of any extension, `.pre-commit-config.yaml` or a script of `.husky` at that directory's root, 64
+  KB of each and 64 of `.husky`'s, matched by the end of the path, `../scripts/x.sh` denying every
+  `scripts/x.sh`, since it would run at the user's next commit, past the grant: `denied_path`; what
+  such a script runs in turn is not followed), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path

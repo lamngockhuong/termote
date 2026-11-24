@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -51,11 +52,17 @@ var delegateInterpreters = []string{
 // config, c and set write the manager's own config, outside the worktree
 // and past the grant ("npm config set node-options=--require=x" loads x in
 // every later npm script), and npm's pkg writes package.json, which no
-// edit grant covers.
+// edit grant covers. The last ones act on the registry with the user's
+// login (publish the worktree, change an owner, make a token); pnpm hands
+// them to npm.
 var delegateRunners = map[string][]string{
-	"npm":  {"exec", "x", "create", "init", "innit", "config", "c", "set", "pkg"},
-	"pnpm": {"dlx", "exec", "x", "create", "config", "c", "set"},
-	"yarn": {"dlx", "exec", "create", "config"},
+	"npm": {"exec", "x", "create", "init", "innit", "config", "c", "set", "pkg",
+		"publish", "unpublish", "deprecate", "dist-tag", "dist-tags", "owner", "author", "access", "token",
+		"adduser", "add-user", "login", "logout", "signin", "signout", "team", "org", "star", "unstar"},
+	"pnpm": {"dlx", "exec", "x", "create", "config", "c", "set", "pkg",
+		"publish", "unpublish", "deprecate", "dist-tag", "owner", "access", "token",
+		"adduser", "login", "logout", "team", "star", "unstar"},
+	"yarn": {"dlx", "exec", "create", "config", "publish", "login", "logout", "owner", "team", "tag", "npm"},
 	"bun":  {"x", "create"},
 }
 
@@ -63,8 +70,8 @@ var delegateRunners = map[string][]string{
 // commands although they start a runner word of its: npm also runs a
 // command from any unique start of its name ("npm exe x" is "npm exec
 // x"), so another word of two letters or more that starts one is refused
-// too ("in" is install's alias, "se" search's).
-var delegateAbbrevNames = []string{"in", "se"}
+// too ("in", "add" are install's aliases, "un" uninstall's, "se" search's).
+var delegateAbbrevNames = []string{"in", "add", "un", "se"}
 
 // delegateKnownCommands are the commands of pnpm and yarn a delegated
 // command may name after the grant's prefix: both run a word that is no
@@ -232,12 +239,80 @@ var delegateDeniedNames = []string{
 	".mcp.json", "claude.md", "agents.md", ".envrc", "package.json", "makefile", "gnumakefile",
 	"pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb", "npm-shrinkwrap.json",
 	"go.sum", "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "uv.lock",
-	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", "lefthook.yml", ".lefthook.yml", ".pre-commit-config.yaml",
-	"lefthook-local.yml", ".lefthook-local.yml", "opencode.json", "opencode.jsonc",
+	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", ".pre-commit-config.yaml",
+	"opencode.json", "opencode.jsonc",
 	// Claude Code and Codex read these as instructions too.
 	"claude.local.md", "agents.override.md",
 	// The package managers run or read these when they install.
 	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
+}
+
+// delegateHookConfigs are the files that make git hooks run a program:
+// lefthook's (also denied names) and pre-commit's. checkDelegateHook reads
+// them, and the scripts of .husky, for the files they run.
+var delegateHookConfigs = func() []string {
+	var names []string
+	for _, base := range []string{"lefthook", "lefthook-local"} {
+		for _, ext := range []string{".yml", ".yaml", ".json", ".jsonc", ".toml"} {
+			names = append(names, base+ext, "."+base+ext)
+		}
+	}
+	return append(names, ".pre-commit-config.yaml")
+}()
+
+func init() { delegateDeniedNames = append(delegateDeniedNames, delegateHookConfigs...) }
+
+// hookScriptRe is a word of a hook config that names a script file.
+var hookScriptRe = regexp.MustCompile(`[A-Za-z0-9_@+./-]+\.(?:sh|bash|zsh|js|mjs|cjs|ts|mts|cts|py|rb|pl|ps1|go)\b`)
+
+// maxHookConfig bounds what checkDelegateHook reads of one file, and
+// maxHookScripts how many of .husky's.
+const (
+	maxHookConfig  = 64 << 10
+	maxHookScripts = 64
+)
+
+// checkDelegateHook is "denied_path" when rel, under dir, is a file a git
+// hook of dir runs: named in a hook config at dir's root or in a script of
+// .husky, compared by the end of its path ("../scripts/x.sh" in a command
+// run from a subfolder denies every scripts/x.sh), since such a file runs
+// at the user's next commit or push, past the grant. A config dir does
+// not hold, or one too large, denies nothing more; what a hook script
+// reads in turn is not followed.
+func checkDelegateHook(dir, rel string) string {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "denied_path"
+	}
+	defer root.Close()
+	files := slices.Clone(delegateHookConfigs)
+	if d, err := root.Open(".husky"); err == nil {
+		names, _ := d.Readdirnames(maxHookScripts)
+		d.Close()
+		for _, n := range names {
+			files = append(files, ".husky/"+n)
+		}
+	}
+	rel = strings.ToLower(filepath.ToSlash(rel))
+	for _, name := range files {
+		f, err := root.Open(name)
+		if err != nil {
+			continue
+		}
+		b, _ := io.ReadAll(io.LimitReader(f, maxHookConfig))
+		f.Close()
+		for _, w := range hookScriptRe.FindAllString(string(b), -1) {
+			w = strings.ToLower(w)
+			for strings.HasPrefix(w, "./") || strings.HasPrefix(w, "../") {
+				w = w[strings.Index(w, "/")+1:]
+			}
+			w = strings.TrimPrefix(w, "/")
+			if w != "" && (rel == w || strings.HasSuffix(rel, "/"+w)) {
+				return "denied_path"
+			}
+		}
+	}
+	return ""
 }
 
 // delegateDeniedDirs are directories nothing under which a grant covers

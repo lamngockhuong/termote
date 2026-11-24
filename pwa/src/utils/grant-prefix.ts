@@ -76,11 +76,24 @@ const VERSIONED = /^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
 // refused at any position after the program's name (delegateRunners).
 // create and init fetch and run a create-* package (npm init vite is npm
 // exec create-vite; innit is npm's alias). config, c and set write the
-// manager's own config past the grant, npm's pkg writes package.json
+// manager's own config past the grant, npm's pkg writes package.json, and
+// the last ones act on the registry with the user's login (publish...)
 const RUNNERS: Record<string, string[]> = {
-  npm: ['exec', 'x', 'create', 'init', 'innit', 'config', 'c', 'set', 'pkg'],
-  pnpm: ['dlx', 'exec', 'x', 'create', 'config', 'c', 'set'],
-  yarn: ['dlx', 'exec', 'create', 'config'],
+  npm: [
+    ...['exec', 'x', 'create', 'init', 'innit', 'config', 'c', 'set', 'pkg'],
+    ...['publish', 'unpublish', 'deprecate', 'dist-tag', 'dist-tags', 'owner'],
+    ...['author', 'access', 'token', 'adduser', 'add-user', 'login', 'logout'],
+    ...['signin', 'signout', 'team', 'org', 'star', 'unstar'],
+  ],
+  pnpm: [
+    ...['dlx', 'exec', 'x', 'create', 'config', 'c', 'set', 'pkg', 'publish'],
+    ...['unpublish', 'deprecate', 'dist-tag', 'owner', 'access', 'token'],
+    ...['adduser', 'login', 'logout', 'team', 'star', 'unstar'],
+  ],
+  yarn: [
+    ...['dlx', 'exec', 'create', 'config', 'publish', 'login', 'logout'],
+    ...['owner', 'team', 'tag', 'npm'],
+  ],
   bun: ['x', 'create'],
 }
 
@@ -88,7 +101,7 @@ const RUNNERS: Record<string, string[]> = {
 // exec x): a word of two letters or more that starts one of its runner
 // words is refused too, but for these, its own commands' aliases
 // (delegateAbbrevNames)
-const ABBREV_NAMES = ['in', 'se']
+const ABBREV_NAMES = ['in', 'add', 'un', 'se']
 
 // Package managers' words that install the packages named after them
 // (delegateInstallers): refused when any word after one is no option (npm
