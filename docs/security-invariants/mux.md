@@ -409,7 +409,10 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   dialog follow the key), and the push watcher
   keys statuses by the pane's `%N`. `DELETE /tabs/{id}?key=` and `PATCH /tabs/{id}` `{name,
   key}` act on `@N` only while it sits at the id's index, else 409 `changed` (Herdr and hc: key ≠
-  id → 409); without a key, as before. hc renames a tab by writing its `name` into herdr-app's
+  id → 409); without a key, as before. `CloseTab` has a second caller, job finish, which passes the
+  key its snapshot read. Herdr's `confirmation_required` for `tab.close` (the last tab of a workspace
+  with `ui.confirm_close` on; its API takes no confirmation) is 409 `tab_confirm_required`, the user
+  closing it in Herdr; the other replies map as before (`herdrInputError`). hc renames a tab by writing its `name` into herdr-app's
   document (`doc.set`, above; `caps.renameTab` only once a document is read; a tab placed by its
   labels alone → 404 `unknown_tab`). Accepted gaps: deep links and saved selections to a shifted
   index open another tab; `send-keys` and the stream carry no key, so keys typed on another
@@ -429,7 +432,8 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   let a name pose as another in the Remove confirmation), `base` empty (HEAD), `HEAD` or the same
   check (Herdr passes it to git positionally without `--`), a non-empty `label` by
   `validateTmuxTarget`. No path comes from the client. Creates, opens and removes take one slot (a
-  one-slot channel, waited for at most `muxTimeout`, then 503 `busy`); once held, the read deadline
+  one-slot channel, `worktreeSlot`, waited for at most `muxTimeout`, then 503 `busy`; `termote agents
+  job finish` takes the same slot for its remove, see Finishing a job in agents.md); once held, the read deadline
   grows and the change runs under `WithoutCancel` for 60 s (open: `muxTimeout`), so a client
   leaving never cuts git short; past that 504 `unknown` (the change may still finish; the PWA
   treats its own 75 s abort the same). Create with a non-empty `base` first runs `git show-ref
@@ -501,7 +505,10 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
     a gitlink or a list cut at 16 MiB is `dirty`, as is an initialized submodule, `gitDir/modules`),
     then `status --porcelain -z --untracked-files=normal --ignore-submodules=all` (filters off, and
     never entering a submodule, whose own config can define filters `gitRunner` does not know of;
-    any output or a cut one is `dirty`), `show-ref
+    any output or a cut one is `dirty`; on Windows, unless the user's or the repository's config
+    sets `core.autocrlf`, status runs with `-c core.autocrlf=true`, as Git for Windows' system config,
+    which `gitRunner` never reads, checked the worktree out (Herdr's or the user's own `git worktree
+    add`): only a change of line endings reads as none, `windowsCheckoutEOL`), `show-ref
     --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
     (the resolver). Remove re-derives the path from git's own list for the group's work tree,
     never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409
@@ -521,7 +528,11 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
     `dirty` check still runs before anything closes. Accepted gap: a program (a scanner, an
     editor) opening a file between the probe and git's delete still makes git stop halfway. The route's branch list and
     existing-branch check pass the resolver's `safe.directory` too. On tmux and Zellij a group name taken already is
-    `open_failed` with the checkout kept. Nesting (`server/git_worktree_nest.go`): the snapshot
+    `open_failed` with the checkout kept. `RemoveWorktree` has a second caller, job finish, always
+    without `force`; once a finish's remove failed after its workspace closed, a finish again removes
+    the checkout with git alone (`removeUnopenedWorktree`: only a worktree git lists as linked and
+    unlocked at the ledger's folder, made by the job, clean and pushed or merged), opening nothing.
+    Nesting (`server/git_worktree_nest.go`): the snapshot
     route nests by a cache only; lookups run in the background (at most 4 at once, `muxTimeout`
     each, 10 s fresh, 30 s after a failure, 512 folders, cleared after every worktree change),
     started only by a full client's non-peek read; a view-only or peek read uses what is cached.

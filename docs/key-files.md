@@ -426,6 +426,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_agents_worktree.go`                   | `agents start --worktree`: make or reuse a worktree            |
 | `server/cli_agents_self.go`                       | `agents list`: which pane the CLI runs in (tmux/Herdr/Zellij)  |
 | `server/cli_agents_jobs.go`                       | `agents jobs`, `job add/show/set`, `wait --job`, start's job   |
+| `server/cli_agents_finish.go`                     | `agents job finish`: checks it can make, the one request       |
 | `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
 | `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
 | `scripts/termote-plugins.sh`                      | Writes the termote-plugins marketplace at each stable release  |
@@ -463,6 +464,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/job_store.go`                             | Job ledger (`<stateDir>/jobs`), limits, lock, review hook      |
 | `server/job_routes.go`                            | `/api/mux/jobs*`: roles, live status, unread from transcript   |
 | `server/job_identity.go`                          | A job's agent: activity key + pid and start time, or session   |
+| `server/job_finish.go`                            | `/api/mux/jobs/{id}/finish`: checks, locks, close, remove      |
+| `server/job_finish_git.go`                        | A job's worktree: clean, pushed or merged; branch delete       |
 | `server/job_grants.go`                            | Grants to answer dialogs: made only from a signed-in browser   |
 | `server/job_pr.go`                                | A job's pull requests: summary, failing set, pins              |
 | `server/gh_runner.go`                             | The only `gh` call: env, `--repo`, budget, error codes         |

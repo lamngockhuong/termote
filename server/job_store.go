@@ -146,6 +146,10 @@ type jobTree struct {
 	Base    string `json:"base,omitempty"`
 	Dir     string `json:"dir"`
 	GroupID string `json:"groupId,omitempty"`
+	// Made: the start that recorded it made the worktree (not one opened
+	// again that the user had), so job finish may remove it. Only the
+	// server writes it, from a request over the local socket.
+	Made bool `json:"made,omitempty"`
 }
 
 // jobDiff is what the last termote agents diff --stat of the job's pane

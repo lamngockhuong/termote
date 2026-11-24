@@ -41,6 +41,7 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents job set <id> [--state active|review|done|failed|abandoned] [--title <title>] [--note <text | ->] [--pane <pane>] [--pr <number>]... [--no-pr <number>]...
        termote agents job ci <id> [--refresh] [--send] [--json]
        termote agents job remove <id>
+       termote agents job finish <id> [--close] [--remove-worktree] [--json]
        termote agents jobs prune [--older-than <duration>] [--dry-run] [--json]
        termote agents ask add --text <question | -> [--choice <choice>]... [--job <id>] [--json]
        termote agents ask list [--all] [--json]
@@ -1663,7 +1664,7 @@ func (c *cli) agentsStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	rec := startRecord{snap: s, group: g, kind: kind, title: title, prompt: prompt, todo: todo, branch: branch, base: base}
+	rec := startRecord{snap: s, group: g, kind: kind, title: title, prompt: prompt, todo: todo, branch: branch, base: base, made: t.made}
 	if t.running != nil {
 		return c.continueInWorktree(port, t, rec)
 	}
@@ -1688,8 +1689,9 @@ type startTarget struct {
 	// used: the pane was not opened by this command (a worktree workspace
 	// a run before opened), so its shell may hold the user's typing.
 	used bool
-	// worktree: dir is a git worktree the start made or went on in.
-	worktree bool
+	// worktree: dir is a git worktree the start made or went on in; made:
+	// this start made it.
+	worktree, made bool
 	// running: the worktree's first pane, which runs an agent already (a
 	// start run again): the task goes to it, if it can take it.
 	running *snapPane

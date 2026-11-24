@@ -693,7 +693,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		hc.nester = nester
 	}
 	agent.wm = worktreeMuxFor(m, files, nester)
-	registerWorktreeRoutes(mux, m, agent.wm, files.git, allowed)
+	agent.worktreeSlot = newWorktreeSlot()
+	registerWorktreeRoutes(mux, m, agent.wm, files.git, allowed, agent.worktreeSlot)
 	// Streams forwarded to machines have a hub of their own (they never push
 	// this server's out), closed with the main one and asking the same
 	// device and session stores.

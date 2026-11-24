@@ -1061,6 +1061,15 @@ func TestHerdrTabOps(t *testing.T) {
 	if err := m.CloseTab(ctx, "wR:tK", ""); !errors.As(err, &ie) {
 		t.Errorf("tab_not_found = %v, want inputError", err)
 	}
+	// Herdr asks the user to confirm closing a workspace's last tab: the
+	// close is refused with a code of termote's, not passed as Herdr's text.
+	f.failCode = "confirmation_required"
+	if err := m.CloseTab(ctx, "wR:tK", ""); err != errTabConfirmRequired {
+		t.Errorf("confirmation_required = %v", err)
+	}
+	if err := m.RenameTab(ctx, "wR:t3", "shell", ""); errors.Is(err, errTabConfirmRequired) {
+		t.Errorf("rename mapped a confirmation: %v", err)
+	}
 	f.failCode = "pane_not_found"
 	if err := m.ClosePane(ctx, "wR:p3"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("pane_not_found = %v, want errUnknownPane", err)

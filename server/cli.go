@@ -515,6 +515,7 @@ Commands:
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
                        (native only): list, read, send, wait, answer, stop, diff, start,
                        jobs, job add|show|set [--pr <n>]|ci [--refresh] [--send],
+                       job finish <id> [--close] [--remove-worktree] (after the user's yes),
                        ask add --text [--choice]... [--job], ask list [--all],
                        ask close <Qn> [--answer] (your questions for the user)
   skills <cmd>         The orchestrator skill for Claude Code and Codex, embedded here:
@@ -645,6 +646,9 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              [--pane <pane>]  Change a job; another pane ends every grant it has
   job remove <id>            Remove a done, failed or abandoned job from the ledger, as read (its
                              worktree and branch stay); an unfinished one is refused
+  job finish <id> [--close] [--remove-worktree]  After the user's yes: close the tab of a job you
+                             started, remove the worktree it made (clean, pushed or merged) and
+                             its branch once a merged pull request has its head; review becomes done
   jobs prune [--older-than <duration>] [--dry-run] [--json]  Remove every finished job, or those
                              not changed for --older-than (12h, 7d, 2w); --dry-run lists them
 

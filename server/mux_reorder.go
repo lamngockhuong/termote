@@ -17,6 +17,9 @@ var (
 	errReorderUnsupported = &codedError{"unsupported", "reordering is not supported on this backend", http.StatusNotImplemented}
 	errReorderBusy        = &codedError{"busy", "another move is still running; try again", http.StatusServiceUnavailable}
 	errTabChanged         = &codedError{"changed", "the tab changed; try again", http.StatusConflict}
+	// errTabConfirmRequired: the backend closes the tab only once the user
+	// confirms it in its own window (Herdr's ui.confirm_close).
+	errTabConfirmRequired = &codedError{"tab_confirm_required", "Herdr asks to confirm closing this tab: close it in Herdr or the PWA", http.StatusConflict}
 )
 
 // reorderLockWait bounds the wait for another move to finish; a var so tests

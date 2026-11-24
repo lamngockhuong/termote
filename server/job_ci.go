@@ -608,16 +608,7 @@ func (p *ciPoller) readTarget(ctx context.Context, dir, branch string) (t ciTarg
 		return ciTarget{}, errNoRepo
 	}
 	remotes := strings.Fields(git("remote"))
-	pick := func(names ...string) string {
-		for _, n := range names {
-			if n != "" && remoteNameRe.MatchString(n) && slices.Contains(remotes, n) {
-				return n
-			}
-		}
-		return ""
-	}
-	pushName := pick(git("config", "--get", "branch."+branch+".pushRemote"), git("config", "--get", "remote.pushDefault"),
-		git("config", "--get", "branch."+branch+".remote"), "origin")
+	pushName := pushRemoteName(git, remotes, branch)
 	if pushName == "" {
 		return ciTarget{}, errNoRepo
 	}
@@ -626,12 +617,31 @@ func (p *ciPoller) readTarget(ctx context.Context, dir, branch string) (t ciTarg
 		return ciTarget{}, errNoRepo
 	}
 	repo := push
-	if up := pick("upstream"); up != "" && up != pushName {
+	if up := pickRemote(remotes, "upstream"); up != "" && up != pushName {
 		if r, ok := parseRemoteURL(git("remote", "get-url", up)); ok && r.Host == push.Host {
 			repo = r
 		}
 	}
 	return ciTarget{repo: repo, push: push, branch: branch}, nil
+}
+
+// pushRemoteName is the remote branch is pushed to, as git push picks it
+// (branch.<b>.pushRemote, remote.pushDefault, branch.<b>.remote, origin),
+// among remotes; "" when none of them is one. git runs a git command in the
+// branch's repository and answers its trimmed output, "" on failure.
+func pushRemoteName(git func(args ...string) string, remotes []string, branch string) string {
+	return pickRemote(remotes, git("config", "--get", "branch."+branch+".pushRemote"), git("config", "--get", "remote.pushDefault"),
+		git("config", "--get", "branch."+branch+".remote"), "origin")
+}
+
+// pickRemote is the first of names that is a remote of remotes.
+func pickRemote(remotes []string, names ...string) string {
+	for _, n := range names {
+		if n != "" && remoteNameRe.MatchString(n) && slices.Contains(remotes, n) {
+			return n
+		}
+	}
+	return ""
 }
 
 // checkHost maps an SSH alias (a host without a dot, a Host entry of

@@ -787,7 +787,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   too. A prompt goes in `agent/start`'s body for every kind (the server hands it to the agent at its
   start, see Starting an agent), never through `agent/message`; an answer without `prompt: true`
   (an older server) is reported as a start without it. Text from the server
-  is printed without control, hidden or bidi characters (`cleanOut`, `plainText`)
+  is printed without control, hidden or bidi characters (`cleanOut`, `plainText`). `job finish`
+  refuses before any write when `self` is unknown (psmux, herdr-core: the user cleans up in the
+  PWA), when the job is not `self`'s, not in `review` or finished, or has no worktree it made for
+  `--remove-worktree`, then sends `jobs/{id}/finish` once with the `updated` it read and never again
+  (see Finishing a job)
 - **Job ledger** (`/api/mux/jobs*`, `server/job_store.go`, `server/job_routes.go`,
   `server/job_identity.go`): `<stateDir>/jobs/jobs.json` (dir 0700 checked by `checkPrivateDir`,
   a symlink refused), written as the tasks file is (`jobs.lock`, read again before each change,
@@ -832,7 +836,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
   (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
-  at or above the home dir, and whenever the home dir cannot be found (`jobDirTooWide`). A job's agent is recorded by the server from the
+  at or above the home dir, and whenever the home dir cannot be found (`jobDirTooWide`). The worktree's
+  `made` flag (job finish removes only a worktree with it) is the server's too: set only from a
+  socket request whose `worktree.made` is true (`start --worktree` sends it only for a worktree it
+  made, never one it opened again), kept when a later write names the same folder, dropped when it
+  names another; a job from before the flag has none. A job's agent is recorded by the server from the
   pane's agent lookup (`jobAgentOf`: activity key, kind, pid and process start time, session id);
   it is the same agent only while the key, kind, pid and start time all match, or, where the backend
   finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
@@ -1097,3 +1105,81 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   machine's `gh` reads; a pull request link a machine sends is shown as a link by the PWA only when it is
   `https://<host>/<owner>/<repo>/pull/<n>` of the pull request's own repo and number, compared
   case-insensitively (`safePRUrl`), since a machine may be hostile.
+- **Finishing a job** (`POST /api/mux/jobs/{id}/finish`, `server/job_finish.go`,
+  `server/job_finish_git.go`, `server/cli_agents_finish.go`): `termote agents job finish <id> [--close]
+  [--remove-worktree]` closes the tab of a job its own orchestrator started and removes the worktree
+  the job made, after the user said yes. `requireWriteRole` first, then the local socket only (403
+  `socket_only`: a browser, a paired device and another termote's bridge never reach it, and the
+  bridge is refused before by `machineForbiddenPath` with `machine_forbidden`); a 1 KB body
+  `{updated, by, close, removeWorktree}` (413 `too_large`), at least one of the two and `updated`
+  (400 `invalid_request`). Before anything closes: `by` given (409 `finish_self_unknown`), the job
+  found and `updated` its own (404 `job_not_found`, 409 `job_conflict` with the job), `createdBy`
+  equal to `by` (403 `finish_not_mine`; a job made in the PWA is `pwa`), the job in `review` or
+  finished (409 `finish_job_active`). A new snapshot, past Herdr's cache (`invalidate`), finds the
+  job's pane by its agent's activity key whatever runs there: an agent that is not the job's
+  (`jobAgent.matches`) is 409 `finish_agent_changed`, one working 409 `finish_agent_working`; a pane
+  with no agent left counts only in the job's own workspace and under its recorded `ref` (tmux reuses
+  `%N` and `$N` once restarted), and every pane of its tab must then be a shell at its prompt. The tab must not hold `by`'s pane (409 `finish_self`),
+  and every other pane of it is an idle shell (`taskMux.IdleShell`; a backend without it, or a tab
+  listing more processes than panes, is 409 `finish_tab_busy`). A remove needs the job's worktree
+  (409 `finish_no_worktree`) made by the start that recorded it (`made`, 409
+  `finish_worktree_not_made`), a backend with worktrees (501 `unsupported`); the groups working in it
+  are the backend's list for it (`ListWorktrees` from the worktree's group or the job's workspace,
+  every `groupIDs`) and every group with a pane or process whose folder is in it (`dirInTree`); a
+  backend with worktrees of its own (Herdr) whose list cannot be read is 503 `busy`, one whose list
+  lacks the job's folder 409 `changed`. Any group there but the job tab's, a second tab in it, or a
+  group the backend would remove another worktree of (Herdr: its list does not name the group for
+  the job's folder; tmux, Zellij, herdr-core: the group's first pane, which `RemoveWorktree` takes
+  the worktree from, is not in the job's folder) is 409 `finish_worktree_shared`; `by`'s pane in one, or
+  in the worktree's folder, is 409 `finish_self`; the job's tab in the worktree without `close` is
+  400 `finish_needs_close`, and `close` alone on the last tab of a workspace in the job's worktree
+  400 `finish_needs_remove` (the workspace would go with it). git then reads the worktree
+  (`readFinishTree`, argv through `gitRunner` only): the folder from the ledger, below the home dir
+  (`jobDirTooWide`), a linked worktree whose top is that folder, still on the job's branch (409
+  `changed`, `not_linked`, 404 `not_found`); dirty as the worktree routes count it (409 `dirty`; on
+  Windows a CRLF checkout made by git with Git for Windows' `core.autocrlf` is not dirty, see
+  Worktrees in mux.md);
+  safe only when HEAD is on the branch's push ref (`merge-base --is-ancestor`, the ref read locally:
+  termote never fetches, so a stale ref refuses) or is the head of a merged pull request of the job's
+  that is not `foreign` (409 `worktree_not_pushed`); an ignored `.env*` file anywhere in it
+  (`ls-files --others --ignored` on a `**/.env*` pathspec, a list cut short counting) is 409
+  `finish_worktree_env`. An open ask of the job's is 409 `finish_open_ask`. For a job in `review`
+  with no merged pull request at HEAD known, the job's pull requests are read once
+  (`ciPoller.refresh`) before any lock, waited for 20 s at most (the read goes on in the
+  background); what it says only decides whether the branch goes. Then the agent's pane lock
+  (`muxTimeout` at most, 409 `input_busy`; a pane with no agent takes none) and the worktree slot
+  shared with the worktree routes (`worktreeSlot`, 503 `busy`), always in that order, then the job
+  read again (its state, `createdBy`, agent or worktree changed since the first checks: 409
+  `job_conflict`), and every check again on a new snapshot; for an agent, `sessionNow` past every cache (working 409
+  `finish_agent_working`, blocked or a dialog on a fresh capture 409 `agent_blocked`, Claude Code
+  background work 409 `finish_agent_background`, a turn later than the read mark or another
+  conversation 409 `finish_unread`). Every refusal closes nothing. The close and remove run under a
+  context of their own (`worktreeTimeout` + `muxTimeout`) made once the locks are held: a tab
+  outside the worktree through `Mux.CloseTab` with its key; the worktree through
+  `worktreeMux.RemoveWorktree(group, false)`, which closes the job's tab with its workspace (git
+  still removes with `--force` after termote's dirty check, so ignored files go with it: the skill
+  tells the user before asking); a worktree no group shows any more (a finish whose remove failed
+  after its workspace closed) is removed with git alone (`removeUnopenedWorktree`: git's own list
+  names it linked and unlocked), never opened again. The local branch goes only with a merged pull
+  request at HEAD, from the repository's shared git dir, after the worktree is gone, refused while a
+  worktree has it checked out, and by `update-ref -d refs/heads/<b> <sha>` so a branch that moved
+  stays (`branch_moved`). Herdr's `confirmation_required` for `tab.close` (the last tab of a
+  workspace with `ui.confirm_close` on) is 409 `tab_confirm_required`, never passed through. A remove
+  that fails once the job's tab closed (with its workspace, or on its own before) answers its code
+  with `closed: true`, logs the tab's close and adds a `finish_partial` event; a finish again removes the rest. Then the job: `review` becomes
+  `done` (a `state` event, its grants revoked, `audit: grant_revoked reason=job_finished`), a
+  finished job keeps its state, and a `finished` event with a fixed text names what was done; a
+  ledger write that fails after the close answers 200 `jobUpdated: false`. Audit lines:
+  `job_tab_closed` (job, tab, pane, agent kind or `shell`, by, `peer_pid`), `job_worktree_removed`
+  (job, group, branch, by, `peer_pid`), `job_branch_deleted` (job, branch, 12 hex of the SHA, by,
+  `peer_pid`). git's, tmux's and Herdr's text is logged only; a failure without a code is 500
+  `finish_failed`. Threat model: `by` and `createdBy` are what the CLI says, so any process of the
+  user on the socket (an agent in another pane told to by a prompt injection too) can name the
+  orchestrator's pane: `finish_not_mine` keeps one orchestrator from finishing another's job by
+  mistake, it is no access control, as for `stop` and `send`; what a finish removes is bounded by
+  the checks above (only a clean worktree whose work is pushed or merged, made by the job). Accepted
+  gaps: ignored files go with the worktree (`.env*` refused); the push ref is local and may be stale
+  (it refuses rather than removes); a tab opened through `/api/mux/tabs` between the last check and
+  the close (milliseconds, outside the slot) is closed with the workspace. A server's worst case is
+  about 100 s (20 s CI, 5 s pane lock, 5 s slot, 60 s remove, 5 s close); the CLI waits 120 s and
+  never sends again.

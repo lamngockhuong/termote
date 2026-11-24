@@ -62,6 +62,33 @@ export default {
   'errors.exists': 'Something with this name already exists',
   'errors.file_changed': 'The file changed since it was read',
   'errors.filtered': 'The file goes through a git filter. Use a terminal',
+  'errors.finish_agent_background':
+    'The agent still runs work in the background. Wait for it',
+  'errors.finish_agent_changed': "The job's pane runs another agent now",
+  'errors.finish_agent_working': 'The agent is working. Wait until it stops',
+  'errors.finish_failed': 'Could not clean up the job',
+  'errors.finish_job_active':
+    'Only a job in review, or finished, can be cleaned up',
+  'errors.finish_needs_close': "The job's tab is in the worktree. Close it too",
+  'errors.finish_needs_remove':
+    "This is the last tab of the worktree's workspace. Remove the worktree too",
+  'errors.finish_no_worktree': 'The job has no worktree',
+  'errors.finish_not_mine':
+    'Only the agent that started this job can clean it up here',
+  'errors.finish_open_ask':
+    'A question about this job still waits for an answer',
+  'errors.finish_self':
+    "The job's tab or worktree holds the agent cleaning it up",
+  'errors.finish_self_unknown':
+    'termote cannot tell which pane this runs in. Clean up in the app',
+  'errors.finish_tab_busy': "Another pane of the job's tab runs a program",
+  'errors.finish_unread': "The agent's last answer has not been read yet",
+  'errors.finish_worktree_env':
+    'The worktree holds .env files git ignores, which removing it would delete',
+  'errors.finish_worktree_not_made':
+    'The worktree was there before the job. Remove it from the worktree list',
+  'errors.finish_worktree_shared':
+    'Another workspace or tab works in the worktree',
   'errors.folder_reaches':
     'The folder holds or sits beside entries Windows may follow to another computer. Open it from Windows',
   'errors.full_needs_password':
@@ -203,6 +230,8 @@ export default {
   'errors.step_not_confirmed': 'The tab did not change',
   'errors.storage_full': 'The storage on the host is full',
   'errors.symlink': 'That path, or a folder on it, is a symbolic link',
+  'errors.tab_confirm_required':
+    'Herdr asks to confirm closing this tab. Close it in Herdr',
   'errors.tab_gone': 'The tab was closed',
   'errors.target_changed': 'The agent is no longer in this pane',
   'errors.task_not_found': 'This task no longer exists',
@@ -248,6 +277,8 @@ export default {
   'errors.windows_name':
     'Windows reads this path differently (a \\, comma or similar character)',
   'errors.worktree_failed': 'Could not change the worktree',
+  'errors.worktree_not_pushed':
+    'The worktree has commits that are neither pushed nor merged',
   'errors.zellij_socket_dir':
     'The Zellij socket directory is not private to this user',
   'errors.zellij_version_mismatch':

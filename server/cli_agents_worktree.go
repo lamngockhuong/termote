@@ -75,7 +75,8 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	}
 	b := plainText(branch)
 	var groupID string
-	fresh := true // the workspace is opened by this command
+	fresh := true   // the workspace is opened by this command
+	madeIt := false // the worktree is made by this command
 	switch wt, found := list.find(branch); {
 	case found && !wt.Linked:
 		return startTarget{}, fmt.Errorf("branch %s is the main worktree's; pick a new branch name", b)
@@ -103,6 +104,7 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 		if err != nil {
 			return startTarget{}, err
 		}
+		madeIt = true
 	}
 	// From here the worktree exists: every failure names what stays.
 	if list, err = c.worktreeList(port, g.ID); err != nil {
@@ -112,7 +114,7 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	if !found {
 		return startTarget{}, worktreeStays(errors.New("the worktree is not in the list after it was made"), b, "")
 	}
-	t := startTarget{dir: wt.Path, used: !fresh, worktree: true, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
+	t := startTarget{dir: wt.Path, used: !fresh, worktree: true, made: madeIt, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
 	p, err := c.worktreePane(port, groupID, wt.Path)
 	if err != nil {
 		return startTarget{}, t.note(err)
