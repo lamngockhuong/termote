@@ -117,6 +117,19 @@ describe('grantPrefixProblem', () => {
       'yarn workspace a add evil',
       'bun a evil',
       'npm ADD evil',
+      // npm runs a command from any unique start of its name
+      'npm --prefix pwa exe',
+      'npm cre evil',
+      'npm ini',
+      // config writes the manager's config past the grant, pkg package.json
+      'npm --prefix pwa config set',
+      'npm c',
+      'npm set',
+      'npm conf',
+      'npm pkg set',
+      'pnpm config',
+      'pnpm --filter termote c',
+      'yarn config set',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     for (const p of [
@@ -140,6 +153,12 @@ describe('grantPrefixProblem', () => {
       'pnpm add',
       'yarn install',
       'cargo add serde',
+      'npm in',
+      'npm se react',
+      'npm --prefix pwa test',
+      'npm --prefix pwa run build',
+      'pnpm --filter termote',
+      'yarn workspace a',
     ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })

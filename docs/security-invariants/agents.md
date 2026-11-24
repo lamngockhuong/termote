@@ -861,13 +861,26 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
   exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
   `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
-  init x`; the lists of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
+  init x`; nor `config`, `c` or `set` of `npm`, `pnpm`, `yarn` (`config` only), which write the
+  manager's own config outside the worktree and past the grant, `npm config set
+  node-options=--require=x` loading `x` in every later npm script, nor npm's `pkg`, which writes
+  `package.json`; npm also runs a command from any unique start of its name, `npm exe x` being `npm
+  exec x`, so a word of two letters or more that starts one of npm's is refused too, but `in` and
+  `se`, its aliases of install and search (`delegateAbbrevNames`, the PWA's `ABBREV_NAMES`); the lists
+  of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
   it followed by any word that is no option (`delegateInstallers`, the PWA's `INSTALLERS`: `npm i x`, its
   other aliases of install, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
   runs its install scripts and writes `package.json` and the lockfile, which no edit grant covers; an
   install of the lockfile alone, `npm ci`, `pnpm install --frozen-lockfile`, `pnpm --filter a install`, is
   not refused) (`interpreter`; the same three
-  checks hold a grant's prefix when it is made); the words between the two dashed rules under the header (a wrapped row's leading `│`
+  checks hold a grant's prefix when it is made); pnpm and yarn run a word that is no command of
+  theirs as a script or, without one, as a program (`pnpm --filter a node x.js` runs node), so the
+  word that picks the command (`commandWord`: past options, an option without `=` and not of
+  `delegateFlagOptions` taking the word after it, and past `yarn workspace <name>`) is, when it
+  comes after the grant's prefix, one of `delegateKnownCommands` (`test`, `run`, `install`... ; for
+  yarn not `run`, whose name may be any program of `node_modules/.bin`, so a yarn script name after
+  `run` must be in the prefix too), else `interpreter`; a command the user typed into the prefix
+  (`pnpm --filter a lint`) is theirs; the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
   the prefix and a space (`no_grant`), and no word after the prefix starts with `-` (`option`: a
   granted program runs another through its own options, `rg --pre=x`, `tar --to-command=x`, `go
@@ -883,7 +896,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
   `.opencode`, `.agents`, `.husky`, `.githooks`, `.lefthook`, `.vscode`, `.idea`, `.cargo`,
   `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
-  `AGENTS.md`, `.envrc`, `.env*`, `package.json`, lockfiles, `Makefile`, hook configs, sensitive
+  `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.envrc`, `.env*`, `package.json`, lockfiles,
+  `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
+  `Makefile`, hook configs, sensitive
   names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
@@ -931,7 +946,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   is `https://<host>/<owner>/<repo>/pull/<n>` of that repo, a failed run's id only from a link of
   that repo, check names (written by whoever wrote the workflow, a fork's author for a fork's pull
   request: a prompt-injection surface) in `[A-Za-z0-9 ._:/()[]#+-]` (anything else `?`), 100
-  runes, 10 per pull request, quoted in a message the user sends and left out of one the server sends under a grant; a pull request whose head is not the
+  runes, 10 per pull request, quoted in a message sent from the PWA (whose user saw them) or the CLI
+  (`job ci <id> --send`, whose orchestrator `job ci` printed them) and left out of one the server
+  sends under a grant (the agent can read them with `gh pr checks` either way); a pull request whose head is not the
   job's pushed repo is `foreign`. The poller (`ciPoller`, native only: not in a container, where
   the list says `ciAvailable: false` and no summary is shown) reads each unfinished job every 20 s
   to 5 minutes, one read per job at a time, and writes it in one change under `jobs.lock`

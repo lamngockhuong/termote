@@ -75,13 +75,20 @@ const VERSIONED = /^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
 // x, also after options (pnpm -s exec x, pnpm --filter a exec x), so it is
 // refused at any position after the program's name (delegateRunners).
 // create and init fetch and run a create-* package (npm init vite is npm
-// exec create-vite; innit is npm's alias)
+// exec create-vite; innit is npm's alias). config, c and set write the
+// manager's own config past the grant, npm's pkg writes package.json
 const RUNNERS: Record<string, string[]> = {
-  npm: ['exec', 'x', 'create', 'init', 'innit'],
-  pnpm: ['dlx', 'exec', 'x', 'create'],
-  yarn: ['dlx', 'exec', 'create'],
+  npm: ['exec', 'x', 'create', 'init', 'innit', 'config', 'c', 'set', 'pkg'],
+  pnpm: ['dlx', 'exec', 'x', 'create', 'config', 'c', 'set'],
+  yarn: ['dlx', 'exec', 'create', 'config'],
   bun: ['x', 'create'],
 }
+
+// npm runs a command from any unique start of its name (npm exe x is npm
+// exec x): a word of two letters or more that starts one of its runner
+// words is refused too, but for these, its own commands' aliases
+// (delegateAbbrevNames)
+const ABBREV_NAMES = ['in', 'se']
 
 // Package managers' words that install the packages named after them
 // (delegateInstallers): refused when any word after one is no option (npm
@@ -114,10 +121,12 @@ const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 // empty: nothing typed; length: longer than the server takes; chars: a
 // character or a spacing it refuses; interpreter: a first word (or a
 // package manager's runner word, at any position, or its install word
-// followed by a package) that runs any code at all. The server also refuses a command whose words after the prefix
-// start with -, or, under a prefix of tar's name alone, has tar's first
-// argument (option letters even without a dash), which a prefix alone
-// cannot show.
+// followed by a package) that runs any code at all. The server also
+// refuses, which a prefix alone cannot show: a command whose words after
+// the prefix start with -; under a prefix of tar's name alone, tar's
+// first argument (option letters even without a dash); and a pnpm or yarn
+// command whose word picking the command comes after the prefix and is no
+// command of theirs (they run it as a program).
 export type PrefixProblem = 'empty' | 'length' | 'chars' | 'interpreter'
 
 // What is wrong with prefix, or null when the server would take it. The
@@ -138,8 +147,17 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   if (INTERPRETERS.has(first) || VERSIONED.test(first)) return 'interpreter'
   if (Object.hasOwn(RUNNERS, first)) {
     const runs = RUNNERS[first]
-    if (words.slice(1).some((w) => runs.includes(w.toLowerCase())))
-      return 'interpreter'
+    for (const w of words.slice(1)) {
+      const lw = w.toLowerCase()
+      if (runs.includes(lw)) return 'interpreter'
+      if (
+        first === 'npm' &&
+        lw.length >= 2 &&
+        !ABBREV_NAMES.includes(lw) &&
+        runs.some((r) => r.startsWith(lw))
+      )
+        return 'interpreter'
+    }
   }
   if (Object.hasOwn(INSTALLERS, first)) {
     const inst = INSTALLERS[first]

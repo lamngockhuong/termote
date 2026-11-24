@@ -48,11 +48,65 @@ var delegateInterpreters = []string{
 // "pnpm --filter a exec x"), so the word is refused at any position after
 // the program's name. create and init fetch and run a create-* package
 // ("npm init vite" is "npm exec create-vite"; innit is npm's alias).
+// config, c and set write the manager's own config, outside the worktree
+// and past the grant ("npm config set node-options=--require=x" loads x in
+// every later npm script), and npm's pkg writes package.json, which no
+// edit grant covers.
 var delegateRunners = map[string][]string{
-	"npm":  {"exec", "x", "create", "init", "innit"},
-	"pnpm": {"dlx", "exec", "x", "create"},
-	"yarn": {"dlx", "exec", "create"},
+	"npm":  {"exec", "x", "create", "init", "innit", "config", "c", "set", "pkg"},
+	"pnpm": {"dlx", "exec", "x", "create", "config", "c", "set"},
+	"yarn": {"dlx", "exec", "create", "config"},
 	"bun":  {"x", "create"},
+}
+
+// delegateAbbrevNames are the exact words npm takes for one of its own
+// commands although they start a runner word of its: npm also runs a
+// command from any unique start of its name ("npm exe x" is "npm exec
+// x"), so another word of two letters or more that starts one is refused
+// too ("in" is install's alias, "se" search's).
+var delegateAbbrevNames = []string{"in", "se"}
+
+// delegateKnownCommands are the commands of pnpm and yarn a delegated
+// command may name after the grant's prefix: both run a word that is no
+// command of theirs as a script or, without one, as a program ("pnpm
+// --filter a node x.js" runs node), so the word that picks the command is
+// one of these unless the user typed it into the prefix. yarn has no run
+// here: "yarn run <name>" runs any program of node_modules/.bin too.
+var delegateKnownCommands = map[string][]string{
+	"pnpm": {"add", "audit", "bin", "dedupe", "fetch", "i", "install", "install-test", "it", "licenses", "list", "ls",
+		"outdated", "pack", "prune", "rb", "rebuild", "remove", "rm", "root", "run", "run-script", "start", "store",
+		"t", "test", "tst", "un", "uninstall", "unlink", "up", "update", "upgrade", "why"},
+	"yarn": {"add", "audit", "info", "install", "licenses", "list", "outdated", "pack", "remove", "start", "test",
+		"up", "upgrade", "why"},
+}
+
+// delegateFlagOptions are pnpm's and yarn's options that take no value.
+// Any other option without "=" is taken to take the word after it, so the
+// word picking the command is never mistaken for an option's value the
+// user typed.
+var delegateFlagOptions = []string{"-r", "--recursive", "-s", "--silent", "-w", "--workspace-root", "--parallel",
+	"--stream", "--if-present", "--aggregate-output", "--bail", "--no-bail", "--sequential", "--color", "--no-color",
+	"--frozen-lockfile", "--prod", "--dev", "--offline", "--prefer-offline", "--reverse", "--include-workspace-root",
+	"-D", "-P", "-O"}
+
+// commandWord is the index in words (a pnpm or yarn command) of the word
+// that picks its command, past options and their values ("yarn workspace
+// <name>" is skipped too), or -1 when none does.
+func commandWord(words []string, first string) int {
+	for i := 1; i < len(words); i++ {
+		w := words[i]
+		switch {
+		case strings.HasPrefix(w, "-"):
+			if !strings.Contains(w, "=") && !slices.Contains(delegateFlagOptions, w) {
+				i++
+			}
+		case first == "yarn" && strings.ToLower(w) == "workspace":
+			i++
+		default:
+			return i
+		}
+	}
+	return -1
 }
 
 // delegateInstallers are package managers' words that install the
@@ -111,7 +165,12 @@ func checkDelegateCommand(cmd, prefix string) string {
 	}
 	if runs, ok := delegateRunners[first]; ok {
 		for _, w := range words[1:] {
-			if slices.Contains(runs, strings.ToLower(w)) {
+			lw := strings.ToLower(w)
+			if slices.Contains(runs, lw) {
+				return "interpreter"
+			}
+			if first == "npm" && len(lw) >= 2 && !slices.Contains(delegateAbbrevNames, lw) &&
+				slices.ContainsFunc(runs, func(r string) bool { return strings.HasPrefix(r, lw) }) {
 				return "interpreter"
 			}
 		}
@@ -138,6 +197,19 @@ func checkDelegateCommand(cmd, prefix string) string {
 			return "option"
 		}
 	}
+	// pnpm and yarn run a word that is no command of theirs as a program:
+	// one the user did not type in the prefix must be a known command, and
+	// yarn's name after run must be the user's too.
+	if known, ok := delegateKnownCommands[first]; ok {
+		n := len(strings.Fields(prefix))
+		k := commandWord(words, first)
+		if k >= n && !slices.Contains(known, strings.ToLower(words[k])) {
+			return "interpreter"
+		}
+		if first == "yarn" && k >= 0 && strings.ToLower(words[k]) == "run" && k+1 >= n && k+1 < len(words) {
+			return "interpreter"
+		}
+	}
 	// A prefix of the program's name alone leaves its first argument to
 	// the command: for tar that word is an option bundle, dash or not.
 	if slices.Contains(delegateBundledOptions, first) && len(strings.Fields(prefix)) == 1 && len(words) > 1 {
@@ -162,6 +234,10 @@ var delegateDeniedNames = []string{
 	"go.sum", "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "uv.lock",
 	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", "lefthook.yml", ".lefthook.yml", ".pre-commit-config.yaml",
 	"lefthook-local.yml", ".lefthook-local.yml", "opencode.json", "opencode.jsonc",
+	// Claude Code and Codex read these as instructions too.
+	"claude.local.md", "agents.override.md",
+	// The package managers run or read these when they install.
+	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
 }
 
 // delegateDeniedDirs are directories nothing under which a grant covers
