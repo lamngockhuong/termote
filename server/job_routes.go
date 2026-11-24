@@ -526,7 +526,9 @@ func (a *agentAPI) jobTreeFor(r *http.Request, in *jobWorktreeInput) (*jobTree, 
 	return nil, invalidJob("no such worktree")
 }
 
-// jobDirTooWide: dir is the home dir or holds it (or is not absolute).
+// jobDirTooWide: dir is the home dir or holds it (or is not absolute). A
+// home dir that cannot be found leaves nothing to compare with: every dir
+// is too wide then.
 func jobDirTooWide(dir, home string) bool {
 	dir = filepath.Clean(dir)
 	if !filepath.IsAbs(dir) || filepath.Dir(dir) == dir { // a root: / or C:\
@@ -538,7 +540,7 @@ func jobDirTooWide(dir, home string) bool {
 		}
 	}
 	if home == "" {
-		return false
+		return true
 	}
 	home = filepath.Clean(home)
 	rel, err := filepath.Rel(dir, home)

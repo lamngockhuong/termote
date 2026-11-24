@@ -527,6 +527,13 @@ func TestJobDirTooWide(t *testing.T) {
 			t.Errorf("%s: %v", dir, got)
 		}
 	}
+	// No home dir to compare with: refused, not let through.
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("home", "")
+	if !jobDirTooWide(filepath.Join(root, "srv", "x"), "") {
+		t.Error("a dir passed without a home dir")
+	}
 }
 
 // The worktree of a job is the server's own list's, never a path the

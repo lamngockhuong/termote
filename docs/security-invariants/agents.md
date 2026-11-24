@@ -815,7 +815,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
   (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
-  at or above the home dir (`jobDirTooWide`). A job's agent is recorded by the server from the
+  at or above the home dir, and whenever the home dir cannot be found (`jobDirTooWide`). A job's agent is recorded by the server from the
   pane's agent lookup (`jobAgentOf`: activity key, kind, pid and process start time, session id);
   it is the same agent only while the key, kind, pid and start time all match, or, where the backend
   finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
@@ -942,7 +942,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, with prompts, pager, colour and the update
   check off. The repository is one `--repo=host/owner/repo` argument the server works out itself:
   the job's worktree dir (else the job agent's folder the first time, the result kept on the job,
-  refused at or above home by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
+  refused at or above home, or with no home dir found, by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
   read with its `gitRunner` (`checkRoot`, hooks and fsmonitor off): the branch's push remote and
   an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
   repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias
