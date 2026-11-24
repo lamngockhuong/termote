@@ -79,6 +79,41 @@ describe('JobCISection', () => {
     expect(screen.getByText(/Checked/)).toBeTruthy()
   })
 
+  it('links a pull request only by an https link to its own number', () => {
+    const one = (url: string) =>
+      job({
+        ci: {
+          repo: 'github.com/o/r',
+          prs: [
+            {
+              number: 12,
+              repo: 'github.com/o/r',
+              state: 'open',
+              checks: 'pass',
+              url,
+            },
+          ],
+        },
+      })
+    for (const url of [
+      'javascript:alert(1)//pull/12',
+      'http://github.com/o/r/pull/12',
+      'https://github.com/o/r/pull/13',
+      'https://evil.example/o/r/pull/12',
+    ]) {
+      const { unmount } = render(<JobCISection job={one(url)} now={NOW} />)
+      expect(screen.queryByRole('link')).toBeNull()
+      unmount()
+    }
+    render(
+      <JobCISection job={one('https://github.com/o/r/pull/12')} now={NOW} />,
+    )
+    expect(screen.getByRole('link')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/12',
+    )
+  })
+
   it('sends the failed checks and says whether the agent queued them', async () => {
     mockRun.mockResolvedValue({ job: job(), queued: true })
     render(<JobCISection job={job()} now={NOW} />)

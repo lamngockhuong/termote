@@ -34,6 +34,7 @@ vi.mock('./use-agent-overview', () => ({
   },
 }))
 
+import { setCurrentMachineForTest } from '../utils/api-base'
 import {
   addJob,
   answerQuestion,
@@ -282,6 +283,86 @@ describe('useJobs', () => {
     expect(result.current.asksReadOnly).toBe(true)
     await act(() => reloadJobs())
     expect(result.current).toMatchObject({ asks: [], asksReadOnly: false })
+  })
+
+  it('tells a machine without the ledger from every other failure', async () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      api.fetchAsks.mockResolvedValue(asks([]))
+      api.fetchJobs
+        .mockRejectedValueOnce(new RequestError(404, '', 'not found'))
+        .mockRejectedValueOnce(refusal('machine_route_forbidden', 404))
+        .mockRejectedValueOnce(refusal('jobs_unavailable', 503))
+        .mockResolvedValueOnce(list([job('a')]))
+        .mockRejectedValueOnce(refusal('machine_offline', 502))
+        .mockRejectedValueOnce(new RequestError(404, '', 'not found'))
+        .mockResolvedValueOnce(list([job('b')]))
+      const { result } = renderHook(() => useJobs())
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        outdated: true,
+        unavailable: false,
+      })
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        outdated: false,
+        unavailable: true,
+      })
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        outdated: false,
+        unavailable: true,
+      })
+      await act(() => reloadJobs())
+      // Offline: an error, the jobs read before kept
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        jobs: [job('a')],
+        error: true,
+        outdated: false,
+        unavailable: false,
+      })
+      await act(() => reloadJobs())
+      expect(result.current.outdated).toBe(true)
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        jobs: [job('b')],
+        outdated: false,
+      })
+    } finally {
+      setCurrentMachineForTest('')
+    }
+  })
+
+  it('reads a 404 without a code on this server as no ledger', async () => {
+    api.fetchAsks.mockResolvedValue(asks([]))
+    api.fetchJobs.mockRejectedValueOnce(new RequestError(404, '', 'not found'))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+    expect(result.current).toMatchObject({ outdated: false, unavailable: true })
+  })
+
+  it('tells a machine without the asks, until it has them', async () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      api.fetchJobs.mockResolvedValue(list([job('a')]))
+      api.fetchAsks
+        .mockRejectedValueOnce(new RequestError(404, '', 'not found'))
+        .mockRejectedValueOnce(refusal('jobs_unavailable', 503))
+        .mockResolvedValueOnce(asks([ask('Q1')]))
+      const { result } = renderHook(() => useJobs())
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({ asksOutdated: true, asks: [] })
+      await act(() => reloadJobs())
+      expect(result.current.asksOutdated).toBe(false)
+      await act(() => reloadJobs())
+      expect(result.current).toMatchObject({
+        asksOutdated: false,
+        asks: [ask('Q1')],
+      })
+    } finally {
+      setCurrentMachineForTest('')
+    }
   })
 
   it('has no asks on a server without them (404)', async () => {

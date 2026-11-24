@@ -1,4 +1,11 @@
-import { ChevronDown, CircleCheck, ListTodo, Plus, X } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleArrowUp,
+  CircleCheck,
+  ListTodo,
+  Plus,
+  X,
+} from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useJobs } from '../hooks/use-jobs'
 import type { Job } from '../hooks/use-mux-api'
@@ -123,6 +130,29 @@ export function OverviewJobs({
     if (activityOpen) setSelectedId(null)
   }, [activityOpen])
 
+  // A machine whose Termote keeps no ledger yet: what to run there, and
+  // nothing to change here
+  if (store.outdated)
+    return (
+      <section aria-labelledby={titleId} className="flex flex-col pb-4">
+        <h3 id={titleId} className="sr-only">
+          {t('jobs.title')}
+        </h3>
+        <div className="flex flex-col items-center gap-1.5 rounded-panel border border-dashed border-border-strong px-4 py-8 text-center">
+          <CircleArrowUp
+            size={22}
+            aria-hidden="true"
+            className="text-fg-subtle"
+          />
+          <p className="m-0 mt-1 font-medium text-fg">
+            {t('jobs.outdated.title')}
+          </p>
+          <p className="m-0 text-[12px] text-fg-muted">
+            {t('jobs.outdated.hint')}
+          </p>
+        </div>
+      </section>
+    )
   if (store.unavailable || (!store.loaded && !store.error)) return null
   const groups = groupJobs(store.jobs)
   // An ask's job opens as its card would, never closed by it
@@ -256,6 +286,7 @@ export function OverviewJobs({
         <OverviewAsks
           asks={store.asks}
           readOnly={!canWrite || store.asksReadOnly}
+          outdated={store.asksOutdated}
           now={now}
           onOpenJob={canWrite ? openJob : undefined}
           openableJobs={new Set(store.jobs.map((j) => j.id))}
