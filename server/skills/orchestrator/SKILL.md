@@ -147,6 +147,8 @@ workspace>", never the prompt, because the user's view-only devices see titles).
   looked at it and said so.
 - The ledger is the user's history: remove jobs (`job remove`, `jobs prune`) only when the user
   asks. Only finished ones go; an unfinished job is refused until `job set <id> --state abandoned`.
+  The server itself removes a finished job not changed for 30 days at the next change to the
+  ledger, and the oldest finished one when the ledger holds 200 jobs and one is added.
 - Pull requests: the agent pushes and opens them; termote and you never open, merge or close
   one. The server follows the pull requests of each job's branch with the user's `gh` login
   (`jobs` shows the worst one, `job ci <id>` each one and its failed checks; `--refresh` reads

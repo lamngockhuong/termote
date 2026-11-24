@@ -340,6 +340,10 @@ không, nhánh được giữ và lệnh nói rõ lý do. Nếu tab đã đóng 
 điều đó; chạy lại đúng lệnh ấy sẽ xóa nốt. Trên psmux và herdr-core, termote không biết lệnh chạy
 trong pane nào nên từ chối: hãy đóng tab và xóa worktree trong PWA.
 
+Termote cũng tự xóa việc đã kết thúc: việc không đổi trong 30 ngày bị xóa ở lần sổ việc thay đổi tiếp
+theo (sửa việc ấy thì nó được giữ lại), và khi sổ đã đủ 200 việc, thêm một việc mới sẽ xóa trước việc
+đã kết thúc cũ nhất. `job remove` và `jobs prune` dùng để xóa sớm hơn.
+
 ## Dừng
 
 `stop` dừng lượt mà agent đang làm, như khi bấm Esc trong terminal của nó. Lệnh cần `cursor` lấy từ
