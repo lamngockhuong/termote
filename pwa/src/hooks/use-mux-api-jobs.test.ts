@@ -56,6 +56,8 @@ describe('job requests', () => {
       canGrant: true,
       ciAvailable: true,
       jobFields: ['priority', 'after', 'workspace'],
+      finishedKeepSeconds: 2592000,
+      jobsMax: 200,
     })
     expect(await fetchJobs()).toEqual({
       jobs: [JOB],
@@ -64,6 +66,8 @@ describe('job requests', () => {
       canGrant: true,
       ciAvailable: true,
       jobFields: ['priority', 'after', 'workspace'],
+      finishedKeepMs: 2592000000,
+      jobsMax: 200,
     })
     expect(sent[0]).toEqual({ url: '/api/mux/jobs?all=1', method: 'GET' })
   })
@@ -76,6 +80,8 @@ describe('job requests', () => {
       serverNow: '',
       canGrant: false,
       ciAvailable: false,
+      finishedKeepMs: null,
+      jobsMax: null,
       jobFields: [],
     })
   })
@@ -125,6 +131,18 @@ describe('job requests', () => {
       method: 'PATCH',
       body: { priority: 'normal', after: [], workspace: '', updated: 'u1' },
     })
+  })
+
+  it('takes a keep time and a job limit only as counts above zero', async () => {
+    for (const bad of ['30', 0, -1, Number.NaN, null, true]) {
+      mockFetch({ jobs: [], finishedKeepSeconds: bad, jobsMax: bad })
+      expect(await fetchJobs()).toMatchObject({
+        finishedKeepMs: null,
+        jobsMax: null,
+      })
+    }
+    mockFetch({ jobs: [], finishedKeepSeconds: 0.5, jobsMax: 3 })
+    expect(await fetchJobs()).toMatchObject({ finishedKeepMs: 500, jobsMax: 3 })
   })
 
   it('throws the refusal of a read', async () => {

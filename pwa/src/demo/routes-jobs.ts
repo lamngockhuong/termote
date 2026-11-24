@@ -154,6 +154,9 @@ const list: Handler = (req) => {
     canGrant: true,
     ciAvailable: true,
     jobFields: JOB_FIELDS,
+    // As a real server says; the demo removes nothing
+    finishedKeepSeconds: 30 * 24 * 60 * 60,
+    jobsMax: 200,
   })
 }
 

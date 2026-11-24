@@ -226,3 +226,29 @@ export function safePRUrl(
     ? url
     : undefined
 }
+
+const DAY_MS = 86_400_000
+// A finished job this close to its keep time is marked on its row
+export const EXPIRY_WARN_MS = 3 * DAY_MS
+
+// When a finished job may go: the server drops one not changed for
+// finishedKeepMs at the next write to the ledger (a change to the job keeps
+// it), so this tells how far that is, never a date. soon: within
+// EXPIRY_WARN_MS, in whole days rounded up; due: past it, gone at the next
+// write. null when the job is unfinished, its time unreadable, the time far
+// off or the server keeps no limit.
+export type JobExpiry = { kind: 'soon'; days: number } | { kind: 'due' }
+
+export function jobExpiry(
+  job: Job,
+  finishedKeepMs: number | null,
+  now: number,
+): JobExpiry | null {
+  if (finishedKeepMs === null || !jobFinished(job.state)) return null
+  const at = Date.parse(job.updated)
+  if (Number.isNaN(at)) return null
+  const left = at + finishedKeepMs - now
+  if (left <= 0) return { kind: 'due' }
+  if (left > EXPIRY_WARN_MS) return null
+  return { kind: 'soon', days: Math.ceil(left / DAY_MS) }
+}

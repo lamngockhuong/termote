@@ -7,6 +7,7 @@ import {
   grantUsed,
   groupJobs,
   jobDependents,
+  jobExpiry,
   jobFinished,
   jobPaneRef,
   jobsByWorkspace,
@@ -297,5 +298,52 @@ describe('workspaces', () => {
       { workspace: 'w1', jobs: [job('x', { workspace: 'w1' })] },
     ])
     expect(jobsByWorkspace([])).toEqual([])
+  })
+})
+
+describe('jobExpiry', () => {
+  const DAY = 86_400_000
+  const KEEP = 30 * DAY
+  const at = Date.parse('2026-11-23T00:00:00Z')
+  const done = job('d', { state: 'done' })
+  // now when left ms remain of the keep time
+  const left = (ms: number) => at + KEEP - ms
+
+  it('says nothing while the keep time is far off', () => {
+    expect(jobExpiry(done, KEEP, left(10 * DAY))).toBeNull()
+    expect(jobExpiry(done, KEEP, left(3 * DAY + 1))).toBeNull()
+  })
+
+  it('counts whole days left, rounded up, within three days', () => {
+    expect(jobExpiry(done, KEEP, left(3 * DAY))).toEqual({
+      kind: 'soon',
+      days: 3,
+    })
+    expect(jobExpiry(done, KEEP, left(2.1 * DAY))).toEqual({
+      kind: 'soon',
+      days: 3,
+    })
+    expect(jobExpiry(done, KEEP, left(3_600_000))).toEqual({
+      kind: 'soon',
+      days: 1,
+    })
+  })
+
+  it('is due once the keep time has passed', () => {
+    expect(jobExpiry(done, KEEP, left(0))).toEqual({ kind: 'due' })
+    expect(jobExpiry(done, KEEP, left(-DAY))).toEqual({ kind: 'due' })
+  })
+
+  it('says nothing of an unfinished job, an unreadable time or no limit', () => {
+    for (const state of ['failed', 'abandoned'] as const) {
+      expect(jobExpiry(job('f', { state }), KEEP, left(0))).toEqual({
+        kind: 'due',
+      })
+    }
+    expect(jobExpiry(job('t', { state: 'active' }), KEEP, left(0))).toBeNull()
+    expect(
+      jobExpiry(job('u', { state: 'done', updated: '' }), KEEP, left(0)),
+    ).toBeNull()
+    expect(jobExpiry(done, null, left(0))).toBeNull()
   })
 })

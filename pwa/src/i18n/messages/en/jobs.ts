@@ -23,6 +23,12 @@ export default {
   'jobs.group.review': 'To review · {count}',
   'jobs.group.todo': 'To do · {count}',
   'jobs.group.finished': 'Finished · {count}',
+  // With the finished jobs that may be removed soon or are past their keep
+  // time counted: "Finished · 16 · 2 expire soon"
+  'jobs.group.finishedExpiring_one':
+    'Finished · {total} · {count} expires soon',
+  'jobs.group.finishedExpiring_other':
+    'Finished · {total} · {count} expire soon',
   'jobs.waitingNone': 'No job waits for you',
   // Above the columns: "2 open jobs · To review 0 · To do 0", the groups
   // with no job named with their 0
@@ -49,6 +55,26 @@ export default {
   'jobs.priority.high': 'High priority',
   'jobs.priority.normal': 'Normal priority',
   'jobs.priority.low': 'Low priority',
+  // Above the finished jobs' table: the server's two rules for removing
+  // them, never a date (the next change to the ledger removes them)
+  'jobs.finishedKeep_one':
+    'A finished job not changed for {count} day is removed at the next change to the plan; changing a job keeps it.',
+  'jobs.finishedKeep_other':
+    'A finished job not changed for {count} days is removed at the next change to the plan; changing a job keeps it.',
+  'jobs.finishedCap':
+    'When the plan holds {max} jobs, the oldest finished one is removed first to make room.',
+  // Under a finished job's Updated time, and in its details
+  'jobs.expiry.soon_one': 'may be removed in {count} day',
+  'jobs.expiry.soon_other': 'may be removed in {count} days',
+  'jobs.expiry.due': 'awaiting removal',
+  'jobs.expiry.soonLong_one':
+    'This job may be removed in {count} day unless it changes',
+  'jobs.expiry.soonLong_other':
+    'This job may be removed in {count} days unless it changes',
+  'jobs.expiry.dueLong':
+    'Past its keep time: this job is removed at the next change to the plan, unless you change it',
+  'jobs.expiry.dueLongNoEdit':
+    'Past its keep time: this job is removed at the next change to the plan',
   // A job's state, as the ledger keeps it
   'jobs.state.todo': 'To do',
   'jobs.state.active': 'Active',

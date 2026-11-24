@@ -133,6 +133,27 @@ describe('useJobs', () => {
     expect(result.current.clockOffset).toBe(0)
   })
 
+  it('keeps the keep time and job limit a read gave, none when missing', async () => {
+    api.fetchJobs
+      .mockResolvedValueOnce(list([]))
+      .mockResolvedValueOnce(list([], { finishedKeepMs: 5000, jobsMax: 9 }))
+      .mockRejectedValueOnce(new Error('down'))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+    expect(result.current).toMatchObject({
+      finishedKeepMs: null,
+      jobsMax: null,
+    })
+    await act(() => reloadJobs())
+    expect(result.current).toMatchObject({ finishedKeepMs: 5000, jobsMax: 9 })
+    await act(() => reloadJobs())
+    expect(result.current).toMatchObject({
+      finishedKeepMs: 5000,
+      jobsMax: 9,
+      error: true,
+    })
+  })
+
   it('keeps the last read through a failure, and hides on no ledger', async () => {
     api.fetchJobs
       .mockResolvedValueOnce(list([job('a')]))
