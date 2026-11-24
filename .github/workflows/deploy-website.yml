@@ -98,7 +98,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 12.14.0
+          version: 12.22.0
 
       # No cache: called from a release run, it shares the cache
       # any CI job on main can write.
