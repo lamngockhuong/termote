@@ -63,7 +63,7 @@
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
-    "shiki": "4.5.0",
+    "shiki": "4.6.0",
     "workbox-window": "7.4.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
