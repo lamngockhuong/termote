@@ -866,7 +866,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
   (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
   no variable set before the program (`X=1 bash`, what `env` does: `interpreter`), and its first word
-  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
+  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`; `gawk`, `mawk`, `gmake` as
+  `awk` and `make`) of the one list
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
   `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
@@ -911,12 +912,19 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
   short name or stream, nothing case folding or Windows maps onto another name), not a
   denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
-  `.opencode`, `.agents`, `.husky`, `.githooks`, `.lefthook`, `.vscode`, `.idea`, `.cargo`,
+  `.opencode`, `.agents`, `.gemini`, `.cursor`, `.devcontainer`, `.husky`, `.githooks`, `.lefthook`,
+  `.vscode`, `.idea`, `.cargo`,
   `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
-  `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.envrc`, `.env*`, `package.json`, lockfiles,
+  `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, `mise.toml`, `.mise.toml`, `.exrc`,
+  `.nvim.lua`, `Directory.Build.props`, `Directory.Build.targets`, `.envrc`, `.env*`, `package.json`, lockfiles,
   `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
   `Makefile`, hook configs, sensitive
-  names by `isSensitive`: `denied_path`), and no component on the way, the last included, is a
+  names by `isSensitive`: `denied_path`), not a file a git hook of the grant's directory runs
+  (`checkDelegateHook`: a word naming a script, `.sh`, `.js`, `.mjs`, `.py`..., in a lefthook config
+  of any extension, `.pre-commit-config.yaml` or a script of `.husky` at that directory's root, 64
+  KB of each and 64 of `.husky`'s, matched by the end of the path, `../scripts/x.sh` denying every
+  `scripts/x.sh`, since it would run at the user's next commit, past the grant: `denied_path`; what
+  such a script runs in turn is not followed), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path

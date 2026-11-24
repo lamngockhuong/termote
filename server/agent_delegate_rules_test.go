@@ -173,6 +173,9 @@ func TestCheckDelegateCommand(t *testing.T) {
 		{"stdbuf -o0 sh", "", "interpreter"},
 		{"gdb -batch", "", "interpreter"},
 		{"java Foo", "", "interpreter"},
+		{"gawk x", "", "interpreter"},
+		{"mawk x", "", "interpreter"},
+		{"gmake x", "", "interpreter"},
 		// tar's old option style under a prefix of its name alone.
 		{"tar cIf sh out.tar notes.txt", "tar", "option"},
 		{"yarn init", "", ""},
@@ -238,56 +241,66 @@ func TestCheckDelegateCommand(t *testing.T) {
 
 func TestCheckDelegatePath(t *testing.T) {
 	for rel, want := range map[string]string{
-		"src/app.ts":                   "",
-		"README.md":                    "",
-		"docs/guide.md":                "",
-		".claude/settings.local.json":  "denied_path",
-		"sub/.claude/settings.json":    "denied_path",
-		".git/hooks/pre-commit":        "denied_path",
-		"sub/.git":                     "denied_path",
-		".mcp.json":                    "denied_path",
-		"CLAUDE.md":                    "denied_path",
-		"docs/claude.md":               "denied_path",
-		"AGENTS.md":                    "denied_path",
-		"CLAUDE.local.md":              "denied_path",
-		"sub/AGENTS.override.md":       "denied_path",
-		"lefthook.yaml":                "denied_path",
-		".lefthook-local.toml":         "denied_path",
-		"lefthook.json":                "denied_path",
-		".pnpmfile.cjs":                "denied_path",
-		".pnpmfile.mjs":                "denied_path",
-		"pnpm-workspace.yaml":          "denied_path",
-		".yarnrc.yaml":                 "denied_path",
-		"bunfig.toml":                  "denied_path",
-		"package.json":                 "denied_path",
-		"web/package.json":             "denied_path",
-		"pnpm-lock.yaml":               "denied_path",
-		"Makefile":                     "denied_path",
-		".env":                         "denied_path",
-		".env.local":                   "denied_path",
-		".envrc":                       "denied_path",
-		".husky/pre-commit":            "denied_path",
-		".githooks/pre-push":           "denied_path",
-		".vscode/settings.json":        "denied_path",
-		".github/workflows/ci.yml":     "denied_path",
-		"node_modules/x/index.js":      "denied_path",
-		"lefthook.yml":                 "denied_path",
-		"keys/id_rsa":                  "denied_path",
-		"../outside.txt":               "denied_path",
-		"a/../../outside.txt":          "denied_path",
-		"/etc/passwd":                  "denied_path",
-		"":                             "denied_path",
-		".github/ISSUE_TEMPLATE/x.md":  "",
-		"GIT~1/hooks/pre-commit":       "denied_path",
-		"package.json.":                "denied_path",
-		"package.json ":                "denied_path",
-		"src/a.ts:stream":              "denied_path",
-		"AGENT\u017f.md":               "denied_path",
-		".lefthook/x.yml":              "denied_path",
-		".codex/config.toml":           "denied_path",
-		".github/actions/x/action.yml": "denied_path",
-		"lefthook-local.yml":           "denied_path",
-		"src/.envelope/not-an-env.txt": "",
+		"src/app.ts":                      "",
+		"README.md":                       "",
+		"docs/guide.md":                   "",
+		".claude/settings.local.json":     "denied_path",
+		"sub/.claude/settings.json":       "denied_path",
+		".git/hooks/pre-commit":           "denied_path",
+		"sub/.git":                        "denied_path",
+		".mcp.json":                       "denied_path",
+		"CLAUDE.md":                       "denied_path",
+		"docs/claude.md":                  "denied_path",
+		"AGENTS.md":                       "denied_path",
+		"CLAUDE.local.md":                 "denied_path",
+		"sub/AGENTS.override.md":          "denied_path",
+		"lefthook.yaml":                   "denied_path",
+		".lefthook-local.toml":            "denied_path",
+		"lefthook.json":                   "denied_path",
+		".pnpmfile.cjs":                   "denied_path",
+		".pnpmfile.mjs":                   "denied_path",
+		"pnpm-workspace.yaml":             "denied_path",
+		".yarnrc.yaml":                    "denied_path",
+		"bunfig.toml":                     "denied_path",
+		"GEMINI.md":                       "denied_path",
+		".gemini/settings.json":           "denied_path",
+		".cursor/rules.md":                "denied_path",
+		".devcontainer/devcontainer.json": "denied_path",
+		"mise.toml":                       "denied_path",
+		".mise.toml":                      "denied_path",
+		".exrc":                           "denied_path",
+		".nvim.lua":                       "denied_path",
+		"Directory.Build.props":           "denied_path",
+		"sub/Directory.Build.targets":     "denied_path",
+		"package.json":                    "denied_path",
+		"web/package.json":                "denied_path",
+		"pnpm-lock.yaml":                  "denied_path",
+		"Makefile":                        "denied_path",
+		".env":                            "denied_path",
+		".env.local":                      "denied_path",
+		".envrc":                          "denied_path",
+		".husky/pre-commit":               "denied_path",
+		".githooks/pre-push":              "denied_path",
+		".vscode/settings.json":           "denied_path",
+		".github/workflows/ci.yml":        "denied_path",
+		"node_modules/x/index.js":         "denied_path",
+		"lefthook.yml":                    "denied_path",
+		"keys/id_rsa":                     "denied_path",
+		"../outside.txt":                  "denied_path",
+		"a/../../outside.txt":             "denied_path",
+		"/etc/passwd":                     "denied_path",
+		"":                                "denied_path",
+		".github/ISSUE_TEMPLATE/x.md":     "",
+		"GIT~1/hooks/pre-commit":          "denied_path",
+		"package.json.":                   "denied_path",
+		"package.json ":                   "denied_path",
+		"src/a.ts:stream":                 "denied_path",
+		"AGENT\u017f.md":                  "denied_path",
+		".lefthook/x.yml":                 "denied_path",
+		".codex/config.toml":              "denied_path",
+		".github/actions/x/action.yml":    "denied_path",
+		"lefthook-local.yml":              "denied_path",
+		"src/.envelope/not-an-env.txt":    "",
 	} {
 		if got := checkDelegatePath(rel); got != want {
 			t.Errorf("%q = %q, want %q", rel, got, want)
@@ -337,5 +350,37 @@ func TestCheckDelegateFile(t *testing.T) {
 	}
 	if got := checkDelegateFile(filepath.Join(dir, "nope"), "a"); got != "denied_path" {
 		t.Errorf("no dir = %q", got)
+	}
+}
+
+func TestCheckDelegateHook(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "lefthook.yml"), `pre-commit:
+  commands:
+    i18n:
+      root: "pwa/"
+      run: sh ../scripts/staged-files.sh node scripts/check-i18n.mjs
+`)
+	writeFile(t, filepath.Join(dir, ".husky", "pre-push"), "./tools/Lint.sh\n")
+	writeFile(t, filepath.Join(dir, ".pre-commit-config.yaml"), "repos:\n- repo: local\n  hooks:\n  - id: x\n    entry: python hooks/check.py\n")
+	for rel, want := range map[string]string{
+		"pwa/scripts/check-i18n.mjs": "denied_path",
+		"scripts/staged-files.sh":    "denied_path",
+		"tools/lint.sh":              "denied_path",
+		"hooks/check.py":             "denied_path",
+		"src/a.ts":                   "",
+		"scripts/other.sh":           "",
+		"pwa/scripts/check.mjs":      "",
+	} {
+		if got := checkDelegateHook(dir, rel); got != want {
+			t.Errorf("checkDelegateHook(%q) = %q, want %q", rel, got, want)
+		}
+	}
+	// No hook config: nothing more is denied.
+	if got := checkDelegateHook(t.TempDir(), "scripts/staged-files.sh"); got != "" {
+		t.Errorf("no config = %q", got)
+	}
+	if got := checkDelegateHook(filepath.Join(dir, "missing"), "a.ts"); got != "denied_path" {
+		t.Errorf("missing dir = %q", got)
 	}
 }
