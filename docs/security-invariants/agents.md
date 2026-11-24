@@ -861,7 +861,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
   exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
   `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
-  init x`; the lists of `delegateRunners` and the PWA's `RUNNERS` are the same) (`interpreter`; the same two
+  init x`; the lists of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
+  it followed by any word that is no option (`delegateInstallers`, the PWA's `INSTALLERS`: `npm i x`, its
+  other aliases of install, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
+  runs its install scripts and writes `package.json` and the lockfile, which no edit grant covers; an
+  install of the lockfile alone, `npm ci`, `pnpm install --frozen-lockfile`, `pnpm --filter a install`, is
+  not refused) (`interpreter`; the same three
   checks hold a grant's prefix when it is made); the words between the two dashed rules under the header (a wrapped row's leading `│`
   dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
   the prefix and a space (`no_grant`), and no word after the prefix starts with `-` (`option`: a

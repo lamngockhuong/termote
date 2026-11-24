@@ -55,6 +55,20 @@ var delegateRunners = map[string][]string{
 	"bun":  {"x", "create"},
 }
 
+// delegateInstallers are package managers' words that install the
+// packages named after them: an install fetches a package the agent names
+// and runs its install scripts, and writes package.json and the lockfile,
+// which no edit grant covers. Refused when any word after one is no option
+// ("npm i x", "pnpm add -D x"); an install with no package ("npm ci",
+// "pnpm install --frozen-lockfile", "pnpm --filter a install") installs
+// what the lockfile holds. npm's list holds its aliases of install.
+var delegateInstallers = map[string][]string{
+	"npm":  {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add"},
+	"pnpm": {"install", "i", "add"},
+	"yarn": {"install", "add"},
+	"bun":  {"install", "i", "add", "a"},
+}
+
 // delegateBundledOptions are programs that read their first argument as
 // option letters even without a dash (GNU tar: "tar xIf ./x.sh a.tar"
 // runs ./x.sh), so that word is an option when it comes after the prefix.
@@ -98,6 +112,14 @@ func checkDelegateCommand(cmd, prefix string) string {
 	if runs, ok := delegateRunners[first]; ok {
 		for _, w := range words[1:] {
 			if slices.Contains(runs, strings.ToLower(w)) {
+				return "interpreter"
+			}
+		}
+	}
+	if inst, ok := delegateInstallers[first]; ok {
+		for i := 1; i < len(words); i++ {
+			if slices.Contains(inst, strings.ToLower(words[i])) &&
+				slices.ContainsFunc(words[i+1:], func(w string) bool { return !strings.HasPrefix(w, "-") }) {
 				return "interpreter"
 			}
 		}

@@ -104,6 +104,19 @@ describe('grantPrefixProblem', () => {
       'yarn workspace a create',
       'bun create vite',
       'npm CREATE',
+      // an install that names a package fetches it and runs its scripts
+      'npm install evil',
+      'npm i evil',
+      'npm isntall evil',
+      'npm --prefix pwa install evil',
+      'npm install --save-dev evil',
+      'pnpm add evil',
+      'pnpm --filter termote add -D evil',
+      'pnpm install --filter termote',
+      'yarn add evil',
+      'yarn workspace a add evil',
+      'bun a evil',
+      'npm ADD evil',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     for (const p of [
@@ -119,6 +132,14 @@ describe('grantPrefixProblem', () => {
       'yarn init',
       'cargo init',
       'go mod init',
+      'npm install',
+      'npm i',
+      'npm ci',
+      'pnpm install --frozen-lockfile',
+      'pnpm --filter termote install',
+      'pnpm add',
+      'yarn install',
+      'cargo add serde',
     ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })

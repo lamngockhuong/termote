@@ -83,14 +83,38 @@ const RUNNERS: Record<string, string[]> = {
   bun: ['x', 'create'],
 }
 
+// Package managers' words that install the packages named after them
+// (delegateInstallers): refused when any word after one is no option (npm
+// i x, pnpm add -D x); an install with no package installs what the
+// lockfile holds
+const INSTALLERS: Record<string, string[]> = {
+  npm: [
+    'install',
+    'i',
+    'in',
+    'ins',
+    'inst',
+    'insta',
+    'instal',
+    'isnt',
+    'isnta',
+    'isntal',
+    'isntall',
+    'add',
+  ],
+  pnpm: ['install', 'i', 'add'],
+  yarn: ['install', 'add'],
+  bun: ['install', 'i', 'add', 'a'],
+}
+
 // Windows extensions a program's name drops, each once in this order
 // (commandName)
 const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 
 // empty: nothing typed; length: longer than the server takes; chars: a
 // character or a spacing it refuses; interpreter: a first word (or a
-// package manager's runner word, at any position) that runs any code at
-// all. The server also refuses a command whose words after the prefix
+// package manager's runner word, at any position, or its install word
+// followed by a package) that runs any code at all. The server also refuses a command whose words after the prefix
 // start with -, or, under a prefix of tar's name alone, has tar's first
 // argument (option letters even without a dash), which a prefix alone
 // cannot show.
@@ -116,6 +140,15 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
     const runs = RUNNERS[first]
     if (words.slice(1).some((w) => runs.includes(w.toLowerCase())))
       return 'interpreter'
+  }
+  if (Object.hasOwn(INSTALLERS, first)) {
+    const inst = INSTALLERS[first]
+    for (let i = 1; i < words.length; i++)
+      if (
+        inst.includes(words[i].toLowerCase()) &&
+        words.slice(i + 1).some((w) => !w.startsWith('-'))
+      )
+        return 'interpreter'
   }
   return null
 }

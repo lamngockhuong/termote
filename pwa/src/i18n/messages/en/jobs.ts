@@ -154,7 +154,7 @@ export default {
   'jobs.grant.problem.chars':
     'Use plain words with one space between them: no quotes, no ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # and no tab',
   'jobs.grant.problem.interpreter':
-    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx or pnpm dlx…): it cannot be granted',
+    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx, pnpm dlx, or an install that names a package such as pnpm add x…): it cannot be granted',
   'jobs.grant.oneWord':
     'One word covers every command of {word}. A longer prefix is safer',
   'jobs.grant.editHint':

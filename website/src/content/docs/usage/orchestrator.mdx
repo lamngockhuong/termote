@@ -190,7 +190,9 @@ agent's transcript has waiting name the same command or file, no subagent runs, 
 nothing a shell would chain, expand or redirect and does not start with a shell or interpreter, no
 word after your prefix is an option (starts with `-`: `rg --pre=x` or `go test -exec=x` runs
 another program, so type into the prefix the options you allow; `tar` reads its first word as
-options even without a dash, so grant `tar xzf`, not `tar`), and
+options even without a dash, so grant `tar xzf`, not `tar`), a package manager is not asked to
+run or install a package it names (`pnpm dlx x`, `npm init x`, `pnpm add x`, `npm i x`; `pnpm install`
+with no package is fine), and
 the file is in the worktree, reached through no link, and not one that configures the agent, runs
 as a hook, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
 Anything else is refused and comes to you as before. Each answer shows on the job's card and in the
