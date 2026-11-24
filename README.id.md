@@ -47,7 +47,7 @@ Kendalikan alat CLI (Claude Code, Codex, OpenCode, terminal apa pun) dari jarak 
 - **Pergantian session**: Banyak tmux sessions dengan buat/edit/hapus
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
 - **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
-- **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code, Codex (dijalankan dengan `--no-daemon`) atau OpenCode 2 sebagai obrolan, dengan saran slash command, jawaban dialog, dan subagent yang sedang berjalan — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code, Codex (dijalankan dengan `--no-daemon`) atau OpenCode 2 sebagai obrolan, dengan saran slash command, jawaban dialog, kutipan teks dari chat ke dalam balasan, dan subagent yang sedang berjalan, dengan percakapan tiap subagent cukup sekali ketuk — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Riwayat session**: tampilkan daftar session Claude Code, Codex, dan OpenCode yang pernah berjalan di folder sebuah pane, baca salah satunya, lanjutkan di tab baru, atau fork session yang sedang berjalan — lihat [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
 - **Token dan biaya**: token dan perkiraan biaya setiap session agent, dengan total harian — lihat [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
 - **File yang diubah session**: file yang diedit oleh session agent, tercantum di Changes dan di riwayat session, masing-masing membuka diff-nya — lihat [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
@@ -64,12 +64,15 @@ Kendalikan alat CLI (Claude Code, Codex, OpenCode, terminal apa pun) dari jarak 
 - **Backend Zellij** (Linux, macOS, atau di dalam container): kendalikan sesi, tab, dan pane Zellij Anda alih-alih tmux (Zellij 0.45.0 atau lebih baru), dipilih dengan `--mux zellij` — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Backend herdr-core** (native, semua OS): tampilkan space, tab, dan pane yang ditampilkan aplikasi herdr, sebagai satu klien lagi dari herdr-core (`hc` 0.1.16 atau lebih baru), dipilih dengan `--mux hc` — lihat [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**: pantau dan kendalikan agent di komputer Anda yang lain dari satu Termote, lewat SSH dengan kunci yang hanya bisa menjangkau Termote di sana (`termote machine add <alias>`) — lihat [Machines](https://termote.ohnice.app/usage/machines/)
+- **Orkestrator**: satu sesi Claude Code atau Codex yang mengoordinasikan agent di pane Anda yang lain: statusnya, tugas untuk salah satunya, jawabannya, dialognya, agent baru di worktree sendiri (`termote agents`) — lihat [Orchestrator](https://termote.ohnice.app/usage/orchestrator/). Skill-nya ikut bersama Termote (`termote skills install`) atau sebagai plugin dari [termote-plugins](https://github.com/lamngockhuong/termote-plugins) (`/plugin marketplace add lamngockhuong/termote-plugins` di Claude Code, `codex plugin marketplace add lamngockhuong/termote-plugins` di Codex); pasang salah satu saja
+- **Plan dan job**: pekerjaan yang dibagikan orkestrator, sebagai job dengan prioritas, job yang ditunggunya, dan workspace, beserta pull request dan cek CI-nya (yang gagal dikirim balik ke agent), serta penyelesaian yang menutup tab dan menghapus worktree setelah Anda setuju (`termote agents job ...`) — lihat [Orchestrator](https://termote.ohnice.app/usage/orchestrator/)
+- **Pertanyaan untuk Anda**: orkestrator mencatat apa yang ditanyakannya kepada Anda (`termote agents ask add`); jawab atau abaikan tiap pertanyaan dari tab **Plan** atau chat orkestrator yang bertanya, di Termote ini atau di Termote sebuah mesin; job yang agent-nya menunggu di dialog muncul di **Waiting for you** — lihat [Orchestrator](https://termote.ohnice.app/usage/orchestrator/#questions-waiting-on-you)
 - **Plugin Herdr**: buka pane Herdr yang sedang aktif di Termote, tampilkan link-nya sebagai kode QR untuk ponsel, mulai atau hentikan server, tanpa meninggalkan Herdr — lihat [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
 - **Aksi cepat**: Tombol ⋯ yang tersemat di ujung toolbar mobile menampilkan baris Actions berisi operasi umum (clear, cancel, exit)
-- **Gaya antarmuka**: Neutral, Terminal, atau Native, dipilih di Pengaturan, terpisah dari tema terang/gelap
+- **Gaya antarmuka**: Neutral, Terminal, atau Native, dipilih di Pengaturan, terpisah dari tema terang/gelap, dengan warna aksen yang sama untuk semua gaya
 - **Bahasa antarmuka**: Inggris atau Vietnam, dipilih di Pengaturan; Auto mengikuti browser
 - **Pengaturan yang bisa dibawa**: ekspor pengaturan browser ini ke file lalu impor di browser lain, atau tinjau pengaturan yang diusulkan coding agent dengan `termote settings propose` — lihat [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
 - **Terminal GPU**: terminal digambar dengan WebGL2 jika perangkat memiliki GPU, sehingga output yang besar tetap lancar
@@ -203,6 +206,7 @@ termote url --qr                     # The link to open, as a QR code for a phon
 termote pair                         # A one-time code that signs a new device in
 termote devices                      # List the paired devices (devices revoke <id>)
 termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
+termote skills install               # The orchestrator skill for Claude Code and Codex
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command, the install and uploads
 ```
@@ -386,13 +390,16 @@ termote/
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
+│   ├── job_*.go, ask_*.go  # The orchestrator's job ledger and its questions for the user
+│   ├── skills/             # The orchestrator skill (`termote skills install`, termote-plugins)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
 │   ├── install.sh          # Unix online installer (curl | sh)
 │   ├── install.ps1         # Windows online installer (irm | iex)
 │   ├── termote.sh          # Unix shim: builds and runs a checkout
-│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   ├── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+│   └── termote-plugins.sh  # Writes the termote-plugins marketplace at each stable release
 ├── tests/                  # Test suite
 │   ├── test-termote.sh     # Unix shim tests
 │   ├── test-termote.ps1    # Windows shim tests

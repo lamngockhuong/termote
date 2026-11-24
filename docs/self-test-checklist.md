@@ -479,6 +479,40 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
       of a closed window does nothing; a column beside the cards on a wide screen, a sheet on a phone
       (360 px, no sideways scroll)
 
+### Orchestrator
+
+Native server (Linux or macOS), two or more panes running Claude Code or Codex, one of them the
+orchestrator.
+
+- [ ] `termote skills install` installs the skill for Claude Code and Codex; `skills status` shows it;
+      `skills uninstall` removes it. From the termote-plugins marketplace instead (Claude Code
+      `/plugin marketplace add lamngockhuong/termote-plugins`, `/plugin install termote@termote`;
+      Codex `codex plugin marketplace add ...`, `codex plugin add termote@termote`) the skill loads too
+- [ ] An empty Plan tab's hint, and its **?** button, show the install lines, each copied by its button
+- [ ] Asked to give a task to an agent in a new worktree, the orchestrator runs `agents start
+      --worktree ... --job`: the job shows in the Plan, its card names the agent, pane and branch
+- [ ] `job add --priority high --after <job>`: the card shows the high mark and **Waits on 1**; `jobs
+      --ready` leaves it out until that job is done; making the first job wait on the second is
+      refused (`job_cycle`)
+- [ ] An agent of a job on a permission dialog: its job moves to **Waiting for you**
+- [ ] **Copy ID** in a job's details copies its id
+- [ ] `ask add --text 'Merge now?' --choice Yes --choice Later --job <id>` prints `Q1`: the overview
+      button shows the count (a dot on the phone's view menu), the Plan's "Waiting on you" and the
+      orchestrator's chat list it
+- [ ] Answering with a choice types `Answer to Q1 (choice 1): ...` into the orchestrator's input
+      box; a draft in that box refuses the answer until it is sent or cleared
+- [ ] **Dismiss** types nothing; the next `agents wait --mine` reports `Q1 dismissed in the PWA`
+      once
+- [ ] A view-only device sees how many questions wait and their ids, never their text
+- [ ] A machine open through Machines shows its Plan tab; its questions are answered and dismissed
+      from there
+- [ ] A job whose branch has a pull request: its card shows the pull request chip; `job ci <id>
+      --refresh` reads it again; a failed check sent from the details arrives in the agent's input
+- [ ] `job finish <id> --close --remove-worktree` is refused while the worktree has uncommitted
+      changes or unpushed commits; once pushed it closes the tab, removes the worktree and the job
+      is done
+- [ ] `jobs prune --dry-run` lists finished jobs only, and removes nothing
+
 ### Host Stats
 
 - [ ] Header shows the Host chip, one value behind an icon on every screen: a gauge with the higher

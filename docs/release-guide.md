@@ -110,7 +110,27 @@ docker:      image pushed to GHCR by digest (no tag), before the approval
 release:     waits for the approval, signs checksums.txt, uploads to the draft
 docker-tags: x.y.z, x.y, latest (GHCR + Docker Hub) moved to the signed digest
 publish:     the draft goes public, then the website deploys
+homebrew:    after publish, a stable release only: the formula in the Homebrew tap,
+             then homebrew-verify installs it on macOS and Linux
+termote-plugins: after publish, a stable release only: the plugin marketplace
 ```
+
+The `homebrew` job downloads the release's `checksums.txt` and `checksums.txt.sig`, checks the
+signature with the key `install.sh` pins (brew itself only checks the hash a formula names), writes
+the formula with `scripts/homebrew-formula.sh` and pushes `Formula/termote.rb` to
+[lamngockhuong/homebrew-tap](https://github.com/lamngockhuong/homebrew-tap) with a deploy key that
+can push to that repository and nothing else. A tap already on a newer version (a patch of an older
+line) is left as it is. `homebrew-verify` then runs `brew install lamngockhuong/tap/termote` on
+`macos-latest` and `ubuntu-latest` with no secret; a new `brew audit` rule failing there means fixing
+the generator and running `homebrew` again. `make test-homebrew-formula` tests the generator.
+
+The `termote-plugins` job writes the [termote-plugins](https://github.com/lamngockhuong/termote-plugins)
+marketplace (the orchestrator skill as a Claude Code and Codex plugin) with
+`scripts/termote-plugins.sh` from the release's own `server/skills/orchestrator/SKILL.md`, the only
+copy anyone edits, and pushes it with a deploy key that can push to that repository and nothing
+else. It skips a pre-release and a dry run, and leaves a marketplace already on a newer version as
+it is (a patch of an older line). Nothing else waits on it: if it fails, the marketplace stays one
+version behind until the job is run again. `make test-termote-plugins` tests the script.
 
 Every job checks out the tag's commit by hash. The `release` and `github-pages` environments take
 `main` only (Settings → Environments → Deployment branches and tags), so a `v*` tag pushed to an
@@ -128,6 +148,17 @@ risk is accepted (Lam Ngoc Khuong, 2026-10-23).
 | `GITHUB_TOKEN`       | Auto-provided                    | GHCR + Release  |
 | `DOCKERHUB_USERNAME` | hub.docker.com                   | Docker Hub auth |
 | `DOCKERHUB_TOKEN`    | hub.docker.com/settings/security | Docker Hub auth |
+
+### Secrets of the `release` Environment
+
+Settings → Environments → `release`, not repository secrets: only a run the maintainer approves, on
+`main`, gets them. The job that needs one fails when it is missing.
+
+| Secret                       | Holds                                                                 | Used by           |
+| ---------------------------- | --------------------------------------------------------------------- | ----------------- |
+| `RELEASE_SIGNING_KEY`        | Ed25519 private key that signs `checksums.txt` (and `.sshsig`)        | `release`         |
+| `HOMEBREW_TAP_DEPLOY_KEY`    | Private half of a write deploy key on `lamngockhuong/homebrew-tap`    | `homebrew`        |
+| `TERMOTE_PLUGINS_DEPLOY_KEY` | Private half of a write deploy key on `lamngockhuong/termote-plugins` | `termote-plugins` |
 
 ### Add Docker Hub Secrets
 

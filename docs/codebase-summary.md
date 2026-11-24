@@ -37,6 +37,8 @@ termote/
 │   ├── agent*.go               # Chat view: Claude Code, Codex and OpenCode sessions, transcripts, dialogs, input
 │   ├── files*.go               # Files/Changes views: pane root, tree, contents, git status/diff, images, saves
 │   ├── uploads*.go             # `/api/mux/uploads` image store
+│   ├── job_*.go, ask_*.go      # Orchestrator: job ledger, its pull requests and finish, questions for the user
+│   ├── skills/                 # Orchestrator skill embedded for `termote skills install` (and termote-plugins)
 │   ├── cli*.go                 # CLI subcommands (start/stop, service, container, update, url, panel, ...)
 │   ├── listener_owner*.go      # CLI sends the saved password only to the current user's listener
 │   ├── local_socket*.go        # CLI ↔ native server over a Unix socket / named pipe, no password
@@ -48,7 +50,8 @@ termote/
 │   ├── testdata/               # Recorded agent screens and transcript fixtures
 │   └── webui/                  # Embeds the built PWA into the binary
 ├── herdr-plugin/               # Herdr plugin manifest (every command runs `termote ...`)
-├── scripts/                    # Release installers (install.sh/.ps1) and checkout-only dev shims (termote.sh/.ps1)
+├── scripts/                    # Release installers (install.sh/.ps1), checkout-only dev shims (termote.sh/.ps1),
+│                               #   termote-plugins.sh (the plugin marketplace at each stable release)
 ├── tests/                      # Shell/PowerShell tests (dev shim, installers, entrypoints, Herdr plugin)
 │   └── fixtures/               # Stand-in Claude Code and Codex for the Chat view E2E (Linux)
 ├── website/                    # Documentation site (Astro Starlight, EN + VI)
@@ -91,6 +94,9 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Session history and resume                   | `server/agent_history*.go`, `agent_resume.go`; PWA `components/agent-history-sheet.tsx`, `recent-sessions.tsx`, `hooks/use-agent-history.ts`, `use-resume-session.ts`                                                       |
 | Starting an agent in a Herdr pane            | `server/agent_start.go`, `pwa/src/hooks/use-start-agent.ts`, `components/start-agent-panel.tsx`                                                                                                                             |
 | Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_git_commit.go`, `files_raw.go`, `files_write.go`, `files_create.go`, `files_image.go`                                                                            |
+| Orchestrator CLI (`termote agents`)          | `server/cli_agents.go`, then `cli_agents_jobs.go`, `cli_agents_ask.go`, `cli_agents_finish.go`, `cli_agents_ci.go`; skill `server/skills/orchestrator/SKILL.md`                                                             |
+| Job ledger and questions (server)            | `server/job_store.go`, `job_routes.go`, `job_deps.go`, `job_ci.go`, `job_finish.go`, `job_grants.go`, `ask_store.go`, `ask_routes.go`                                                                                       |
+| Plan tab and questions (PWA)                 | `components/overview-jobs.tsx`, `job-card.tsx`, `job-detail.tsx`, `overview-asks.tsx`, `chat-asks.tsx`, `hooks/use-jobs.ts`                                                                                                 |
 | CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))                                                                                                                               |
 
 Two things the code does not explain on its own:
@@ -123,9 +129,11 @@ The CLI is a set of subcommands compiled into the `termote` binary. Run `termote
 current command and flag list — it is generated from the same code that parses them, so it
 never drifts from behavior.
 
-**Commands:** `start [options]`, `stop`, `restart`, `status`/`health`, `container <cmd>`
-(`up`/`down`/`logs`/`status`), `update [--version X.Y.Z] [--force]`, `uninstall [--purge]`,
-`logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`, `serve`,
+**Commands:** `start [options]`, `stop`, `restart`, `status`/`health`, `url`, `panel`,
+`container <cmd>` (`up`/`down`/`logs`/`status`), `update [--version X.Y.Z] [--force]`,
+`uninstall [--purge]`, `logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`,
+`pair`, `devices`, `signins`, `machine <cmd>`, `bridge`, `settings <cmd>`, `agents <cmd>` (the
+orchestrator's commands, jobs and questions), `skills <cmd>`, `version`, `help agent`, `serve`,
 `menu` (no arguments). There is no `install` command in 1.0 (it prints the replacement above).
 
 **Config persistence:** Unix `~/.config/termote/config` (`KEY="value"`, chmod 600, password
@@ -187,7 +195,8 @@ release.yml builds assets, pushes the image by digest, waits for approval
            in the `release` environment, signs checksums.txt, uploads to the draft,
            moves the Docker tags, then publishes (never public before both land)
        ↓
-Stable release published → release.yml calls deploy-website.yml
+Stable release published → release.yml calls deploy-website.yml,
+           updates the Homebrew tap and the termote-plugins marketplace
 ```
 
 ### Manual Release

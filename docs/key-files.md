@@ -118,6 +118,16 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/job-workspace-filter.tsx`     | Plan tab: the workspace filter and grouping, kept per browser  |
 | `pwa/src/components/job-card.tsx`                 | One job's compact card; a full client's opens its details      |
 | `pwa/src/components/job-detail.tsx`               | A job's details: pane, Grants, Edit, every field it has        |
+| `pwa/src/components/job-edit-sheet.tsx`           | Add or change a job: title, prompt, priority, after, workspace |
+| `pwa/src/components/job-grant-sheet.tsx`          | A job's grants: those in force, end one, give one more         |
+| `pwa/src/utils/grant-prefix.ts`                   | A grant's command prefix checked as the server checks it       |
+| `pwa/src/utils/job-ci.ts`                         | A job's pull requests: names and colours of the server's worst |
+| `pwa/src/hooks/use-jobs.ts`                       | Job ledger and open questions, read after each overview read   |
+| `pwa/src/components/overview-asks.tsx`            | Plan: the orchestrators' questions, answered or dismissed      |
+| `pwa/src/components/chat-asks.tsx`                | Chat: this pane's orchestrator's open questions, answered here |
+| `pwa/src/components/overview-button.tsx`          | Overview button or menu dot with the count of open questions   |
+| `pwa/src/utils/orchestrator-setup.ts`             | Plan's install sheet lines (`orchestrator-setup-sheet.tsx`)    |
+| `pwa/src/demo/routes-jobs.ts`                     | Demo: the Plan's `/api/mux/jobs*` routes in the browser        |
 | `pwa/src/utils/job-of-pane.ts`                    | The active job each pane works on, for the agent cards         |
 | `pwa/src/components/agent-card.tsx`               | One agent: status age, job, last text, Branch/Context/Session  |
 | `pwa/src/components/needs-me-queue.tsx`           | Overview: dialogs waiting on the user, answered one at a time  |
@@ -427,6 +437,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_agents_worktree.go`                   | `agents start --worktree`: make or reuse a worktree            |
 | `server/cli_agents_self.go`                       | `agents list`: which pane the CLI runs in (tmux/Herdr/Zellij)  |
 | `server/cli_agents_jobs.go`                       | `agents jobs`, `job add/show/set`, `wait --job`, start's job   |
+| `server/cli_agents_wait_mine.go`                  | `agents wait --mine`: every unfinished job made from this pane |
+| `server/cli_agents_question.go`                   | A turn that ends with a question: `read` and `wait` say so     |
+| `server/cli_agents_ask.go`                        | `agents ask add/list/close`: the questions for the user        |
 | `server/cli_agents_finish.go`                     | `agents job finish`: checks it can make, the one request       |
 | `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
 | `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
@@ -464,6 +477,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/task_store.go`                            | User tasks (`<stateDir>/tasks`), limits, lock                  |
 | `server/job_store.go`                             | Job ledger (`<stateDir>/jobs`), limits, lock, review hook      |
 | `server/job_routes.go`                            | `/api/mux/jobs*`: roles, live status, unread from transcript   |
+| `server/ask_store.go`                             | Orchestrator questions (Q1, Q2...) in the job file, limits     |
+| `server/ask_routes.go`                            | `/api/mux/asks*`: add, close (socket); answer, dismiss (PWA)   |
 | `server/job_deps.go`                              | A job's priority and the jobs it waits on: checks, order       |
 | `server/job_repo.go`                              | A job's repository: kept with its workspace, `workspaceNow`    |
 | `server/job_identity.go`                          | A job's agent: activity key + pid and start time, or session   |

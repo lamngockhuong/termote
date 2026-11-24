@@ -156,6 +156,13 @@ Only when the user asks you to coordinate other agents. `termote agents` reaches
 server over its local socket, so it needs no password; in container mode it says it is not
 supported.
 
+The termote-orchestrator skill teaches this to Claude Code and Codex. It comes with termote
+(`termote skills install`, `termote skills status`) or as a plugin from the termote-plugins
+marketplace: in Claude Code `/plugin marketplace add lamngockhuong/termote-plugins`, then
+`/plugin install termote@termote`; in Codex `codex plugin marketplace add lamngockhuong/termote-plugins`,
+then `codex plugin add termote@termote`. Install it one way only, or the agent sees it twice;
+installing it is the user's call.
+
 ```bash
 termote agents list --json                     # every agent: pane id, workspace, name, status, directory; latest, self
 termote agents read <pane>                     # its last turn (--all: every entry read)

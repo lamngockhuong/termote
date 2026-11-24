@@ -1597,6 +1597,15 @@ entry is later than the read mark the CLI's `read` moved, or belongs to another 
 ended before the wait or while the server was down is still reported. A job moved to `review`
 pushes `job_review` with its id.
 
+A job also has a priority (`high`, `normal`, `low`), the jobs it waits on (`after`) and a workspace
+(`server/job_deps.go`). These only change what is shown, which jobs `jobs --ready` lists and the
+refusal of `start --job` while a job it waits on is not done; no state change reads them. Only a
+`done` job satisfies a dependency: a failed or abandoned one keeps the job waiting, flagged, for the
+user to decide, and a change that would make jobs wait on each other is refused (`job_cycle`). A
+finished job (`done`, `failed`, `abandoned`) is removed 30 days after its last change, at the next
+write of the ledger, with the questions it leaves with nothing to wait for; the PWA marks the ones
+close to it, and `jobs prune` removes them earlier.
+
 A user signed in to the PWA gives a job's agent grants (`server/job_grants.go`): run commands that
 start with a prefix, or edit files in the job's worktree, for up to a day. `termote agents answer
 <pane> --delegated` asks the server to answer the open permission dialog under one; the server
@@ -1615,6 +1624,34 @@ pushed by the job's id. `POST /api/mux/jobs/{id}/ci` reads them again or sends t
 names to the job's agent (`server/job_ci_send.go`); a `ci` grant given in the PWA lets the server
 send them on its own, at most three times, without the checks' names. termote never writes to GitHub. The checks are the Job
 pull requests entry of [`security-invariants/agents.md`](security-invariants/agents.md).
+
+`termote agents job finish <id>` (`POST /api/mux/jobs/{id}/finish`, local socket only,
+`server/job_finish.go`) ends a job after the user said yes: it closes the job's tab and removes its
+worktree through the same backend calls as the PWA's close tab and remove worktree. Every check
+runs before anything closes and again under the pane's lock right before it: the agent at rest with
+its last turn read, nothing else in its tab or the worktree, the worktree made by the job, clean, and
+its work pushed or merged (`server/job_finish_git.go`). A job in review becomes `done`. The checks
+are the Finishing a job entry of [`security-invariants/agents.md`](security-invariants/agents.md).
+
+### Orchestrator questions (`/api/mux/asks*`)
+
+`server/ask_store.go` keeps the questions an orchestrator puts to the user (`termote agents ask
+add`), in the job ledger's file under its lock, so a question outlives a compacted conversation and
+keeps its id (`Q1`, `Q2`... from a counter that only grows). A question belongs to the pane of the
+orchestrator that added it: its activity key and the agent that ran there, which an answer must
+still find there. At most 20 open per pane and 200 in all; answered ones make room, oldest first.
+
+Only `termote agents`, over the local socket, adds, closes or marks one reported; the server looks
+up the orchestrator's agent from the pane named in the body, never from a key in the request
+(`server/ask_routes.go`). A full client reads them and answers one: the server types a fixed English
+message (`Answer to Q3 (choice 2): ...`) into the orchestrator's input box, checked under the pane's
+lock as a job's failed checks are, and records the answer; or dismisses one, typing nothing, and
+`wait --mine` tells the orchestrator once. A view-only client sees how many wait and their ids, never
+their text. The machine proxy forwards the list, an answer and a dismissal only, so another
+termote's browser answers through its Machines, never its CLI. The PWA reads them with the ledger
+after each overview read (`use-jobs.ts`) and shows them in the Plan, in the chat of the orchestrator
+that asked and as a count on the overview button. The checks are the Orchestrator asks entry of
+[`security-invariants/agents.md`](security-invariants/agents.md).
 
 ### Agent tokens and estimated cost (`/agent/usage`, `/agent/usage/summary`, `/usage`)
 
