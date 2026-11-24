@@ -39,7 +39,12 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   agent takes it into its own queue (Claude Code: Enter; Codex: Tab, since its Enter steers the
   running turn), and the route answers 202 instead of 204; an agent waiting on a dialog
   (`blocked`) or of unknown status still gets nothing, and so does a `/` command to a working
-  Codex (Tab would take the popup's pick). Clearing a failed paste (C-c) still needs the agent
+  Codex (Tab would take the popup's pick). Under the pane's lock the screen is read again right
+  before each paste (`noDialog`): a dialog that opened since the last read (its status not yet
+  `blocked`) gets no paste, 409 `input_not_ready` (`partial_paste` after an earlier part landed), so
+  text such as `2` never answers a permission dialog past `cliMayChoose`
+  (`TestMessageRechecksDialogBeforePaste`); a dialog opening in the milliseconds between that read
+  and the paste is not caught. Clearing a failed paste (C-c) still needs the agent
   idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. A
   transcript read the read cache (`readCached`) does not answer waits for one of 4 slots
   (`transcriptReads`): each holds a file's tail, and every signed cursor a client paged through is a

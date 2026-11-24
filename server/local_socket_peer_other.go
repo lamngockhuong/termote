@@ -12,3 +12,6 @@ import (
 func unixPeerUID(*net.UnixConn) (int, error) {
 	return 0, errors.New("peer credentials are not supported on this OS")
 }
+
+// connPeerPID cannot tell the peer's pid here.
+func connPeerPID(net.Conn) int { return 0 }

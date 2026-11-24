@@ -695,7 +695,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 	default:
 		if sc.prompt != nil {
-			return fail(http.StatusConflict, "input_not_ready", "a dialog is open")
+			return errDialogOpen
 		}
 		return fail(http.StatusConflict, "input_not_ready", "the screen is not the input box")
 	}
@@ -704,6 +704,20 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	stillReady := func() bool {
 		now, err := sessionNow(ctx, wr, paneID)
 		return err == nil && sameAgent(now, s) && agentReady(now, true) == nil
+	}
+	// noDialog reads the screen again right before each paste, under the
+	// pane's lock: a dialog that opened since the last read would take the
+	// pasted text as its answer (a digit picks an option of a permission
+	// dialog, past the options the CLI may choose).
+	noDialog := func() error {
+		screen, err := wr.Capture(ctx, s.Target)
+		if err != nil {
+			return err
+		}
+		if readAgentScreen(s.Agent, screen).prompt != nil {
+			return errDialogOpen
+		}
+		return nil
 	}
 	// box: what the box shows once the pastes so far land, its text before
 	// each image token and after the last; tried: every such state, the
@@ -715,6 +729,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	pasteText := func(part string) error {
 		if pastes > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
+		}
+		if err := noDialog(); err != nil {
+			if pastes == 0 {
+				return err
+			}
+			return a.abandon(ctx, wr, paneID, s, tried, err)
 		}
 		next := append(slices.Clone(box[:len(box)-1]), part)
 		tried = append(tried, next)
@@ -761,6 +781,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		if pastes > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
 		}
+		if err := noDialog(); err != nil {
+			if pastes == 0 {
+				return err
+			}
+			return a.abandon(ctx, wr, paneID, s, tried, err)
+		}
 		next := append(slices.Clone(box), "")
 		tried = append(tried, next)
 		if err := wr.Paste(ctx, s.Target, pasteablePath(p)); err != nil {
@@ -792,6 +818,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if pasted != "" && !resend {
 		if n > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
+		}
+		if err := noDialog(); err != nil {
+			if n > 0 {
+				return a.abandon(ctx, wr, paneID, s, tried, err)
+			}
+			return err
 		}
 		tried = append(tried, final)
 		if err := wr.Paste(ctx, s.Target, pasted); err != nil {
@@ -1151,7 +1183,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	socket := isLocalSocket(r.Context())
 	auth, _ := authFrom(r.Context())
-	cli := socket || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
+	// Basic auth is the CLI's sign-in over TCP (a browser has a session by
+	// then), held like the socket and like a forwarded "basic" origin.
+	cli := socket || auth.Kind == authBasic || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
 	if body.Delegated && (!socket || (len(body.Choice) > 0 && string(body.Choice) != "null")) {
 		jsonErrorCode(w, "invalid_request", "only termote agents answers under a grant, and names no option", http.StatusBadRequest)
 		return
@@ -1186,17 +1220,19 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var f *agentFailure
 	if err == nil || (errors.As(err, &f) && f.keySent) {
 		confirmed := err == nil
+		// Who answered: the socket names the process at its other end.
+		via := "socket"
+		if !socket {
+			via = auditBy(auth)
+		}
+		peer := localPeerPID(r.Context())
 		if body.Delegated {
-			a.recordDelegation(paneID, d, confirmed)
+			a.recordDelegation(paneID, d, confirmed, via, peer)
 		}
 		if cli && rec != nil && rec.prompt.Kind == "permission" {
-			via := "socket"
-			if !socket {
-				via = auditBy(auth)
-			}
 			auditf("dialog_answer", "pane", paneID, "agent", rec.session.Agent, "dialog", rec.prompt.Title,
 				"option", optionLabel(rec.prompt, choice), "delegated", body.Delegated, "grant", d.grantID,
-				"confirmed", confirmed, "by", via)
+				"confirmed", confirmed, "by", via, "peer_pid", peer)
 		}
 	}
 	if err != nil {
@@ -1216,6 +1252,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 func browserOrigin(origin string) bool {
 	return origin == "password" || origin == "device" || origin == "none"
 }
+
+// errDialogOpen: a dialog is on the screen where a message would go.
+var errDialogOpen = fail(http.StatusConflict, "input_not_ready", "a dialog is open")
 
 // errAnswerAlwaysRefused: the CLI, or another termote's CLI, chose an option
 // of a permission dialog that would stop it from asking again.

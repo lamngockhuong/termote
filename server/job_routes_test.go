@@ -298,6 +298,12 @@ func TestJobUnreadFromTranscript(t *testing.T) {
 	if code, _ := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "read", "cursor": "forged.x"}); code != http.StatusBadRequest {
 		t.Errorf("unsigned cursor = %d", code)
 	}
+	// The read mark is a time, never text of any length.
+	for _, ts := range []string{"later", "2026-11-23T09:05:00.000Z" + strings.Repeat("<", 64)} {
+		if code, _ := jt.do("socket", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "read", "lastTs": ts, "cursor": cursor}); code != http.StatusBadRequest {
+			t.Errorf("lastTs %.30q = %d", ts, code)
+		}
+	}
 	// A new conversation in the same agent (/clear) is a turn not read.
 	jt.f.mu.Lock()
 	jt.f.session.ID = "22222222-2222-4333-8444-555555555555"
@@ -521,6 +527,13 @@ func TestJobDirTooWide(t *testing.T) {
 			t.Errorf("%s: %v", dir, got)
 		}
 	}
+	// No home dir to compare with: refused, not let through.
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("home", "")
+	if !jobDirTooWide(filepath.Join(root, "srv", "x"), "") {
+		t.Error("a dir passed without a home dir")
+	}
 }
 
 // The worktree of a job is the server's own list's, never a path the
@@ -710,5 +723,60 @@ func TestJobLiveIdleBackground(t *testing.T) {
 	jt.agent.input.captures = newTTLCache[string](0)
 	if l := live(jt.list()[0]); l["status"] != "idle" || l["background"] != "1 shell" {
 		t.Errorf("mode row: %v", l)
+	}
+}
+
+// A grant a change ends without a revoke of its own (another agent, the
+// job finished or removed) is logged as revoked, with the reason; one that
+// had expired is not.
+func TestJobImplicitRevocationsAudited(t *testing.T) {
+	jt := newJobsTest(t)
+	logs := captureLog(t)
+	later := time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)
+	earlier := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	addGrant := func(id, gid, expires string) {
+		t.Helper()
+		if _, err := jt.agent.jobs.update(id, "", func(j *job) error {
+			j.Grants = append(j.Grants, grant{ID: gid, Kind: "bash", Expires: expires})
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := jt.create(map[string]any{"title": "Parser", "pane": "w1:pa"})["id"].(string)
+	addGrant(id, "g0", earlier)
+	addGrant(id, "g1", later)
+	// The job's agent is another one than the pane's now.
+	jt.agent.jobs.update(id, "", func(j *job) error { j.Agent.PID = 7; return nil })
+	if code, out := jt.do("socket", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"pane": "w1:pa"}); code != http.StatusOK {
+		t.Fatalf("give = %d %v", code, out)
+	}
+	addGrant(id, "g2", later)
+	if code, out := jt.do("socket", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"state": "done"}); code != http.StatusOK {
+		t.Fatalf("done = %d %v", code, out)
+	}
+	other := jt.create(map[string]any{"title": "Lexer", "state": "active"})["id"].(string)
+	addGrant(other, "g3", later)
+	var updated string
+	for _, j := range jt.list() {
+		if j["id"] == other {
+			updated = j["updated"].(string)
+		}
+	}
+	if code, out := jt.do("full", http.MethodDelete, "/api/mux/jobs/"+other+"?updated="+url.QueryEscape(updated), nil); code != http.StatusOK {
+		t.Fatalf("remove = %d %v", code, out)
+	}
+	text := logs.String()
+	for _, want := range []string{
+		`audit: grant_revoked grant="g1" job="` + id + `" reason="agent_changed" by=`,
+		`audit: grant_revoked grant="g2" job="` + id + `" reason="job_finished" by=`,
+		`audit: grant_revoked grant="g3" job="` + other + `" reason="job_removed" by=`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no %q in\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `grant="g0"`) {
+		t.Errorf("an expired grant logged as revoked:\n%s", text)
 	}
 }

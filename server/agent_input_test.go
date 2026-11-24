@@ -1718,3 +1718,43 @@ func TestClearDraftRefusals(t *testing.T) {
 		})
 	}
 }
+
+// A permission dialog that opens after the screen was read and before the
+// paste gets nothing: the screen is read again right before each paste, so
+// text such as "2" never lands in the dialog as its answer.
+func TestMessageRechecksDialogBeforePaste(t *testing.T) {
+	shortConfirm(t)
+	dialog := fixtureScreen(t, "2.1.286-permission-bash")
+	t.Run("text", func(t *testing.T) {
+		f := newFakeWriter()
+		f.screens = []string{boxScreen("")}
+		f.screen = dialog
+		code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "2", "cursor": cursorFor(testSessionID)})
+		if code != http.StatusConflict || body["code"] != "input_not_ready" {
+			t.Errorf("POST = %d %v", code, body)
+		}
+		if len(f.pasted) != 0 || len(f.keys) != 0 {
+			t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+		}
+	})
+	t.Run("text after an image", func(t *testing.T) {
+		shortImageWait(t)
+		f := newFakeWriter()
+		imageAgent(f, 0)
+		mux, ids, paths := imageMux(t, f, 1)
+		hook := f.onPaste
+		f.onPaste = func(f *fakeWriter, text string) {
+			hook(f, text)
+			// The image shows, then a dialog opens.
+			f.screens = []string{f.screen}
+			f.screen = dialog
+		}
+		code, body := postMessage(t, mux, "2", ids)
+		if code != http.StatusConflict || body["code"] != "partial_paste" {
+			t.Errorf("POST = %d %v", code, body)
+		}
+		if len(f.pasted) != 1 || f.pasted[0] != paths[0] || len(f.keys) != 0 {
+			t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+		}
+	})
+}

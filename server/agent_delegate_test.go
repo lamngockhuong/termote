@@ -220,6 +220,11 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		}, "subagent"},
 		"edit a denied file": {"edit", strings.Replace(edit, "notes.txt", ".claude/settings.local.json", 1), nil, "mismatch"},
 		"edit outside":       {"edit", strings.Replace(edit, "WT/notes.txt", "OUT/notes.txt", 1), nil, "no_grant"},
+		// A path not in its clean form, though it names the file the
+		// screen shows once cleaned: sub may be a symlink out of the worktree.
+		"edit through ..":   {"edit", strings.Replace(edit, "WT/notes.txt", "WT/sub/../notes.txt", 1), nil, "denied_path"},
+		"edit through .":    {"edit", strings.Replace(edit, "WT/notes.txt", "WT/./notes.txt", 1), nil, "denied_path"},
+		"edit, two slashes": {"edit", strings.Replace(edit, "WT/notes.txt", "WT//notes.txt", 1), nil, "denied_path"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dt := newDelegateTest(t, delegateScreen(t, tc.screen), "")
@@ -304,7 +309,7 @@ func TestDelegatedAnswerNotConfirmed(t *testing.T) {
 			t.Errorf("no %q in\n%s", want, text)
 		}
 	}
-	if !regexp.MustCompile(`audit: dialog_delegated grant="` + g + `" .* command_sha256="[0-9a-f]{64}" confirmed="false"`).MatchString(text) {
+	if !regexp.MustCompile(`audit: dialog_delegated grant="` + g + `" .* command_sha256="[0-9a-f]{64}" confirmed="false" by="socket" peer_pid="0"`).MatchString(text) {
 		t.Errorf("dialog_delegated without confirmed=false:\n%s", text)
 	}
 	if strings.Contains(text, `confirmed="true"`) {
@@ -369,8 +374,8 @@ func TestDelegatedOnlyFromSocket(t *testing.T) {
 	}
 }
 
-// Over the socket and the bridge, a permission dialog's option that stops
-// it asking is never chosen; a browser still may.
+// Over the socket, Basic auth and the bridge, a permission dialog's option
+// that stops it asking is never chosen; a browser still may.
 func TestCLINeverChoosesAlways(t *testing.T) {
 	setup := func(t *testing.T) *delegateTest {
 		return newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
@@ -380,6 +385,13 @@ func TestCLINeverChoosesAlways(t *testing.T) {
 		code, out := dt.do("socket", http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", map[string]any{"promptId": dt.promptID(), "choice": choice})
 		if code != http.StatusForbidden || out["code"] != "answer_always_refused" || len(dt.keys()) != 0 {
 			t.Errorf("socket %v = %d %v", choice, code, out)
+		}
+		// Basic auth over TCP: the CLI's sign-in, held as the socket is.
+		b, _ := json.Marshal(map[string]any{"promptId": dt.promptID(), "choice": choice})
+		req := httptestRequest(http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", b)
+		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authBasic, Role: roleFull}))
+		if rec := serve(dt.mux, req); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "answer_always_refused") {
+			t.Errorf("basic %v = %d %s", choice, rec.Code, rec.Body)
 		}
 		// Another termote's CLI (or one that names no origin) over the bridge.
 		for _, origin := range []string{"socket", "basic", ""} {

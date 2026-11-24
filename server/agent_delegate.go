@@ -280,6 +280,11 @@ func (a *agentAPI) checkDelegation(p snapPane, s AgentSession, sc agentScreen, s
 	if file == "" || !filepath.IsAbs(file) || !ok {
 		return delegation{}, refuseDelegation("mismatch")
 	}
+	// Only a path already in its clean form: filepath.Rel below reads
+	// sub/../x as x, while the OS walks sub (a symlink, maybe) first.
+	if filepath.Clean(file) != filepath.FromSlash(file) {
+		return delegation{}, refuseDelegation("denied_path")
+	}
 	why := "no_grant"
 	for _, g := range grants {
 		rel, err := filepath.Rel(g.grant.Dir, file)
@@ -386,11 +391,12 @@ func (a *agentAPI) paneNow(paneID string) (snapPane, bool) {
 }
 
 // recordDelegation keeps the answer on its grant and job, and in the log:
-// the command's hash only, never the command.
-func (a *agentAPI) recordDelegation(paneID string, d delegation, confirmed bool) {
+// the command's hash only, never the command, and who answered (by, and
+// peer: the pid at the socket's other end, 0 when unknown).
+func (a *agentAPI) recordDelegation(paneID string, d delegation, confirmed bool, by string, peer int) {
 	sum := sha256.Sum256([]byte(d.command + d.path))
 	auditf("dialog_delegated", "grant", d.grantID, "job", d.jobID, "pane", paneID, "path", d.path,
-		"command_sha256", hex.EncodeToString(sum[:]), "confirmed", confirmed)
+		"command_sha256", hex.EncodeToString(sum[:]), "confirmed", confirmed, "by", by, "peer_pid", peer)
 	if a.jobs == nil {
 		return
 	}

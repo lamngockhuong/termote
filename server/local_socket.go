@@ -34,6 +34,18 @@ func isLocalSocket(ctx context.Context) bool {
 	return v
 }
 
+// localPeerPIDKey holds the pid of the process at the other end of a local
+// socket connection, read once when it was accepted (connPeerPID).
+type localPeerPIDKey struct{}
+
+// localPeerPID is the pid of the process that sent a request over the
+// local socket, for the audit log, or 0 when unknown. The process may have
+// exited, and its pid been reused, since.
+func localPeerPID(ctx context.Context) int {
+	v, _ := ctx.Value(localPeerPIDKey{}).(int)
+	return v
+}
+
 // localSocketConn is a connection accepted on the local socket.
 type localSocketConn struct{ net.Conn }
 
@@ -52,9 +64,13 @@ func (l localSocketListener) Accept() (net.Conn, error) {
 // localSocketConnContext is the server's ConnContext: it marks connections
 // of the local socket and of the machine bridge.
 func localSocketConnContext(ctx context.Context, c net.Conn) context.Context {
-	switch c.(type) {
+	switch c := c.(type) {
 	case *localSocketConn:
-		return context.WithValue(ctx, localSocketKey{}, true)
+		ctx = context.WithValue(ctx, localSocketKey{}, true)
+		if pid := connPeerPID(c.Conn); pid > 0 {
+			ctx = context.WithValue(ctx, localPeerPIDKey{}, pid)
+		}
+		return ctx
 	case *bridgeConn:
 		return context.WithValue(ctx, bridgeKey{}, true)
 	}

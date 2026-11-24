@@ -102,7 +102,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   For a pane whose snapshot shows Claude Code `working`, the overview also reads its screen through
   the prompt route's capture cache (`paneBackground`, inside the same bounded parallel reads) and
   sends `background`, the work its working line says it only waits for, never any other screen text;
-  the card then shows no Stop.
+  the card then shows no Stop. A view-only client gets `cursor` and `background` too: the transcript
+  route gives it the same cursor (paging needs it) and `agent/prompt` the same activity line, the
+  card shows the background work to it, and `agent/interrupt`, the one route that takes the cursor
+  to act, is `requireWriteRole`.
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude Code or OpenCode session (`AgentSession`, as the transcript): another
@@ -788,7 +791,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
   hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
   `codedError` codes (`job_not_found`, `job_conflict` with the job as it is, `too_many_jobs`,
-  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500. `GET` is same-site
+  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500; the file is read up to
+  32 MB (`maxJobsRead`) and a write that would make it larger is refused with 409 `jobs_full`, so the
+  file stays one every later write can read and a job can still be removed. `GET` is same-site
   (`crossSiteRejection`) for every role; a view-only client gets `id, title, state, branch, live,
   updated` only (never the prompt, note, directory, agent record, grants or history); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
@@ -807,12 +812,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`TestJobDeleteFinishedOnlyOnSocket`). `termote agents job remove` and `jobs prune` refuse an
   unfinished job before sending anything and send the `updated` they read; `/event` is the local socket's alone (403 `socket_only`), takes a fixed list of
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
-  with a cursor that verifies (`decodeCursor`). `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
+  with a cursor that verifies (`decodeCursor`) and a `lastTs` that is empty or an RFC 3339 time of 64
+  bytes at most. `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
   10^9, 10 attached at most, one change). A browser's job is always `createdBy: "pwa"`; a
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
   (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
-  at or above the home dir (`jobDirTooWide`). A job's agent is recorded by the server from the
+  at or above the home dir, and whenever the home dir cannot be found (`jobDirTooWide`). A job's agent is recorded by the server from the
   pane's agent lookup (`jobAgentOf`: activity key, kind, pid and process start time, session id);
   it is the same agent only while the key, kind, pid and start time all match, or, where the backend
   finds no process (pid 0), the session id (`jobAgent.matches`): an agent at a reused tmux `%N`
@@ -841,7 +847,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   moved to a pane elsewhere); it is a bash prefix the
   command rules accept or "edit", lasts 1 minute to 24 hours, and ends when revoked, expired, the job
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
-  each. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
+  each. A grant still unexpired that a change ends without a revoke of its own is logged `audit:
+  grant_revoked` with a `reason` (`agent_changed`, `job_finished`, `job_removed` for an unfinished job
+  a browser removes, `replaced` for a `ci` grant a newer one ends) and `by`, once the change is
+  written; expiry and a pane that no longer runs the agent change nothing stored (checked at each use,
+  `grantInForce`, `jobAgent.matches`) and leave no line. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
   under the pane's lock it reads the session again (`sessionNow`) and the screen, requires the
   `promptId` to be the dialog on screen now (`promptIs`), then refuses with 409
   `delegation_out_of_scope` and a `reason`, sending no key, unless all hold: the agent is Claude
@@ -894,7 +904,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   xIf ./x.sh a.tar` running `./x.sh`, so under a prefix of its name alone any further word is
   `option`, and a prefix such as `tar xzf` or `tar -xf` covers what follows it). A grant for a
   test, build or script command still runs code the agent can edit (its test files, a script it
-  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, inside the grant's directory,
+  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
+  component and no doubled separator, since `filepath.Rel` reads `sub/../x` as `x` while the OS walks
+  `sub` first: `denied_path`), inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every
   component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
   short name or stream, nothing case folding or Windows maps onto another name), not a
@@ -910,19 +922,24 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
   (the dialog's signature checked again before the key). The use is kept on the grant and as a
   `delegated` event on the job (the command or path), and logged as `audit: dialog_delegated` with
-  the grant, job, pane, path, the command's SHA-256, never the command, and `confirmed`: once the key
+  the grant, job, pane, path, the command's SHA-256, never the command, `confirmed`, `by` (`socket`)
+  and `peer_pid`, the pid of the process at the socket's other end as the kernel gave it when the
+  connection was accepted (`connPeerPID`: `SO_PEERCRED`, `LOCAL_PEERPID`, the named pipe's client;
+  0 when unknown, and the process may have exited since): once the key
   that answers is sent the use is recorded even when the dialog is not seen to close
   (`answer_not_confirmed`, `keySent`), with `confirmed="false"`, since the answer may still take
-  effect; a refusal before the key records nothing. Over the local socket and
-  the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
+  effect; a refusal before the key records nothing. Over the local socket, with Basic auth (the
+  CLI's sign-in over TCP, a browser has a session by then, as `isCLI` and a forwarded `basic` origin
+  hold) and over the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
   before any key) every option of a permission dialog of any agent, also when another
   termote forwards its own CLI's answer over the bridge (an origin other than `password`, `device`
   or `none`, `browserOrigin`), except cancel, one whose label
   is `No` or starts with `No` and a comma or a space, and the first option when it reads exactly `Yes`, `Yes, proceed` or
   `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
   or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
-  and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
-  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by)
+  and the key still lets that one answer through. Every answer to a permission dialog over the socket, Basic auth or the bridge is logged as
+  `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by,
+  peer_pid)
   once its key is sent, also when the dialog then stays open (`confirmed="false"`,
   `TestDelegatedAnswerNotConfirmed`, `TestCLIAnswerAuditedOnceSent`).
   A grant of kind `ci` (Job pull requests) answers no dialog: `grantsFor` takes a grant of the
@@ -932,13 +949,15 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the OS user the server runs as, and keeps no token (the service passes `GH_CONFIG_DIR`, never
   `GH_TOKEN`). `ghRunner` is the only place `gh` runs: found on the service's `PATH` or in
   package managers' dirs (a regular executable file, not world-writable on Unix), argv only, no
-  shell, `cmd.Dir` the jobs' state dir and never a repository, a 20 s timeout, 1 MB of output,
+  shell, `cmd.Dir` the jobs' state dir and never a repository, a 20 s timeout, its output pipes
+  closed 1 s after gh exits or the timeout passes (`cmd.WaitDelay`, so a child of gh holding them
+  never holds a call or a slot), 1 MB of output,
   two calls at once, 1200 an hour for the whole server and none for 15 minutes after GitHub's
   rate limit, an environment without `GIT_*`, `TERMOTE_*`, `GH_HOST`, `GH_REPO`,
   `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, with prompts, pager, colour and the update
   check off. The repository is one `--repo=host/owner/repo` argument the server works out itself:
   the job's worktree dir (else the job agent's folder the first time, the result kept on the job,
-  refused at or above home by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
+  refused at or above home, or with no home dir found, by `jobDirTooWide`), resolved by the files routes' `rootResolver` and
   read with its `gitRunner` (`checkRoot`, hooks and fsmonitor off): the branch's push remote and
   an `upstream` remote (a fork's pull requests are asked there, a head matched to the pushed
   repo), their URLs through `git remote get-url`; owner and repo `[A-Za-z0-9_.-]`, an SSH alias

@@ -204,9 +204,18 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		}
 		// The CLI and an agent on this machine remove a finished job only;
 		// a browser or another termote's bridge, any job it read.
-		if err := a.jobs.remove(id, updated, socket); err != nil {
+		gone, err := a.jobs.remove(id, updated, socket)
+		if err != nil {
 			writeJobError(w, err)
 			return
+		}
+		// The grants of an unfinished job end with it.
+		auth, _ := authFrom(r.Context())
+		now := a.jobs.now()
+		for _, g := range gone.Grants {
+			if !jobFinished(gone.State) && grantUnexpired(g, now) {
+				auditf("grant_revoked", "grant", g.ID, "job", id, "reason", "job_removed", "by", auditBy(auth))
+			}
 		}
 		jsonOK(w, map[string]bool{"ok": true})
 		return
@@ -231,7 +240,10 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := a.readMark(agent)
+	// The grants this change ends, by reason, logged once it is written.
+	var ended map[string][]string
 	j, err := a.jobs.update(id, in.Updated, func(j *job) error {
+		ended = map[string][]string{}
 		if err := applyJobInput(j, in); err != nil {
 			return err
 		}
@@ -245,13 +257,13 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 			a.jobs.addEvent(j, "state", *in.State)
 		}
 		if agent != nil {
-			a.giveJob(j, *agent, base)
+			ended["agent_changed"] = a.giveJob(j, *agent, base)
 		}
 		if tree != nil {
 			j.Worktree = tree
 		}
 		if jobFinished(j.State) {
-			revokeGrants(j, a.jobs.now())
+			ended["job_finished"] = revokeGrants(j, a.jobs.now())
 		}
 		return nil
 	})
@@ -259,30 +271,51 @@ func (a *agentAPI) handleJob(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, err)
 		return
 	}
+	auth, _ := authFrom(r.Context())
+	for _, reason := range []string{"agent_changed", "job_finished"} {
+		for _, gid := range ended[reason] {
+			auditf("grant_revoked", "grant", gid, "job", id, "reason", reason, "by", auditBy(auth))
+		}
+	}
 	jsonOK(w, map[string]any{"job": a.viewJob(j)})
 }
 
 // giveJob makes ag the agent of j: every grant of j ends with the agent it
-// was pinned to, and what the agent wrote before counts as read.
-func (a *agentAPI) giveJob(j *job, ag jobAgent, base readMark) {
+// was pinned to, and what the agent wrote before counts as read. It
+// returns the ids of the grants it ended that had not expired.
+func (a *agentAPI) giveJob(j *job, ag jobAgent, base readMark) []string {
 	if j.Agent != nil && j.Agent.Key == ag.Key && j.Agent.PID == ag.PID && j.Agent.Start == ag.Start && j.Agent.Session == ag.Session {
-		return
+		return nil
 	}
+	var ended []string
 	if j.Agent != nil {
-		revokeGrants(j, a.jobs.now())
+		ended = revokeGrants(j, a.jobs.now())
 	}
 	j.Agent = &ag
 	j.ReadTS, j.ReadConv, j.Reported = base.ts, base.conv, ""
 	a.jobs.addEvent(j, "agent", ag.Ref)
+	return ended
 }
 
-// revokeGrants ends every grant of j still in force.
-func revokeGrants(j *job, now time.Time) {
+// revokeGrants ends every grant of j not yet revoked, and returns the ids
+// of those that had not expired, for the audit log.
+func revokeGrants(j *job, now time.Time) []string {
+	var ended []string
 	for i := range j.Grants {
 		if j.Grants[i].Revoked == "" {
+			if grantUnexpired(j.Grants[i], now) {
+				ended = append(ended, j.Grants[i].ID)
+			}
 			j.Grants[i].Revoked = now.UTC().Format(activityTimeFormat)
 		}
 	}
+	return ended
+}
+
+// grantUnexpired: g, not revoked, has not reached its end at now.
+func grantUnexpired(g grant, now time.Time) bool {
+	exp, err := time.Parse(time.RFC3339Nano, g.Expires)
+	return g.Revoked == "" && err == nil && now.Before(exp)
 }
 
 func (a *agentAPI) handleJobEvent(w http.ResponseWriter, r *http.Request) {
@@ -322,6 +355,11 @@ func (a *agentAPI) handleJobEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		conv = c.Session
+		// Kept on the job: a time, never text of any length.
+		if _, err := time.Parse(time.RFC3339Nano, in.LastTS); in.LastTS != "" && (err != nil || len(in.LastTS) > 64) {
+			writeJobError(w, invalidJob("lastTs is not a time"))
+			return
+		}
 	}
 	j, err := a.jobs.update(id, "", func(j *job) error {
 		switch in.Kind {
@@ -521,7 +559,9 @@ func (a *agentAPI) jobTreeFor(r *http.Request, in *jobWorktreeInput) (*jobTree, 
 	return nil, invalidJob("no such worktree")
 }
 
-// jobDirTooWide: dir is the home dir or holds it (or is not absolute).
+// jobDirTooWide: dir is the home dir or holds it (or is not absolute). A
+// home dir that cannot be found leaves nothing to compare with: every dir
+// is too wide then.
 func jobDirTooWide(dir, home string) bool {
 	dir = filepath.Clean(dir)
 	if !filepath.IsAbs(dir) || filepath.Dir(dir) == dir { // a root: / or C:\
@@ -533,7 +573,7 @@ func jobDirTooWide(dir, home string) bool {
 		}
 	}
 	if home == "" {
-		return false
+		return true
 	}
 	home = filepath.Clean(home)
 	rel, err := filepath.Rel(dir, home)
