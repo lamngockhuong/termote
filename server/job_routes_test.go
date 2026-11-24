@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -778,5 +780,55 @@ func TestJobImplicitRevocationsAudited(t *testing.T) {
 	}
 	if strings.Contains(text, `grant="g0"`) {
 		t.Errorf("an expired grant logged as revoked:\n%s", text)
+	}
+}
+
+// gatedLocator answers no session lookup until want of them wait at once:
+// a list that reads its jobs one after another never gets there.
+type gatedLocator struct {
+	agentSessionLocator
+	want    int
+	mu      sync.Mutex
+	waiting int
+	open    chan struct{}
+}
+
+func (g *gatedLocator) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	g.mu.Lock()
+	if g.waiting++; g.waiting == g.want {
+		close(g.open)
+	}
+	g.mu.Unlock()
+	select {
+	case <-g.open:
+		return g.agentSessionLocator.AgentSession(ctx, paneID)
+	case <-time.After(3 * time.Second):
+		return AgentSession{}, false, errors.New("read one at a time")
+	}
+}
+
+func TestJobListReadsAgentsSideBySide(t *testing.T) {
+	jt := newJobsTest(t)
+	// One pane each: lookups of one pane share a single read
+	jt.f.mu.Lock()
+	jt.f.snap = agentPanes(3)
+	for i := range 3 {
+		jt.f.snap.Groups[0].Tabs[0].Panes[i].Agent.Status = "blocked"
+	}
+	jt.f.session.Status = "blocked"
+	jt.f.mu.Unlock()
+	jt.snapshot()
+	for i, title := range []string{"One", "Two", "Three"} {
+		jt.create(map[string]any{"title": title, "pane": "w1:p" + string(rune('a'+i))})
+	}
+	jt.agent.loc = &gatedLocator{agentSessionLocator: jt.agent.loc, want: 3, open: make(chan struct{})}
+	jobs := jt.list()
+	if len(jobs) != 3 {
+		t.Fatalf("%d jobs", len(jobs))
+	}
+	for _, j := range jobs {
+		if l := live(j); l["status"] != "blocked" {
+			t.Errorf("%s: %v", j["title"], l)
+		}
 	}
 }

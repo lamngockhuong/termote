@@ -52,6 +52,22 @@ describe('groupJobs', () => {
     expect(ids(g.finished)).toEqual(['d', 'f', 'a'])
   })
 
+  it('puts every unfinished job whose agent waits on a dialog first', () => {
+    // An orchestrator moves a job to review while its agent still runs, and
+    // the agent asks again: the dialog waits on the user all the same
+    const blocked = { status: 'blocked' } as const
+    const jobs = [
+      job('v', { state: 'review', live: blocked }),
+      job('t', { state: 'todo', live: blocked }),
+      job('d', { state: 'done', live: blocked }),
+    ]
+    const g = groupJobs(jobs)
+    expect(g.waiting.map((j) => j.id)).toEqual(['v', 't'])
+    expect(g.review).toEqual([])
+    expect(g.todo).toEqual([])
+    expect(g.finished.map((j) => j.id)).toEqual(['d'])
+  })
+
   it('knows the finished states', () => {
     expect(jobFinished('done')).toBe(true)
     expect(jobFinished('review')).toBe(false)
