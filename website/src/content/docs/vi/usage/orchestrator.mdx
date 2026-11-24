@@ -187,14 +187,17 @@ Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote
 chọn "Yes" cho đúng lần này khi mọi điều sau đều đúng: hộp thoại trên màn hình và lời gọi công cụ
 duy nhất đang chờ trong transcript của agent cùng nêu một lệnh hoặc một file; không subagent nào
 đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, và không bắt đầu
-bằng một shell hay trình thông dịch; không từ nào sau tiền tố của bạn là tùy chọn (bắt đầu bằng `-`, `@` hay `+`, hoặc có dạng `/p:`:
+bằng một shell, một trình thông dịch hay một công cụ container (`docker`, `podman`: chúng chạy
+được mọi image, hay một file compose mà agent sửa được); không từ nào sau tiền tố của bạn là tùy chọn (bắt đầu bằng `-`, `@` hay `+`, hoặc có dạng `/p:`:
 `rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên tùy chọn nào bạn cho phép thì
 gõ luôn vào tiền tố; `tar` đọc từ đầu tiên sau nó là tùy chọn dù không có `-`, nên hãy cấp
 `tar xzf` thay vì `tar`); trình quản lý gói không được yêu cầu chạy hay cài một gói do agent nêu tên, hay sửa cấu hình
 của nó (`pnpm dlx x`, `npm init x`, `pnpm add x`, `npm i x`, `npm config set`, `npm publish`; riêng `pnpm install`, không kèm
 gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải là lệnh của chính chúng
 (`pnpm --filter a node x.js` sẽ chạy node: muốn cho chạy script `lint` của bạn thì cấp
-`pnpm --filter a lint`);
+`pnpm --filter a lint`); lệnh cargo chỉ được là `build`, `test`, `check`, `clippy` hay `fmt` (với từ
+nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn lệnh `install` của nó build một
+crate do agent nêu tên);
 file nằm trong worktree, không đi qua liên kết nào, và không
 phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, `.env`...). Mọi trường hợp khác đều bị từ chối và quay về

@@ -148,10 +148,8 @@ describe('grantPrefixProblem', () => {
       'pnpm --filter termote test',
       'yarn x',
       'npm dlx',
-      'cargo exec',
       'pnpm init',
       'yarn init',
-      'cargo init',
       'go mod init',
       'npm install',
       'npm i',
@@ -160,7 +158,6 @@ describe('grantPrefixProblem', () => {
       'pnpm --filter termote install',
       'pnpm add',
       'yarn install',
-      'cargo add serde',
       'npm in',
       'npm se react',
       'npm add',
@@ -170,6 +167,52 @@ describe('grantPrefixProblem', () => {
       'npm --prefix pwa run build',
       'pnpm --filter termote',
       'yarn workspace a',
+    ])
+      expect(grantPrefixProblem(p), p).toBeNull()
+  })
+
+  it('refuses a container engine', () => {
+    for (const p of [
+      'docker',
+      'docker run alpine',
+      'docker compose up',
+      '/usr/bin/Docker.exe ps',
+      'podman run alpine',
+      'nerdctl run alpine',
+      'docker-compose up',
+      'podman-compose up',
+    ])
+      expect(grantPrefixProblem(p), p).toBe('interpreter')
+  })
+
+  it('takes only build, test, check, clippy and fmt of cargo', () => {
+    for (const p of [
+      'cargo install evil',
+      'cargo add serde',
+      'cargo init',
+      'cargo exec',
+      'cargo evil',
+      'cargo run',
+      'cargo b',
+      'cargo Build',
+      'cargo --locked build',
+      'cargo -C build install evil',
+      'cargo +nightly install evil',
+      'cargo +nightly +stable build',
+      'cargo.exe install evil',
+    ])
+      expect(grantPrefixProblem(p), p).toBe('interpreter')
+    for (const p of [
+      'cargo',
+      'cargo build',
+      'cargo test',
+      'cargo check',
+      'cargo clippy',
+      'cargo fmt',
+      'cargo build --release',
+      'cargo +nightly',
+      'cargo +nightly test',
+      '/home/u/.cargo/bin/cargo.exe clippy',
     ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })

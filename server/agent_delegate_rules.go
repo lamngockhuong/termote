@@ -46,6 +46,22 @@ var delegateInterpreters = []string{
 	// git runs any program through its options (--upload-pack, -x,
 	// --exec, difftool, bisect run, submodule foreach) and its config.
 	"git",
+	// Container engines: "docker run <image>" runs any image of a
+	// registry, and "docker compose up" reads a compose file the agent can
+	// edit, which may mount the whole machine.
+	"docker", "podman", "nerdctl", "docker-compose", "podman-compose",
+}
+
+// delegateSubcommands are programs whose command, the word after the
+// name, must be one of these: cargo runs "cargo <x>", for any x no command
+// of its own, as the program cargo-<x> it finds on PATH, and its install
+// fetches and builds a crate the agent names. Each is spelled out: cargo's
+// aliases (b, t, c) are ones a cargo config may redefine. One +toolchain
+// (rustup's) may come before the command; after the grant's prefix it is
+// an option like any other. build and test still run code the agent can
+// edit (build.rs, its tests), as any build or test command does.
+var delegateSubcommands = map[string][]string{
+	"cargo": {"build", "test", "check", "clippy", "fmt"},
 }
 
 // delegateRunners are package managers with a word that runs any package:
@@ -198,6 +214,15 @@ func checkDelegateCommand(cmd, prefix string) string {
 				slices.ContainsFunc(words[i+1:], func(w string) bool { return !strings.HasPrefix(w, "-") }) {
 				return "interpreter"
 			}
+		}
+	}
+	if allowed, ok := delegateSubcommands[first]; ok {
+		k := 1
+		if k < len(words) && strings.HasPrefix(words[k], "+") {
+			k++
+		}
+		if k < len(words) && !slices.Contains(allowed, words[k]) {
+			return "interpreter"
 		}
 	}
 	if prefix == "" || cmd == prefix {

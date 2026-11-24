@@ -104,6 +104,14 @@ const INTERPRETERS = new Set([
   'xvfb-run',
   'systemd-run',
   'caffeinate',
+  // container engines: docker run <image> runs any image of a registry,
+  // docker compose up a compose file the agent can edit (it may mount the
+  // whole machine)
+  'docker',
+  'podman',
+  'nerdctl',
+  'docker-compose',
+  'podman-compose',
 ])
 
 // A versioned name of an interpreter: python3.12 (interpreterVersionRe)
@@ -165,6 +173,14 @@ const INSTALLERS: Record<string, string[]> = {
   bun: ['install', 'i', 'add', 'a'],
 }
 
+// Programs whose command, the word after the name (past one +toolchain),
+// must be one of these (delegateSubcommands): cargo runs any other word as
+// the program cargo-<x> on PATH, and its install builds a crate the agent
+// names; cargo's aliases (b, t, c) a cargo config may redefine
+const SUBCOMMANDS: Record<string, string[]> = {
+  cargo: ['build', 'test', 'check', 'clippy', 'fmt'],
+}
+
 // Windows extensions a program's name drops, each once in this order
 // (commandName)
 const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
@@ -172,7 +188,8 @@ const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 // empty: nothing typed; length: longer than the server takes; chars: a
 // character or a spacing it refuses; interpreter: a first word (or a
 // package manager's runner word, at any position, or its install word
-// followed by a package) that runs any code at all. The server also
+// followed by a package, or a cargo command other than build, test, check,
+// clippy and fmt) that runs any code at all. The server also
 // refuses, which a prefix alone cannot show: a command whose words after
 // the prefix start with -; under a prefix of tar's name alone, tar's
 // first argument (option letters even without a dash); and a pnpm or yarn
@@ -220,6 +237,12 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
         words.slice(i + 1).some((w) => !w.startsWith('-'))
       )
         return 'interpreter'
+  }
+  if (Object.hasOwn(SUBCOMMANDS, first)) {
+    let k = 1
+    if (k < words.length && words[k].startsWith('+')) k++
+    if (k < words.length && !SUBCOMMANDS[first].includes(words[k]))
+      return 'interpreter'
   }
   return null
 }

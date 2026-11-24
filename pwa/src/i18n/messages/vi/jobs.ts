@@ -139,7 +139,7 @@ export default {
   'jobs.grant.problem.chars':
     'Chỉ dùng các từ thường, cách nhau đúng một dấu cách: không có dấu nháy, không có ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # và không có tab',
   'jobs.grant.problem.interpreter':
-    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, pnpm dlx, npm config, hay lệnh cài một gói như pnpm add x…): không thể ủy quyền cho nó',
+    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, hay lệnh cài một gói như pnpm add x…): không thể ủy quyền cho nó',
   'jobs.grant.oneWord':
     'Một từ bao gồm mọi lệnh của {word}. Tiền tố dài hơn thì an toàn hơn',
   'jobs.grant.editHint':

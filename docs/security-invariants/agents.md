@@ -741,7 +741,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   is ever removed, and every failure after the worktree exists names it (`worktreeStays`, then
   `startTarget.note`): its branch with its directory, or, before the directory is read again, its
   branch and the PWA's worktrees, whatever failed (an open refused, a 200 it cannot read, the list
-  read after it); a refusal before anything is made says nothing stays.
+  read after it); a refusal before anything is made says nothing stays. On the Herdr backend
+  `worktree.create` is Herdr's own: Herdr runs git, outside termote's `gitRunner`, so a hook the user
+  installed in the repository (`post-checkout`, say) runs as when the user types `git worktree add`;
+  an accepted risk, since git copies no hook when it clones, so only the user puts one there.
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
@@ -869,8 +872,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   is no shell, interpreter, wrapper or versioned interpreter (`python3.12`; `gawk`, `mawk`, `gmake` as
   `awk` and `make`) of the one list
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
-  `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
-  runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
+  `--upload-pack`, `-x`, `difftool`, `bisect run`), `sed` and `ed` (a script such as `1e./x.sh`
+  runs a program) and the container engines `docker`, `podman`, `nerdctl`, `docker-compose` and
+  `podman-compose` (`docker run <image>` runs any image of a registry, `docker compose up` reads a
+  compose file the agent can edit, which may mount the whole machine), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
   exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
   `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
   init x`; nor `config`, `c` or `set` of `npm`, `pnpm`, `yarn` (`config` only), which write the
@@ -886,8 +891,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   other aliases of install, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
   runs its install scripts and writes `package.json` and the lockfile, which no edit grant covers; an
   install of the lockfile alone, `npm ci`, `pnpm install --frozen-lockfile`, `pnpm --filter a install`, is
-  not refused) (`interpreter`; the same three
-  checks hold a grant's prefix when it is made); pnpm and yarn run a word that is no command of
+  not refused), and `cargo`'s command, the word after its name past one rustup `+toolchain` at most, is
+  `build`, `test`, `check`, `clippy` or `fmt`, spelled out and in that case (`delegateSubcommands`, the
+  PWA's `SUBCOMMANDS`: cargo runs any other word as the program `cargo-<x>` it finds on `PATH`, and
+  `cargo install` fetches and builds a crate the agent names; `cargo add`, `cargo run`, an option before
+  the command (`cargo -C build install x`) and the aliases `b`, `t`, `c`, which a cargo config may
+  redefine, are refused; after the grant's prefix a `+toolchain` is an option like any other) (`interpreter`;
+  the same four checks hold a grant's prefix when it is made); pnpm and yarn run a word that is no command of
   theirs as a script or, without one, as a program (`pnpm --filter a node x.js` runs node), so the
   word that picks the command (`commandWord`: past options, an option without `=` and not of
   `delegateFlagOptions` taking the word after it, and past `yarn workspace <name>`) is, when it
@@ -905,7 +915,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   xIf ./x.sh a.tar` running `./x.sh`, so under a prefix of its name alone any further word is
   `option`, and a prefix such as `tar xzf` or `tar -xf` covers what follows it). A grant for a
   test, build or script command still runs code the agent can edit (its test files, a script it
-  wrote); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
+  wrote; for cargo its `build.rs`, and `clippy` and `fmt` are no commands of cargo's own, so an alias
+  of a cargo config the agent writes may redefine them); the grant sheet says so under the prefix
+  (`jobs.grant.runsCode`). `msbuild` and `dotnet` are not refused: they build what the agent can edit
+  like any build command. Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
   component and no doubled separator, since `filepath.Rel` reads `sub/../x` as `x` while the OS walks
   `sub` first: `denied_path`), inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every
