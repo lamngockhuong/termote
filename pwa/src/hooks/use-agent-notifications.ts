@@ -14,6 +14,8 @@ import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 interface Options {
   sessions: Session[]
   groups: SessionGroup[]
+  // Workspaces hidden on this browser: notified without their names
+  hiddenGroupIds?: ReadonlySet<string>
   // Pane on screen; it never notifies while the page is visible and focused
   activePaneId?: string
   enabled: boolean
@@ -65,6 +67,7 @@ export function useAgentNotifications(opts: Options) {
             o.sessions,
             o.groups,
             t,
+            o.hiddenGroupIds,
           )
           reg.showNotification(title, options).catch(() => {})
         }

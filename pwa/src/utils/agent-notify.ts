@@ -101,15 +101,19 @@ export function notificationTitle(
 
 // Names only: no screen or transcript text, and never the pane title, which
 // whatever runs in the pane can set. The name the user gave the pane goes
-// before the agent's, so two agents' panes read apart.
+// before the agent's, so two agents' panes read apart. A workspace hidden on
+// this browser (hiddenGroupIds) leaves its name out, shown for a while or not.
 export function notificationContent(
   event: AgentEvent,
   sessions: readonly Session[],
   groups: readonly SessionGroup[],
   t: Translate<MessageKey>,
+  hiddenGroupIds: ReadonlySet<string> = new Set(),
 ): NotificationContent {
   const tab = sessions.find((s) => s.id === event.tabId)
-  const group = groups.find((g) => g.id === event.groupId)
+  const group = hiddenGroupIds.has(event.groupId ?? '')
+    ? undefined
+    : groups.find((g) => g.id === event.groupId)
   const paneName = tab?.panes?.find((p) => p.id === event.paneId)?.name
   const agent =
     cleanName(paneName) ||

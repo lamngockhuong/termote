@@ -7,8 +7,8 @@ export type NotifySupport = NotificationPermission | 'unsupported'
 
 // Answered by notify-sw.js; a worker from before it never answers, and one
 // before 2 has no push handler (3: the settings push, 4: the job review
-// push).
-export const NOTIFY_WORKER_VERSION = 4
+// push, 5: a hidden workspace's name left out of a push).
+export const NOTIFY_WORKER_VERSION = 5
 const PING_TIMEOUT_MS = 500
 
 // The demo registers no service worker and never asks for the permission.

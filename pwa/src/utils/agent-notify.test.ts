@@ -170,6 +170,34 @@ describe('notificationContent', () => {
     })
   })
 
+  it("leaves a hidden workspace's name out", () => {
+    const event = {
+      kind: 'blocked' as const,
+      groupId: '$1',
+      tabId: '$1:2',
+      paneId: '%3',
+      agentName: 'claude',
+    }
+    const hidden = notificationContent(
+      event,
+      sessions,
+      groups,
+      tFor('en'),
+      new Set(['$1']),
+    )
+    expect(hidden.options.body).toBe('claude · build')
+    // The link still opens the pane
+    expect(hidden.options.data.hash).toBe('#/s/%241/%241%3A2/%253')
+    const other = notificationContent(
+      event,
+      sessions,
+      groups,
+      tFor('en'),
+      new Set(['$2']),
+    )
+    expect(other.options.body).toBe('claude · work / build')
+  })
+
   it('names the pane by the name the user gave it, before the agent', () => {
     const named = (paneId: string, name: string) =>
       notificationContent(

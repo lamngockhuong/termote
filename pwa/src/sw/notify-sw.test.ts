@@ -5,7 +5,9 @@ import { LOCALES } from '../i18n'
 import { tFor } from '../i18n/i18n-context'
 import { cleanName, notificationContent } from '../utils/agent-notify'
 import { OVERVIEW_PLAN_HASH } from '../utils/deep-link'
+import { HIDDEN_URL, hiddenKey } from '../utils/hidden-workspaces'
 import { LOCALE_CACHE, LOCALE_URL } from '../utils/notify-locale'
+import { NOTIFY_WORKER_VERSION } from '../utils/notify-permission'
 
 type Listener = (event: unknown) => void
 
@@ -119,7 +121,9 @@ describe('notify-sw.js', () => {
       data: { type: 'termote-notify-ping' },
       ports: [port],
     })
-    expect(port.postMessage).toHaveBeenCalledWith({ version: 4 })
+    expect(port.postMessage).toHaveBeenCalledWith({
+      version: NOTIFY_WORKER_VERSION,
+    })
     await dispatch('message', { data: { type: 'SKIP_WAITING' }, ports: [port] })
     await dispatch('message', { data: null, ports: [] })
     await dispatch('message', {
@@ -288,6 +292,81 @@ describe('notify-sw.js', () => {
       expect(page.options.body).toBe('claude · work / build')
       expect(calls[0].init?.credentials).toBe('same-origin')
       expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
+    })
+
+    describe('hidden workspaces', () => {
+      // Cache Storage holding the page's list as text (undefined: none)
+      const keepHidden = (text?: string) =>
+        vi.stubGlobal('caches', {
+          match: vi.fn(async (url: string, opts?: { cacheName: string }) =>
+            url === HIDDEN_URL &&
+            opts?.cacheName === LOCALE_CACHE &&
+            text !== undefined
+              ? new Response(text)
+              : undefined,
+          ),
+        })
+      const body = async (event: object = EVENT, snapshot = SNAPSHOT) => {
+        const machine = (event as { machineId?: string }).machineId
+        stubFetch({
+          [machine
+            ? `/api/machines/${machine}/mux/snapshot?peek=1`
+            : '/api/mux/snapshot?peek=1']: { body: snapshot },
+        })
+        const { registration, dispatch } = loadWorker()
+        await dispatch('push', pushData(event))
+        return registration.showNotification.mock.calls[0][1].body
+      }
+
+      it('leaves a hidden workspace out as the page does', async () => {
+        // Names the key is built from as is: spaces around, invisible and
+        // bidi characters, longer than a name is shown
+        for (const name of [' work ', 'wo​rk', 'wo‮rk⁦', `${'w'.repeat(70)} `]) {
+          const snapshot = structuredClone(SNAPSHOT)
+          snapshot.groups[0].name = name
+          keepHidden(JSON.stringify([hiddenKey('', name)]))
+          const shown = await body(EVENT, snapshot)
+          const page = notificationContent(
+            { ...EVENT, kind: 'blocked', agentName: 'claude⁦' },
+            [{ id: '$1:2', name: ' build\u0007 ', icon: '', description: '' }],
+            [{ id: '$1', name }],
+            tFor('en'),
+            new Set(['$1']),
+          )
+          expect(shown, name).toBe(page.options.body)
+          expect(shown, name).toBe('claude · build')
+        }
+      })
+
+      it("hides by the push's machine", async () => {
+        const machine = '0123456789abcdef'
+        keepHidden(JSON.stringify([hiddenKey(machine, 'wo‮rk')]))
+        expect(await body({ ...EVENT, machineId: machine })).toBe(
+          'claude · build',
+        )
+        // The same name on this server is not hidden
+        expect(await body()).toBe('claude · work / build')
+      })
+
+      it('shows every name without a list, or when storage is refused', async () => {
+        keepHidden(undefined)
+        expect(await body()).toBe('claude · work / build')
+        keepHidden(JSON.stringify([hiddenKey('', 'other')]))
+        expect(await body()).toBe('claude · work / build')
+        vi.stubGlobal('caches', {
+          match: async () => {
+            throw new Error('denied')
+          },
+        })
+        expect(await body()).toBe('claude · work / build')
+      })
+
+      it('shows no workspace name when the list cannot be read', async () => {
+        keepHidden('{oops')
+        expect(await body()).toBe('claude · build')
+        keepHidden('{"a":1}')
+        expect(await body()).toBe('claude · build')
+      })
     })
 
     it("reads a machine's names through this server", async () => {
