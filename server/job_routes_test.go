@@ -69,7 +69,9 @@ func (jt *jobsTest) snapshot() {
 }
 
 // as: "socket" (the CLI), "full" (a browser signed in), "view" (a
-// view-only device), "bridge" (another termote with the full role).
+// view-only device), "bridge" (another termote with the full role), or
+// "bridge-<role>:<origin>" (another termote with that role, for a client
+// there that signed in as origin).
 func (jt *jobsTest) do(as, method, path string, body any) (int, map[string]any) {
 	jt.t.Helper()
 	var rd *bytes.Reader
@@ -93,6 +95,12 @@ func (jt *jobsTest) do(as, method, path string, body any) (int, map[string]any) 
 	case "bridge":
 		req = onBridge(req)
 		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authMachine, Role: roleFull}))
+	default:
+		if rest, ok := strings.CutPrefix(as, "bridge-"); ok {
+			r, origin, _ := strings.Cut(rest, ":")
+			req = onBridge(req)
+			req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authMachine, Role: role(r), OriginAuth: origin}))
+		}
 	}
 	rec := serve(jt.mux, req)
 	var out map[string]any
@@ -830,5 +838,81 @@ func TestJobListReadsAgentsSideBySide(t *testing.T) {
 		if l := live(j); l["status"] != "blocked" {
 			t.Errorf("%s: %v", j["title"], l)
 		}
+	}
+}
+
+// Another termote's bridge reads and changes the ledger as a browser here
+// does: a view role gets the brief, a job it makes is the user's only when a
+// browser there made it, a change names the updated it read, the history
+// and the grants stay with this server, and an audit line names the bridge.
+func TestJobLedgerOverBridge(t *testing.T) {
+	jt := newJobsTest(t)
+	logs := captureLog(t)
+	jt.create(map[string]any{"title": "Parser", "prompt": "Tidy the parser", "pane": "w1:pa"})
+
+	allowed := map[string]bool{"id": true, "title": true, "state": true, "branch": true, "live": true, "updated": true, "ciSummary": true}
+	for _, as := range []string{"bridge-view:password", "bridge-:device"} {
+		code, out := jt.do(as, http.MethodGet, "/api/mux/jobs?all=1", nil)
+		if code != http.StatusOK || out["readOnly"] != true || out["canGrant"] != nil {
+			t.Fatalf("%s list = %d %v", as, code, out)
+		}
+		for _, j := range out["jobs"].([]any) {
+			for k := range j.(map[string]any) {
+				if !allowed[k] {
+					t.Errorf("%s sees %q: %v", as, k, j)
+				}
+			}
+			for _, k := range []string{"dir", "lastTs", "entryTs", "outsideWorktree"} {
+				if _, ok := live(j.(map[string]any))[k]; ok {
+					t.Errorf("%s sees live %q", as, k)
+				}
+			}
+		}
+	}
+	if code, out := jt.do("bridge-full:password", http.MethodGet, "/api/mux/jobs?all=1", nil); code != http.StatusOK || out["canGrant"] != false || out["readOnly"] != false {
+		t.Errorf("full list = %d %v", code, out)
+	}
+
+	// A browser there makes the user's job; its CLI or Basic auth there, or
+	// an older termote that names no origin, a machine's.
+	for as, want := range map[string]string{"bridge-full:password": "pwa", "bridge-full:device": "pwa", "bridge-full:none": "pwa",
+		"bridge-full:socket": "machine", "bridge-full:basic": "machine", "bridge-full:": "machine"} {
+		code, out := jt.do(as, http.MethodPost, "/api/mux/jobs", map[string]any{"title": as, "createdBy": "x",
+			"worktree": map[string]string{"source": "w1", "branch": "b"}})
+		if code != http.StatusCreated {
+			t.Fatalf("%s create = %d %v", as, code, out)
+		}
+		if j := out["job"].(map[string]any); j["createdBy"] != want || j["worktree"] != nil {
+			t.Errorf("%s job %v", as, j)
+		}
+	}
+	if code, out := jt.do("bridge-view:password", http.MethodPost, "/api/mux/jobs", map[string]any{"title": "t"}); code != http.StatusForbidden || out["code"] != "view_only" {
+		t.Errorf("view create = %d %v", code, out)
+	}
+
+	id := jt.create(map[string]any{"title": "Lexer", "state": "active"})["id"].(string)
+	if code, out := jt.do("bridge-full:password", http.MethodPatch, "/api/mux/jobs/"+id, map[string]any{"state": "review"}); code != http.StatusBadRequest || out["code"] != "job_invalid" {
+		t.Errorf("patch without updated = %d %v", code, out)
+	}
+	if code, out := jt.do("bridge-full:password", http.MethodDelete, "/api/mux/jobs/"+id, nil); code != http.StatusBadRequest || out["code"] != "job_invalid" {
+		t.Errorf("delete without updated = %d %v", code, out)
+	}
+	if code, out := jt.do("bridge-full:password", http.MethodPost, "/api/mux/jobs/"+id+"/event", map[string]any{"kind": "sent", "text": "x"}); code != http.StatusForbidden || out["code"] != "socket_only" {
+		t.Errorf("bridge event = %d %v", code, out)
+	}
+
+	// Removing an unfinished job ends its grants, logged with the bridge.
+	if _, err := jt.agent.jobs.update(id, "", func(j *job) error {
+		j.Grants = append(j.Grants, grant{ID: "g1", Kind: "bash", Expires: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	j, _ := jt.agent.jobs.job(id)
+	if code, out := jt.do("bridge-full:password", http.MethodDelete, "/api/mux/jobs/"+id+"?updated="+url.QueryEscape(j.Updated.Format(time.RFC3339Nano)), nil); code != http.StatusOK {
+		t.Fatalf("bridge delete active = %d %v", code, out)
+	}
+	if want := `audit: grant_revoked grant="g1" job="` + id + `" reason="job_removed" by="machine" via="machine:password"`; !strings.Contains(logs.String(), want) {
+		t.Errorf("no %q in\n%s", want, logs)
 	}
 }

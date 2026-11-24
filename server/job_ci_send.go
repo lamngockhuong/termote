@@ -108,10 +108,11 @@ func ciGrant(j *job, now time.Time) *grant {
 	return nil
 }
 
-// sendCI sends job id's failed checks to its agent. by names the sender
-// for the audit line; auto is a send under the job's ci grant. queued: the
-// agent was working and took the message into its queue.
-func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued bool, saved job, err error) {
+// sendCI sends job id's failed checks to its agent. by and via name the
+// sender and how it signed in for the audit line; auto is a send under the
+// job's ci grant. queued: the agent was working and took the message into
+// its queue.
+func (a *agentAPI) sendCI(ctx context.Context, id, by, via string, auto bool) (queued bool, saved job, err error) {
 	j, ok := a.jobs.job(id)
 	if !ok || jobFinished(j.State) {
 		return false, job{}, errJobNotFound
@@ -227,7 +228,7 @@ func (a *agentAPI) sendCI(ctx context.Context, id, by string, auto bool) (queued
 	if auto {
 		auditf("ci_sent", "job", id, "prs", prs, "by", "grant", "grant", gid)
 	} else {
-		auditf("ci_sent", "job", id, "prs", prs, "by", by)
+		auditf("ci_sent", "job", id, "prs", prs, "by", by, "via", via)
 	}
 	saved, _ = a.jobs.job(id)
 	return errors.Is(err, errQueued), saved, nil
@@ -297,7 +298,7 @@ func (p *ciPoller) autoSend(ctx context.Context, j job) {
 	if blocked {
 		return
 	}
-	_, _, err := p.a.sendCI(ctx, j.ID, "grant", true)
+	_, _, err := p.a.sendCI(ctx, j.ID, "grant", "", true)
 	if err == nil || errors.Is(err, errCISkip) {
 		return
 	}
@@ -347,11 +348,11 @@ func (a *agentAPI) handleJobCI(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonOK(w, map[string]any{"job": a.viewJob(j)})
 	case "send":
-		by := "cli"
-		if auth, ok := authFrom(r.Context()); ok {
-			by = auditBy(auth)
+		by, via := "cli", "none"
+		if _, ok := authFrom(r.Context()); ok {
+			by, via = auditWho(r)
 		}
-		queued, j, err := a.sendCI(r.Context(), id, by, false)
+		queued, j, err := a.sendCI(r.Context(), id, by, via, false)
 		if err != nil {
 			a.writeCIError(w, err)
 			return

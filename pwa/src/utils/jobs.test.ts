@@ -8,6 +8,7 @@ import {
   groupJobs,
   jobFinished,
   jobPaneRef,
+  safePRUrl,
 } from './jobs'
 import { visibleUnsafe } from './unsafe-chars'
 
@@ -126,5 +127,39 @@ describe('jobPaneRef', () => {
       '%9',
     )
     expect(jobPaneRef(job('e'))).toBe('')
+  })
+})
+
+describe('safePRUrl', () => {
+  it('keeps an https link to the pull request of that number and repo only', () => {
+    const ok = 'https://github.com/o/r/pull/12'
+    expect(safePRUrl(ok, 12, 'github.com/o/r')).toBe(ok)
+    expect(
+      safePRUrl('https://GitHub.com/O/r/pull/12', 12, 'github.com/o/r'),
+    ).toBe('https://GitHub.com/O/r/pull/12')
+    expect(
+      safePRUrl('https://ghe.example/o/r/pull/7', 7, 'ghe.example/o/r'),
+    ).toBe('https://ghe.example/o/r/pull/7')
+    expect(
+      safePRUrl('https://evil.example/o/r/pull/12', 12, 'github.com/o/r'),
+    ).toBeUndefined()
+    expect(
+      safePRUrl('https://github.com/x/r/pull/12', 12, 'github.com/o/r'),
+    ).toBeUndefined()
+    for (const url of [
+      undefined,
+      '',
+      'not a url',
+      'javascript:alert(1)',
+      'http://github.com/o/r/pull/12',
+      'https://github.com/o/r/pull/13',
+      'https://github.com/o/r/pull/012',
+      'https://github.com/o/r/issues/12',
+      'https://github.com/o/r/x/pull/12',
+      'https://u:p@github.com/o/r/pull/12',
+      'https://github.com/o/r/pull/12?x=1',
+      'https://github.com/o/r/pull/12#x',
+    ])
+      expect(safePRUrl(url, 12, 'github.com/o/r')).toBeUndefined()
   })
 })

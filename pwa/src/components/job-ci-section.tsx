@@ -12,7 +12,7 @@ import {
   prChecksWords,
   prStateWords,
 } from '../utils/job-ci'
-import { jobFinished } from '../utils/jobs'
+import { jobFinished, safePRUrl } from '../utils/jobs'
 import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
@@ -151,6 +151,7 @@ export function JobCISection({ job, now }: Props) {
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {prs.map((pr) => {
             const checks = prChecksWords(pr)
+            const href = safePRUrl(pr.url, pr.number, pr.repo)
             return (
               <li
                 key={`${pr.repo}#${pr.number}`}
@@ -183,9 +184,9 @@ export function JobCISection({ job, now }: Props) {
                     </span>
                   )}
                 </span>
-                {pr.url && (
+                {href && (
                   <a
-                    href={pr.url}
+                    href={href}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={t('jobs.ci.open', { n: pr.number })}

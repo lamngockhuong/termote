@@ -822,7 +822,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   kinds, and `read` moves the read mark only forward (`tsAfter`, or another conversation) and only
   with a cursor that verifies (`decodeCursor`) and a `lastTs` that is empty or an RFC 3339 time of 64
   bytes at most. `PATCH` takes `addPrs`/`removePrs` (numbers 1 to
-  10^9, 10 attached at most, one change). A browser's job is always `createdBy: "pwa"`; a
+  10^9, 10 attached at most, one change). A browser's job is always `createdBy: "pwa"`, as is one
+  another termote's browser makes through Machines (`X-Termote-Origin-Auth` `password`, `device` or
+  `none`); any other origin over the bridge (that termote's CLI, Basic auth, or an older termote that
+  names none) makes a `createdBy: "machine"` job, so a job the PWA shows as the user's was made, as
+  far as the other termote can tell, by a user (the same limit as Orchestrator asks: a termote
+  without sign-in, or its own OS user, can name a browser origin); the Machine proxy forwards `jobs`, `jobs/{id}` and `jobs/{id}/ci` and nothing else of the
+  ledger (see Machine proxy, Machine bridge); a
   `worktree` in a request is ignored unless it comes over the socket, and then only names the source
   workspace and branch: the directory is the one the server's own worktree list
   (`worktreeMux.ListWorktrees`) gives for that linked branch, never a path from the request, refused
@@ -887,20 +893,33 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `Answer to Qn: <text>` or `Answer to Qn (choice k): <label>`, the label taken from the stored
   ask, never the client. Only then is the answer recorded; a record that fails is logged and
   answered 200 `recorded: false` (the orchestrator closes the ask on the message). The audit line
-  `ask_answered` carries `ask` and `by` (`auditBy`), never the answer. The PWA shows the text and
+  `ask_answered` carries `ask`, `by` and `via` (`auditWho`, `machine:<origin>` over the bridge), never
+  the answer. The PWA shows the text and
   choices as plain text (`visibleUnsafe`, `whitespace-pre-wrap`), never Markdown, a link or an
-  action. The machine proxy does not forward `asks*` (`machineRouteRe`,
-  `TestAskRoutesNotForwarded`): a question is answered in the PWA of the server that holds it.
-  `answer` itself needs the write role only, not a browser: a process on the local socket (`by`
-  socket) or a full bridge connection can answer too, as either can already send to the
-  orchestrator's pane; the record says `answeredBy: pwa` then. In
+  action. The machine proxy forwards `GET asks` and `asks/{id}/answer` only (`machineRouteRe`; a
+  method other than `GET`/`HEAD` on `asks` is 404 `machine_route_forbidden` at the edge,
+  `machineAsksAdd`, as are `close`, `reported` and anything longer, `TestMachineProxyAsks`), so
+  another termote's PWA lists a machine's questions (the brief for a view role, cut by the machine)
+  and answers them with a full role. Over the bridge an answer is taken only from a browser origin
+  (`X-Termote-Origin-Auth` `password`, `device` or `none`, `browserOrigin`); another termote's CLI
+  (`socket`), Basic auth (`basic`) or an older termote that names none get 403 `ask_browser_only`
+  before the question is reserved, read or typed (`TestAskAnswerOverBridge`): the answer is the
+  user's words, as a permission dialog's choices are held for a non-browser origin (`cliMayChoose`).
+  As there, it is not a wall: the origin is what the other termote says, so on a termote without
+  sign-in every client of its port (a script on that host, or on the LAN with `--lan`) is `none`,
+  and a process of that termote's OS user that can use its SSH key can name any origin (accepted).
+  Otherwise `answer` needs the write role only, not a browser: a process on the local socket (`by`
+  socket) can answer too, as it can already send to the orchestrator's pane; the record says
+  `answeredBy: pwa` then. In
   container mode the routes exist but nothing adds an ask (`termote agents` does not run there).
 - **Dialog delegation** (`server/job_grants.go`, `server/agent_delegate*.go`, `handleAnswer`):
   a grant is made and revoked (`POST /api/mux/jobs/{id}/grants`, `DELETE .../grants/{gid}`) only by
   a browser signed in with the password or as a full paired device (`canGrant`: `authSession` or
   `authDevice` with role full, not the local socket); the CLI, the bridge (`machineForbiddenPath`),
   Basic auth and a server without sign-in get 403 `grant_pwa_only`, and there is no CLI command that
-  makes one. This is the user's say given where the user reads the job, not a wall against a process
+  makes one; the Machine proxy does not forward `jobs/{id}/grants*` either (404
+  `machine_route_forbidden`), so another termote's PWA shows a machine's grants read only and says they
+  are given on that machine. This is the user's say given where the user reads the job, not a wall against a process
   of the same OS user (which can read the password). A grant is pinned when made to the job's agent
   as recorded (`jobAgent`) and, to edit, to the job's worktree directory, refused with 409
   `grant_outside_worktree` while the agent's pane is outside it (`live.outsideWorktree`, a job
@@ -909,8 +928,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
   each. A grant still unexpired that a change ends without a revoke of its own is logged `audit:
   grant_revoked` with a `reason` (`agent_changed`, `job_finished`, `job_removed` for an unfinished job
-  a browser removes, `replaced` for a `ci` grant a newer one ends) and `by`, once the change is
-  written; expiry and a pane that no longer runs the agent change nothing stored (checked at each use,
+  a browser removes, `replaced` for a `ci` grant a newer one ends), `by` and `via` (`auditWho`:
+  `machine:<origin>` for another termote's bridge, as on `grant_created` and a revoke), once the change is
+  written; a `PATCH` or `DELETE` over the bridge ends grants as a browser's would: it can only take
+  power away; expiry and a pane that no longer runs the agent change nothing stored (checked at each use,
   `grantInForce`, `jobAgent.matches`) and leave no line. `answer` with `delegated: true` is the socket's alone and names no option (400 otherwise);
   under the pane's lock it reads the session again (`sessionNow`) and the screen, requires the
   `promptId` to be the dialog on screen now (`promptIs`), then refuses with 409
@@ -1070,4 +1091,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   work), for a set of failures not sent before, with the pull requests' numbers and the `gh` commands but no check name, never a `foreign` pull request, at most 3 times per
   grant, backing off while the agent refuses (5 tries a set); one `ci` grant per job, a new one
   ends the last. Every send is logged as `audit: ci_sent` (job, pull requests, by: the user, `cli`
-  or the grant) and noted on the job (`ci_sent`, `ci_failed_send`).
+  or the grant; a send asked for also `via`, `machine:<origin>` when another termote forwards it)
+  and noted on the job (`ci_sent`, `ci_failed_send`). The route reaches a machine through the Machine
+  proxy (`refresh` and `send`, a full role only, refused at the edge for a view role), and the
+  machine's `gh` reads; a pull request link a machine sends is shown as a link by the PWA only when it is
+  `https://<host>/<owner>/<repo>/pull/<n>` of the pull request's own repo and number, compared
+  case-insensitively (`safePRUrl`), since a machine may be hostile.

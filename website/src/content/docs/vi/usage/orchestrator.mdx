@@ -190,7 +190,8 @@ orchestrator đóng câu hỏi bằng `termote agents ask close Q3`. Termote kh�
 đang gõ dở trong ô nhập của orchestrator: câu trả lời bị từ chối và câu hỏi vẫn mở cho tới khi bạn
 gửi hoặc xoá phần gõ dở. Nếu orchestrator đã hỏi không còn chạy, PWA báo điều đó và bạn trả lời
 trong terminal của nó. Thiết bị chỉ xem chỉ thấy có bao nhiêu câu đang chờ và ID của chúng, không
-thấy nội dung.
+thấy nội dung. Một máy mở qua [Machines](/vi/usage/machines/) hiện câu hỏi của chính nó, và bạn trả
+lời từ trình duyệt; dòng lệnh của một Termote khác không trả lời được.
 
 ```bash
 termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>
@@ -207,7 +208,8 @@ Hộp thoại xin quyền (chạy lệnh, sửa file) là việc của bạn. Đ
 vắng mặt, bạn có thể cấp cho agent của một việc một ủy quyền trên PWA, khi đăng nhập bằng mật khẩu
 hoặc bằng thiết bị đã ghép: chạy các lệnh bắt đầu bằng một tiền tố do bạn gõ (`pnpm test`), hoặc
 sửa file trong worktree của việc khi agent đang làm trong đó, tối đa một ngày. Chỉ bạn mới cấp được ủy quyền: orchestrator,
-dòng lệnh, một Termote khác và server không bật đăng nhập đều không cấp được.
+dòng lệnh, một Termote khác và server không bật đăng nhập đều không cấp được. Với một máy mở qua
+[Machines](/vi/usage/machines/), hãy cấp trên Termote của chính máy đó; ở đây chỉ xem được.
 
 Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
 chọn "Yes" cho đúng lần này khi mọi điều sau đều đúng: hộp thoại trên màn hình và lời gọi công cụ

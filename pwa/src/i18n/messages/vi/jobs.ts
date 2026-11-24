@@ -9,6 +9,9 @@ export default {
   'jobs.noneHint':
     'Hãy thêm một việc, hoặc để một agent điều phối lên kế hoạch',
   'jobs.noneOpen': 'Mọi việc đều đã kết thúc',
+  'jobs.outdated.title': 'Termote trên máy này quá cũ để hiện kế hoạch',
+  'jobs.outdated.hint':
+    'Chạy termote update trên máy đó, hoặc brew upgrade termote && termote restart nếu máy cài bằng Homebrew',
   'jobs.noneOpenHint': 'Các việc đã kết thúc nằm ở danh sách bên dưới',
   'jobs.group.waiting': 'Đang chờ bạn · {count}',
   'jobs.group.unread': 'Xong, chưa đọc · {count}',
@@ -111,6 +114,8 @@ export default {
     'Ủy quyền cho phép agent điều phối thay bạn trả lời một loại hộp thoại xin quyền của agent làm việc này, cho tới khi hết hạn',
   'jobs.grant.cannot':
     'Chỉ trình duyệt đăng nhập bằng mật khẩu hoặc thiết bị ghép nối toàn quyền mới cấp hay thu hồi được ủy quyền. Trình duyệt này không thuộc loại nào (máy chủ không yêu cầu đăng nhập, hoặc dùng Basic auth)',
+  'jobs.grant.machine':
+    'Ủy quyền của máy này được cấp trên Termote của chính máy đó, khi đăng nhập ở đó. Ở đây chỉ xem được',
   'jobs.grant.active': 'Còn hiệu lực',
   'jobs.grant.none': 'Không có ủy quyền nào còn hiệu lực',
   'jobs.grant.runLabel': 'Chạy: {prefix}',
@@ -205,6 +210,8 @@ export default {
   'jobs.ci.setDone': 'Đặt là xong',
   'jobs.asks.title': 'Chờ bạn',
   'jobs.asks.from': 'Hỏi từ {ref}',
+  'jobs.asks.outdated':
+    'Termote trên máy này quá cũ nên chưa giữ câu hỏi của orchestrator. Hãy cập nhật để trả lời ở đây',
   'jobs.asks.about': 'Về việc',
   'jobs.asks.choices': 'Các lựa chọn cho {id}',
   'jobs.asks.answerLabel': 'Câu trả lời của bạn cho {id}',

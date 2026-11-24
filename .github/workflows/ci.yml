@@ -847,6 +847,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_MACHINE: "1"
+          TERMOTE_E2E_MACHINE_URL: http://127.0.0.1:7681
           TERMOTE_PASS: ${{ env.E2E_MACHINE_PASS }}
         run: pnpm exec playwright test machines.spec --workers=1
 
