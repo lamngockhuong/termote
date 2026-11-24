@@ -3,10 +3,12 @@ import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from './unsafe-chars'
 
-// The Plan section's groups: the active jobs split by what they need from
-// the user, then those to review, those not started and the finished ones.
+// The Plan section's groups: the unfinished jobs whose agent waits on a
+// dialog, the other active ones split by what they need from the user, then
+// those to review, those not started and the finished ones.
 export interface JobGroups {
-  // Active, the agent waits for an answer to a dialog
+  // Not finished, the agent waits for an answer to a dialog (a job moved to
+  // review while its agent still runs asks the user all the same)
   waiting: Job[]
   // Active, a turn ended that the orchestrator has not read
   unread: Job[]
@@ -33,10 +35,13 @@ export function groupJobs(jobs: readonly Job[]): JobGroups {
     finished: [],
   }
   for (const j of jobs) {
+    if (!jobFinished(j.state) && j.live.status === 'blocked') {
+      groups.waiting.push(j)
+      continue
+    }
     switch (j.state) {
       case 'active':
-        if (j.live.status === 'blocked') groups.waiting.push(j)
-        else if (j.live.unread) groups.unread.push(j)
+        if (j.live.unread) groups.unread.push(j)
         else groups.running.push(j)
         break
       case 'review':
