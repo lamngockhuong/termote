@@ -24,6 +24,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/compact-group-row.tsx`        | Compact sidebar: one workspace per line, its chip, tab count   |
 | `pwa/src/utils/group-avatar.ts`                   | Workspace avatar: first letter, a stable `--tm-avatar-N`       |
 | `pwa/src/utils/pick-group-tab.ts`                 | Tab a picked workspace opens: last shown here, then server's   |
+| `pwa/src/hooks/use-hidden-workspaces.ts`          | Workspaces hidden on this browser: hide, show, follow renames  |
+| `pwa/src/utils/hidden-workspaces.ts`              | Their keys; whatever names a workspace filters with `shownIds` |
 | `pwa/src/components/sidebar-agents.tsx`           | Compact sidebar's Agents: by status, opens a pane, resizable   |
 | `pwa/src/hooks/use-sidebar-agents-collapsed.ts`   | Agents section folded or not, kept on the device               |
 | `pwa/src/components/sidebar-row-classes.ts`       | Row classes of the sidebar's tabs, workspaces and agents       |

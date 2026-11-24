@@ -3755,6 +3755,29 @@ Caution
 
 With tmux, a tab’s id is its window number, and moving a window renumbers the windows it passes. Termote keeps your unsent Chat message, attached images and unsaved file edits with their window, but a link to a tab (or another device’s saved selection) that named a renumbered window opens another tab afterwards.
 
+### Hiding workspaces
+
+[Section titled “Hiding workspaces”](#hiding-workspaces)
+
+To keep the list short, or to keep a project’s name out of a screenshot, choose **Hide** in a workspace’s **⋯** menu (a tmux or Zellij session’s too). The workspace leaves the sidebar, the compact layout’s **Agents** section, the command palette, the [agent overview](/usage/overview/) (its cards, the activity log and the Plan’s jobs) and the recent list of **New workspace**. A repository’s linked worktrees are hidden with it.
+
+* A line under the list says how many are hidden. **Show** brings them back in their places, each marked with a struck-through eye, until you choose **Hide again** or reload the page. **Unhide** in the menu of one shown that way keeps it shown for good.
+* The workspace on screen stays open: the header names it **Hidden** instead.
+* **Hide** is offered on a view-only device too, and moving the other workspaces still keeps the hidden ones where they are.
+* Agents in a hidden workspace still notify, but neither the page’s notification nor a Web Push names the workspace, even while it is shown; a notification of it already on screen is closed when you hide it.
+
+Hiding is a setting of this browser, not of the server: each browser and device keeps its own list, and on iOS a Safari tab and the app added to the Home Screen keep separate ones.
+
+Caution
+
+Hiding only takes the name off the screen. It does not blur the terminal, nor stop anyone who can sign in from opening the workspace. Other limits:
+
+* The list remembers a workspace by its name (and the machine it is on). Two workspaces of the same name are hidden together, and a new workspace given a hidden one’s name is shown.
+* A workspace renamed while a page of Termote is open stays hidden under its new name; one renamed while none is open shows again. An unnamed herdr-core space takes its folder’s name, so it can show again when that folder changes with no page open.
+* A job’s title still shows in a job’s notification.
+* With Zellij, the address bar holds the session’s id, which is its name encoded in base64.
+* A Web Push leaves the name out only once the browser runs the new service worker: choose **Reload** when Termote says a new version is ready.
+
 ### Searching Sessions
 
 [Section titled “Searching Sessions”](#searching-sessions)
