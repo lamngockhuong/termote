@@ -66,6 +66,13 @@ export default {
   'jobs.detail.branch': 'Branch',
   'jobs.detail.changes': 'Thay đổi',
   'jobs.detail.folder': 'Thư mục',
+  'jobs.detail.id': 'Mã',
+  'jobs.detail.copyId': 'Sao chép mã',
+  'jobs.detail.copyIdFor': 'Sao chép mã của {title}',
+  'jobs.detail.idLine':
+    'termote job {id} ("{title}"); xem: termote agents job show {id}',
+  'jobs.detail.idCopied': 'Đã sao chép',
+  'jobs.detail.idCopyFailed': 'Không sao chép được',
   'jobs.detail.grantsCount': 'Ủy quyền · {count}',
   'jobs.event.created': 'Đã thêm',
   'jobs.event.started': 'Đã bắt đầu',

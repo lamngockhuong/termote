@@ -80,6 +80,15 @@ export default {
   'jobs.detail.branch': 'Branch',
   'jobs.detail.changes': 'Changes',
   'jobs.detail.folder': 'Folder',
+  // The job's id, and the line its copy button puts on the clipboard for an
+  // agent; the command in it stays as it is in every language
+  'jobs.detail.id': 'ID',
+  'jobs.detail.copyId': 'Copy ID',
+  'jobs.detail.copyIdFor': 'Copy the ID of {title}',
+  'jobs.detail.idLine':
+    'termote job {id} ("{title}"); see: termote agents job show {id}',
+  'jobs.detail.idCopied': 'Copied',
+  'jobs.detail.idCopyFailed': 'Could not copy',
   'jobs.detail.grantsCount': 'Grants · {count}',
   // A history line, by its kind
   'jobs.event.created': 'Added',

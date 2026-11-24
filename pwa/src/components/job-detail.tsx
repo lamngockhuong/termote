@@ -1,4 +1,5 @@
-import { type ReactNode, useState } from 'react'
+import { Check, Copy, X } from 'lucide-react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { agentLabel } from '../chat-agents'
 import { revokeJobGrant } from '../hooks/use-jobs'
 import {
@@ -9,6 +10,7 @@ import {
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import { copyText } from '../utils/copy-text'
 import { formatAgo } from '../utils/format-ago'
 import { ciSetNumbers } from '../utils/job-ci'
 import {
@@ -22,7 +24,7 @@ import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { JobCISection } from './job-ci-section'
-import { Button } from './ui/button'
+import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 // A history line's words, by its kind; one this version does not know is
@@ -84,6 +86,14 @@ export function JobDetail({
   const [ending, setEnding] = useState<JobGrant | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
+  // How the last copy of a job's reference went; kept with that job's id so
+  // another job's panel does not show it
+  const [copied, setCopied] = useState<{ id: string; ok: boolean } | null>(null)
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(null), 2000)
+    return () => clearTimeout(id)
+  }, [copied])
   const end = async (g: JobGrant) => {
     setEnding(null)
     setEnded(false)
@@ -100,6 +110,14 @@ export function JobDetail({
     }
   }
   const title = visibleUnsafe(job.title)
+  // A line an agent can act on without the skill: the id, the title a person
+  // knows the job by, and the command that shows the rest
+  const copyRef = async () => {
+    const line = t('jobs.detail.idLine', { id: job.id, title })
+    setCopied({ id: job.id, ok: (await copyText(line)) === 'ok' })
+  }
+  const copy = copied?.id === job.id ? copied : null
+  const CopyIcon = copy ? (copy.ok ? Check : X) : Copy
   const status = job.live.status
   const live = jobLiveWords(job, t)
   const ref = jobPaneRef(job)
@@ -175,6 +193,34 @@ export function JobDetail({
       <dl className="m-0 grid grid-cols-[6rem_minmax(0,1fr)] gap-y-2 text-[12px]">
         <Row label={t('jobs.detail.state')}>
           {t(JOB_STATE_WORDS[job.state])}
+        </Row>
+        <Row label={t('jobs.detail.id')}>
+          {/* The button's negative margin keeps the row one line high, as
+              the others, while its touch area stays full size */}
+          <span className="flex items-center gap-1">
+            <span className="break-all font-term text-[11px]">
+              {visibleUnsafe(job.id)}
+            </span>
+            <IconButton
+              size="sm"
+              onClick={() => void copyRef()}
+              aria-label={t('jobs.detail.copyIdFor', { title })}
+              title={t('jobs.detail.copyId')}
+              className={`-my-2 pointer-coarse:-my-3 ${copy ? (copy.ok ? 'text-success' : 'text-danger') : 'text-fg-subtle'}`}
+            >
+              <CopyIcon size={14} aria-hidden="true" />
+            </IconButton>
+            {copy && (
+              <span
+                role={copy.ok ? 'status' : 'alert'}
+                className={`text-[11px] ${copy.ok ? 'text-fg-muted' : 'text-danger'}`}
+              >
+                {t(
+                  copy.ok ? 'jobs.detail.idCopied' : 'jobs.detail.idCopyFailed',
+                )}
+              </span>
+            )}
+          </span>
         </Row>
         {agent && <Row label={t('jobs.detail.agent')}>{agent}</Row>}
         {branch && (
