@@ -3318,6 +3318,8 @@ Beside each agent the bar then says **Sent**, **Queued** (the agent was working 
 
 When an [orchestrator](/usage/orchestrator/) hands out work, the **Plan** tab shows its job ledger in columns by what needs you: **Waiting for you** (the agent is on a dialog), which always shows, then done and not read yet, running, to review and to do. The line above the columns counts the open jobs and names the groups with no job. On a phone the columns stack. A job’s card shows its title and state, what its agent does, its pane and branch, and its last diff and grants in force. **Finished** unfolds the finished jobs as a table: job, state, worktree, changes and when it last changed.
 
+The **?** button at the top of the tab (and the hint of an empty Plan) opens how to [install the orchestrator skill](/usage/orchestrator/#install-the-skill), with each command ready to copy. Without the skill, **New job** still adds jobs by hand.
+
 Tap a job (its card, or its title in the table) to open its details: beside the columns on a wide screen, in place of the Activity column (opening Activity closes them), a sheet on a phone. They hold a button that opens the job’s pane, **Grants** and **Edit**, then the job’s state, agent, branch, worktree folder, last diff, prompt, note, grants in force, the dialogs answered under a grant and its history. Each grant in force says when it ends and how often it was used, and **End** revokes it after you confirm (only where you can give grants, see below).
 
 * **New job** adds a job to do, with a title, a prompt and a note: the orchestrator takes it up with `termote agents start --job <id>` when you ask it to.
