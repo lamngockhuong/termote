@@ -73,12 +73,14 @@ const VERSIONED = /^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$/
 
 // Package managers with a word that runs any package: pnpm dlx x, npm exec
 // x, also after options (pnpm -s exec x, pnpm --filter a exec x), so it is
-// refused at any position after the program's name (delegateRunners)
+// refused at any position after the program's name (delegateRunners).
+// create and init fetch and run a create-* package (npm init vite is npm
+// exec create-vite; innit is npm's alias)
 const RUNNERS: Record<string, string[]> = {
-  npm: ['exec', 'x'],
-  pnpm: ['dlx', 'exec', 'x'],
-  yarn: ['dlx', 'exec'],
-  bun: ['x'],
+  npm: ['exec', 'x', 'create', 'init', 'innit'],
+  pnpm: ['dlx', 'exec', 'x', 'create'],
+  yarn: ['dlx', 'exec', 'create'],
+  bun: ['x', 'create'],
 }
 
 // Windows extensions a program's name drops, each once in this order
@@ -89,7 +91,9 @@ const EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 // character or a spacing it refuses; interpreter: a first word (or a
 // package manager's runner word, at any position) that runs any code at
 // all. The server also refuses a command whose words after the prefix
-// start with -, which a prefix alone cannot show.
+// start with -, or, under a prefix of tar's name alone, has tar's first
+// argument (option letters even without a dash), which a prefix alone
+// cannot show.
 export type PrefixProblem = 'empty' | 'length' | 'chars' | 'interpreter'
 
 // What is wrong with prefix, or null when the server would take it. The

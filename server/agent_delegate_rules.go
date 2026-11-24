@@ -46,10 +46,19 @@ var delegateInterpreters = []string{
 // delegateRunners are package managers with a word that runs any package:
 // "pnpm dlx x", "npm exec x", and also after options ("pnpm -s exec x",
 // "pnpm --filter a exec x"), so the word is refused at any position after
-// the program's name.
+// the program's name. create and init fetch and run a create-* package
+// ("npm init vite" is "npm exec create-vite"; innit is npm's alias).
 var delegateRunners = map[string][]string{
-	"npm": {"exec", "x"}, "pnpm": {"dlx", "exec", "x"}, "yarn": {"dlx", "exec"}, "bun": {"x"},
+	"npm":  {"exec", "x", "create", "init", "innit"},
+	"pnpm": {"dlx", "exec", "x", "create"},
+	"yarn": {"dlx", "exec", "create"},
+	"bun":  {"x", "create"},
 }
+
+// delegateBundledOptions are programs that read their first argument as
+// option letters even without a dash (GNU tar: "tar xIf ./x.sh a.tar"
+// runs ./x.sh), so that word is an option when it comes after the prefix.
+var delegateBundledOptions = []string{"tar"}
 
 // interpreterVersionRe: a versioned name of an interpreter (python3.12).
 var interpreterVersionRe = regexp.MustCompile(`^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
@@ -106,6 +115,11 @@ func checkDelegateCommand(cmd, prefix string) string {
 		if strings.HasPrefix(w, "-") {
 			return "option"
 		}
+	}
+	// A prefix of the program's name alone leaves its first argument to
+	// the command: for tar that word is an option bundle, dash or not.
+	if slices.Contains(delegateBundledOptions, first) && len(strings.Fields(prefix)) == 1 && len(words) > 1 {
+		return "option"
 	}
 	return ""
 }

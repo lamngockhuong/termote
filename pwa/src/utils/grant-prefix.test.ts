@@ -92,6 +92,18 @@ describe('grantPrefixProblem', () => {
       'npm --prefix a x',
       'yarn workspace a exec',
       'npm run build EXEC',
+      // create and init run a create-* package from the registry
+      'npm create vite',
+      'npm init vite',
+      'npm innit vite',
+      'npm init',
+      'npm --prefix pwa init',
+      'pnpm create vite',
+      'pnpm --filter termote create',
+      'yarn create vite',
+      'yarn workspace a create',
+      'bun create vite',
+      'npm CREATE',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     for (const p of [
@@ -103,6 +115,10 @@ describe('grantPrefixProblem', () => {
       'yarn x',
       'npm dlx',
       'cargo exec',
+      'pnpm init',
+      'yarn init',
+      'cargo init',
+      'go mod init',
     ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })
