@@ -1008,3 +1008,71 @@ func TestJobWorktreeMadeFlag(t *testing.T) {
 		t.Errorf("browser = %d %v", code, out)
 	}
 }
+
+// A finish moves a job in review to done whatever it waits on, and the
+// jobs waiting on it are ready in the same write.
+func TestJobFinishAndDependencies(t *testing.T) {
+	ft := newFinishTest(t, false)
+	other, err := ft.agent.jobs.create(job{Title: "other", State: "todo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ft.set(func(j *job) { j.After = []string{other.ID} })
+	next, err := ft.agent.jobs.create(job{Title: "next", State: "todo", After: []string{ft.id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := ft.agent.jobs.jobs()
+	if jobReady(list, next) {
+		t.Fatal("next ready before the finish")
+	}
+	if code, out := ft.finish(map[string]any{"close": true}); code != http.StatusOK {
+		t.Fatalf("finish = %d %v", code, out)
+	}
+	list, _ = ft.agent.jobs.jobs()
+	next, _ = ft.agent.jobs.job(next.ID)
+	if j := ft.job(); j.State != "done" || !jobReady(list, next) {
+		t.Errorf("job %s, next ready %v", j.State, jobReady(list, next))
+	}
+}
+
+// A job started in a worktree keeps the workspace it ran from: once the
+// worktree's own workspace is gone, a finish run again lists the worktrees
+// from there.
+func TestJobFinishRetryFromSourceWorkspace(t *testing.T) {
+	ft := newFinishTest(t, true)
+	if j := ft.job(); j.Workspace != "w1" || j.Worktree.GroupID != "w9" {
+		t.Fatalf("job %+v", j)
+	}
+	ft.merged()
+	ft.agent.m = finishHerdr{ft.ff, ft.wm}
+	ft.wm.removeErr = errWorktreeInUse
+	if code, out := ft.finish(map[string]any{"close": true, "removeWorktree": true}); code != http.StatusConflict || out["closed"] != true {
+		t.Fatalf("finish = %d %v", code, out)
+	}
+	if groupIndex(ft.f.snap.Groups, "w9") >= 0 {
+		t.Fatal("w9 still open")
+	}
+	ft.wm.removeErr = nil
+	code, out := ft.finish(map[string]any{"close": true, "removeWorktree": true})
+	if code != http.StatusOK || out["worktreeRemoved"] != true {
+		t.Fatalf("again = %d %v", code, out)
+	}
+	if j := ft.job(); j.State != "done" {
+		t.Errorf("job %+v", j)
+	}
+}
+
+// The same retry with the worktree's own workspace recorded finds nothing
+// to list the worktrees from, and removes nothing.
+func TestJobFinishRetryWithoutSource(t *testing.T) {
+	ft := newFinishTest(t, true)
+	ft.merged()
+	ft.agent.m = finishHerdr{ft.ff, ft.wm}
+	ft.wm.removeErr = errWorktreeInUse
+	ft.finish(map[string]any{"close": true, "removeWorktree": true})
+	ft.wm.removeErr = nil
+	ft.set(func(j *job) { j.Workspace = "w9" })
+	ft.wm.removed, ft.ff.closed = nil, nil
+	ft.refused("no source", map[string]any{"close": true, "removeWorktree": true}, http.StatusServiceUnavailable, "busy")
+}

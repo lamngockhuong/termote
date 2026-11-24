@@ -850,7 +850,8 @@ func TestJobLedgerOverBridge(t *testing.T) {
 	logs := captureLog(t)
 	jt.create(map[string]any{"title": "Parser", "prompt": "Tidy the parser", "pane": "w1:pa"})
 
-	allowed := map[string]bool{"id": true, "title": true, "state": true, "branch": true, "live": true, "updated": true, "ciSummary": true}
+	allowed := map[string]bool{"id": true, "title": true, "state": true, "branch": true, "live": true, "updated": true, "ciSummary": true,
+		"priority": true, "after": true, "waitsOn": true, "waitsOnFailed": true, "workspace": true}
 	for _, as := range []string{"bridge-view:password", "bridge-:device"} {
 		code, out := jt.do(as, http.MethodGet, "/api/mux/jobs?all=1", nil)
 		if code != http.StatusOK || out["readOnly"] != true || out["canGrant"] != nil {

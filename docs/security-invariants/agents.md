@@ -803,11 +803,13 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   200 runes, never taken from a prompt; prompt 16 KB, note 4 KB, 50 events of 200 runes; control,
   hidden and bidi characters removed on the way in; 32 KB bodies (413 `too_large`), errors as
   `codedError` codes (`job_not_found`, `job_conflict` with the job as it is, `too_many_jobs`,
-  `job_invalid`, `job_no_agent`, `job_unfinished`), anything else a logged 500; the file is read up to
+  `job_invalid`, `job_no_agent`, `job_unfinished`, `job_cycle`, `job_after_missing`,
+  `job_workspace_unknown`, `job_workspace_bound`), anything else a logged 500; the file is read up to
   32 MB (`maxJobsRead`) and a write that would make it larger is refused with 409 `jobs_full`, so the
   file stays one every later write can read and a job can still be removed. `GET` is same-site
   (`crossSiteRejection`) for every role; a view-only client gets `id, title, state, branch, live,
-  updated` only (never the prompt, note, directory, agent record, grants or history); `live`
+  updated, priority, after, waitsOn, waitsOnFailed, workspace` only, ids and an enum (never the prompt,
+  note, directory, agent record, grants or history; `TestJobLedgerOverBridge`); `live`
   carries the pane's folder now to a full client only, and the branch the overview's background
   read found, which a view-only client does not get for a home dir (`viewHidden`), as the
   overview's changes; the route never runs git itself. A view-only client also gets `ciSummary`
@@ -857,7 +859,31 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (`notifyJobReview`), whether the job moved there or was made in it. Zellij renames move the
   ledger's ids as the tracker's (`renameGroup`), a job's `createdBy` and the asks' keys too. The
   file also holds the orchestrator's asks (see Orchestrator asks). In container mode the ledger exists but only the
-  PWA writes it (`termote agents` does not run there).
+  PWA writes it (`termote agents` does not run there). Priority and dependencies (`server/job_deps.go`):
+  `priority` is `high`, `normal` (stored empty) or `low`, else `job_invalid`; `after` names at most 20
+  jobs by id (`validTemplateID`), never the job itself (`job_invalid`), and is checked under
+  `jobs.lock` on the re-read file (`checkAfter`, in `create` and `updateWith`): a job not in the file
+  is 409 `job_after_missing`, a list that would make jobs wait on each other however far round is 409
+  `job_cycle`, so no write, whatever order writes race in, leaves a cycle or an unknown id
+  (`TestCheckAfter`, `TestJobStoreAfter`, `TestJobPriorityAndAfterRoutes`). A job removed, pruned,
+  dropped after 30 days or dropped to make room is stripped from every `after` in the same write, with a
+  `deps` event (`pruneAfter`, `TestJobStorePruneAfter`, `TestJobDeleteStripsAfter`). `after` is
+  accepted in any state and feeds only what is shown (`waitsOn`, `waitsOnFailed`: a failed or
+  abandoned one keeps the job waiting; only `done` satisfies), `ready` and `?ready=1`, and the refusal
+  of `termote agents start --job`: no state change and no job finish reads it
+  (`TestJobAfterAnyState`, `TestJobFinishAndDependencies`). `workspace` is clipped to 256 bytes and a
+  non-empty one must name a group of the tracker's last snapshot, else of a new one (409
+  `job_workspace_unknown`). A client sets a job's workspace only while the job has no agent and no
+  worktree, checked on the job re-read under the lock (409 `job_workspace_bound`; the same value is no
+  change); a request giving a pane with a workspace other than the pane's group is refused before
+  anything is written (`PATCH` and `POST` alike), and a job given its first agent takes the agent's
+  group, server-set with a `workspace` event; a later agent leaves it. For a worktree the server
+  found in its own list (socket only), that group is the worktree's `source`, the workspace the start
+  ran from, which job finish falls back to once the worktree's own is gone; a browser's `worktree`
+  being ignored, it is held to the pane's group (`TestJobWorkspaceRoutes`, `TestJobWorkspaceFromPane`,
+  `TestJobWorkspaceOfWorktreeStart`, `TestJobFinishRetryFromSourceWorkspace`). The events `priority`,
+  `after`, `workspace` and `deps` are written by the server only (not in `jobEventKinds`). Listings
+  are by priority (`sortJobs`) and carry `jobFields`, the fields this server reads.
 - **Orchestrator asks** (`/api/mux/asks*`, `POST /api/mux/asks/{id}/dismiss` among them,
   `server/ask_store.go`, `server/ask_routes.go`, `server/cli_agents_ask.go`): an ask is `open`,
   `answered` or `dismissed`. The orchestrator's questions for the user live in `jobs.json` (`asks`,
@@ -1148,7 +1174,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (409 `finish_no_worktree`) made by the start that recorded it (`made`, 409
   `finish_worktree_not_made`), a backend with worktrees (501 `unsupported`); the groups working in it
   are the backend's list for it (`ListWorktrees` from the worktree's group or the job's workspace,
-  every `groupIDs`) and every group with a pane or process whose folder is in it (`dirInTree`); a
+  every `groupIDs`; the job's workspace of a bound job is never one a client chose: only the server
+  sets it once the job has an agent or a worktree, see Job ledger; a finish never reads `after`) and every group with a pane or process whose folder is in it (`dirInTree`); a
   backend with worktrees of its own (Herdr) whose list cannot be read is 503 `busy`, one whose list
   lacks the job's folder 409 `changed`. Any group there but the job tab's, a second tab in it, or a
   group the backend would remove another worktree of (Herdr: its list does not name the group for

@@ -141,12 +141,17 @@ export default {
   'errors.invalid_template': 'The template is not valid',
   'errors.invalid_text': 'The text is empty or holds a control character',
   'errors.invalid_validity': 'The time limit is not valid',
+  'errors.job_after_missing': 'A job it waits on no longer exists',
   'errors.job_conflict': 'The job was changed elsewhere meanwhile',
+  'errors.job_cycle': 'These jobs would wait on each other',
   'errors.job_invalid': 'The job cannot take this change',
   'errors.job_no_agent': 'No agent runs in that pane',
   'errors.job_not_found': 'This job no longer exists',
   'errors.job_unfinished':
     'Only a done, failed or abandoned job can be removed',
+  'errors.job_workspace_bound':
+    'This job has an agent or a worktree: its workspace stays',
+  'errors.job_workspace_unknown': 'No such workspace is open',
   'errors.jobs_full': 'The plan is full. Remove finished jobs first',
   'errors.jobs_unavailable': 'The plan is not available on this server',
   'errors.last_pane': "A tab's last pane is closed by closing the tab",
