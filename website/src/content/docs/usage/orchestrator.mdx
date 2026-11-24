@@ -209,8 +209,8 @@ orchestrator still runs or has exited. Nothing is typed into the orchestrator's 
 `termote agents wait --mine` tells it once (`Q3 dismissed in the PWA`), and it does not ask that
 question again. A dismissed question no longer counts as waiting, and no longer holds a job's
 finish. A view-only device sees how many questions wait and their ids, never their text. A machine open
-through [Machines](/usage/machines/) shows its own questions, and you answer them from the browser;
-another Termote's command line cannot answer one.
+through [Machines](/usage/machines/) shows its own questions, and you answer or dismiss them from the
+browser; another Termote's command line cannot.
 
 ```bash
 termote agents ask add --text 'Merge PR #12 now?' --choice Yes --choice Later --job <id>

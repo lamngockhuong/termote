@@ -258,7 +258,7 @@ export default {
   'jobs.asks.dismissConfirm':
     'Dismiss {id}? The orchestrator is told you chose not to answer it.',
   'jobs.asks.dismissConfirmGone':
-    'Dismiss {id}? Its orchestrator is no longer running; the question only leaves the list.',
+    'Dismiss {id}? Its orchestrator is no longer running; one that runs again in that pane is told once.',
   'jobs.asks.dismissCancel': 'Cancel',
   'jobs.asks.dismissed': '{id} dismissed',
   'jobs.asks.dismissFailed': 'Could not dismiss the question',

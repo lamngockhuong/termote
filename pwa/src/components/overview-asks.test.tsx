@@ -247,7 +247,7 @@ describe('OverviewAsks', () => {
     )
     expect(
       within(card('Q1')).getByText(
-        'Dismiss Q1? Its orchestrator is no longer running; the question only leaves the list.',
+        'Dismiss Q1? Its orchestrator is no longer running; one that runs again in that pane is told once.',
       ),
     ).toBeVisible()
   })

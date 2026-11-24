@@ -18,7 +18,7 @@ export default {
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',
   'errors.ask_browser_only':
-    'Another Termote answers a question only from a browser, never from its command line',
+    'Another Termote answers or dismisses a question only from a browser, never from its command line',
   'errors.ask_busy': 'An answer to this question is being sent. Try again',
   'errors.ask_closed': 'This question was answered or dismissed already',
   'errors.ask_conflict': 'The question was changed elsewhere meanwhile',

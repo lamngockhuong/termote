@@ -175,7 +175,7 @@ each question's id across a compacted conversation, and the user can answer in t
   PWA: ...` once, and `ask close Qn` says it was dismissed (no error). The user does not want to
   answer it: never ask it again, nor `ask add` the same question. If it held up a job, ask in the
   conversation what to do next, or go on with the safest choice that needs no decision of the
-  user's. A question gone from `ask list` without an answer was dismissed too.
+  user's.
 - `read` prints `[the user wrote in this pane after Qn was asked ...]` (`read --json`:
   `userWroteAfter`): read what the user wrote there; if it answers the question, `ask close` it.
 - A question an agent asks in its own tab stays the agent's: read it, and only when the user has

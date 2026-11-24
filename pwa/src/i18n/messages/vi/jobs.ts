@@ -232,7 +232,7 @@ export default {
   'jobs.asks.dismissConfirm':
     'Bỏ qua {id}? Orchestrator sẽ được báo là bạn không trả lời câu này.',
   'jobs.asks.dismissConfirmGone':
-    'Bỏ qua {id}? Orchestrator của câu này đã thoát; câu hỏi chỉ bị gỡ khỏi danh sách.',
+    'Bỏ qua {id}? Orchestrator của câu này đã thoát; orchestrator chạy lại trong pane đó sẽ được báo một lần.',
   'jobs.asks.dismissCancel': 'Huỷ',
   'jobs.asks.dismissed': 'Đã bỏ qua {id}',
   'jobs.asks.dismissFailed': 'Không bỏ qua được câu hỏi',
