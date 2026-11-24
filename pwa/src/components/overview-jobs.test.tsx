@@ -401,11 +401,13 @@ describe('OverviewJobs', () => {
 
   it('tells an empty plan and one with every job finished', () => {
     const { unmount } = show({ jobs: [] })
-    expect(screen.getByText(/No job yet/)).toBeVisible()
+    expect(screen.getByText('No job yet')).toBeVisible()
+    expect(screen.getByText(/let an orchestrator agent plan/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Finished/ })).toBeNull()
     unmount()
     show({ jobs: [job('d', { state: 'done' })] })
     expect(screen.getByText('Every job is finished')).toBeVisible()
+    expect(screen.getByText(/in the list below/)).toBeVisible()
   })
 
   it('shows nothing before the first read, nor on a server without a ledger', () => {
