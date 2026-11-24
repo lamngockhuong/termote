@@ -66,7 +66,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)               |
 | `pwa/src/utils/lazy-retry.tsx`                    | `lazy()` whose failed import can be retried (`retry()`)        |
 | `pwa/src/components/lazy-boundary.tsx`            | Error boundary for lazy chunks: fallback and Try again         |
-| `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                   |
+| `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native) and accent colors |
 | `pwa/src/components/toast.tsx`                    | Toast notification component                                   |
 | `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                   |
 | `pwa/src/hooks/use-command-history.ts`            | Command history storage and management                         |
