@@ -83,8 +83,10 @@ export function SegmentedControl<T extends string>({
             tabIndex={selected || (current === -1 && i === 0) ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={
+              // A swatch's dot is size-7: size-9 leaves a 2px gap inside the
+              // 2px ring, so the ring never reads as an outline of the dot
               swatches
-                ? `flex size-8 items-center justify-center rounded-full border-2 pointer-coarse:size-touch ${FOCUS_RING} ${
+                ? `flex size-9 items-center justify-center rounded-full border-2 pointer-coarse:size-touch ${FOCUS_RING} ${
                     selected
                       ? 'border-fg'
                       : 'border-transparent hover:border-border-strong'
