@@ -198,8 +198,15 @@ hỏi, việc liên quan, mỗi lựa chọn một nút, và một ô để bạ
 nhập của orchestrator dưới dạng `Answer to Q3: ...` (hoặc `Answer to Q3 (choice 2): ...`), rồi
 orchestrator đóng câu hỏi bằng `termote agents ask close Q3`. Termote không bao giờ ghi đè chữ bạn
 đang gõ dở trong ô nhập của orchestrator: câu trả lời bị từ chối và câu hỏi vẫn mở cho tới khi bạn
-gửi hoặc xoá phần gõ dở. Nếu orchestrator đã hỏi không còn chạy, PWA báo điều đó và bạn trả lời
-trong terminal của nó. Thiết bị chỉ xem chỉ thấy có bao nhiêu câu đang chờ và ID của chúng, không
+gửi hoặc xoá phần gõ dở. Nếu orchestrator đã hỏi không còn chạy, PWA báo điều đó: bạn trả lời trong
+terminal của nó, hoặc bỏ qua câu hỏi.
+
+Câu nào bạn không muốn trả lời thì bỏ qua được, dù orchestrator còn chạy hay đã thoát: bấm **Bỏ
+qua** trên thẻ của câu đó (trong Kế hoạch hay trong chat), xác nhận ngay trên thẻ, và câu hỏi rời
+khỏi danh sách. Termote không gõ gì vào ô nhập của orchestrator; lần chạy
+`termote agents wait --mine` kế tiếp báo cho nó đúng một lần (`Q3 dismissed in the PWA`), và nó
+không hỏi lại câu đó. Câu đã bỏ qua không còn được đếm là đang chờ, cũng không còn chặn việc kết
+thúc một việc. Thiết bị chỉ xem chỉ thấy có bao nhiêu câu đang chờ và ID của chúng, không
 thấy nội dung. Một máy mở qua [Machines](/vi/usage/machines/) hiện câu hỏi của chính nó, và bạn trả
 lời từ trình duyệt; dòng lệnh của một Termote khác không trả lời được.
 
