@@ -114,8 +114,11 @@ func helpCommands(help string) map[string]bool {
 	return cmds
 }
 
-// Every command and flag the guide tells an agent to run must exist.
-func TestAgentGuideCommandsAndFlagsExist(t *testing.T) {
+// checkTermoteInvocations fails t for each command found that termote help
+// does not list, and each flag on one that help does not name. source names
+// where they were written, for the message.
+func checkTermoteInvocations(t *testing.T, source string, found map[string][]string) {
+	t.Helper()
 	tc := newTestCLI(t, runtime.GOOS)
 	tc.printHelp()
 	help := tc.stdout.String()
@@ -123,20 +126,25 @@ func TestAgentGuideCommandsAndFlagsExist(t *testing.T) {
 	if !cmds["start"] || !cmds["unlink"] || !cmds["help"] {
 		t.Fatalf("could not read the Commands section of help: %v", cmds)
 	}
+	for cmd, flags := range found {
+		if !cmds[cmd] {
+			t.Errorf("%s runs termote %s, which help does not list", source, cmd)
+		}
+		for _, f := range flags {
+			if !strings.Contains(help, f) {
+				t.Errorf("%s passes %s to termote %s, which help does not list", source, f, cmd)
+			}
+		}
+	}
+}
+
+// Every command and flag the guide tells an agent to run must exist.
+func TestAgentGuideCommandsAndFlagsExist(t *testing.T) {
 	found := guideInvocations(agentGuide)
 	if len(found) < 5 {
 		t.Fatalf("found too few termote commands in the guide: %v", found)
 	}
-	for cmd, flags := range found {
-		if !cmds[cmd] {
-			t.Errorf("the guide runs termote %s, which help does not list", cmd)
-		}
-		for _, f := range flags {
-			if !strings.Contains(help, f) {
-				t.Errorf("the guide passes %s to termote %s, which help does not list", f, cmd)
-			}
-		}
-	}
+	checkTermoteInvocations(t, "the guide", found)
 }
 
 func TestGuideInvocationsParsing(t *testing.T) {
