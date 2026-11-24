@@ -1117,6 +1117,7 @@ export default function App({
     ...viewContext,
     isMobile,
     clockOffset,
+    hiddenGroupIds: shownIds,
     notify,
     showView,
     openSettings,

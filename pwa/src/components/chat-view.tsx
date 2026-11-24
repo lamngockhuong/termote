@@ -207,6 +207,7 @@ function AgentChat({
   isMobile,
   clockOffset,
   openHistory,
+  hiddenGroupIds,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const { t: translate } = useT()
@@ -602,7 +603,11 @@ function AgentChat({
         />
       )}
       {!readOnly && paneId && (
-        <ChatAsks paneId={paneId} clockOffset={clockOffset ?? 0} />
+        <ChatAsks
+          paneId={paneId}
+          clockOffset={clockOffset ?? 0}
+          hiddenGroupIds={hiddenGroupIds}
+        />
       )}
       <SubagentTranscriptSheet
         target={subagent?.paneId === paneId ? subagent : undefined}

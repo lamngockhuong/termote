@@ -6,12 +6,14 @@ import { ChatAsks } from './chat-asks'
 
 const api = vi.hoisted(() => ({
   fetchAsks: vi.fn(),
+  fetchJobs: vi.fn(),
   answerAsk: vi.fn(),
   dismissAsk: vi.fn(),
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchAsks: () => api.fetchAsks(),
+  fetchJobs: () => api.fetchJobs(),
   answerAsk: (id: string, a: unknown) => api.answerAsk(id, a),
   dismissAsk: (id: string, u: string) => api.dismissAsk(id, u),
 }))
@@ -34,6 +36,7 @@ describe('ChatAsks', () => {
   beforeEach(() => {
     resetJobs()
     api.fetchAsks.mockReset()
+    api.fetchJobs.mockReset()
     api.answerAsk.mockReset()
     api.dismissAsk.mockReset()
   })
@@ -55,6 +58,30 @@ describe('ChatAsks', () => {
     expect(screen.queryByRole('article', { name: 'Q2' })).toBeNull()
     expect(screen.queryByRole('article', { name: 'Q3' })).toBeNull()
     expect(screen.queryByRole('article', { name: 'Q4' })).toBeNull()
+  })
+
+  it("leaves out the questions about a hidden workspace's jobs", async () => {
+    api.fetchAsks.mockResolvedValue({
+      asks: [ask('Q1', { job: 'a' }), ask('Q2', { job: 'b' })],
+      readOnly: false,
+    })
+    api.fetchJobs.mockResolvedValue({
+      jobs: [
+        { id: 'a', title: 'a', state: 'todo', updated: '', workspace: 'w2' },
+        { id: 'b', title: 'b', state: 'todo', updated: '', workspace: 'w1' },
+      ],
+      readOnly: false,
+      canGrant: false,
+      serverNow: '',
+    })
+    render(
+      <ChatAsks paneId="%1" clockOffset={0} hiddenGroupIds={new Set(['w2'])} />,
+    )
+    await settle()
+    expect(screen.queryByRole('article', { name: 'Q1' })).toBeNull()
+    expect(screen.queryByText('question Q1')).toBeNull()
+    // The oldest one left is the one shown
+    expect(screen.getByRole('article', { name: 'Q2' })).toBeInTheDocument()
   })
 
   it('answers one here, then keeps the note that it went out', async () => {

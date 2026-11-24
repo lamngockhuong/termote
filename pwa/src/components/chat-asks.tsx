@@ -9,6 +9,9 @@ interface Props {
   paneId: string
   // Server time minus this device's (ms)
   clockOffset: number
+  // Workspaces hidden from what is drawn: the asks about their jobs are left
+  // out
+  hiddenGroupIds?: ReadonlySet<string>
 }
 
 // How far from the end still counts as the end (px)
@@ -26,9 +29,9 @@ const END_SLACK = 4
 // itself is positioned: an absolute descendant (a card's sr-only label) would
 // otherwise belong to the chat's root, escape this box's clip and make the
 // whole chat scroll by the height of the cards hidden below.
-export function ChatAsks({ paneId, clockOffset }: Props) {
+export function ChatAsks({ paneId, clockOffset, hiddenGroupIds }: Props) {
   const { t } = useT()
-  const { open, readOnly } = useOpenAsks()
+  const { open, readOnly } = useOpenAsks(hiddenGroupIds)
   const box = useRef<HTMLDivElement>(null)
   const [below, setBelow] = useState(false)
   const mine = readOnly
