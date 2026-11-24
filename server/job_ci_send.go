@@ -45,11 +45,13 @@ var (
 
 // ciMessage is the message for the failing pull requests of prs (foreign
 // ones too when foreign), or "". withNames names the failed checks: a send
-// the user makes, who saw the names first. A send under a ci grant names
-// none, since a check's name is written by whoever wrote the workflow or
-// the app that posts it, a third party for an upstream repo or an
-// installed app, and would reach the agent with nobody reading it; the
-// agent reads them with gh pr checks.
+// from the PWA, whose user saw the names first, or from the CLI (job ci
+// --send), whose orchestrator was printed them by job ci. A send under a
+// ci grant names none, since a check's name is written by whoever wrote
+// the workflow or the app that posts it, a third party for an upstream
+// repo or an installed app, and would reach the agent with nobody reading
+// it. Neither adds text the agent cannot reach: it reads them with gh pr
+// checks.
 func ciMessage(prs []jobPR, foreign, withNames bool, workRepo string) string {
 	var failing []jobPR
 	for _, p := range prs {

@@ -129,7 +129,7 @@ export default {
   'jobs.grant.kindEdit': 'Sửa file',
   'jobs.grant.prefix': 'Tiền tố lệnh',
   'jobs.grant.prefixHint':
-    'Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -). Hãy tự gõ tiền tố, kèm luôn các tùy chọn cần dùng',
+    'Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:, và với tiền tố chỉ có tar thì không có từ đầu tiên sau tar, vì tar đọc từ đó là tùy chọn). Hãy tự gõ tiền tố, kèm luôn các tùy chọn cần dùng',
   'jobs.grant.runsCode':
     'Lệnh test, build hay script chạy mã mà agent sửa được: pnpm test chạy các file test và mọi thứ package.json khai báo cho test, go test chạy test của package. Chỉ ủy quyền khi bạn chấp nhận để agent chạy mã đó',
   'jobs.grant.problem.empty': 'Hãy gõ tiền tố lệnh',
@@ -137,7 +137,7 @@ export default {
   'jobs.grant.problem.chars':
     'Chỉ dùng các từ thường, cách nhau đúng một dấu cách: không có dấu nháy, không có ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # và không có tab',
   'jobs.grant.problem.interpreter':
-    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx hay pnpm dlx…): không thể ủy quyền cho nó',
+    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, pnpm dlx, npm config, hay lệnh cài một gói như pnpm add x…): không thể ủy quyền cho nó',
   'jobs.grant.oneWord':
     'Một từ bao gồm mọi lệnh của {word}. Tiền tố dài hơn thì an toàn hơn',
   'jobs.grant.editHint':

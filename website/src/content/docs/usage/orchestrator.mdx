@@ -188,8 +188,13 @@ The orchestrator then tries `answer <pane> --delegated` first. Termote itself ch
 and answers "Yes" for this one time only when the dialog on screen and the one tool call the
 agent's transcript has waiting name the same command or file, no subagent runs, the command holds
 nothing a shell would chain, expand or redirect and does not start with a shell or interpreter, no
-word after your prefix is an option (starts with `-`: `rg --pre=x` or `go test -exec=x` runs
-another program, so type into the prefix the options you allow), and
+word after your prefix is an option (starts with `-`, `@` or `+`, or is `/p:`: `rg --pre=x` or `go test -exec=x` runs
+another program, so type into the prefix the options you allow; `tar` reads its first word as
+options even without a dash, so grant `tar xzf`, not `tar`), a package manager is not asked to
+run or install a package it names or to change its config (`pnpm dlx x`, `npm init x`, `pnpm add x`,
+`npm i x`, `npm config set`, `npm publish`; a bare `pnpm install`, with no package, is fine), a pnpm or yarn command after your
+prefix is one of theirs (`pnpm --filter a node x.js` would run node: grant `pnpm --filter a lint` to
+let it run your `lint` script), and
 the file is in the worktree, reached through no link, and not one that configures the agent, runs
 as a hook, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, `.env`...).
 Anything else is refused and comes to you as before. Each answer shows on the job's card and in the

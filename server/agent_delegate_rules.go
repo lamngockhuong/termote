@@ -38,6 +38,8 @@ var delegateInterpreters = []string{
 	"watch", "make",
 	// sed and ed run a program from their script (sed's e command, ed's !).
 	"sed", "ed",
+	// More interpreters, and wrappers that run the program named after them.
+	"gsed", "pythonw", "py", "pypy", "pypy3", "java", "jshell", "rscript", "julia", "tclsh", "wish", "expect", "osascript", "stdbuf", "setsid", "flock", "strace", "ltrace", "gdb", "lldb", "valgrind", "chroot", "unshare", "nsenter", "runuser", "pkexec", "ionice", "taskset", "chrt", "xvfb-run", "systemd-run", "caffeinate",
 	// git runs any program through its options (--upload-pack, -x,
 	// --exec, difftool, bisect run, submodule foreach) and its config.
 	"git",
@@ -46,13 +48,96 @@ var delegateInterpreters = []string{
 // delegateRunners are package managers with a word that runs any package:
 // "pnpm dlx x", "npm exec x", and also after options ("pnpm -s exec x",
 // "pnpm --filter a exec x"), so the word is refused at any position after
-// the program's name.
+// the program's name. create and init fetch and run a create-* package
+// ("npm init vite" is "npm exec create-vite"; innit is npm's alias).
+// config, c and set write the manager's own config, outside the worktree
+// and past the grant ("npm config set node-options=--require=x" loads x in
+// every later npm script), and npm's pkg writes package.json, which no
+// edit grant covers. The last ones act on the registry with the user's
+// login (publish the worktree, change an owner, make a token); pnpm hands
+// them to npm.
 var delegateRunners = map[string][]string{
-	"npm": {"exec", "x"}, "pnpm": {"dlx", "exec", "x"}, "yarn": {"dlx", "exec"}, "bun": {"x"},
+	"npm": {"exec", "x", "create", "init", "innit", "config", "c", "set", "pkg",
+		"publish", "unpublish", "deprecate", "dist-tag", "dist-tags", "owner", "author", "access", "token",
+		"adduser", "add-user", "login", "logout", "signin", "signout", "team", "org", "star", "unstar"},
+	"pnpm": {"dlx", "exec", "x", "create", "config", "c", "set", "pkg",
+		"publish", "unpublish", "deprecate", "dist-tag", "owner", "access", "token",
+		"adduser", "login", "logout", "team", "star", "unstar"},
+	"yarn": {"dlx", "exec", "create", "config", "publish", "login", "logout", "owner", "team", "tag", "npm"},
+	"bun":  {"x", "create"},
 }
 
+// delegateAbbrevNames are the exact words npm takes for one of its own
+// commands although they start a runner word of its: npm also runs a
+// command from any unique start of its name ("npm exe x" is "npm exec
+// x"), so another word of two letters or more that starts one is refused
+// too ("in", "add" are install's aliases, "un" uninstall's, "se" search's).
+var delegateAbbrevNames = []string{"in", "add", "un", "se"}
+
+// delegateKnownCommands are the commands of pnpm and yarn a delegated
+// command may name after the grant's prefix: both run a word that is no
+// command of theirs as a script or, without one, as a program ("pnpm
+// --filter a node x.js" runs node), so the word that picks the command is
+// one of these unless the user typed it into the prefix. yarn has no run
+// here: "yarn run <name>" runs any program of node_modules/.bin too.
+var delegateKnownCommands = map[string][]string{
+	"pnpm": {"add", "audit", "bin", "dedupe", "fetch", "i", "install", "install-test", "it", "licenses", "list", "ls",
+		"outdated", "pack", "prune", "rb", "rebuild", "remove", "rm", "root", "run", "run-script", "start", "store",
+		"t", "test", "tst", "un", "uninstall", "unlink", "up", "update", "upgrade", "why"},
+	"yarn": {"add", "audit", "info", "install", "licenses", "list", "outdated", "pack", "remove", "start", "test",
+		"up", "upgrade", "why"},
+}
+
+// delegateFlagOptions are pnpm's and yarn's options that take no value.
+// Any other option without "=" is taken to take the word after it, so the
+// word picking the command is never mistaken for an option's value the
+// user typed.
+var delegateFlagOptions = []string{"-r", "--recursive", "-s", "--silent", "-w", "--workspace-root", "--parallel",
+	"--stream", "--if-present", "--aggregate-output", "--bail", "--no-bail", "--sequential", "--color", "--no-color",
+	"--frozen-lockfile", "--prod", "--dev", "--offline", "--prefer-offline", "--reverse", "--include-workspace-root",
+	"-D", "-P", "-O"}
+
+// commandWord is the index in words (a pnpm or yarn command) of the word
+// that picks its command, past options and their values ("yarn workspace
+// <name>" is skipped too), or -1 when none does.
+func commandWord(words []string, first string) int {
+	for i := 1; i < len(words); i++ {
+		w := words[i]
+		switch {
+		case strings.HasPrefix(w, "-"):
+			if !strings.Contains(w, "=") && !slices.Contains(delegateFlagOptions, w) {
+				i++
+			}
+		case first == "yarn" && strings.ToLower(w) == "workspace":
+			i++
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+// delegateInstallers are package managers' words that install the
+// packages named after them: an install fetches a package the agent names
+// and runs its install scripts, and writes package.json and the lockfile,
+// which no edit grant covers. Refused when any word after one is no option
+// ("npm i x", "pnpm add -D x"); an install with no package ("npm ci",
+// "pnpm install --frozen-lockfile", "pnpm --filter a install") installs
+// what the lockfile holds. npm's list holds its aliases of install.
+var delegateInstallers = map[string][]string{
+	"npm":  {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add"},
+	"pnpm": {"install", "i", "add"},
+	"yarn": {"install", "add"},
+	"bun":  {"install", "i", "add", "a"},
+}
+
+// delegateBundledOptions are programs that read their first argument as
+// option letters even without a dash (GNU tar: "tar xIf ./x.sh a.tar"
+// runs ./x.sh), so that word is an option when it comes after the prefix.
+var delegateBundledOptions = []string{"tar"}
+
 // interpreterVersionRe: a versioned name of an interpreter (python3.12).
-var interpreterVersionRe = regexp.MustCompile(`^(python|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
+var interpreterVersionRe = regexp.MustCompile(`^(python|pypy|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
 
 // commandName is a command's first word as its program is found: its base
 // name, lowercased, without a Windows extension.
@@ -82,13 +167,32 @@ func checkDelegateCommand(cmd, prefix string) string {
 	if strings.Join(words, " ") != cmd {
 		return "chars"
 	}
+	// A variable set before the program (X=1 bash) is what env does: the
+	// program is not the first word, and the variable can make any one run
+	// another (NODE_OPTIONS, LD_PRELOAD).
+	if strings.Contains(words[0], "=") {
+		return "interpreter"
+	}
 	first := commandName(words[0])
 	if slices.Contains(delegateInterpreters, first) || interpreterVersionRe.MatchString(first) {
 		return "interpreter"
 	}
 	if runs, ok := delegateRunners[first]; ok {
 		for _, w := range words[1:] {
-			if slices.Contains(runs, strings.ToLower(w)) {
+			lw := strings.ToLower(w)
+			if slices.Contains(runs, lw) {
+				return "interpreter"
+			}
+			if first == "npm" && len(lw) >= 2 && !slices.Contains(delegateAbbrevNames, lw) &&
+				slices.ContainsFunc(runs, func(r string) bool { return strings.HasPrefix(r, lw) }) {
+				return "interpreter"
+			}
+		}
+	}
+	if inst, ok := delegateInstallers[first]; ok {
+		for i := 1; i < len(words); i++ {
+			if slices.Contains(inst, strings.ToLower(words[i])) &&
+				slices.ContainsFunc(words[i+1:], func(w string) bool { return !strings.HasPrefix(w, "-") }) {
 				return "interpreter"
 			}
 		}
@@ -103,12 +207,43 @@ func checkDelegateCommand(cmd, prefix string) string {
 	// another one through its own (rg --pre=x, tar --to-command=x, go test
 	// -exec=x), so only what the user typed in the prefix chooses options.
 	for _, w := range strings.Fields(cmd[len(prefix):]) {
-		if strings.HasPrefix(w, "-") {
+		if optionLike(w) {
 			return "option"
 		}
 	}
+	// pnpm and yarn run a word that is no command of theirs as a program:
+	// one the user did not type in the prefix must be a known command, and
+	// yarn's name after run must be the user's too.
+	if known, ok := delegateKnownCommands[first]; ok {
+		n := len(strings.Fields(prefix))
+		k := commandWord(words, first)
+		if k >= n && !slices.Contains(known, strings.ToLower(words[k])) {
+			return "interpreter"
+		}
+		if first == "yarn" && k >= 0 && strings.ToLower(words[k]) == "run" && k+1 >= n && k+1 < len(words) {
+			return "interpreter"
+		}
+	}
+	// A prefix of the program's name alone leaves its first argument to
+	// the command: for tar that word is an option bundle, dash or not.
+	if slices.Contains(delegateBundledOptions, first) && len(strings.Fields(prefix)) == 1 && len(words) > 1 {
+		return "option"
+	}
 	return ""
 }
+
+// optionLike is a word a program may read as an option: -x, and also
+// @file (a response file of options: gcc @opts, javac, dotnet), +cmd (vim
+// +q, less +F) and /name: (MSBuild's /p:X=1, dotnet build's).
+func optionLike(w string) bool {
+	if strings.HasPrefix(w, "-") || strings.HasPrefix(w, "@") || strings.HasPrefix(w, "+") {
+		return true
+	}
+	return windowsOptionRe.MatchString(w)
+}
+
+// windowsOptionRe is an option written /name: or /name=.
+var windowsOptionRe = regexp.MustCompile(`^/[A-Za-z][A-Za-z0-9-]*[:=]`)
 
 // maxGrantCommand bounds a delegated command; maxGrantPrefix a grant's
 // prefix.
@@ -124,9 +259,27 @@ var delegateDeniedNames = []string{
 	".mcp.json", "claude.md", "agents.md", ".envrc", "package.json", "makefile", "gnumakefile",
 	"pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb", "npm-shrinkwrap.json",
 	"go.sum", "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "uv.lock",
-	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", "lefthook.yml", ".lefthook.yml", ".pre-commit-config.yaml",
-	"lefthook-local.yml", ".lefthook-local.yml", "opencode.json", "opencode.jsonc",
+	".npmrc", ".yarnrc", ".yarnrc.yml", ".gitmodules", ".gitattributes", ".pre-commit-config.yaml",
+	"opencode.json", "opencode.jsonc",
+	// Claude Code and Codex read these as instructions too.
+	"claude.local.md", "agents.override.md",
+	// The package managers run or read these when they install.
+	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
 }
+
+// delegateHookConfigs are lefthook's configs, every extension it reads:
+// denied names, since a hook runs what they say at the user's next commit.
+var delegateHookConfigs = func() []string {
+	var names []string
+	for _, base := range []string{"lefthook", "lefthook-local"} {
+		for _, ext := range []string{".yml", ".yaml", ".json", ".jsonc", ".toml"} {
+			names = append(names, base+ext, "."+base+ext)
+		}
+	}
+	return names
+}()
+
+func init() { delegateDeniedNames = append(delegateDeniedNames, delegateHookConfigs...) }
 
 // delegateDeniedDirs are directories nothing under which a grant covers
 // ("/"-separated, lowercased, from the worktree's root down).

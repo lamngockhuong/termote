@@ -263,7 +263,9 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   `server/files_git_branch.go`): read only, through `f.begin` (`requireMethod(GET)`,
   `crossSiteRejection`, the pane's root, the view-only rules) and `gitRunner` only. `base` is a
   branch name checked as a worktree branch is (`validBranchName`: no `-` start, no `..`, no `@{`,
-  never `HEAD`) and resolved with `rev-parse --verify --end-of-options`; every later git call gets
+  never `HEAD`) and resolved with `rev-parse --verify --end-of-options` as `refs/heads/<base>`, else
+  `refs/remotes/<base>` (`origin/main`), never as a commit hash or a tag, which would show a file as
+  it was at any commit of HEAD's history, to a view-only client too (`base_not_found`); every later git call gets
   only full hashes (the merge base and HEAD). Without `base`, the branch the repo's main worktree has
   checked out; detached, or the pane's own branch, answers `base_required`. A path must be one of
   the range's `--name-status` list (with its `orig` for a rename), then passes the deny lists, and a

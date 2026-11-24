@@ -69,11 +69,12 @@ func (f *filesAPI) branchRange(ctx context.Context, root filesRoot, base string)
 		return br, err
 	}
 	br.head = head
-	// A branch of that name first, as the route promises; else what git
-	// names so (a remote branch such as origin/main).
+	// A branch of that name, local first, else a remote one (origin/main):
+	// never a commit hash or a tag, which would show a file as it was at
+	// any commit, to a view-only client too.
 	from, err := f.revCommit(ctx, c, "refs/heads/"+base)
 	if err == nil && from == "" {
-		from, err = f.revCommit(ctx, c, base)
+		from, err = f.revCommit(ctx, c, "refs/remotes/"+base)
 	}
 	if err != nil {
 		return br, err

@@ -146,7 +146,7 @@ export default {
   'jobs.grant.kindEdit': 'Edit files',
   'jobs.grant.prefix': 'Command prefix',
   'jobs.grant.prefixHint':
-    'A command the agent asks to run is answered when it is this prefix, or starts with it and a space followed by words that are no option (none starts with -). Type it yourself, with the options it needs',
+    'A command the agent asks to run is answered when it is this prefix, or starts with it and a space followed by words that are no option (none starts with -, @, + or /name:, and after tar alone its first word, which tar reads as options). Type it yourself, with the options it needs',
   'jobs.grant.runsCode':
     'A test, build or script command runs code the agent can edit: pnpm test runs its test files and whatever package.json declares for test, go test the tests of the package. Grant one only when you would let the agent run that code',
   'jobs.grant.problem.empty': 'Type the command prefix',
@@ -154,7 +154,7 @@ export default {
   'jobs.grant.problem.chars':
     'Use plain words with one space between them: no quotes, no ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # and no tab',
   'jobs.grant.problem.interpreter':
-    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx or pnpm dlx…): it cannot be granted',
+    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx, pnpm dlx, npm config, or an install that names a package such as pnpm add x…): it cannot be granted',
   'jobs.grant.oneWord':
     'One word covers every command of {word}. A longer prefix is safer',
   'jobs.grant.editHint':

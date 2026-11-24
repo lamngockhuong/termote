@@ -92,6 +92,52 @@ describe('grantPrefixProblem', () => {
       'npm --prefix a x',
       'yarn workspace a exec',
       'npm run build EXEC',
+      // create and init run a create-* package from the registry
+      'npm create vite',
+      'npm init vite',
+      'npm innit vite',
+      'npm init',
+      'npm --prefix pwa init',
+      'pnpm create vite',
+      'pnpm --filter termote create',
+      'yarn create vite',
+      'yarn workspace a create',
+      'bun create vite',
+      'npm CREATE',
+      // an install that names a package fetches it and runs its scripts
+      'npm install evil',
+      'npm i evil',
+      'npm isntall evil',
+      'npm --prefix pwa install evil',
+      'npm install --save-dev evil',
+      'pnpm add evil',
+      'pnpm --filter termote add -D evil',
+      'pnpm install --filter termote',
+      'yarn add evil',
+      'yarn workspace a add evil',
+      'bun a evil',
+      'npm ADD evil',
+      // npm runs a command from any unique start of its name
+      'npm --prefix pwa exe',
+      'npm cre evil',
+      'npm ini',
+      // config writes the manager's config past the grant, pkg package.json
+      'npm --prefix pwa config set',
+      'npm c',
+      'npm set',
+      'npm conf',
+      'npm pkg set',
+      'pnpm config',
+      'pnpm --filter termote c',
+      'yarn config set',
+      // the registry with the user's login
+      'npm --prefix pwa publish',
+      'npm pub',
+      'npm tok',
+      'npm owner',
+      'npm login',
+      'pnpm --filter termote publish',
+      'yarn npm publish',
     ])
       expect(grantPrefixProblem(p), p).toBe('interpreter')
     for (const p of [
@@ -103,6 +149,27 @@ describe('grantPrefixProblem', () => {
       'yarn x',
       'npm dlx',
       'cargo exec',
+      'pnpm init',
+      'yarn init',
+      'cargo init',
+      'go mod init',
+      'npm install',
+      'npm i',
+      'npm ci',
+      'pnpm install --frozen-lockfile',
+      'pnpm --filter termote install',
+      'pnpm add',
+      'yarn install',
+      'cargo add serde',
+      'npm in',
+      'npm se react',
+      'npm add',
+      'npm un react',
+      'npm audit',
+      'npm --prefix pwa test',
+      'npm --prefix pwa run build',
+      'pnpm --filter termote',
+      'yarn workspace a',
     ])
       expect(grantPrefixProblem(p), p).toBeNull()
   })
@@ -118,5 +185,19 @@ describe('grantPrefixTooWide', () => {
     expect(grantPrefixTooWide(' pnpm ')).toBe(true)
     expect(grantPrefixTooWide('pnpm test')).toBe(false)
     expect(grantPrefixTooWide('')).toBe(false)
+  })
+
+  it('refuses a variable set before the program, and more interpreters', () => {
+    for (const p of [
+      'X=1 bash',
+      'NODE_OPTIONS=x pnpm test',
+      'py',
+      'pypy3.10',
+      'stdbuf',
+      'gdb',
+      'java',
+    ])
+      expect(grantPrefixProblem(p), p).toBe('interpreter')
+    expect(grantPrefixProblem('gcc -O2')).toBeNull()
   })
 })
