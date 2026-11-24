@@ -135,13 +135,23 @@ export function OverviewScreen({
     asksOverviewPlan(window.location.hash) ? {} : undefined,
   )
   const askedPlan = useRef(!!planFocus)
-  // The tab shown: the Plan the address asks for, else Agents for a card
-  // asked for, else the one this browser looked at last
-  const [tab, setTab] = useState<OverviewTab>(() =>
-    askedPlan.current ? 'plan' : focusPane ? 'agents' : readOverviewTab(),
-  )
   // Without a job ledger there is no Plan, and no tabs
   const jobs = useJobs()
+  // The questions orchestrators asked that wait for an answer: the Plan
+  // shows them, and its tab counts them
+  const openAsks = jobs.asks.filter((a) => a.state === 'open').length
+  // The tab shown: the Plan the address asks for, else Agents for a card
+  // asked for, else the Plan while questions wait there (the badge on the
+  // overview's button led here), else the one this browser looked at last
+  const [tab, setTab] = useState<OverviewTab>(() =>
+    askedPlan.current
+      ? 'plan'
+      : focusPane
+        ? 'agents'
+        : openAsks > 0
+          ? 'plan'
+          : readOverviewTab(),
+  )
   // Known once the ledger was read (or failed to be): no tab flashes on a
   // server without one
   const hasPlan = !jobs.unavailable && (jobs.loaded || jobs.error)
@@ -375,8 +385,10 @@ export function OverviewScreen({
       t('tasks.tabs.plan'),
       t('tasks.tabs.open', { count: openJobs }),
       t('tasks.tabs.open', { count: openJobs }),
-      jobGroups.waiting.length > 0
-        ? t('tasks.tabs.waiting', { count: jobGroups.waiting.length })
+      jobGroups.waiting.length + openAsks > 0
+        ? t('tasks.tabs.waiting', {
+            count: jobGroups.waiting.length + openAsks,
+          })
         : undefined,
     ),
   ]

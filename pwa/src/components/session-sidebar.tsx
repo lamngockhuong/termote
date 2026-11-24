@@ -9,7 +9,6 @@ import {
   FolderPlus,
   GitBranch,
   History,
-  LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -68,6 +67,7 @@ import {
 } from './group-dialog'
 import { IconPicker } from './icon-picker'
 import { MetaChips, OnlyPaneLine, onlyPaneOf } from './meta-chips'
+import { OverviewButton } from './overview-button'
 import { SearchToggle, SessionSearchField } from './session-search-field'
 import { SidebarAgents } from './sidebar-agents'
 import {
@@ -1257,15 +1257,7 @@ export function SessionSidebar({
 
   // Desktop: every agent at a glance
   const overviewButton = onOpenOverview && (
-    <IconButton
-      onClick={onOpenOverview}
-      title={t('common.overview')}
-      aria-label={t('common.overview')}
-      aria-pressed={!!overviewOpen}
-      className={overviewOpen ? 'bg-surface text-fg' : ''}
-    >
-      <LayoutDashboard size={18} aria-hidden="true" />
-    </IconButton>
+    <OverviewButton onClick={onOpenOverview} pressed={!!overviewOpen} />
   )
 
   const filterBar = showFilterBar && (

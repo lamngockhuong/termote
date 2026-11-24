@@ -1,5 +1,6 @@
 import { LayoutDashboard } from 'lucide-react'
 import { useT } from '../../i18n/i18n-context'
+import { AsksDot, OverviewMenuLabel } from '../overview-button'
 import { Menu, MenuGroup, MenuItem, MenuItemRadio } from './menu'
 import type { ViewOption } from './view-switcher'
 
@@ -27,7 +28,12 @@ export function ViewMenu<T extends string>({
     <Menu
       tourAnchor="view-menu"
       label={t('shell.view.current', { name: current.label })}
-      trigger={<current.Icon size={17} aria-hidden="true" />}
+      trigger={
+        <span className="relative inline-flex">
+          <current.Icon size={17} aria-hidden="true" />
+          {onOpenOverview && <AsksDot />}
+        </span>
+      }
     >
       <MenuGroup label={t('shell.view')}>
         {views.map(({ id, label, Icon }) => (
@@ -47,7 +53,7 @@ export function ViewMenu<T extends string>({
             icon={<LayoutDashboard size={17} />}
             onSelect={onOpenOverview}
           >
-            {t('common.overview')}
+            <OverviewMenuLabel />
           </MenuItem>
         </MenuGroup>
       )}

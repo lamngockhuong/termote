@@ -49,6 +49,17 @@ vi.mock('../hooks/use-agent-prompt', () => ({
     }
   },
 }))
+// The questions themselves are ChatAsks' own test: here a stand-in that
+// names the pane whose questions it shows
+vi.mock('./chat-asks', () => ({
+  ChatAsks: ({
+    paneId,
+    clockOffset,
+  }: {
+    paneId: string
+    clockOffset: number
+  }) => <p data-testid="chat-asks">{`${paneId} ${clockOffset}`}</p>,
+}))
 vi.mock('../hooks/use-agent-transcript', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-agent-transcript')>()),
   useAgentTranscript: () => ({
@@ -160,6 +171,16 @@ beforeEach(() => {
 })
 
 describe('ChatView', () => {
+  it("shows the questions its pane's orchestrator asked, on a full client only", () => {
+    set({ entries: [entry(0)] })
+    const { rerender } = render(<ChatView {...props} clockOffset={1500} />)
+    expect(screen.getByTestId('chat-asks')).toHaveTextContent('0 1500')
+    rerender(<ChatView {...props} />)
+    expect(screen.getByTestId('chat-asks')).toHaveTextContent('0 0')
+    rerender(<ChatView {...props} readOnly />)
+    expect(screen.queryByTestId('chat-asks')).toBeNull()
+  })
+
   it('fades in only a message that came after the conversation showed', () => {
     const root = (text: string) =>
       screen.getByText(text).closest('[data-role]') as HTMLElement

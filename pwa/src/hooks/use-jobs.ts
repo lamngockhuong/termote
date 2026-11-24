@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { currentMachine } from '../utils/api-base'
 import { followOverview } from './use-agent-overview'
 import {
@@ -71,14 +71,21 @@ const INITIAL: JobsState = {
 
 let state = INITIAL
 const listeners = new Set<() => void>()
+// The readers of the open asks alone (useOpenAsks): they run their own poll
+const askListeners = new Set<() => void>()
 // Only the latest read lands: one begun before a write would undo it
 let readSeq = 0
 let askSeq = 0
+// When the asks were last read (ms), by either poll
+let askReadAt = 0
+// The server keeps no asks: they are read far less often
+let asksMissing = false
 let stopFollowing: (() => void) | undefined
 
 function set(next: Partial<JobsState>) {
   state = { ...state, ...next }
   for (const fn of listeners) fn()
+  for (const fn of askListeners) fn()
 }
 
 // Reads the jobs and the asks again, each on its own: a failed read of the
@@ -134,18 +141,90 @@ function olderMachine(err: unknown): boolean {
 // without a ledger has none. Never rejects.
 async function reloadAsks(): Promise<void> {
   const id = ++askSeq
+  askReadAt = Date.now()
   try {
     const list = await fetchAsks()
     if (id !== askSeq) return
+    asksMissing = false
     set({ asks: list.asks, asksReadOnly: list.readOnly, asksOutdated: false })
   } catch (err) {
     if (id !== askSeq) return
     if (
       err instanceof RequestError &&
       (err.status === 404 || err.code === 'jobs_unavailable')
-    )
+    ) {
+      asksMissing = true
       set({ asks: [], asksReadOnly: false, asksOutdated: olderMachine(err) })
+    }
   }
+}
+
+// The asks alone, read for the screens outside the overview (the badge on
+// its button, the questions in an orchestrator's chat): every poll period
+// while the page is shown, unless the overview's poll read them since; a
+// minute apart from a server that keeps none.
+// The overview's own period (OVERVIEW_POLL)
+const ASKS_POLL = 5000
+const ASKS_MISSING_POLL = 60_000
+let askTimer: ReturnType<typeof setTimeout> | undefined
+
+function askPeriod() {
+  return asksMissing ? ASKS_MISSING_POLL : ASKS_POLL
+}
+
+function scheduleAsks() {
+  clearTimeout(askTimer)
+  askTimer = askListeners.size
+    ? setTimeout(() => void pollAsks(), askPeriod())
+    : undefined
+}
+
+async function pollAsks() {
+  // A hidden page reads nothing; it reads again once shown
+  if (!document.hidden && Date.now() - askReadAt >= askPeriod() - 250)
+    await reloadAsks()
+  scheduleAsks()
+}
+
+function onAsksVisibility() {
+  if (!document.hidden) void pollAsks()
+}
+
+function subscribeAsks(fn: () => void) {
+  askListeners.add(fn)
+  if (askListeners.size === 1) {
+    document.addEventListener('visibilitychange', onAsksVisibility)
+    void pollAsks()
+  }
+  return () => {
+    askListeners.delete(fn)
+    if (askListeners.size === 0) {
+      clearTimeout(askTimer)
+      askTimer = undefined
+      document.removeEventListener('visibilitychange', onAsksVisibility)
+    }
+  }
+}
+
+export interface OpenAsks {
+  // The asks not answered yet, oldest first as the server keeps them
+  open: Ask[]
+  // Read view-only: ids only, no text
+  readOnly: boolean
+}
+
+// The open asks, read on their own while a reader is shown. A view-only
+// device learns how many wait, never what they ask.
+export function useOpenAsks(): OpenAsks {
+  const s = useSyncExternalStore(subscribeAsks, get)
+  const { asks, asksReadOnly } = s
+  return useMemo(
+    () => ({
+      open: asks.filter((a) => a.state === 'open'),
+      readOnly: asksReadOnly,
+    }),
+    [asks, asksReadOnly],
+  )
 }
 
 function subscribe(fn: () => void) {
@@ -326,4 +405,10 @@ export function resetJobs() {
   state = INITIAL
   readSeq = 0
   askSeq = 0
+  askReadAt = 0
+  asksMissing = false
+  clearTimeout(askTimer)
+  askTimer = undefined
+  askListeners.clear()
+  document.removeEventListener('visibilitychange', onAsksVisibility)
 }

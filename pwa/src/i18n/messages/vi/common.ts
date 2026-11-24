@@ -14,6 +14,7 @@ export default {
   'common.files': 'File',
   'common.changes': 'Thay đổi',
   'common.tasks': 'Tác vụ',
+  'common.asksWaiting_other': '{count} câu hỏi chờ bạn',
   'common.overview': 'Tổng quan agent',
   'common.settings': 'Cài đặt',
   'common.commandPalette': 'Bảng lệnh',

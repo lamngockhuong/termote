@@ -31,6 +31,7 @@ import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatActivity, ChatBackground } from './chat-activity-row'
+import { ChatAsks } from './chat-asks'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext } from './chat-message'
@@ -599,6 +600,9 @@ function AgentChat({
               : undefined
           }
         />
+      )}
+      {!readOnly && paneId && (
+        <ChatAsks paneId={paneId} clockOffset={clockOffset ?? 0} />
       )}
       <SubagentTranscriptSheet
         target={subagent?.paneId === paneId ? subagent : undefined}

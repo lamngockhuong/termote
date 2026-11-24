@@ -48,6 +48,7 @@ import {
   runJobCI,
   useCurrentJob,
   useJobs,
+  useOpenAsks,
 } from './use-jobs'
 import { RequestError } from './use-mux-api'
 
@@ -488,5 +489,126 @@ describe('useJobs', () => {
     })
     await act(() => answerQuestion(bare, { choice: 2 }).then(() => {}))
     expect(result.current.asks).toEqual([{ ...bare, state: 'answered' }])
+  })
+})
+
+describe('useOpenAsks', () => {
+  let hidden = false
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetJobs()
+    for (const fn of Object.values(api)) fn.mockReset()
+    hidden = false
+    vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden)
+  })
+  afterEach(() => {
+    resetJobs()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  const flush = () => act(() => vi.advanceTimersByTimeAsync(0))
+
+  it('reads the asks on its own every period, the open ones only', async () => {
+    api.fetchAsks.mockResolvedValue(
+      asks([ask('Q1'), ask('Q2', { state: 'answered' })]),
+    )
+    const { result, unmount } = renderHook(() => useOpenAsks())
+    await flush()
+    expect(api.fetchAsks).toHaveBeenCalledTimes(1)
+    expect(result.current).toEqual({ open: [ask('Q1')], readOnly: false })
+    // Never the ledger, nor the overview
+    expect(api.fetchJobs).not.toHaveBeenCalled()
+    expect(api.follow).not.toHaveBeenCalled()
+
+    api.fetchAsks.mockResolvedValue(asks([ask('Q3')], true))
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    expect(result.current).toEqual({ open: [ask('Q3')], readOnly: true })
+
+    unmount()
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the same list until the asks change', async () => {
+    api.fetchAsks.mockResolvedValue(asks([ask('Q1')]))
+    const { result } = renderHook(() => useOpenAsks())
+    await flush()
+    const first = result.current
+    // A write of a job changes the store, not the asks
+    api.createJob.mockResolvedValue(job('a'))
+    await act(() => addJob({ title: 'a' }).then(() => {}))
+    expect(result.current).toBe(first)
+  })
+
+  it('skips a read the overview made in the period, and reads nothing hidden', async () => {
+    api.fetchAsks.mockResolvedValue(asks([ask('Q1')]))
+    api.fetchJobs.mockResolvedValue(list([]))
+    renderHook(() => useOpenAsks())
+    await flush()
+    expect(api.fetchAsks).toHaveBeenCalledTimes(1)
+    // The overview read them 2 s later: the poll at 5 s has nothing to do
+    await act(() => vi.advanceTimersByTimeAsync(2000))
+    await act(() => reloadJobs())
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    await act(() => vi.advanceTimersByTimeAsync(3000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+
+    hidden = true
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    // Shown again: read at once
+    hidden = false
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(api.fetchAsks).toHaveBeenCalledTimes(3)
+  })
+
+  it('reads a minute apart from a server without asks, until it has them', async () => {
+    api.fetchAsks.mockRejectedValue(new RequestError(404, '', 'not found'))
+    const { result } = renderHook(() => useOpenAsks())
+    await flush()
+    expect(result.current.open).toEqual([])
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(1)
+    api.fetchAsks.mockResolvedValue(asks([ask('Q1')]))
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(2)
+    expect(result.current.open).toEqual([ask('Q1')])
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(3)
+  })
+
+  it('polls once for every reader, and stops with the last, even mid-read', async () => {
+    let answer: (v: unknown) => void = () => {}
+    api.fetchAsks.mockImplementation(() => new Promise((r) => (answer = r)))
+    const first = renderHook(() => useOpenAsks())
+    const second = renderHook(() => useOpenAsks())
+    expect(api.fetchAsks).toHaveBeenCalledTimes(1)
+    // One reader left: the poll goes on
+    first.unmount()
+    // A hidden page told it was hidden reads nothing
+    hidden = true
+    document.dispatchEvent(new Event('visibilitychange'))
+    hidden = false
+    // The last one leaves while the read is under way: none follows it
+    second.unmount()
+    await act(async () => {
+      answer(asks([ask('Q1')]))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(api.fetchAsks).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the overview to start its own follow', async () => {
+    api.fetchAsks.mockResolvedValue(asks([]))
+    renderHook(() => useOpenAsks())
+    await flush()
+    renderHook(() => useJobs())
+    expect(api.follow).toHaveBeenCalledTimes(1)
   })
 })
