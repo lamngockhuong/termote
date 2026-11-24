@@ -986,6 +986,11 @@ func TestJobWorktreeMadeFlag(t *testing.T) {
 	if !ft.job().Worktree.Made {
 		t.Fatal("made not recorded")
 	}
+	// job set (state, note) names no worktree: made stays.
+	if code, out := ft.do("socket", http.MethodPatch, "/api/mux/jobs/"+ft.id,
+		map[string]any{"state": "review", "note": "n"}); code != http.StatusOK || !ft.job().Worktree.Made {
+		t.Fatalf("job set = %d %v, made %v", code, out, ft.job().Worktree.Made)
+	}
 	patch := func(made bool) {
 		t.Helper()
 		if code, out := ft.do("socket", http.MethodPatch, "/api/mux/jobs/"+ft.id,
