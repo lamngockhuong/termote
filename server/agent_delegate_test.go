@@ -369,8 +369,8 @@ func TestDelegatedOnlyFromSocket(t *testing.T) {
 	}
 }
 
-// Over the socket and the bridge, a permission dialog's option that stops
-// it asking is never chosen; a browser still may.
+// Over the socket, Basic auth and the bridge, a permission dialog's option
+// that stops it asking is never chosen; a browser still may.
 func TestCLINeverChoosesAlways(t *testing.T) {
 	setup := func(t *testing.T) *delegateTest {
 		return newDelegateTest(t, delegateScreen(t, "bash"), bashUse("pnpm test --run"))
@@ -380,6 +380,13 @@ func TestCLINeverChoosesAlways(t *testing.T) {
 		code, out := dt.do("socket", http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", map[string]any{"promptId": dt.promptID(), "choice": choice})
 		if code != http.StatusForbidden || out["code"] != "answer_always_refused" || len(dt.keys()) != 0 {
 			t.Errorf("socket %v = %d %v", choice, code, out)
+		}
+		// Basic auth over TCP: the CLI's sign-in, held as the socket is.
+		b, _ := json.Marshal(map[string]any{"promptId": dt.promptID(), "choice": choice})
+		req := httptestRequest(http.MethodPost, "/api/mux/panes/w1:pa/agent/answer", b)
+		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authBasic, Role: roleFull}))
+		if rec := serve(dt.mux, req); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "answer_always_refused") {
+			t.Errorf("basic %v = %d %s", choice, rec.Code, rec.Body)
 		}
 		// Another termote's CLI (or one that names no origin) over the bridge.
 		for _, origin := range []string{"socket", "basic", ""} {

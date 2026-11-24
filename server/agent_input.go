@@ -1151,7 +1151,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	socket := isLocalSocket(r.Context())
 	auth, _ := authFrom(r.Context())
-	cli := socket || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
+	// Basic auth is the CLI's sign-in over TCP (a browser has a session by
+	// then), held like the socket and like a forwarded "basic" origin.
+	cli := socket || auth.Kind == authBasic || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
 	if body.Delegated && (!socket || (len(body.Choice) > 0 && string(body.Choice) != "null")) {
 		jsonErrorCode(w, "invalid_request", "only termote agents answers under a grant, and names no option", http.StatusBadRequest)
 		return

@@ -913,15 +913,16 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the grant, job, pane, path, the command's SHA-256, never the command, and `confirmed`: once the key
   that answers is sent the use is recorded even when the dialog is not seen to close
   (`answer_not_confirmed`, `keySent`), with `confirmed="false"`, since the answer may still take
-  effect; a refusal before the key records nothing. Over the local socket and
-  the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
+  effect; a refusal before the key records nothing. Over the local socket, with Basic auth (the
+  CLI's sign-in over TCP, a browser has a session by then, as `isCLI` and a forwarded `basic` origin
+  hold) and over the bridge, `answer` refuses (403 `answer_always_refused`, checked when the `promptId` is taken,
   before any key) every option of a permission dialog of any agent, also when another
   termote forwards its own CLI's answer over the bridge (an origin other than `password`, `device`
   or `none`, `browserOrigin`), except cancel, one whose label
   is `No` or starts with `No` and a comma or a space, and the first option when it reads exactly `Yes`, `Yes, proceed` or
   `Yes, once` (`cliMayChoose`): what is not known for sure is refused; a browser's answers, here
   or through another termote's Machines, are unchanged. A grant revoked in the milliseconds between the grant check
-  and the key still lets that one answer through. Every answer to a permission dialog over the socket or the bridge is logged as
+  and the key still lets that one answer through. Every answer to a permission dialog over the socket, Basic auth or the bridge is logged as
   `audit: dialog_answer` (pane, agent, dialog title, option label, delegated, grant, confirmed, by)
   once its key is sent, also when the dialog then stays open (`confirmed="false"`,
   `TestDelegatedAnswerNotConfirmed`, `TestCLIAnswerAuditedOnceSent`).
