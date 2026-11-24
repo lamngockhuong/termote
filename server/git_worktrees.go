@@ -439,12 +439,32 @@ func worktreeDirty(ctx context.Context, git *gitRunner, repo gitRepoInfo) (bool,
 		return true, nil
 	}
 	c.limit = 4 << 10
-	out, truncated, err := git.output(ctx, c,
+	args := append(windowsCheckoutEOL(ctx, git, c),
 		"status", "--porcelain", "-z", "--untracked-files=normal", "--ignore-submodules=all")
+	out, truncated, err := git.output(ctx, c, args...)
 	if err != nil {
 		return false, err
 	}
 	return truncated || len(out) > 0, nil
+}
+
+// windowsCheckoutEOL is the -c that reads a Windows checkout's line endings
+// as git for Windows wrote them. gitRunner reads no system config
+// (GIT_CONFIG_NOSYSTEM), where Git for Windows sets core.autocrlf=true, so a
+// worktree that git made (Herdr's worktree.create, the user's own git
+// worktree add) has CRLF files status would call modified. Unless the
+// user's or the repository's own config sets core.autocrlf, status runs
+// with it true: only a change of line endings reads as none (a file whose
+// committed text has CRLF is left as it is), any other change still shows.
+func windowsCheckoutEOL(ctx context.Context, git *gitRunner, c gitCall) []string {
+	if !git.windows {
+		return nil
+	}
+	c.heavy, c.noFilters, c.limit = false, false, 1<<10
+	if _, _, err := git.output(ctx, c, "config", "--get", "core.autocrlf"); err == nil {
+		return nil // set: the checkout followed it
+	}
+	return []string{"-c", "core.autocrlf=true"}
 }
 
 // worktreeIndexLimit caps the index list worktreeDirty reads (some 200k

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // finishRepo is a repository with a bare origin and a linked worktree on
@@ -44,9 +45,6 @@ func newFinishRepo(t *testing.T) finishRepo {
 	gitIn(t, r.main, "init", "-q", "-b", "main")
 	gitIn(t, r.main, "config", "user.name", "t")
 	gitIn(t, r.main, "config", "user.email", "t@t")
-	// gitRunner reads no system config, so a checkout made with Git for
-	// Windows' core.autocrlf would read as modified.
-	gitIn(t, r.main, "config", "core.autocrlf", "false")
 	if err := os.WriteFile(filepath.Join(r.main, ".gitignore"), []byte(".env*\nnode_modules/\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -330,5 +328,53 @@ func TestRemoveUnopenedWorktree(t *testing.T) {
 	}
 	if _, err := os.Stat(r.wt); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("worktree still there: %v", err)
+	}
+}
+
+// A checkout git made with core.autocrlf=true (Git for Windows' system
+// config, which gitRunner never reads) has CRLF files whose sizes the index
+// records; once a file's time changes, or its entry is racy, git compares
+// its content. On Windows such a file is no change unless the repository's
+// own config says otherwise; any other change still is.
+func TestWorktreeDirtyWindowsLineEndings(t *testing.T) {
+	r := newFinishRepo(t)
+	ctx := context.Background()
+	wt := filepath.Join(r.home, "wt", "crlf")
+	gitIn(t, r.main, "-c", "core.autocrlf=true", "worktree", "add", "-q", "-b", "crlf", wt)
+	file := filepath.Join(wt, ".gitignore")
+	if b, _ := os.ReadFile(file); !strings.Contains(string(b), "\r\n") {
+		t.Skipf("git wrote no CRLF: %q", b)
+	}
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(file, later, later); err != nil {
+		t.Fatal(err)
+	}
+	info := mustRepoInfo(t, newTestRoots(), wt)
+	win, plain := newGitRunner(), newGitRunner()
+	win.windows, plain.windows = true, false
+	dirty := func(g *gitRunner) bool {
+		t.Helper()
+		d, err := worktreeDirty(ctx, g, info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if !dirty(plain) {
+		t.Error("the CRLF checkout read as clean without core.autocrlf (the test proves nothing)")
+	}
+	if dirty(win) {
+		t.Error("a CRLF checkout reads dirty on Windows")
+	}
+	gitIn(t, r.main, "config", "core.autocrlf", "false")
+	if !dirty(win) {
+		t.Error("the repository's own core.autocrlf=false was not followed")
+	}
+	gitIn(t, r.main, "config", "--unset", "core.autocrlf")
+	if err := os.WriteFile(file, []byte("other\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !dirty(win) {
+		t.Error("a real change read as clean on Windows")
 	}
 }

@@ -505,7 +505,10 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
     a gitlink or a list cut at 16 MiB is `dirty`, as is an initialized submodule, `gitDir/modules`),
     then `status --porcelain -z --untracked-files=normal --ignore-submodules=all` (filters off, and
     never entering a submodule, whose own config can define filters `gitRunner` does not know of;
-    any output or a cut one is `dirty`), `show-ref
+    any output or a cut one is `dirty`; on Windows, unless the user's or the repository's config
+    sets `core.autocrlf`, status runs with `-c core.autocrlf=true`, as Git for Windows' system config,
+    which `gitRunner` never reads, checked the worktree out (Herdr's or the user's own `git worktree
+    add`): only a change of line endings reads as none, `windowsCheckoutEOL`), `show-ref
     --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
     (the resolver). Remove re-derives the path from git's own list for the group's work tree,
     never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409

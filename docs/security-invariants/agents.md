@@ -1108,7 +1108,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   400 `finish_needs_remove` (the workspace would go with it). git then reads the worktree
   (`readFinishTree`, argv through `gitRunner` only): the folder from the ledger, below the home dir
   (`jobDirTooWide`), a linked worktree whose top is that folder, still on the job's branch (409
-  `changed`, `not_linked`, 404 `not_found`); dirty as the worktree routes count it (409 `dirty`);
+  `changed`, `not_linked`, 404 `not_found`); dirty as the worktree routes count it (409 `dirty`; on
+  Windows a CRLF checkout made by git with Git for Windows' `core.autocrlf` is not dirty, see
+  Worktrees in mux.md);
   safe only when HEAD is on the branch's push ref (`merge-base --is-ancestor`, the ref read locally:
   termote never fetches, so a stale ref refuses) or is the head of a merged pull request of the job's
   that is not `foreign` (409 `worktree_not_pushed`); an ignored `.env*` file anywhere in it
