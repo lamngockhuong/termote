@@ -487,6 +487,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/job_grants.go`                            | Grants to answer dialogs: made only from a signed-in browser   |
 | `server/job_pr.go`                                | A job's pull requests: summary, failing set, pins              |
 | `server/gh_runner.go`                             | The only `gh` call: env, `--repo`, budget, error codes         |
+| `server/ssh_host.go`                              | An SSH remote's real host via `ssh -G`, for a job's `--repo`   |
 | `server/job_ci.go`                                | Poller of the jobs' pull requests, where they are asked, push  |
 | `server/job_ci_send.go`                           | Failed checks to the agent: message, ci grant, `/ci` route     |
 | `server/cli_agents_ci.go`                         | `termote agents job ci`, `job set --pr`                        |
