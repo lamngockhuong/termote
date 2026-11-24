@@ -411,3 +411,49 @@ func TestCIPollerSSHAlias(t *testing.T) {
 		})
 	}
 }
+
+// The host of an SSH remote is the one ssh connects to (an alias of
+// ~/.ssh/config with dots, Host work.github.com), as gh reads it; an https
+// remote is never looked up, and an alias naming a host gh is not signed in
+// to stays ci_no_repo.
+func TestCIPollerSSHConfigHost(t *testing.T) {
+	for _, c := range []struct {
+		name, url string
+		alias     map[string]string
+		want      string
+		asked     int
+	}{
+		{"alias of github.com", "git@work.github.com:o/r.git", map[string]string{"work.github.com": "github.com"}, "", 1},
+		{"ssh:// alias", "ssh://git@github.com-work/o/r.git", map[string]string{"github.com-work": "github.com"}, "", 1},
+		{"alias of another host", "git@work.github.com:o/r.git", map[string]string{"work.github.com": "ghe.example.com"}, "ci_no_repo", 1},
+		{"ssh cannot tell", "git@work.github.com:o/r.git", nil, "ci_no_repo", 1},
+		{"https is not looked up", "https://github.com/o/r.git", map[string]string{"github.com": "ghe.example.com"}, "", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ct := newCITest(t, "feat", "origin", c.url)
+			asked := 0
+			ct.p.sshHost = func(_ context.Context, host string) string {
+				asked++
+				return c.alias[host]
+			}
+			ct.gh.reply("auth status --hostname=ghe.example.com", fakeGhReply{Err: "not logged in", Code: 1})
+			ct.gh.reply("auth status --hostname=work.github.com", fakeGhReply{Err: "not logged in", Code: 1})
+			id := ct.worktreeJob("feat")
+			ct.list("feat", ghPRJSON(3, "OPEN", "a", "o", ct.now(), passCheck))
+			ct.p.read(context.Background(), id)
+			j, _ := ct.agent.jobs.job(id)
+			if j.CI == nil {
+				t.Fatal("nothing written")
+			}
+			if j.CI.Error != c.want {
+				t.Errorf("error %q, want %q", j.CI.Error, c.want)
+			}
+			if c.want == "" && (j.CI.Repo != "github.com/o/r" || len(j.CI.PRs) != 1) {
+				t.Errorf("remote not read as github.com: %+v", j.CI)
+			}
+			if asked != c.asked {
+				t.Errorf("ssh asked %d times, want %d", asked, c.asked)
+			}
+		})
+	}
+}
