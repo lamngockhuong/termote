@@ -866,7 +866,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
   (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
   no variable set before the program (`X=1 bash`, what `env` does: `interpreter`), and its first word
-  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`) of the one list
+  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`; `gawk`, `mawk`, `gmake` as
+  `awk` and `make`) of the one list
   `delegateInterpreters`, which holds `git` too (its options and config run any program:
   `--upload-pack`, `-x`, `difftool`, `bisect run`) and `sed` and `ed` (a script such as `1e./x.sh`
   runs a program), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
@@ -911,9 +912,11 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   component printable ASCII without `~`, `:` or `\` and not ending in a dot or a space (no Windows
   short name or stream, nothing case folding or Windows maps onto another name), not a
   denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
-  `.opencode`, `.agents`, `.husky`, `.githooks`, `.lefthook`, `.vscode`, `.idea`, `.cargo`,
+  `.opencode`, `.agents`, `.gemini`, `.cursor`, `.devcontainer`, `.husky`, `.githooks`, `.lefthook`,
+  `.vscode`, `.idea`, `.cargo`,
   `node_modules`, `.github/workflows`, `.github/actions`, `.mcp.json`, `CLAUDE.md`,
-  `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.envrc`, `.env*`, `package.json`, lockfiles,
+  `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, `mise.toml`, `.mise.toml`, `.exrc`,
+  `.nvim.lua`, `Directory.Build.props`, `Directory.Build.targets`, `.envrc`, `.env*`, `package.json`, lockfiles,
   `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
   `Makefile`, hook configs, sensitive
   names by `isSensitive`: `denied_path`), not a file a git hook of the grant's directory runs

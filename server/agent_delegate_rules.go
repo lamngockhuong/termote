@@ -37,6 +37,8 @@ var delegateInterpreters = []string{
 	"npx", "pnpx", "bunx", "dlx", "uvx", "uv", "pipx", "tsx", "ts-node", "busybox", "node", "deno", "bun",
 	"python", "perl", "ruby", "php", "lua", "awk", "eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout",
 	"watch", "make",
+	// GNU's and the other builds of awk and make.
+	"gawk", "mawk", "nawk", "gmake",
 	// sed and ed run a program from their script (sed's e command, ed's !).
 	"sed", "ed",
 	// More interpreters, and wrappers that run the program named after them.
@@ -266,6 +268,11 @@ var delegateDeniedNames = []string{
 	"claude.local.md", "agents.override.md",
 	// The package managers run or read these when they install.
 	".pnpmfile.cjs", ".pnpmfile.mjs", "pnpm-workspace.yaml", ".yarnrc.yaml", "bunfig.toml",
+	// Gemini CLI reads GEMINI.md as instructions; mise runs the tasks and
+	// hooks of its config on entering the folder; vim and Neovim run a
+	// folder's .exrc and .nvim.lua; MSBuild imports Directory.Build.* into
+	// every project below it.
+	"gemini.md", "mise.toml", ".mise.toml", ".exrc", ".nvim.lua", "directory.build.props", "directory.build.targets",
 }
 
 // delegateHookConfigs are the files that make git hooks run a program:
@@ -339,7 +346,10 @@ func checkDelegateHook(dir, rel string) string {
 // delegateDeniedDirs are directories nothing under which a grant covers
 // ("/"-separated, lowercased, from the worktree's root down).
 var delegateDeniedDirs = []string{".git", ".claude", ".codex", ".opencode", ".agents", ".husky", ".githooks", ".lefthook",
-	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules"}
+	".vscode", ".idea", ".cargo", ".github/workflows", ".github/actions", "node_modules",
+	// Agent and editor settings that run or instruct: Gemini CLI, Cursor,
+	// a dev container's commands.
+	".gemini", ".cursor", ".devcontainer"}
 
 // checkDelegatePath is "" when rel, a path relative to a grant's dir, may
 // be edited under it, else the refusal code. Only the names are read here;
