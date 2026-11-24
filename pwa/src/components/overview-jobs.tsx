@@ -2,6 +2,7 @@ import {
   ChevronDown,
   CircleArrowUp,
   CircleCheck,
+  CircleHelp,
   ListTodo,
   Plus,
   X,
@@ -13,6 +14,7 @@ import type { Job } from '../hooks/use-mux-api'
 import { useNow } from '../hooks/use-now'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import { Trans } from '../i18n/trans'
 import { formatAgo } from '../utils/format-ago'
 import { groupJobs, jobFinished } from '../utils/jobs'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -20,6 +22,7 @@ import { JOB_STATE_WORDS, JobCard, jobBranch } from './job-card'
 import { JobDetail } from './job-detail'
 import { type JobAgentChoice, JobEditSheet } from './job-edit-sheet'
 import { JobGrantSheet } from './job-grant-sheet'
+import { OrchestratorSetupSheet } from './orchestrator-setup-sheet'
 import { OverviewAsks } from './overview-asks'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -111,6 +114,8 @@ export function OverviewJobs({
   const [granting, setGranting] = useState<Job | null>(null)
   // The job whose details are open, by id: read again from each read
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The sheet on how an agent fills the Plan
+  const [setupOpen, setSetupOpen] = useState(false)
   const canWrite = !readOnly && !store.readOnly
   const shown = store.loaded && !store.unavailable
   const selected = canWrite
@@ -277,6 +282,15 @@ export function OverviewJobs({
             </p>
           )}
           <span className="flex-1" />
+          {/* Every role and mode: a view-only device reads it too */}
+          <IconButton
+            onClick={() => setSetupOpen(true)}
+            aria-label={t('jobs.setup.open')}
+            title={t('jobs.setup.open')}
+            className="text-fg-subtle"
+          >
+            <CircleHelp size={16} aria-hidden="true" />
+          </IconButton>
           {canWrite && (
             <Button variant="primary" onClick={() => setEditing(null)}>
               <Plus size={14} aria-hidden="true" />
@@ -316,9 +330,24 @@ export function OverviewJobs({
               {store.jobs.length === 0 ? t('jobs.none') : t('jobs.noneOpen')}
             </p>
             <p className="m-0 text-[12px] text-fg-muted">
-              {store.jobs.length === 0
-                ? t('jobs.noneHint')
-                : t('jobs.noneOpenHint')}
+              {store.jobs.length === 0 ? (
+                <Trans
+                  k="jobs.noneHint"
+                  tags={{
+                    link: (s) => (
+                      <button
+                        type="button"
+                        onClick={() => setSetupOpen(true)}
+                        className={`text-accent hover:underline ${FOCUS_RING}`}
+                      >
+                        {s}
+                      </button>
+                    ),
+                  }}
+                />
+              ) : (
+                t('jobs.noneOpenHint')
+              )}
             </p>
           </div>
         )}
@@ -501,6 +530,10 @@ export function OverviewJobs({
           onClose={() => setGranting(null)}
         />
       )}
+      <OrchestratorSetupSheet
+        isOpen={setupOpen}
+        onClose={() => setSetupOpen(false)}
+      />
     </section>
   )
 }

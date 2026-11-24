@@ -385,6 +385,39 @@ describe('OverviewJobs', () => {
     ).toBeNull()
   })
 
+  it.each([
+    ['with full access', false],
+    ['view only', true],
+  ])('opens the orchestrator setup from its ? button, %s', (_, readOnly) => {
+    show({}, readOnly)
+    const help = within(plan()).getByRole('button', {
+      name: 'How the Plan gets filled',
+    })
+    help.focus()
+    fireEvent.click(help)
+    expect(
+      screen.getByRole('dialog', { name: 'Let an agent fill the Plan' }),
+    ).toBeVisible()
+    expect(screen.getByText('termote skills install')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(help).toHaveFocus()
+  })
+
+  it('opens the orchestrator setup from the empty plan', () => {
+    show({ jobs: [] })
+    const link = screen.getByRole('button', { name: 'orchestrator agent' })
+    link.focus()
+    fireEvent.click(link)
+    expect(
+      screen.getByRole('dialog', { name: 'Let an agent fill the Plan' }),
+    ).toBeVisible()
+    // Escape: the dialog's cancel event
+    fireEvent(screen.getByRole('dialog'), new Event('cancel'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(link).toHaveFocus()
+  })
+
   it('adds a job in its sheet', () => {
     show()
     fireEvent.click(screen.getByRole('button', { name: 'New job' }))
@@ -468,7 +501,9 @@ describe('OverviewJobs', () => {
   it('tells an empty plan and one with every job finished', () => {
     const { unmount } = show({ jobs: [] })
     expect(screen.getByText('No job yet')).toBeVisible()
-    expect(screen.getByText(/let an orchestrator agent plan/)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'orchestrator agent' }),
+    ).toBeVisible()
     expect(screen.queryByRole('button', { name: /Finished/ })).toBeNull()
     unmount()
     show({ jobs: [job('d', { state: 'done' })] })
