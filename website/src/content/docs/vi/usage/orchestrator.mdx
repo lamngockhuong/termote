@@ -390,6 +390,14 @@ vào shell: nó ghi prompt ra một file riêng, và dòng lệnh nó gõ sẽ �
 Windows, sẽ từ chối prompt (`prompt_unsupported_shell`) và không chạy gì. Prompt là tham số dòng
 lệnh của agent, người dùng khác trên cùng máy nhìn thấy được, nên đừng đặt bí mật vào đó.
 
+Khi công việc chuyển sang một việc khác, chẳng hạn từ lập plan sang cài đặt hay từ cài đặt sang
+rà soát, orchestrator mặc định đề xuất một agent mới trong tab mới của cùng workspace (hoặc của
+workspace thuộc worktree, trên cùng branch), thành một việc riêng: agent mới bắt đầu với ngữ cảnh
+sạch, và sổ việc giữ mỗi việc một agent. Nó cũng nêu cách còn lại, gửi việc cho agent đang có, vốn
+đã biết những gì đã làm nhưng mang theo toàn bộ ngữ cảnh cũ, và bạn chọn. Chọn cách nào thì trước
+mỗi lần `start` nó cũng cho bạn xem toàn bộ prompt và chờ bạn đồng ý, kể cả khi bạn đã bảo nó giao
+việc.
+
 ## Những việc nó không làm
 
 Skill để các quyết định cho bạn:
