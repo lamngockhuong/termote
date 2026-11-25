@@ -45,6 +45,25 @@ const value = (label: string) =>
   screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement
 
 describe('JobDetail', () => {
+  it('shows a cleanup waiting on its files only while one does', () => {
+    const files = { files: ['.env.local'], at: ago(1) }
+    const { rerender } = render(
+      <JobDetail job={job({ envConfirm: files })} now={NOW} canEndGrants />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Review files' }),
+    ).toBeInTheDocument()
+    rerender(
+      <JobDetail
+        job={job({ envConfirm: { files: [], at: ago(1) } })}
+        now={NOW}
+      />,
+    )
+    expect(screen.queryByText(/removing the worktree deletes/)).toBeNull()
+    rerender(<JobDetail job={job({ envConfirm: files })} now={NOW} />)
+    expect(screen.queryByRole('button', { name: 'Review files' })).toBeNull()
+  })
+
   it('shows the id and copies a line an agent can act on, saying how the copy went', async () => {
     mockCopy.mockReset()
     mockCopy.mockResolvedValueOnce('ok')

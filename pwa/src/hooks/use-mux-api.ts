@@ -3256,6 +3256,15 @@ export interface Job {
   grants?: JobGrant[]
   events?: JobEvent[]
   created?: string
+  // A cleanup the orchestrator asked for, refused over ignored .env files
+  // not the same in the main checkout: their names, for the user to confirm
+  // (full clients; kept in the server's memory only)
+  envConfirm?: JobEnvConfirm
+}
+
+export interface JobEnvConfirm {
+  files: string[]
+  at: string
 }
 
 export interface JobList {
@@ -3450,6 +3459,49 @@ export async function revokeGrant(id: string, grantId: string): Promise<Job> {
   return (
     await jobRequest(
       `${apiBase()}/jobs/${encodeURIComponent(id)}/grants/${encodeURIComponent(grantId)}`,
+      'DELETE',
+    )
+  ).job
+}
+
+// The user's yes to the cleanup the orchestrator asked for, the job's
+// ignored .env files named in files (as envConfirm listed them) deleted
+// with its worktree. Answered once the cleanup ran, which waits on the
+// agent's pane and the worktree (about 100 s at most on the server).
+// Throws RequestError (finish_env_changed, finish_env_none,
+// finish_env_pwa_only, finish_worktree_env when another file appeared,
+// job_conflict, and any refusal of the cleanup itself).
+export async function confirmFinishEnv(
+  id: string,
+  updated: string,
+  files: string[],
+): Promise<{ job: Job; worktreeRemoved: boolean }> {
+  const res = await fetch(
+    `${apiBase()}/jobs/${encodeURIComponent(id)}/finish/env`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updated, files }),
+      signal: AbortSignal.timeout(FINISH_REQUEST_TIMEOUT_MS),
+    },
+  )
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return {
+    job: replyJob(body.job),
+    worktreeRemoved: body.worktreeRemoved === true,
+  }
+}
+
+// Above the server's worst case for a cleanup
+export const FINISH_REQUEST_TIMEOUT_MS = 120_000
+
+// Drops the cleanup waiting for the user's yes. Throws RequestError
+// (finish_env_pwa_only).
+export async function dismissFinishEnv(id: string): Promise<Job> {
+  return (
+    await jobRequest(
+      `${apiBase()}/jobs/${encodeURIComponent(id)}/finish/env`,
       'DELETE',
     )
   ).job

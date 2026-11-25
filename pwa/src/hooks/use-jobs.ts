@@ -5,10 +5,12 @@ import { followOverview } from './use-agent-overview'
 import {
   type Ask,
   answerAsk,
+  confirmFinishEnv,
   createGrant,
   createJob,
   deleteJob,
   dismissAsk,
+  dismissFinishEnv,
   fetchAsks,
   fetchJobs,
   type GrantKind,
@@ -408,6 +410,29 @@ export function grantJob(
 // Ends a grant of job. Throws RequestError.
 export function revokeJobGrant(job: Job, grantId: string): Promise<Job> {
   return write(() => saved(revokeGrant(job.id, grantId)))
+}
+
+// Runs the cleanup of job the orchestrator asked for, its ignored .env
+// files deleted with the worktree. A refusal reads the jobs again: the
+// files to confirm may have changed. Throws RequestError.
+export async function confirmJobEnv(job: Job): Promise<Job> {
+  try {
+    const r = await confirmFinishEnv(
+      job.id,
+      job.updated,
+      job.envConfirm?.files ?? [],
+    )
+    put(r.job)
+    return r.job
+  } catch (err) {
+    await reloadJobs()
+    throw err
+  }
+}
+
+// Drops the cleanup of job waiting for the user's yes. Throws RequestError.
+export function dismissJobEnv(job: Job): Promise<Job> {
+  return write(() => saved(dismissFinishEnv(job.id)))
 }
 
 // The job held now by id, or the one given when it is gone: a sheet opened

@@ -369,7 +369,14 @@ when one check fails:
 - the job's start made the worktree (one you had before is left to you);
 - the worktree has no uncommitted or untracked change, its commits are on the remote (the pushed
   branch or any other branch of that remote, so a branch with no commit of its own passes) or are
-  the head of a merged pull request, and it holds no `.env` file git ignores.
+  the head of a merged pull request, and every `.env` file git ignores there is the same, byte for
+  byte, as the one at the same path in the repository's main checkout.
+
+When a `.env` file is only in the worktree, or differs from the main checkout's, the command is
+refused and names the files (never their contents). The job's details in the PWA then show them: with
+**Review files** you confirm that they are deleted, and the job is cleaned up there as the
+orchestrator asked; **Dismiss** drops the request. Only a browser signed in with the password or a
+paired device can confirm; the orchestrator's own command has no way to skip the check.
 
 Files git ignores in the worktree (local databases, `node_modules`, build output) are removed with
 it. The branch is deleted only when a merged pull request of the job has the worktree's head;

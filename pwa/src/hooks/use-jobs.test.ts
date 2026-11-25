@@ -13,6 +13,8 @@ const api = vi.hoisted(() => ({
   createGrant: vi.fn(),
   revokeGrant: vi.fn(),
   jobCI: vi.fn(),
+  confirmFinishEnv: vi.fn(),
+  dismissFinishEnv: vi.fn(),
   follow: vi.fn(),
   stop: vi.fn(),
 }))
@@ -28,6 +30,9 @@ vi.mock('./use-mux-api', async (orig) => ({
   createGrant: (id: string, g: unknown) => api.createGrant(id, g),
   revokeGrant: (id: string, g: string) => api.revokeGrant(id, g),
   jobCI: (id: string, a: string) => api.jobCI(id, a),
+  confirmFinishEnv: (id: string, u: string, f: string[]) =>
+    api.confirmFinishEnv(id, u, f),
+  dismissFinishEnv: (id: string) => api.dismissFinishEnv(id),
 }))
 vi.mock('./use-agent-overview', () => ({
   followOverview: (read: () => Promise<void>) => {
@@ -41,6 +46,8 @@ import {
   addJob,
   answerQuestion,
   changeJob,
+  confirmJobEnv,
+  dismissJobEnv,
   dismissQuestion,
   grantJob,
   pinJobPRs,
@@ -92,6 +99,38 @@ describe('useJobs', () => {
     for (const fn of Object.values(api)) fn.mockReset()
   })
   afterEach(() => resetJobs())
+
+  it('confirms the .env files of a cleanup, and dismisses the ask', async () => {
+    const asked = job('a', {
+      state: 'review',
+      envConfirm: { files: ['.env.local'], at: 'x' },
+    })
+    api.fetchJobs.mockResolvedValue(list([asked]))
+    const { result } = renderHook(() => useJobs())
+    await act(() => reloadJobs())
+
+    const done = job('a', { state: 'done', updated: 'a-2' })
+    api.confirmFinishEnv.mockResolvedValue({ job: done, worktreeRemoved: true })
+    await act(() => confirmJobEnv(asked).then(() => {}))
+    expect(api.confirmFinishEnv).toHaveBeenCalledWith('a', 'a-1', [
+      '.env.local',
+    ])
+    expect(result.current.jobs[0]).toEqual(done)
+
+    // A refusal reads the jobs again: the files may have changed
+    api.fetchJobs.mockClear()
+    api.confirmFinishEnv.mockRejectedValue(refusal('finish_worktree_env'))
+    await expect(confirmJobEnv(job('a'))).rejects.toMatchObject({
+      code: 'finish_worktree_env',
+    })
+    expect(api.confirmFinishEnv).toHaveBeenLastCalledWith('a', 'a-1', [])
+    expect(api.fetchJobs).toHaveBeenCalled()
+
+    api.dismissFinishEnv.mockResolvedValue(job('a', { updated: 'a-3' }))
+    await act(() => dismissJobEnv(job('a')).then(() => {}))
+    expect(api.dismissFinishEnv).toHaveBeenCalledWith('a')
+    expect(result.current.jobs[0].updated).toBe('a-3')
+  })
 
   it('follows the overview while read, and reads with it', async () => {
     api.fetchJobs.mockResolvedValue(list([job('a')]))

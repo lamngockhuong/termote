@@ -66,6 +66,12 @@ export default {
     'The agent still runs work in the background. Wait for it',
   'errors.finish_agent_changed': "The job's pane runs another agent now",
   'errors.finish_agent_working': 'The agent is working. Wait until it stops',
+  'errors.finish_env_changed':
+    'The .env files to confirm changed. Read them again',
+  'errors.finish_env_none':
+    'No cleanup waits for this any more. Ask the orchestrator to run it again',
+  'errors.finish_env_pwa_only':
+    'Only you confirm this, in the app signed in with the password or a paired device',
   'errors.finish_failed': 'Could not clean up the job',
   'errors.finish_job_active':
     'Only a job in review, or finished, can be cleaned up',

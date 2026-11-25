@@ -522,6 +522,37 @@ const dismissAsk: Handler = (req) => {
   return json({ ask: q })
 }
 
+// The user's yes to a cleanup held back by ignored .env files, as
+// server/job_finish_env.go's handleFinishEnv: the names shown must be the
+// ones waiting; the job's tab and worktree go, and it is done
+const confirmEnv: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  const waiting = j.envConfirm?.files
+  if (!waiting)
+    return fail(409, 'finish_env_none', 'no finish waits for a confirm')
+  const files: unknown = req.body?.files
+  if (
+    !Array.isArray(files) ||
+    files.length !== waiting.length ||
+    !waiting.every((f) => files.includes(f))
+  )
+    return fail(409, 'finish_env_changed', 'the .env files changed')
+  if (req.body?.updated !== j.updated) return conflict(j)
+  j.envConfirm = undefined
+  j.worktree = undefined
+  j.state = 'done'
+  event(req, j, 'finished', 'tab closed; worktree removed; branch kept')
+  return json({ job: view(req.state, j), closed: true, worktreeRemoved: true })
+}
+
+const dismissEnv: Handler = (req) => {
+  const j = find(req)
+  if (!j) return notFound()
+  j.envConfirm = undefined
+  return json({ job: view(req.state, j) })
+}
+
 export const JOB_ROUTES: Record<string, Handler> = {
   'GET /asks': listAsks,
   'POST /asks/{id}/answer': answerAsk,
@@ -533,4 +564,6 @@ export const JOB_ROUTES: Record<string, Handler> = {
   'POST /jobs/{id}/grants': grant,
   'DELETE /jobs/{id}/grants/{gid}': revoke,
   'POST /jobs/{id}/ci': ci,
+  'POST /jobs/{id}/finish/env': confirmEnv,
+  'DELETE /jobs/{id}/finish/env': dismissEnv,
 }

@@ -222,7 +222,8 @@ days at the next change to the ledger, and the oldest finished one when the ledg
 one is added. Once the user has looked at a job in `review` and says
 yes, `job finish <id> --close --remove-worktree` (or `--close` alone for a job without a worktree)
 closes its tab and removes its worktree, only when the agent is at rest, its last turn was read and
-the worktree is clean with its commits pushed or merged; files git ignores there go with it, and the
+the worktree is clean with its commits pushed or merged; files git ignores there go with it (`.env`
+files only when the main checkout holds the same ones, or the user confirms them in the PWA), and the
 branch goes only once a merged pull request has its head. It sets `review` to `done`; never clean
 up with `herdr`, `tmux` or `git` instead. A turn that ends with a question for the user written in
 its answer is not done, though `wait` exits 0: `wait` says `ends with a question`, and `read` marks

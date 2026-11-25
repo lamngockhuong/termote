@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   answerAsk,
+  confirmFinishEnv,
   createGrant,
   createJob,
   deleteJob,
   dismissAsk,
+  dismissFinishEnv,
   fetchAsks,
   fetchJobs,
   jobCI,
@@ -346,5 +348,43 @@ describe('ask requests', () => {
     const err = await dismissAsk('Q1', 'u1').catch((e: unknown) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err).toMatchObject({ status: 409, code: 'ask_closed' })
+  })
+})
+
+describe('the .env files a cleanup waits on', () => {
+  it('confirms the names shown, then answers the job cleaned up', async () => {
+    const sent = mockFetch({ job: JOB, worktreeRemoved: true, closed: true })
+    expect(
+      await confirmFinishEnv(JOB.id, 'u1', ['.env.local', 'app/.env']),
+    ).toEqual({ job: JOB, worktreeRemoved: true })
+    expect(sent[0]).toEqual({
+      url: `/api/mux/jobs/${JOB.id}/finish/env`,
+      method: 'POST',
+      body: { updated: 'u1', files: ['.env.local', 'app/.env'] },
+    })
+    mockFetch({ job: JOB })
+    expect(
+      (await confirmFinishEnv(JOB.id, 'u1', ['.env'])).worktreeRemoved,
+    ).toBe(false)
+  })
+
+  it('throws the refusal, and a reply without a valid job', async () => {
+    mockFetch({ code: 'finish_env_pwa_only', error: 'no' }, 403)
+    await expect(
+      confirmFinishEnv(JOB.id, 'u1', ['.env']),
+    ).rejects.toMatchObject({ status: 403, code: 'finish_env_pwa_only' })
+    mockFetch({ job: { ...JOB, id: 'x' } })
+    await expect(confirmFinishEnv(JOB.id, 'u1', ['.env'])).rejects.toThrow(
+      'job reply without a valid job',
+    )
+  })
+
+  it('dismisses the ask', async () => {
+    const sent = mockFetch({ job: JOB })
+    expect(await dismissFinishEnv(JOB.id)).toEqual(JOB)
+    expect(sent[0]).toEqual({
+      url: `/api/mux/jobs/${JOB.id}/finish/env`,
+      method: 'DELETE',
+    })
   })
 })
