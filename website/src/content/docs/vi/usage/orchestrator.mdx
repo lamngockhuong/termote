@@ -298,20 +298,20 @@ branch của việc (trên remote `upstream` khi branch được push lên một
 gắn theo số bằng `termote agents job set <id> --pr <number>` hoặc từ phần chi tiết của việc. Pull
 request đã đóng từ trước khi tạo việc, và branch mặc định của repo, được bỏ qua.
 
-Thẻ của mỗi việc có một chip tô màu theo pull request tệ nhất: check lỗi, check đang chạy, check
+Thẻ của mỗi việc có một chip tô màu theo pull request tệ nhất: check không đạt, check đang chạy, check
 đạt, bản nháp, hoặc đã merge hết. Thiết bị chỉ xem thấy chip và các số pull request, không bao giờ
-thấy tên check. Phần chi tiết của việc liệt kê từng pull request kèm các check lỗi và đường dẫn tới
+thấy tên check. Phần chi tiết của việc liệt kê từng pull request kèm các check không đạt và đường dẫn tới
 nó. Khi còn check đang chạy, server đọc lại sau mỗi 20 giây, bình thường mỗi phút một lần, và đọc
-ngay khi bạn bấm Kiểm tra lại. Bạn nhận một thông báo đẩy khi check lỗi trên một lần mới, hoặc khi
+ngay khi bạn bấm Kiểm tra lại. Bạn nhận một thông báo đẩy khi có check không đạt trên một lần mới, hoặc khi
 mọi pull request đã merge hay đóng.
 
-**Gửi check lỗi cho agent** dán vào ô nhập của agent một tin ngắn gồm số pull request, tên các check
-lỗi, và hai lệnh `gh pr checks` và `gh run view --log-failed` để đọc chúng. Tin này không bao giờ
+**Gửi check không đạt cho agent** dán vào ô nhập của agent một tin ngắn gồm số pull request, tên các check
+không đạt, và hai lệnh `gh pr checks` và `gh run view --log-failed` để đọc chúng. Tin này không bao giờ
 chứa log: agent tự đọc log bằng `gh`. Orchestrator làm việc tương tự bằng `termote agents job ci
-<id> --send`, sau khi hỏi bạn. Muốn server tự gửi, hãy cấp cho việc ủy quyền **Gửi check lỗi**: mỗi
+<id> --send`, sau khi hỏi bạn. Muốn server tự gửi, hãy cấp cho việc ủy quyền **Gửi check không đạt**: mỗi
 lượt lỗi mới được gửi một lần, lúc agent đang nghỉ, tối đa ba lần, chỉ gồm số pull request và các
 lệnh để đọc, không kèm tên check vì tên đó có thể do người khác đặt, và không bao giờ gửi cho pull
-request đến từ repo khác. Khi mọi pull request đã merge, phần chi tiết có nút **Đặt là xong**; xoá
+request đến từ repo khác. Khi mọi pull request đã merge, phần chi tiết có nút **Đánh dấu là xong**; xóa
 worktree vẫn là việc của bạn.
 
 <Aside type="note">
@@ -403,7 +403,7 @@ Skill để các quyết định cho bạn:
 - Cho bạn xem hộp thoại xin quyền (chạy lệnh, sửa file) và trả lời bằng lựa chọn của bạn, trừ
   khi một ủy quyền bạn đã cấp bao trùm hộp thoại đó; nó không bao giờ chọn lựa chọn khiến hộp thoại
   thôi hỏi, và không bao giờ đề nghị tự cấp ủy quyền cho mình.
-- Không bao giờ mở, merge hay đóng pull request, chỉ gửi check lỗi cho agent sau khi hỏi bạn, và
+- Không bao giờ mở, merge hay đóng pull request, chỉ gửi check không đạt cho agent sau khi hỏi bạn, và
   không bao giờ đặt việc là `done` chỉ vì pull request của nó đã merge.
 - Không bao giờ chạy `termote show-password` hay `termote pair`, và không cần mật khẩu: các lệnh
   tới server qua local socket, thứ chỉ chính user của bạn mở được.

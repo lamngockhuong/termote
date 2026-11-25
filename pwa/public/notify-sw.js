@@ -141,10 +141,10 @@
       agent: 'Agent',
       fallback: 'Có thể một agent đang cần bạn',
       settings: 'Agent đề xuất thay đổi cài đặt',
-      jobReview: 'Việc chờ bạn xem lại',
+      jobReview: 'Có việc chờ bạn xem lại',
       jobFallback: 'Có một việc đang chờ bạn xem lại',
-      jobCIFailed: 'Check bị lỗi',
-      jobMerged: 'Pull request đã merge hết',
+      jobCIFailed: 'Có check không đạt',
+      jobMerged: 'Đã merge mọi pull request',
       jobOther: 'Một việc trong kế hoạch cần bạn xem',
     },
   }

@@ -88,9 +88,9 @@ export default {
   'dialogs.notify.agent': 'Agent',
   'dialogs.notify.fallback': 'Có thể một agent đang cần bạn',
   'dialogs.notify.settings': 'Agent đề xuất thay đổi cài đặt',
-  'dialogs.notify.jobReview': 'Việc chờ bạn xem lại',
+  'dialogs.notify.jobReview': 'Có việc chờ bạn xem lại',
   'dialogs.notify.jobFallback': 'Có một việc đang chờ bạn xem lại',
-  'dialogs.notify.jobCIFailed': 'Check bị lỗi',
-  'dialogs.notify.jobMerged': 'Pull request đã merge hết',
+  'dialogs.notify.jobCIFailed': 'Có check không đạt',
+  'dialogs.notify.jobMerged': 'Đã merge mọi pull request',
   'dialogs.notify.jobOther': 'Một việc trong kế hoạch cần bạn xem',
 } satisfies Translation<typeof en>

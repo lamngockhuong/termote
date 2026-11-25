@@ -108,7 +108,7 @@ export default {
   'chat.subagent.conversation': 'Hội thoại của subagent',
   'chat.subagent.empty': 'Subagent chưa viết gì.',
   'chat.subagent.gone':
-    'Hội thoại của subagent này không còn nữa. Phần đã đọc vẫn giữ lại.',
+    'Hội thoại của subagent này không còn nữa. Phần đã đọc vẫn được giữ lại.',
   'chat.subagent.unsupported':
     'Server này chưa hiện được hội thoại của subagent. Hãy cập nhật termote trên máy đó.',
 
@@ -294,11 +294,11 @@ export default {
   'chat.composer.send': 'Gửi',
   'chat.composer.stop': 'Dừng {agent}',
   'chat.composer.stopping': 'Đang dừng {agent}…',
-  'chat.composer.notStopped': 'Chưa dừng: {message}.',
+  'chat.composer.notStopped': 'Chưa dừng được: {message}.',
   'chat.composer.stopUnreachable':
     'Không kết nối được server; agent chưa được dừng.',
   'chat.composer.stopSessionChanged':
-    'Cuộc trò chuyện đã đổi và được tải lại. Nếu vẫn muốn, hãy dừng lại lần nữa.',
+    'Cuộc trò chuyện đã đổi nên được tải lại. Nếu vẫn muốn dừng, hãy bấm dừng lần nữa.',
   'chat.composer.exitTitle': 'Thoát {agent}?',
   'chat.composer.exit': 'Thoát',
   'chat.composer.exitBody':
