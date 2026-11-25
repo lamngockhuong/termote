@@ -1,3 +1,5 @@
+//go:build darwin || windows
+
 package main
 
 import (
@@ -8,9 +10,10 @@ import (
 	"testing"
 )
 
-// APFS ignores case by default, and EvalSymlinks keeps the caller's case
-// on macOS: a core.hooksPath that names the work tree in another case is
-// still the folder git runs hooks from, so an edit in it is refused.
+// macOS (APFS by default) and Windows ignore case, and EvalSymlinks keeps
+// the caller's case on macOS: a core.hooksPath that names the work tree in
+// another case is still the folder git runs hooks from, so an edit in it is
+// refused.
 func TestDelegatedEditHooksPathOtherCase(t *testing.T) {
 	dt := newDelegateTest(t, delegateScreen(t, "edit"), "")
 	gitIn(t, dt.wt, "init", "-q")
