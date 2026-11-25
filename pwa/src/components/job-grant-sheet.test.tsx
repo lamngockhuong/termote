@@ -141,8 +141,14 @@ describe('JobGrantSheet', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/no quotes/)
     typePrefix('npx vitest')
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /runs any code it is given/,
+      /This program cannot be granted/,
     )
+    typePrefix('cat /etc/hosts')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /read only inside the folder the grant keeps/,
+    )
+    typePrefix('pnpm lint')
+    expect(screen.getByRole('alert')).toHaveTextContent(/not pnpm lint/)
     typePrefix('x'.repeat(201))
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The prefix is longer than 200 characters',
@@ -151,19 +157,24 @@ describe('JobGrantSheet', () => {
     expect(store.grant).not.toHaveBeenCalled()
   })
 
-  it('warns of a prefix of one word, and still gives it', async () => {
+  it('refuses a program alone, and takes it with a command', async () => {
     open()
     // Not a problem before the user tried to give one
     typePrefix('')
     expect(screen.queryByRole('alert')).toBeNull()
     typePrefix('pnpm')
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'One word covers every command of pnpm',
+    await give()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /Type the command you allow after the program/,
     )
+    expect(store.grant).not.toHaveBeenCalled()
+    typePrefix('pnpm run lint')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
     await give()
     expect(store.grant).toHaveBeenCalledWith(job(), {
       kind: 'bash',
-      prefix: 'pnpm',
+      prefix: 'pnpm run lint',
       minutes: 1440,
     })
   })

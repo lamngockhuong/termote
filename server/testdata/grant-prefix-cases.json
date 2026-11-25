@@ -1,0 +1,1238 @@
+[
+ {
+  "prefix": "npm",
+  "want": "command"
+ },
+ {
+  "prefix": "brew",
+  "want": "program"
+ },
+ {
+  "prefix": "brew install",
+  "want": "program"
+ },
+ {
+  "prefix": "composer",
+  "want": "program"
+ },
+ {
+  "prefix": "composer require",
+  "want": "program"
+ },
+ {
+  "prefix": "dnx",
+  "want": "program"
+ },
+ {
+  "prefix": "nix",
+  "want": "program"
+ },
+ {
+  "prefix": "nix run",
+  "want": "program"
+ },
+ {
+  "prefix": "pip",
+  "want": "command"
+ },
+ {
+  "prefix": "pip wheel",
+  "want": "command"
+ },
+ {
+  "prefix": "pip download",
+  "want": "command"
+ },
+ {
+  "prefix": "pip install",
+  "want": "command"
+ },
+ {
+  "prefix": "pip3",
+  "want": "program"
+ },
+ {
+  "prefix": "pip3.12",
+  "want": "program"
+ },
+ {
+  "prefix": "gem",
+  "want": "program"
+ },
+ {
+  "prefix": "gem ins",
+  "want": "program"
+ },
+ {
+  "prefix": "gem exec",
+  "want": "program"
+ },
+ {
+  "prefix": "npm installTest",
+  "want": "command"
+ },
+ {
+  "prefix": "npm installT",
+  "want": "command"
+ },
+ {
+  "prefix": "npm lin",
+  "want": "command"
+ },
+ {
+  "prefix": "npm explore",
+  "want": "command"
+ },
+ {
+  "prefix": "npm explo",
+  "want": "command"
+ },
+ {
+  "prefix": "npm distTag",
+  "want": "command"
+ },
+ {
+  "prefix": "npm ogr",
+  "want": "command"
+ },
+ {
+  "prefix": "npm og",
+  "want": "command"
+ },
+ {
+  "prefix": "npm pack",
+  "want": "command"
+ },
+ {
+  "prefix": "npm Test",
+  "want": "command"
+ },
+ {
+  "prefix": "npm audit fix",
+  "want": "command"
+ },
+ {
+  "prefix": "npm audit signatures",
+  "want": "command"
+ },
+ {
+  "prefix": "npm ci x",
+  "want": "command"
+ },
+ {
+  "prefix": "npm audit --json fix",
+  "want": "command"
+ },
+ {
+  "prefix": "dotnet",
+  "want": "command"
+ },
+ {
+  "prefix": "dotnet run",
+  "want": "command"
+ },
+ {
+  "prefix": "dotnet tool",
+  "want": "command"
+ },
+ {
+  "prefix": "dotnet add",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm lint",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm --filter a lint",
+  "want": "command"
+ },
+ {
+  "prefix": "yarn lint",
+  "want": "command"
+ },
+ {
+  "prefix": "yarn workspace a test",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm",
+  "want": "command"
+ },
+ {
+  "prefix": "yarn",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo",
+  "want": "command"
+ },
+ {
+  "prefix": "go",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm dlx",
+  "want": "command"
+ },
+ {
+  "prefix": "npm exec",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm add",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo install",
+  "want": "command"
+ },
+ {
+  "prefix": "go run",
+  "want": "command"
+ },
+ {
+  "prefix": "npm run",
+  "want": "command"
+ },
+ {
+  "prefix": "yarn run",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm install x",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm --filter a node",
+  "want": "command"
+ },
+ {
+  "prefix": "npm --foo test",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo +nightly",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo +nightly +stable build",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo b",
+  "want": "command"
+ },
+ {
+  "prefix": "go env",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm run --if-present",
+  "want": "command"
+ },
+ {
+  "prefix": "npm run --",
+  "want": "command"
+ },
+ {
+  "prefix": "vitest",
+  "want": "command"
+ },
+ {
+  "prefix": "biome",
+  "want": "command"
+ },
+ {
+  "prefix": "ruff",
+  "want": "command"
+ },
+ {
+  "prefix": "pip List",
+  "want": "command"
+ },
+ {
+  "prefix": "bash",
+  "want": "program"
+ },
+ {
+  "prefix": "sh",
+  "want": "program"
+ },
+ {
+  "prefix": "zsh",
+  "want": "program"
+ },
+ {
+  "prefix": "dash",
+  "want": "program"
+ },
+ {
+  "prefix": "fish",
+  "want": "program"
+ },
+ {
+  "prefix": "ksh",
+  "want": "program"
+ },
+ {
+  "prefix": "csh",
+  "want": "program"
+ },
+ {
+  "prefix": "tcsh",
+  "want": "program"
+ },
+ {
+  "prefix": "pwsh",
+  "want": "program"
+ },
+ {
+  "prefix": "powershell",
+  "want": "program"
+ },
+ {
+  "prefix": "cmd",
+  "want": "program"
+ },
+ {
+  "prefix": "env",
+  "want": "program"
+ },
+ {
+  "prefix": "sudo",
+  "want": "program"
+ },
+ {
+  "prefix": "doas",
+  "want": "program"
+ },
+ {
+  "prefix": "su",
+  "want": "program"
+ },
+ {
+  "prefix": "command",
+  "want": "program"
+ },
+ {
+  "prefix": "builtin",
+  "want": "program"
+ },
+ {
+  "prefix": "nice",
+  "want": "program"
+ },
+ {
+  "prefix": "time",
+  "want": "program"
+ },
+ {
+  "prefix": "script",
+  "want": "program"
+ },
+ {
+  "prefix": "ssh",
+  "want": "program"
+ },
+ {
+  "prefix": "npx",
+  "want": "program"
+ },
+ {
+  "prefix": "pnpx",
+  "want": "program"
+ },
+ {
+  "prefix": "bunx",
+  "want": "program"
+ },
+ {
+  "prefix": "dlx",
+  "want": "program"
+ },
+ {
+  "prefix": "uvx",
+  "want": "program"
+ },
+ {
+  "prefix": "uv",
+  "want": "program"
+ },
+ {
+  "prefix": "pipx",
+  "want": "program"
+ },
+ {
+  "prefix": "tsx",
+  "want": "program"
+ },
+ {
+  "prefix": "ts-node",
+  "want": "program"
+ },
+ {
+  "prefix": "busybox",
+  "want": "program"
+ },
+ {
+  "prefix": "node",
+  "want": "program"
+ },
+ {
+  "prefix": "deno",
+  "want": "program"
+ },
+ {
+  "prefix": "bun",
+  "want": "program"
+ },
+ {
+  "prefix": "python",
+  "want": "program"
+ },
+ {
+  "prefix": "perl",
+  "want": "program"
+ },
+ {
+  "prefix": "ruby",
+  "want": "program"
+ },
+ {
+  "prefix": "php",
+  "want": "program"
+ },
+ {
+  "prefix": "lua",
+  "want": "program"
+ },
+ {
+  "prefix": "awk",
+  "want": "program"
+ },
+ {
+  "prefix": "eval",
+  "want": "program"
+ },
+ {
+  "prefix": "exec",
+  "want": "program"
+ },
+ {
+  "prefix": "source",
+  "want": "program"
+ },
+ {
+  "prefix": ".",
+  "want": "program"
+ },
+ {
+  "prefix": "xargs",
+  "want": "program"
+ },
+ {
+  "prefix": "find",
+  "want": "program"
+ },
+ {
+  "prefix": "nohup",
+  "want": "program"
+ },
+ {
+  "prefix": "timeout",
+  "want": "program"
+ },
+ {
+  "prefix": "watch",
+  "want": "program"
+ },
+ {
+  "prefix": "make",
+  "want": "program"
+ },
+ {
+  "prefix": "gawk",
+  "want": "program"
+ },
+ {
+  "prefix": "mawk",
+  "want": "program"
+ },
+ {
+  "prefix": "nawk",
+  "want": "program"
+ },
+ {
+  "prefix": "gmake",
+  "want": "program"
+ },
+ {
+  "prefix": "sed",
+  "want": "program"
+ },
+ {
+  "prefix": "ed",
+  "want": "program"
+ },
+ {
+  "prefix": "gsed",
+  "want": "program"
+ },
+ {
+  "prefix": "pythonw",
+  "want": "program"
+ },
+ {
+  "prefix": "py",
+  "want": "program"
+ },
+ {
+  "prefix": "pypy",
+  "want": "program"
+ },
+ {
+  "prefix": "pypy3",
+  "want": "program"
+ },
+ {
+  "prefix": "java",
+  "want": "program"
+ },
+ {
+  "prefix": "jshell",
+  "want": "program"
+ },
+ {
+  "prefix": "rscript",
+  "want": "program"
+ },
+ {
+  "prefix": "julia",
+  "want": "program"
+ },
+ {
+  "prefix": "tclsh",
+  "want": "program"
+ },
+ {
+  "prefix": "wish",
+  "want": "program"
+ },
+ {
+  "prefix": "expect",
+  "want": "program"
+ },
+ {
+  "prefix": "osascript",
+  "want": "program"
+ },
+ {
+  "prefix": "stdbuf",
+  "want": "program"
+ },
+ {
+  "prefix": "setsid",
+  "want": "program"
+ },
+ {
+  "prefix": "flock",
+  "want": "program"
+ },
+ {
+  "prefix": "strace",
+  "want": "program"
+ },
+ {
+  "prefix": "ltrace",
+  "want": "program"
+ },
+ {
+  "prefix": "gdb",
+  "want": "program"
+ },
+ {
+  "prefix": "lldb",
+  "want": "program"
+ },
+ {
+  "prefix": "valgrind",
+  "want": "program"
+ },
+ {
+  "prefix": "chroot",
+  "want": "program"
+ },
+ {
+  "prefix": "unshare",
+  "want": "program"
+ },
+ {
+  "prefix": "nsenter",
+  "want": "program"
+ },
+ {
+  "prefix": "runuser",
+  "want": "program"
+ },
+ {
+  "prefix": "pkexec",
+  "want": "program"
+ },
+ {
+  "prefix": "ionice",
+  "want": "program"
+ },
+ {
+  "prefix": "taskset",
+  "want": "program"
+ },
+ {
+  "prefix": "chrt",
+  "want": "program"
+ },
+ {
+  "prefix": "xvfb-run",
+  "want": "program"
+ },
+ {
+  "prefix": "systemd-run",
+  "want": "program"
+ },
+ {
+  "prefix": "caffeinate",
+  "want": "program"
+ },
+ {
+  "prefix": "git",
+  "want": "program"
+ },
+ {
+  "prefix": "docker",
+  "want": "program"
+ },
+ {
+  "prefix": "podman",
+  "want": "program"
+ },
+ {
+  "prefix": "nerdctl",
+  "want": "program"
+ },
+ {
+  "prefix": "docker-compose",
+  "want": "program"
+ },
+ {
+  "prefix": "podman-compose",
+  "want": "program"
+ },
+ {
+  "prefix": "corepack",
+  "want": "program"
+ },
+ {
+  "prefix": "bundle",
+  "want": "program"
+ },
+ {
+  "prefix": "poetry",
+  "want": "program"
+ },
+ {
+  "prefix": "pipenv",
+  "want": "program"
+ },
+ {
+  "prefix": "conda",
+  "want": "program"
+ },
+ {
+  "prefix": "mise",
+  "want": "program"
+ },
+ {
+  "prefix": "rake",
+  "want": "program"
+ },
+ {
+  "prefix": "just",
+  "want": "program"
+ },
+ {
+  "prefix": "task",
+  "want": "program"
+ },
+ {
+  "prefix": "python3.12",
+  "want": "program"
+ },
+ {
+  "prefix": "X=1",
+  "want": "program"
+ },
+ {
+  "prefix": "X=1 bash",
+  "want": "program"
+ },
+ {
+  "prefix": "NODE_OPTIONS=x npm test",
+  "want": "program"
+ },
+ {
+  "prefix": "bun",
+  "want": "program"
+ },
+ {
+  "prefix": "npx",
+  "want": "program"
+ },
+ {
+  "prefix": "git",
+  "want": "program"
+ },
+ {
+  "prefix": "docker",
+  "want": "program"
+ },
+ {
+  "prefix": "make",
+  "want": "program"
+ },
+ {
+  "prefix": "msbuild",
+  "want": "program"
+ },
+ {
+  "prefix": "tar",
+  "want": "program"
+ },
+ {
+  "prefix": "tar xzf",
+  "want": "program"
+ },
+ {
+  "prefix": "tar -xf",
+  "want": "program"
+ },
+ {
+  "prefix": "cp",
+  "want": "program"
+ },
+ {
+  "prefix": "mv",
+  "want": "program"
+ },
+ {
+  "prefix": "rm",
+  "want": "program"
+ },
+ {
+  "prefix": "sed",
+  "want": "program"
+ },
+ {
+  "prefix": "swift build",
+  "want": "program"
+ },
+ {
+  "prefix": "/usr/bin/rg",
+  "want": "program"
+ },
+ {
+  "prefix": "./rg",
+  "want": "program"
+ },
+ {
+  "prefix": "rg.exe",
+  "want": "program"
+ },
+ {
+  "prefix": "npm.cmd test",
+  "want": "program"
+ },
+ {
+  "prefix": "dotnet.exe build",
+  "want": "program"
+ },
+ {
+  "prefix": "NPM test",
+  "want": "program"
+ },
+ {
+  "prefix": "Rg",
+  "want": "program"
+ },
+ {
+  "prefix": "/bin/sh",
+  "want": "program"
+ },
+ {
+  "prefix": "pnpm test; rm -rf /",
+  "want": "chars"
+ },
+ {
+  "prefix": "pnpm  test",
+  "want": "chars"
+ },
+ {
+  "prefix": "echo $HOME",
+  "want": "chars"
+ },
+ {
+  "prefix": "ls *",
+  "want": "chars"
+ },
+ {
+  "prefix": "cat ~/x",
+  "want": "chars"
+ },
+ {
+  "prefix": "a && b",
+  "want": "chars"
+ },
+ {
+  "prefix": "a | b",
+  "want": "chars"
+ },
+ {
+  "prefix": "echo 'x'",
+  "want": "chars"
+ },
+ {
+  "prefix": "echo \"x\"",
+  "want": "chars"
+ },
+ {
+  "prefix": "echo `x`",
+  "want": "chars"
+ },
+ {
+  "prefix": "echo \\x",
+  "want": "chars"
+ },
+ {
+  "prefix": "a!",
+  "want": "chars"
+ },
+ {
+  "prefix": "a #b",
+  "want": "chars"
+ },
+ {
+  "prefix": "a\tb",
+  "want": "chars"
+ },
+ {
+  "prefix": "a\nb",
+  "want": "chars"
+ },
+ {
+  "prefix": "caf\u00e9",
+  "want": "chars"
+ },
+ {
+  "prefix": "pnpm (test)",
+  "want": "chars"
+ },
+ {
+  "prefix": "npm test",
+  "want": ""
+ },
+ {
+  "prefix": "npm run lint",
+  "want": ""
+ },
+ {
+  "prefix": "npm run lint src",
+  "want": ""
+ },
+ {
+  "prefix": "npm ci",
+  "want": ""
+ },
+ {
+  "prefix": "npm audit",
+  "want": ""
+ },
+ {
+  "prefix": "npm audit --json",
+  "want": ""
+ },
+ {
+  "prefix": "npm --prefix pwa test",
+  "want": ""
+ },
+ {
+  "prefix": "npm --prefix pwa run build",
+  "want": ""
+ },
+ {
+  "prefix": "npm start",
+  "want": ""
+ },
+ {
+  "prefix": "npm ls",
+  "want": ""
+ },
+ {
+  "prefix": "npm outdated",
+  "want": ""
+ },
+ {
+  "prefix": "npm explain react",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm test",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm --filter termote run lint",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm --filter=termote run lint",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm -r --if-present run test",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm install --frozen-lockfile",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm install",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm list",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm why react",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm test src/a.test.ts",
+  "want": ""
+ },
+ {
+  "prefix": "yarn test",
+  "want": ""
+ },
+ {
+  "prefix": "yarn run lint",
+  "want": ""
+ },
+ {
+  "prefix": "yarn install",
+  "want": ""
+ },
+ {
+  "prefix": "yarn why x",
+  "want": ""
+ },
+ {
+  "prefix": "cargo build",
+  "want": ""
+ },
+ {
+  "prefix": "cargo test my_test",
+  "want": ""
+ },
+ {
+  "prefix": "cargo +nightly test",
+  "want": ""
+ },
+ {
+  "prefix": "cargo build --release",
+  "want": ""
+ },
+ {
+  "prefix": "cargo --locked build",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo clippy",
+  "want": ""
+ },
+ {
+  "prefix": "cargo fmt",
+  "want": ""
+ },
+ {
+  "prefix": "cargo check",
+  "want": ""
+ },
+ {
+  "prefix": "go test",
+  "want": ""
+ },
+ {
+  "prefix": "go test -run",
+  "want": ""
+ },
+ {
+  "prefix": "go test -run TestX ./server/...",
+  "want": ""
+ },
+ {
+  "prefix": "go mod",
+  "want": ""
+ },
+ {
+  "prefix": "go mod tidy",
+  "want": ""
+ },
+ {
+  "prefix": "go vet ./...",
+  "want": ""
+ },
+ {
+  "prefix": "go build ./cmd/x",
+  "want": ""
+ },
+ {
+  "prefix": "go version",
+  "want": ""
+ },
+ {
+  "prefix": "go list",
+  "want": ""
+ },
+ {
+  "prefix": "rg",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n foo .",
+  "want": ""
+ },
+ {
+  "prefix": "ls",
+  "want": ""
+ },
+ {
+  "prefix": "ls /tmp",
+  "want": "path"
+ },
+ {
+  "prefix": "cat",
+  "want": ""
+ },
+ {
+  "prefix": "grep -rn",
+  "want": ""
+ },
+ {
+  "prefix": "head",
+  "want": ""
+ },
+ {
+  "prefix": "tail",
+  "want": ""
+ },
+ {
+  "prefix": "wc -l",
+  "want": ""
+ },
+ {
+  "prefix": "diff",
+  "want": ""
+ },
+ {
+  "prefix": "tsc --noEmit",
+  "want": ""
+ },
+ {
+  "prefix": "eslint",
+  "want": ""
+ },
+ {
+  "prefix": "jest",
+  "want": ""
+ },
+ {
+  "prefix": "pytest -x",
+  "want": ""
+ },
+ {
+  "prefix": "vitest run",
+  "want": ""
+ },
+ {
+  "prefix": "vitest list",
+  "want": ""
+ },
+ {
+  "prefix": "biome check",
+  "want": ""
+ },
+ {
+  "prefix": "biome ci",
+  "want": ""
+ },
+ {
+  "prefix": "ruff check",
+  "want": ""
+ },
+ {
+  "prefix": "ruff format",
+  "want": ""
+ },
+ {
+  "prefix": "dotnet build",
+  "want": ""
+ },
+ {
+  "prefix": "dotnet test",
+  "want": ""
+ },
+ {
+  "prefix": "dotnet test tests/a.csproj",
+  "want": ""
+ },
+ {
+  "prefix": "pip list",
+  "want": ""
+ },
+ {
+  "prefix": "pip show",
+  "want": ""
+ },
+ {
+  "prefix": "pip show requests",
+  "want": ""
+ },
+ {
+  "prefix": "cat /etc/hosts",
+  "want": "path"
+ },
+ {
+  "prefix": "cat ../x",
+  "want": "path"
+ },
+ {
+  "prefix": "cat a/../../b",
+  "want": "path"
+ },
+ {
+  "prefix": "rg -n foo ..",
+  "want": "path"
+ },
+ {
+  "prefix": "rg -n foo src/..",
+  "want": "path"
+ },
+ {
+  "prefix": "grep -f/etc/passwd",
+  "want": "path"
+ },
+ {
+  "prefix": "grep --file=/etc/passwd",
+  "want": "path"
+ },
+ {
+  "prefix": "grep -rn x //host/share",
+  "want": "path"
+ },
+ {
+  "prefix": "rg x C:x",
+  "want": "path"
+ },
+ {
+  "prefix": "rg x c:/w",
+  "want": "path"
+ },
+ {
+  "prefix": "tsc @/etc/opts",
+  "want": "path"
+ },
+ {
+  "prefix": "pytest +../x",
+  "want": "path"
+ },
+ {
+  "prefix": "head /dev/zero",
+  "want": "path"
+ },
+ {
+  "prefix": "diff a ../b",
+  "want": "path"
+ },
+ {
+  "prefix": "wc -l /x",
+  "want": "path"
+ },
+ {
+  "prefix": "ls /",
+  "want": "path"
+ },
+ {
+  "prefix": "eslint ../src",
+  "want": "path"
+ },
+ {
+  "prefix": "jest ..",
+  "want": "path"
+ },
+ {
+  "prefix": "cat ~/x",
+  "want": "chars"
+ },
+ {
+  "prefix": "cat C:\\x",
+  "want": "chars"
+ },
+ {
+  "prefix": "cat src/a.ts",
+  "want": ""
+ },
+ {
+  "prefix": "cat .hidden/x",
+  "want": ""
+ },
+ {
+  "prefix": "cat ...",
+  "want": ""
+ },
+ {
+  "prefix": "cat a..b",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n foo src",
+  "want": ""
+ },
+ {
+  "prefix": "grep -f./patterns",
+  "want": ""
+ },
+ {
+  "prefix": "grep --file=a/b",
+  "want": ""
+ },
+ {
+  "prefix": "diff a b",
+  "want": ""
+ },
+ {
+  "prefix": "wc -l ./x",
+  "want": ""
+ },
+ {
+  "prefix": "ls src",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n foo .",
+  "want": ""
+ }
+]

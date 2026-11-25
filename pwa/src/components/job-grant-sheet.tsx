@@ -12,7 +12,6 @@ import type { MessageKey } from '../i18n/messages/en'
 import { currentMachine } from '../utils/api-base'
 import {
   grantPrefixProblem,
-  grantPrefixTooWide,
   MAX_GRANT_PREFIX,
   type PrefixProblem,
 } from '../utils/grant-prefix'
@@ -51,7 +50,9 @@ const MOST_MINUTES = 1440
 const PROBLEM_WORDS: Record<Exclude<PrefixProblem, 'empty'>, MessageKey> = {
   length: 'jobs.grant.problem.length',
   chars: 'jobs.grant.problem.chars',
-  interpreter: 'jobs.grant.problem.interpreter',
+  program: 'jobs.grant.problem.program',
+  command: 'jobs.grant.problem.command',
+  path: 'jobs.grant.problem.path',
 }
 
 const FIELD =
@@ -282,13 +283,6 @@ export function JobGrantSheet({
                     {check === 'empty'
                       ? t('jobs.grant.problem.empty')
                       : t(PROBLEM_WORDS[check])}
-                  </p>
-                )}
-                {!check && grantPrefixTooWide(prefix) && (
-                  <p role="status" className="m-0 text-[12px] text-warning">
-                    {t('jobs.grant.oneWord', {
-                      word: visibleUnsafe(prefix.trim()),
-                    })}
                   </p>
                 )}
               </>

@@ -236,17 +236,19 @@ export default {
   'jobs.grant.kindEdit': 'Edit files',
   'jobs.grant.prefix': 'Command prefix',
   'jobs.grant.prefixHint':
-    'A command the agent asks to run is answered when it is this prefix, or starts with it and a space followed by words that are no option (none starts with -, @, + or /name:, and after tar alone its first word, which tar reads as options). Type it yourself, with the options it needs',
+    "The prefix names a program and the command you allow, as you would type them: npm test, pnpm run lint, cargo build, go test -run, rg -n. A command the agent asks to run is answered when it is this prefix, or starts with it and a space followed by words that are no option (none starts with -, @, + or /name:). Type the options it needs into the prefix. rg, cat, grep and the other tools read files only inside the job's worktree, or the folder the agent works in when the grant is given",
   'jobs.grant.runsCode':
     'A test, build or script command runs code the agent can edit: pnpm test runs its test files and whatever package.json declares for test, go test the tests of the package. Grant one only when you would let the agent run that code',
   'jobs.grant.problem.empty': 'Type the command prefix',
   'jobs.grant.problem.length': 'The prefix is longer than 200 characters',
   'jobs.grant.problem.chars':
     'Use plain words with one space between them: no quotes, no ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # and no tab',
-  'jobs.grant.problem.interpreter':
-    'This program runs any code it is given (a shell, an interpreter, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, go run, or an install that names a package such as pnpm add x or pip install x…): it cannot be granted',
-  'jobs.grant.oneWord':
-    'One word covers every command of {word}. A longer prefix is safer',
+  'jobs.grant.problem.program':
+    'This program cannot be granted: only npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome and ruff with one of their commands, and rg, grep, ls, cat, head, tail, wc, diff, tsc, eslint, jest and pytest. Type its bare name, without a path or .exe',
+  'jobs.grant.problem.command':
+    'Type the command you allow after the program, spelled out: npm test, cargo build, pip show. After run, the name of the script too (pnpm run lint, not pnpm lint). install and ci take no package name, and npm audit takes no fix. An option before the command is written --x=y',
+  'jobs.grant.problem.path':
+    'rg, cat, grep and the other tools read only inside the folder the grant keeps (the worktree, or the folder the agent works in): no path starting with / or a drive such as C:, and no ..',
   'jobs.grant.editHint':
     "A file edit under the job's worktree is answered, except for the files no grant ever covers",
   'jobs.grant.editOutsideWorktree':

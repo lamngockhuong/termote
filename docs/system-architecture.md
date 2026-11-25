@@ -1607,7 +1607,9 @@ write of the ledger, with the questions it leaves with nothing to wait for; the 
 close to it, and `jobs prune` removes them earlier.
 
 A user signed in to the PWA gives a job's agent grants (`server/job_grants.go`): run commands that
-start with a prefix, or edit files in the job's worktree, for up to a day. `termote agents answer
+start with a prefix, or edit files in the job's worktree, for up to a day. A prefix names a program
+and the command the user allows (`npm test`, `pnpm run lint`, `cargo build`, `rg`), and only the ones
+in one table, `server/delegate_programs.json`, are taken. `termote agents answer
 <pane> --delegated` asks the server to answer the open permission dialog under one; the server
 compares the dialog on screen with the single tool call the main transcript has waiting, applies
 the rules of `server/agent_delegate_rules.go` and chooses the option labelled `Yes`

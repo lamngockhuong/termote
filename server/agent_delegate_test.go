@@ -185,14 +185,14 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		setup              func(dt *delegateTest)
 		reason             string
 	}{
-		"command chained":         {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
-		"command expands":         {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
-		"not the prefix":          {"bash", bashUse("pnpm testx --run"), nil, "mismatch"},
-		"screen differs":          {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
-		"background":              {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
-		"interpreter":             {"bash", bashUse("bash -c x"), nil, "interpreter"},
-		"option after the prefix": {"bash", bashUse("pnpm test --run"), nil, "option"},
-		"no grant for it":         {"touch", bashUse("touch MARK456.txt"), nil, "no_grant"},
+		"command chained":          {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
+		"command expands":          {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
+		"not in the table":         {"bash", bashUse("pnpm testx --run"), nil, "command"},
+		"screen differs":           {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
+		"background":               {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
+		"program":                  {"bash", bashUse("bash -c x"), nil, "program"},
+		"option after the prefix":  {"bash", bashUse("pnpm test --run"), nil, "option"},
+		"program not in the table": {"touch", bashUse("touch MARK456.txt"), nil, "program"},
 		"two waiting": {"bash", bashUse("pnpm test --run") + toolUseLine("toolu_2", "Bash", map[string]any{"command": "pnpm test --run"}, false),
 			nil, "pending_many"},
 		"none waiting (parallel calls)": {"parallel", "", nil, "unparsed"},
@@ -206,6 +206,22 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		"grant expired": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
 			now := dt.agent.jobs.now
 			dt.agent.jobs.now = func() time.Time { return now().Add(25 * time.Hour) }
+		}, "no_grant"},
+		// A grant made under older rules, whose prefix the table now
+		// refuses, answers nothing, though the command alone is one the
+		// table takes.
+		"older grant, a bare program": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
+			for _, g := range dt.list()[0]["grants"].([]any) {
+				dt.do("full", http.MethodDelete, "/api/mux/jobs/"+dt.job+"/grants/"+g.(map[string]any)["id"].(string), nil)
+			}
+			now := dt.agent.jobs.now()
+			if _, err := dt.agent.jobs.update(dt.job, "", func(j *job) error {
+				j.Grants = append(j.Grants, grant{ID: newTemplateID(), Kind: "bash", Prefix: "pnpm", Agent: *j.Agent,
+					Created: now.UTC().Format(activityTimeFormat), Expires: now.Add(time.Hour).UTC().Format(time.RFC3339Nano)})
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 		}, "no_grant"},
 		"job done": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
 			dt.do("socket", http.MethodPatch, "/api/mux/jobs/"+dt.job, map[string]any{"state": "done"})
@@ -523,15 +539,22 @@ func TestGrantRoutes(t *testing.T) {
 	}
 	for name, b := range map[string]map[string]any{
 		"chained":      {"kind": "bash", "prefix": "pnpm test; rm"},
-		"interpreter":  {"kind": "bash", "prefix": "bash -c"},
+		"program":      {"kind": "bash", "prefix": "bash -c"},
+		"bare npm":     {"kind": "bash", "prefix": "npm"},
+		"no script":    {"kind": "bash", "prefix": "pnpm run"},
+		"abbreviation": {"kind": "bash", "prefix": "npm installTest"},
 		"empty":        {"kind": "bash", "prefix": " "},
 		"too long":     {"kind": "bash", "prefix": strings.Repeat("a", maxGrantPrefix+1)},
 		"edit, prefix": {"kind": "edit", "prefix": "x"},
 		"kind":         {"kind": "all"},
 		"minutes":      {"kind": "bash", "prefix": "pnpm test", "minutes": 24*60 + 1},
 	} {
-		if code, out := dt.do("full", http.MethodPost, path, b); code != http.StatusBadRequest {
+		code, out := dt.do("full", http.MethodPost, path, b)
+		if code != http.StatusBadRequest {
 			t.Errorf("%s = %d %v", name, code, out)
+		}
+		if b["kind"] == "bash" && name != "minutes" && out["code"] != "grant_invalid" {
+			t.Errorf("%s code = %v", name, out["code"])
 		}
 	}
 	// A device signed in full may; the grant is pinned to the agent now.
@@ -573,6 +596,27 @@ func TestGrantRoutes(t *testing.T) {
 	id := dt.create(map[string]any{"title": "No tree", "pane": "w1:pa"})["id"].(string)
 	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", map[string]any{"kind": "edit"}); code != http.StatusBadRequest {
 		t.Errorf("edit without worktree = %d %v", code, out)
+	}
+	// A bash grant there holds the pane's folder; a tool's needs one.
+	rg := map[string]any{"kind": "bash", "prefix": "rg"}
+	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", rg); code != http.StatusBadRequest || out["code"] != "job_invalid" {
+		t.Errorf("tool without a folder = %d %v", code, out)
+	}
+	dt.f.mu.Lock()
+	dt.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Cwd: t.TempDir()}
+	dt.f.mu.Unlock()
+	dt.snapshot()
+	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", rg); code != http.StatusCreated {
+		t.Fatalf("bash without worktree = %d %v", code, out)
+	}
+	for _, j := range dt.list() {
+		if j["id"] == id {
+			live, _ := j["live"].(map[string]any)
+			g := j["grants"].([]any)[0].(map[string]any)
+			if live == nil || live["dir"] == nil || live["dir"] == "" || g["dir"] != live["dir"] {
+				t.Errorf("bash grant dir %v, pane folder %v", g["dir"], live)
+			}
+		}
 	}
 	// The GET says whether this client may give grants.
 	if _, out := dt.do("full", http.MethodGet, "/api/mux/jobs", nil); out["canGrant"] != true {
@@ -623,4 +667,66 @@ func TestGrantEditOutsideWorktree(t *testing.T) {
 		t.Errorf("edit outside = %d %v", code, out)
 	}
 	dt.grant("bash", "pnpm test", 30)
+}
+
+// A tool's grant holds the job's worktree: the call's folder, from the
+// transcript, must be in it, and its words must not lead out of it.
+func TestDelegatedToolPaths(t *testing.T) {
+	screen := func(t *testing.T) string {
+		s := delegateScreen(t, "touch")
+		if !strings.Contains(s, "touch MARK456.txt") {
+			t.Fatal("fixture changed")
+		}
+		return strings.ReplaceAll(s, "touch MARK456.txt", "cat MARK456.txt")
+	}
+	use := func(cwd string) string {
+		b, _ := json.Marshal(map[string]any{"type": "assistant", "cwd": cwd, "timestamp": "2026-11-23T09:01:00.000Z",
+			"message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": "toolu_c", "name": "Bash",
+				"input": map[string]any{"command": "cat MARK456.txt"}}}}})
+		return string(b) + "\n"
+	}
+	for name, tc := range map[string]struct {
+		cwd    func(dt *delegateTest) string
+		setup  func(t *testing.T, dt *delegateTest)
+		reason string
+	}{
+		"in the worktree": {func(dt *delegateTest) string { return dt.wt }, nil, ""},
+		"in a subfolder":  {func(dt *delegateTest) string { return filepath.Join(dt.wt, "sub") }, nil, ""},
+		"outside it":      {func(dt *delegateTest) string { return dt.t.TempDir() }, nil, "outside"},
+		"no folder (cwd)": {func(dt *delegateTest) string { return "" }, nil, "outside"},
+		"a link out of it": {func(dt *delegateTest) string { return dt.wt }, func(t *testing.T, dt *delegateTest) {
+			secret := filepath.Join(t.TempDir(), "secret")
+			writeFile(t, secret, "x")
+			if err := os.Symlink(secret, filepath.Join(dt.wt, "MARK456.txt")); err != nil {
+				t.Skipf("no symlinks: %v", err)
+			}
+		}, "outside"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newDelegateTest(t, screen(t), "")
+			os.MkdirAll(filepath.Join(dt.wt, "sub"), 0o700)
+			if tc.setup != nil {
+				tc.setup(t, dt)
+			}
+			os.WriteFile(dt.path, []byte(jobsTranscript+use(tc.cwd(dt))), 0o600)
+			dt.grant("bash", "cat", 0)
+			g := dt.list()[0]["grants"].([]any)[0].(map[string]any)
+			if g["dir"] != dt.wt {
+				t.Fatalf("grant dir %v, want the worktree %s", g["dir"], dt.wt)
+			}
+			code, out := dt.answer()
+			if tc.reason == "" {
+				if code != http.StatusNoContent {
+					t.Errorf("= %d %v", code, out)
+				}
+				return
+			}
+			if code != http.StatusConflict || out["reason"] != tc.reason {
+				t.Errorf("= %d %v, want %s", code, out, tc.reason)
+			}
+			if keys := dt.keys(); len(keys) != 0 {
+				t.Errorf("keys sent: %v", keys)
+			}
+		})
+	}
 }

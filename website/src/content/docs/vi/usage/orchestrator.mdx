@@ -255,34 +255,59 @@ sửa file trong worktree của việc khi agent đang làm trong đó, tối đ
 dòng lệnh, một Termote khác và server không bật đăng nhập đều không cấp được. Với một máy mở qua
 [Machines](/vi/usage/machines/), hãy cấp trên Termote của chính máy đó; ở đây chỉ xem được.
 
-Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
+Tiền tố lệnh gồm tên chương trình và lệnh bạn cho phép, gõ như khi bạn tự chạy. Termote chỉ nhận
+các chương trình và lệnh trong một danh sách ngắn:
+
+| Chương trình | Lệnh có thể ủy quyền                                                         |
+| ------------ | ---------------------------------------------------------------------------- |
+| `npm`        | `test`, `start`, `ls`, `outdated`, `explain`, `run <script>`, `ci`, `audit`  |
+| `pnpm`       | `test`, `start`, `ls`, `list`, `outdated`, `why`, `run <script>`, `install`  |
+| `yarn`       | `test`, `start`, `why`, `run <script>`, `install`                            |
+| `cargo`      | `build`, `test`, `check`, `clippy`, `fmt`, có thể đặt một `+toolchain` phía trước |
+| `go`         | `build`, `test`, `vet`, `fmt`, `list`, `mod`, `version`                      |
+| `dotnet`     | `build`, `test`                                                              |
+| `pip`        | `list`, `show`                                                               |
+| `vitest`     | `run`, `list`                                                                |
+| `biome`      | `check`, `format`, `lint`, `ci`                                              |
+| `ruff`       | `check`, `format`                                                            |
+
+Các công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
+`pytest` chỉ làm một việc, không có lệnh con: chỉ cần cấp tên công cụ, hoặc tên kèm các tùy chọn bạn
+cho phép (`rg -n`).
+
+Các công cụ này chỉ đọc trong thư mục gắn với ủy quyền: worktree của việc khi agent đang làm trong đó,
+nếu không thì thư mục agent đang làm việc lúc bạn cấp ủy quyền (thư mục này hiện trong ủy quyền). Từ
+nào bắt đầu bằng `/` hay một ổ đĩa như `C:`, hoặc có `..`, đều bị từ chối, cả trong tiền tố bạn gõ lẫn
+trong lệnh agent xin (`cat /etc/hosts`, `rg foo ../other`). Lệnh agent chạy từ một thư mục khác, hay
+file đi qua một liên kết dẫn ra ngoài thư mục gắn với ủy quyền, cũng bị từ chối. Những ủy quyền cho các
+công cụ này được cấp trước khi có quy tắc thư mục sẽ bị thu hồi khi server khởi động.
+
+Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (`yarn workspace a lint` cũng không
+được), và lệnh chạy script cần có tên script (`npm run` mà thiếu tên script sẽ bị từ chối). `install`,
+`ci` và `npm audit` không được kèm tên gói: lệnh cài có nêu tên gói bị từ chối, `npm audit fix` cũng vậy. Chỉ gõ tên
+chương trình, không kèm đường dẫn hay đuôi (`rg`, không phải `/usr/bin/rg` hay `rg.exe`). Mọi chương
+trình khác đều bị từ chối, trong đó có shell, trình thông dịch, `git`, `make`, `tar`, `docker`, `npx`,
+`brew` và `gem`. Những ủy quyền cấp theo quy tắc cũ có tiền tố không còn hợp lệ (ví dụ chỉ có `npm`) sẽ
+không trả lời hộp thoại nào nữa, và server thu hồi chúng khi khởi động.
+
+Khi có ủy quyền, orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
 chọn "Yes" cho đúng lần này khi mọi điều sau đều đúng: hộp thoại trên màn hình và lời gọi công cụ
 duy nhất đang chờ trong transcript của agent cùng nêu một lệnh hoặc một file; không subagent nào
-đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, và không bắt đầu
-bằng một shell, một trình thông dịch hay một công cụ container (`docker`, `podman`: chúng chạy
-được mọi image, hay một file compose mà agent sửa được); không từ nào sau tiền tố của bạn là tùy chọn (bắt đầu bằng `-`, `@` hay `+`, hoặc có dạng `/p:`:
-`rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên tùy chọn nào bạn cho phép thì
-gõ luôn vào tiền tố; `tar` đọc từ đầu tiên sau nó là tùy chọn dù không có `-`, nên hãy cấp
-`tar xzf` thay vì `tar`); trình quản lý gói không được yêu cầu chạy hay cài một gói do agent nêu tên, hay sửa cấu hình
-của nó (`pnpm dlx x`, `npm init x`, `pnpm add x`, `npm i x`, `npm config set`, `npm publish`; riêng `pnpm install`, không kèm
-gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải là lệnh của chính chúng
-(`pnpm --filter a node x.js` sẽ chạy node: muốn cho chạy script `lint` của bạn thì cấp
-`pnpm --filter a lint`); lệnh cargo chỉ được là `build`, `test`, `check`, `clippy` hay `fmt` (với từ
-nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn lệnh `install` của nó build một
-crate do agent nêu tên); lệnh go chỉ được là `build`, `test`, `vet`, `fmt`, `list`, `mod` hay `version`
-(lệnh `run` và `install` của nó build một module do agent nêu tên, ở phiên bản bất kỳ); lệnh `install` của
-pip, gem và lệnh `link` của npm không được kèm tên một gói cần cài;
+đang chạy; lệnh nằm trong danh sách trên, bắt đầu bằng tiền tố của bạn, và không chứa ký tự nào để shell nối lệnh,
+mở rộng hay chuyển hướng; không từ nào sau tiền tố là tùy chọn (bắt đầu bằng `-`,
+`@` hay `+`, hoặc có dạng `/p:`: `rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên
+tùy chọn nào bạn cho phép thì gõ luôn vào tiền tố);
 file nằm trong worktree, không đi qua liên kết nào, và không
-phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
+phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `.yarn/`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, pipeline CI, `justfile`, `.env`...). File nằm trong thư mục mà
 `core.hooksPath` của kho trỏ tới cũng được tính là file do git hook chạy. Mọi trường hợp khác đều bị từ chối và quay về
 bạn như trước. Mỗi câu trả lời hiện trên thẻ của việc và trong nhật ký kiểm toán của server.
 
 <Aside type="caution">
   Ủy quyền chạy một lệnh test, build hay script là cho chạy mã mà agent sửa được: `pnpm test` chạy
-  các file test và mọi lệnh `package.json` khai báo cho `test`, và agent được sửa file trong
-  worktree có thể đổi chúng. Chỉ cấp ủy quyền cho lệnh ngắn, quen thuộc,
-  trên những việc bạn đang theo dõi.
+  các file test và mọi lệnh `package.json` khai báo cho `test`, `dotnet build` chạy các target build
+  của project, và agent được sửa file trong worktree có thể đổi chúng. Chỉ cấp ủy quyền cho lệnh
+  ngắn, quen thuộc, trên những việc bạn đang theo dõi.
 </Aside>
 
 Từ dòng lệnh, lựa chọn khiến hộp thoại không hỏi lại nữa (`don't ask again`, `always allow`,

@@ -150,6 +150,18 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 			return invalidJob("the job changed: look at it again")
 		}
 		g.Job, g.Agent = j.ID, *j.Agent
+		if g.Kind == "bash" {
+			// The folder a tool's files stay in (checkToolPaths): the
+			// job's worktree while the agent's pane is in it, else the
+			// pane's folder now.
+			g.Dir = live.Dir
+			if j.Worktree != nil && j.Worktree.Dir != "" && !live.OutsideWorktree {
+				g.Dir = j.Worktree.Dir
+			}
+			if first, _, _ := strings.Cut(g.Prefix, " "); g.Dir == "" && isDelegateTool(first) {
+				return invalidJob("the agent's folder is not known: a grant for " + first + " needs it")
+			}
+		}
 		if g.Kind == "edit" {
 			if j.Worktree == nil || j.Worktree.Dir == "" {
 				return invalidJob("a grant to edit files needs the job's worktree")
@@ -195,7 +207,7 @@ func newGrant(in grantInput, now time.Time) (grant, error) {
 		if len(p) > maxGrantPrefix {
 			return grant{}, invalidGrant("chars")
 		}
-		if code := checkDelegateCommand(p, ""); code != "" {
+		if code := checkGrantPrefix(p); code != "" {
 			return grant{}, invalidGrant(code)
 		}
 		g.Prefix = p
