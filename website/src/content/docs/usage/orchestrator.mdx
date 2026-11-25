@@ -273,7 +273,11 @@ only the programs and commands of one short list:
 | `biome`  | `check`, `format`, `lint`, `ci`                                              |
 | `ruff`   | `check`, `format`                                                            |
 
-`rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` and `pytest` do one
+Before the command, a prefix takes only `npm --prefix <folder>` and pnpm's `-r`, `--recursive`,
+`--if-present` and `--filter <name>` (also as `--prefix=<folder>`, `--filter=<name>`); type any
+other option after the command (`cargo build --locked`, not `cargo --locked build`).
+
+`rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `eslint`, `jest` and `pytest` do one
 thing each and take no command: grant the name alone, or with the options you allow (`rg -n`).
 
 They read only inside the grant's folder: the job's worktree while the agent works there, else the

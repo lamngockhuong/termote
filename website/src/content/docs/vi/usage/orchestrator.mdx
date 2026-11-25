@@ -271,7 +271,11 @@ các chương trình và lệnh trong một danh sách ngắn:
 | `biome`      | `check`, `format`, `lint`, `ci`                                              |
 | `ruff`       | `check`, `format`                                                            |
 
-Các công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
+Trước lệnh, tiền tố chỉ nhận `npm --prefix <thư mục>` và các tùy chọn `-r`, `--recursive`,
+`--if-present`, `--filter <tên>` của pnpm (viết `--prefix=<thư mục>`, `--filter=<tên>` cũng được);
+tùy chọn khác phải gõ sau lệnh (`cargo build --locked`, không phải `cargo --locked build`).
+
+Các công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `eslint`, `jest` và
 `pytest` chỉ làm một việc, không có lệnh con: chỉ cần cấp tên công cụ, hoặc tên kèm các tùy chọn bạn
 cho phép (`rg -n`).
 
