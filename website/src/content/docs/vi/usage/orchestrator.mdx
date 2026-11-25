@@ -263,7 +263,7 @@ các chương trình và lệnh trong một danh sách ngắn:
 | `npm`        | `test`, `start`, `ls`, `outdated`, `explain`, `run <script>`, `ci`, `audit`  |
 | `pnpm`       | `test`, `start`, `ls`, `list`, `outdated`, `why`, `run <script>`, `install`  |
 | `yarn`       | `test`, `start`, `why`, `run <script>`, `install`                            |
-| `cargo`      | `build`, `test`, `check`, `clippy`, `fmt`, kể cả sau một `+toolchain`        |
+| `cargo`      | `build`, `test`, `check`, `clippy`, `fmt`, có thể đặt một `+toolchain` phía trước |
 | `go`         | `build`, `test`, `vet`, `fmt`, `list`, `mod`, `version`                      |
 | `dotnet`     | `build`, `test`                                                              |
 | `pip`        | `list`, `show`                                                               |
@@ -271,29 +271,30 @@ các chương trình và lệnh trong một danh sách ngắn:
 | `biome`      | `check`, `format`, `lint`, `ci`                                              |
 | `ruff`       | `check`, `format`                                                            |
 
-Mỗi công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
-`pytest` chỉ làm một việc và không có lệnh con: cấp riêng tên của nó, hoặc kèm các tùy chọn bạn cho
-phép (`rg -n`).
-Các công cụ này chỉ đọc trong thư mục của ủy quyền: worktree của việc khi agent đang làm trong đó,
-nếu không thì thư mục agent đang làm việc lúc bạn cấp ủy quyền (ủy quyền có ghi thư mục này). Từ nào
-bắt đầu bằng `/` hay một ổ đĩa như `C:`, hoặc có `..`, đều bị từ chối, cả trong tiền tố bạn gõ lẫn
+Các công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
+`pytest` chỉ làm một việc, không có lệnh con: chỉ cần cấp tên công cụ, hoặc tên kèm các tùy chọn bạn
+cho phép (`rg -n`).
+
+Các công cụ này chỉ đọc trong thư mục gắn với ủy quyền: worktree của việc khi agent đang làm trong đó,
+nếu không thì thư mục agent đang làm việc lúc bạn cấp ủy quyền (thư mục này hiện trong ủy quyền). Từ
+nào bắt đầu bằng `/` hay một ổ đĩa như `C:`, hoặc có `..`, đều bị từ chối, cả trong tiền tố bạn gõ lẫn
 trong lệnh agent xin (`cat /etc/hosts`, `rg foo ../other`). Lệnh agent chạy từ một thư mục khác, hay
-file đi qua một liên kết dẫn ra ngoài thư mục của ủy quyền, cũng bị từ chối. Ủy quyền cho các công cụ
-này cấp từ trước khi ủy quyền có thư mục sẽ bị thu hồi khi server khởi động.
+file đi qua một liên kết dẫn ra ngoài thư mục gắn với ủy quyền, cũng bị từ chối. Những ủy quyền cho các
+công cụ này được cấp trước khi có quy tắc thư mục sẽ bị thu hồi khi server khởi động.
 
-Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (cũng không dùng `yarn workspace a lint`),
-và lệnh chạy script cần có tên script (`npm run` không kèm tên bị từ chối). `install`, `ci` và
-`npm audit` không nhận tên gói (`pnpm install x` và `npm audit fix` bị từ chối). Tên chương trình viết
-trần (`rg`, không phải `/usr/bin/rg` hay `rg.exe`). Mọi chương trình khác đều bị từ chối, trong đó có
-shell, trình thông dịch, `git`, `make`, `tar`, `docker`, `npx`, `brew` và `gem`. Ủy quyền cấp theo quy
-tắc cũ mà danh sách này không nhận tiền tố của nó (chỉ có `npm`, chẳng hạn) không còn trả lời được hộp
-thoại nào, và server thu hồi nó khi khởi động.
+Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (`yarn workspace a lint` cũng không
+được), và lệnh chạy script cần có tên script (`npm run` mà thiếu tên script sẽ bị từ chối). `install`,
+`ci` và `npm audit` không được kèm tên gói (`pnpm install x` và `npm audit fix` bị từ chối). Chỉ gõ tên
+chương trình, không kèm đường dẫn hay đuôi (`rg`, không phải `/usr/bin/rg` hay `rg.exe`). Mọi chương
+trình khác đều bị từ chối, trong đó có shell, trình thông dịch, `git`, `make`, `tar`, `docker`, `npx`,
+`brew` và `gem`. Những ủy quyền cấp theo quy tắc cũ có tiền tố không còn hợp lệ (ví dụ chỉ có `npm`) sẽ
+không trả lời hộp thoại nào nữa, và server thu hồi chúng khi khởi động.
 
-Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
+Khi có ủy quyền, orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
 chọn "Yes" cho đúng lần này khi mọi điều sau đều đúng: hộp thoại trên màn hình và lời gọi công cụ
 duy nhất đang chờ trong transcript của agent cùng nêu một lệnh hoặc một file; không subagent nào
-đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, chính nó có trong danh
-sách trên và bắt đầu bằng tiền tố của bạn; không từ nào sau tiền tố là tùy chọn (bắt đầu bằng `-`,
+đang chạy; lệnh nằm trong danh sách trên, bắt đầu bằng tiền tố của bạn, và không chứa ký tự nào để shell nối lệnh,
+mở rộng hay chuyển hướng; không từ nào sau tiền tố là tùy chọn (bắt đầu bằng `-`,
 `@` hay `+`, hoặc có dạng `/p:`: `rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên
 tùy chọn nào bạn cho phép thì gõ luôn vào tiền tố);
 file nằm trong worktree, không đi qua liên kết nào, và không
