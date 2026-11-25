@@ -367,6 +367,28 @@ func TestViewPromptHasNoPromptID(t *testing.T) {
 	if got := viewCard(AgentPrompt{Kind: "unsupported", Title: "rm -rf SECRET", textTitle: true}); got.Title != "" {
 		t.Errorf("text title kept: %q", got.Title)
 	}
+	// A question's tab row stays (the question is the agent's own); in any
+	// other dialog it can be a wrapped row of the file the agent writes.
+	steps := []PromptStep{{Label: "Size"}, {Label: "Submit"}}
+	if got := viewCard(AgentPrompt{Kind: "select", Steps: steps}); len(got.Steps) != 2 {
+		t.Errorf("question steps dropped: %+v", got.Steps)
+	}
+	b, err := os.ReadFile(filepath.Join("testdata", "claude", "screens", "collie-claude--permission-edit.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Claude Code 2.1.332 wraps a long line of a file at the card's width
+	// and indents the rest by four columns: the second row starts with the
+	// arrow, as a question's tab row does.
+	screen := strings.Replace(string(b), " \x1b[0m\x1b[2m\x1b[38;2;248;248;242m 1 ",
+		"  1 "+strings.Repeat("A", 115)+"\n    ← ☐ SECRET-TAB ✔ Submit →\n \x1b[0m\x1b[2m\x1b[38;2;248;248;242m 2 ", 1)
+	sc := readClaudeScreen(screen)
+	if sc.prompt == nil || len(sc.prompt.Steps) == 0 {
+		t.Fatalf("the fixture no longer reads the wrapped row as tabs (%+v): rebuild it", sc.prompt)
+	}
+	if got := viewPrompt(sc); got == nil || len(got.Steps) != 0 {
+		t.Errorf("view card of a %s dialog kept the file's row as tabs: %+v", sc.prompt.Kind, got)
+	}
 	// A form's fields go by title only.
 	form := AgentPrompt{Kind: "form", Fields: []PromptField{{Key: "k", Type: "string", Title: "Name",
 		Description: "SECRET", Placeholder: "SECRET", Default: "SECRET",

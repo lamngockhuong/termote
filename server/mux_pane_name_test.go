@@ -87,6 +87,26 @@ func TestWithoutMeta(t *testing.T) {
 	}
 }
 
+// A view-only client never learns where a pane's process works: the path
+// names a project, of a pane it may not even watch.
+func TestWithoutMetaDropsCwd(t *testing.T) {
+	proc := &ProcessInfo{Name: "zsh", Cwd: "/home/u/clients/acme"}
+	s := Snapshot{Groups: []Group{{ID: "g", Tabs: []Tab{{ID: "t",
+		Processes: []ProcessInfo{{Name: "vim", Cwd: "/home/u/clients/acme/src"}},
+		Panes:     []Pane{{ID: "p", Process: proc}}}}}}}
+	v := withoutMeta(s)
+	tab := v.Groups[0].Tabs[0]
+	if tab.Panes[0].Process == nil || tab.Panes[0].Process.Name != "zsh" || tab.Panes[0].Process.Cwd != "" {
+		t.Errorf("pane process = %+v, want the name without the cwd", tab.Panes[0].Process)
+	}
+	if tab.Processes[0].Name != "vim" || tab.Processes[0].Cwd != "" {
+		t.Errorf("tab processes = %+v, want the names without the cwd", tab.Processes)
+	}
+	if proc.Cwd == "" || s.Groups[0].Tabs[0].Processes[0].Cwd == "" {
+		t.Error("withoutMeta changed the snapshot it was given")
+	}
+}
+
 // PATCH /api/mux/panes/{id}: guarded like every write, the name checked
 // before the backend is asked, the backend's errors answered with codes.
 func TestRenamePaneRoute(t *testing.T) {

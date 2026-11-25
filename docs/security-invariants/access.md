@@ -158,11 +158,13 @@ Part of the [security invariants](README.md): who gets in and as what: config, s
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands (the pane's project commands and skills only where Files would show them: none under a
   root Files hides from view-only, else only files git tracks, `projectView`; the user's and the
-  plugins' stay), snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
+  plugins' stay), snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started; `withoutMeta`: no metadata and no pane process's `cwd`, which names projects, of panes the view stream may not show too, `TestWithoutMetaDropsCwd`), push key and `worktrees` GET are allowed; `agent/prompt` carries no
   `promptId`, body, options or free-text option, a form's fields by key, type and title only, and no
   title taken from the dialog's text rather than its header (a Claude dialog's title is kept only
   when it is a question's or one of `claudeDialogHeaders`, since a rule the text draws at column 0
-  can pass for the top edge; `viewCard`: these can hold the tool's
+  can pass for the top edge), and a row of question tabs (`steps`) only on a question (`select`,
+  `multiselect`): Claude Code wraps a long line of a file it shows at the card's width, so a wrapped
+  row of the file can read as tabs (`viewCard`: these can hold the tool's
   input, the command or the file and its new content, and the card is read for any pane, not only
   one the view stream can show; its `activity` is the same as for `full`). Through the machine proxy
   the remote machine builds the card, so a machine on 2.29.1 or older still sends the whole card to

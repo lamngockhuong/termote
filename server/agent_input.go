@@ -1170,10 +1170,11 @@ func viewPrompt(sc agentScreen) *AgentPrompt {
 // about it, and none of the text that can hold the tool's input (the command,
 // the file and its new content): no body, no options (their labels and details
 // can name a command, and the view-only client shows none), a form's fields by
-// title only, and no title read off the dialog's text rather than its header.
-// The client reads that input nowhere else, and the card is read for any pane,
-// not only those its stream can show. It still sees that the agent waits and
-// on what kind of question.
+// title only, no title read off the dialog's text rather than its header, and
+// a row of question tabs only on a question: in any other dialog that row can
+// be a wrapped row of the command or the file. The client reads that input
+// nowhere else, and the card is read for any pane, not only those its stream
+// can show. It still sees that the agent waits and on what kind of question.
 func viewCard(p AgentPrompt) *AgentPrompt {
 	p.PromptID = ""
 	p.Body = ""
@@ -1181,6 +1182,9 @@ func viewCard(p AgentPrompt) *AgentPrompt {
 	p.FreeText = nil
 	if p.textTitle {
 		p.Title = ""
+	}
+	if p.Kind != "select" && p.Kind != "multiselect" {
+		p.Steps = nil
 	}
 	if len(p.Fields) > 0 {
 		fields := make([]PromptField, len(p.Fields))
