@@ -2010,10 +2010,14 @@ termote uninstall [--purge]
 ```
 
 Removes the service registration, Termote's Tailscale mapping, the `termote` command, the
-install root and the upload store (a cache); the saved config and logs stay unless `--purge` is
+install root, the upload store and the `agents start` prompt files (caches, `removeUploads` and
+`removeStartPrompts`) and the orchestrator skill termote wrote (`removeInstalledSkills`, the same
+checks as `skills uninstall`; not from a checkout while a release is installed); the saved config and logs stay unless `--purge` is
 given (the command prints both paths). The trash of the Files view's deletes
 (`<cache dir>/termote/trash`) stays too, since those are the user's files and not a cache; the
-command prints its path, and `--purge` removes it (`removeTrash` in `server/install_layout.go`). On Windows the running binary stays locked, so
+command prints its path, and `--purge` removes it (`removeTrash` in `server/install_layout.go`). The
+worktrees of `agents start --worktree` (`~/.termote/worktrees`) are the user's code: never removed,
+`--purge` included; the command prints the folder. On Windows the running binary stays locked, so
 `uninstall` starts a windowless PowerShell in a console of its own (`CREATE_NO_WINDOW`; with
 `DETACHED_PROCESS` Windows PowerShell exits without running the script) that waits for its PID
 to exit, then removes what was left (`removeLater` in `server/install_layout.go`). The

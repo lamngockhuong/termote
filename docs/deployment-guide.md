@@ -908,14 +908,22 @@ termote uninstall --purge  # removes them too
 
 Removes the service registration, Termote's Tailscale mapping, the `termote` command, the
 install root and the images uploaded from the PWA (a cache: `~/.cache/termote/uploads`,
-`~/Library/Caches/termote/uploads` on macOS, inside the install root on Windows). The saved
+`~/Library/Caches/termote/uploads` on macOS, inside the install root on Windows), the prompt files
+`agents start` left next to them (`~/.cache/termote/start-prompts`) and the orchestrator skill that
+`termote skills install` wrote for Claude Code and Codex (a folder of that name termote did not
+write stays; one it wrote that now holds other files stays and is named). The saved
 config (`~/.config/termote/`) and logs (`~/.local/state/termote/`) stay, so a reinstall keeps the
 password (signed-in devices stay signed in) and the container still shares it; the command prints
 both paths. The files deleted from the PWA's Files view stay as well, in the trash next to the
 uploads (`~/.cache/termote/trash`, `~/Library/Caches/termote/trash` on macOS): they are the
 user's files, not a cache, so a plain `uninstall` prints their path and keeps them. `--purge`
 removes all of these (the interactive menu asks). Run from a checkout while
-a release is installed, `--purge` keeps them, since that install still uses them.
+a release is installed, `--purge` keeps them, since that install still uses them, and the skill
+stays too.
+
+The worktrees `agents start --worktree` made (`~/.termote/worktrees`; with `--mux hc` they are
+herdr-app's, in `~/.herdr/worktrees`) hold your code, so neither `uninstall` nor `--purge` removes
+them: the command prints the folder. Remove each with `git worktree remove` from its repository.
 
 On Windows the command cannot delete the binary it runs from: what is still locked is removed
 by a hidden PowerShell process once the command has exited.

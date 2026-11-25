@@ -319,4 +319,6 @@ termote uninstall
 ```
 
 Homebrew installs update with `brew upgrade termote && termote restart`. `uninstall` keeps the
-config and the logs; `termote uninstall --purge` removes them too. Ask before removing anything.
+config and the logs; `termote uninstall --purge` removes them too. Both remove the orchestrator
+skill termote installed and keep the worktrees in `~/.termote/worktrees` (the user's code). Ask
+before removing anything.

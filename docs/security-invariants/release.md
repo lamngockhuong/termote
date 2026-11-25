@@ -273,7 +273,9 @@ Part of the [security invariants](README.md): Homebrew, release integrity, the w
   still knows. A path of that name without the marker (the user's directory, a file, a symlink) is
   never written to or removed, an empty directory excepted; `uninstall` removes the directory only
   when it holds nothing but those two files and termote's temporary files, else nothing at all, the
-  marker last. `status` calls it current only when the marker's version is this binary's and its `SKILL.md` (a
+  marker last. `termote uninstall` runs the same removal (`removeInstalledSkills`, a failure only warned)
+  for every agent whose skill has the marker, never from a checkout while a release is installed (that
+  install's skill). `status` calls it current only when the marker's version is this binary's and its `SKILL.md` (a
   regular file by `Lstat`, never through a link, 1 MB at most) is byte for byte the embedded one, else it names
   `skills install`; `--json` adds the SHA-256 of the embedded text (`sha256`) and of each installed
   `SKILL.md` read under the same rules (none for a link or a larger file). The skill tells the agent to drive panes only

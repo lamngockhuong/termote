@@ -264,7 +264,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   deleted at once when typing never began, else `startPromptKeep` (35 s) after (a failed or cut
   short `TypeLine` included: part of the line may wait in the shell); `serve` at its start and each
   write delete the dir's `prompt-<digits>.txt` regular files older than that, which a stopped
-  server left. Codex's TUI is told from its daemon by `app-server` only before `--`
+  server left; `termote uninstall` removes the dir (`removeStartPrompts`). Codex's TUI is told from its daemon by `app-server` only before `--`
   (`codexProcOf`), so a prompt naming it is still a prompt. The answer carries `prompt: true`, and `termote agents start` reports a server that
   answers without it (older, so it started the agent without the prompt) instead of claiming it
   sent one (it says so only for a 200; a followed `start_unknown` or `starting` claims nothing).

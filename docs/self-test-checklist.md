@@ -172,6 +172,10 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `termote uninstall` stops the service, removes the registration, the `termote` command,
       the install root and the uploaded images, but keeps the saved config and logs (prints both paths)
+- [ ] `termote uninstall` removes `~/.cache/termote/start-prompts` and the skill `skills install`
+      wrote (`~/.claude/skills/termote-orchestrator`), and leaves a folder of that name you made
+- [ ] With a worktree from `agents start --worktree`, `termote uninstall` (and `--purge`) keeps
+      `~/.termote/worktrees` and prints its path
 - [ ] `termote uninstall --purge` also removes the config and the logs; the menu's Uninstall asks
 - [ ] Windows: after `termote uninstall` exits, `%LOCALAPPDATA%\termote` holds only `state\`
       (nothing with `--purge`), and no "The system cannot find the path specified." is printed

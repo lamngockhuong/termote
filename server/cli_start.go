@@ -1023,12 +1023,14 @@ func (c *cli) cmdStatus(args []string) error {
 }
 
 // cmdUninstall removes the service, Termote's Tailscale mapping, the
-// `termote` command, the installed versions and the uploaded images (a
-// cache). The config (and its saved password), the logs and the files the
-// Files view deleted (its trash) stay, so a reinstall keeps the password,
-// the container still shares it and nothing deleted is lost; --purge
-// removes them too. On Windows what this running binary locks goes once it
-// exits.
+// `termote` command, the installed versions, the uploaded images and the
+// agents start prompts (caches) and the orchestrator skill it wrote. The
+// config (and its saved password), the logs and the files the Files view
+// deleted (its trash) stay, so a reinstall keeps the password, the
+// container still shares it and nothing deleted is lost; --purge removes
+// them too. The worktrees agents started hold the user's code: never
+// removed, only named. On Windows what this running binary locks goes once
+// it exits.
 func (c *cli) cmdUninstall(args []string) error {
 	var purge bool
 	fs := c.newFlagSet("uninstall")
@@ -1060,6 +1062,10 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.cmdUnlink()
 	}
 	left := c.removeUploads()
+	left = append(left, c.removeStartPrompts()...)
+	if !otherInstall {
+		c.removeInstalledSkills()
+	}
 	if purge && !otherInstall {
 		// Before the install: on Windows the state dir sits in the install
 		// root, which can then go as a whole.
@@ -1076,6 +1082,9 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.infof("Remove the binary with: brew uninstall termote")
 	}
 	c.removeLater(left)
+	if dir := c.worktreesDir(); isDir(dir) {
+		c.infof("Kept the worktrees agents started in %s: they hold your code; remove each with git worktree remove", dir)
+	}
 	switch {
 	case purge && otherInstall:
 		c.infof("Kept the config in %s and the logs in %s: the install in %s still uses them", c.configDir(), c.stateDir(), c.dataDir())

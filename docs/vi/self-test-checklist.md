@@ -168,6 +168,10 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `termote uninstall` dừng dịch vụ, gỡ đăng ký, lệnh `termote`, thư mục cài đặt và ảnh đã
       tải lên, nhưng giữ nguyên cấu hình và log đã lưu (in ra cả hai đường dẫn)
+- [ ] `termote uninstall` xoá `~/.cache/termote/start-prompts` và skill do `skills install` ghi
+      (`~/.claude/skills/termote-orchestrator`), còn thư mục cùng tên do bạn tạo thì giữ nguyên
+- [ ] Khi có worktree do `agents start --worktree` tạo, `termote uninstall` (kể cả `--purge`) giữ
+      `~/.termote/worktrees` và in ra đường dẫn của nó
 - [ ] `termote uninstall --purge` xóa luôn cấu hình và log; mục Uninstall trong menu hỏi trước
 - [ ] Windows: khi `termote uninstall` kết thúc, `%LOCALAPPDATA%\termote` chỉ còn `state\`
       (không còn gì với `--purge`), và không in ra "The system cannot find the path specified."
