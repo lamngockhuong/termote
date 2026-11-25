@@ -35,7 +35,7 @@ func TestGrantPrefixCases(t *testing.T) {
 // one kind of command only, a tool has no commands, and a program has
 // some.
 func TestDelegateTable(t *testing.T) {
-	if len(delegateRules.Tools) == 0 || len(delegateRules.Programs) == 0 || len(delegateRules.FlagOptions) == 0 {
+	if len(delegateRules.Tools) == 0 || len(delegateRules.Programs) == 0 {
 		t.Fatal("empty table")
 	}
 	for _, tool := range delegateRules.Tools {
@@ -54,10 +54,14 @@ func TestDelegateTable(t *testing.T) {
 		if len(seen) == 0 {
 			t.Errorf("%s has no command", name)
 		}
-	}
-	for _, o := range delegateRules.FlagOptions {
-		if !strings.HasPrefix(o, "-") || strings.Contains(o, "=") {
-			t.Errorf("flag option %q", o)
+		// An option is a switch or takes a value, never both, and is
+		// spelled as typed alone (the =value form is derived).
+		opts := map[string]bool{}
+		for _, o := range slices.Concat(p.Switches, p.ValueOptions) {
+			if opts[o] || !strings.HasPrefix(o, "-") || o == "-" || o == "--" || strings.Contains(o, "=") {
+				t.Errorf("%s: option %q", name, o)
+			}
+			opts[o] = true
 		}
 	}
 }
@@ -111,13 +115,19 @@ func TestCheckDelegateCommand(t *testing.T) {
 		// Options that do not start with -.
 		{"dotnet test /p:X=1", "dotnet test", "option"},
 		{"dotnet build /property=X", "dotnet build", "option"},
-		{"tsc @opts", "tsc", "option"},
+		{"eslint @opts", "eslint", "option"},
 		{"pytest +x", "pytest", "option"},
 		// A bare command takes no word but options, under its prefix too.
 		{"pnpm install x", "pnpm install", "command"},
 		{"pnpm install --frozen-lockfile x", "pnpm install --frozen-lockfile", "command"},
 		{"npm ci x", "npm ci", "command"},
 		{"npm audit fix", "npm audit", "command"},
+		// An option before the command must be one the table lists for
+		// that program, so the agent's word is never taken for the command.
+		{"cargo --locked install test evil", "cargo --locked install test", "command"},
+		{"npm -w test install evil", "npm -w test install", "command"},
+		{"pip -v install show evil", "pip -v install show", "command"},
+		{"npm --prefix=pwa test src", "npm --prefix=pwa test", ""},
 		// The command must start with the prefix, word for word.
 		{"npm run other", "npm run lint", "no_grant"},
 		{"npm run lint", "npm run lint src", "no_grant"},

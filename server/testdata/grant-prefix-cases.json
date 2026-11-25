@@ -1049,7 +1049,7 @@
  },
  {
   "prefix": "tsc --noEmit",
-  "want": ""
+  "want": "program"
  },
  {
   "prefix": "eslint",
@@ -1152,7 +1152,7 @@
   "want": "path"
  },
  {
-  "prefix": "tsc @/etc/opts",
+  "prefix": "eslint @/etc/opts",
   "want": "path"
  },
  {
@@ -1233,6 +1233,74 @@
  },
  {
   "prefix": "rg -n foo .",
+  "want": ""
+ },
+ {
+  "prefix": "cargo --locked install test",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo --locked install test evil",
+  "want": "command"
+ },
+ {
+  "prefix": "npm -w test install",
+  "want": "command"
+ },
+ {
+  "prefix": "npm -w test install evil",
+  "want": "command"
+ },
+ {
+  "prefix": "pip -v install show",
+  "want": "command"
+ },
+ {
+  "prefix": "pip -v install show evil",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm -w test install",
+  "want": "command"
+ },
+ {
+  "prefix": "cargo --config=alias.clippy=install clippy",
+  "want": "command"
+ },
+ {
+  "prefix": "npm --prefix",
+  "want": "command"
+ },
+ {
+  "prefix": "npm --prefix --x test",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm -r=x test",
+  "want": "command"
+ },
+ {
+  "prefix": "pnpm --if-present=x test",
+  "want": "command"
+ },
+ {
+  "prefix": "go -C x test",
+  "want": "command"
+ },
+ {
+  "prefix": "tsc",
+  "want": "program"
+ },
+ {
+  "prefix": "tsc -p .",
+  "want": "program"
+ },
+ {
+  "prefix": "npm --prefix=pwa test",
+  "want": ""
+ },
+ {
+  "prefix": "pnpm --recursive run test",
   "want": ""
  }
 ]
