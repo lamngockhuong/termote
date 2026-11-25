@@ -191,17 +191,17 @@ export default {
   'jobs.grant.kindEdit': 'Sửa file',
   'jobs.grant.prefix': 'Tiền tố lệnh',
   'jobs.grant.prefixHint':
-    'Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:; nếu tiền tố chỉ là tar thì từ đầu tiên sau tar cũng không được, vì tar coi từ đó là tùy chọn). Hãy tự gõ tiền tố, kèm luôn các tùy chọn cần dùng',
+    'Tiền tố gồm tên chương trình và lệnh bạn cho phép, gõ như khi tự chạy: npm test, pnpm run lint, cargo build, go test -run, rg -n. Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:). Tùy chọn nào cần dùng thì gõ luôn vào tiền tố',
   'jobs.grant.runsCode':
     'Lệnh test, build hay script chạy mã mà agent sửa được: pnpm test chạy các file test và mọi thứ package.json khai báo cho test, go test chạy test của package. Chỉ ủy quyền khi bạn chấp nhận để agent chạy mã đó',
   'jobs.grant.problem.empty': 'Hãy gõ tiền tố lệnh',
   'jobs.grant.problem.length': 'Tiền tố dài hơn 200 ký tự',
   'jobs.grant.problem.chars':
     'Chỉ dùng các từ thường, cách nhau đúng một dấu cách: không có dấu nháy, không có ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # và không có tab',
-  'jobs.grant.problem.interpreter':
-    'Chương trình này chạy bất kỳ mã nào được đưa vào (shell, trình thông dịch, git, make, env, npx, docker, pnpm dlx, npm config, cargo install, go run, hay lệnh cài một gói như pnpm add x hoặc pip install x…): không thể ủy quyền cho nó',
-  'jobs.grant.oneWord':
-    'Một từ sẽ áp dụng cho mọi lệnh của {word}. Tiền tố dài hơn thì an toàn hơn',
+  'jobs.grant.problem.program':
+    'Không thể ủy quyền cho chương trình này. Chỉ có npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome và ruff kèm một lệnh của chúng, cùng rg, grep, ls, cat, head, tail, wc, diff, tsc, eslint, jest và pytest. Gõ tên trần của chương trình, không kèm đường dẫn hay .exe',
+  'jobs.grant.problem.command':
+    'Gõ đầy đủ lệnh bạn cho phép ngay sau tên chương trình: npm test, cargo build, pip show. Sau run cần thêm tên script (pnpm run lint, không phải pnpm lint). install và ci không nhận tên gói, npm audit không nhận fix. Tùy chọn đứng trước lệnh thì viết dạng --x=y',
   'jobs.grant.editHint':
     'Mọi yêu cầu sửa file trong worktree của việc này sẽ được trả lời, trừ những file không ủy quyền nào áp dụng được',
   'jobs.grant.editOutsideWorktree':

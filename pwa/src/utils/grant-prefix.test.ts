@@ -1,19 +1,53 @@
 import { describe, expect, it } from 'vitest'
+import tableJson from '../../../server/delegate_programs.json?raw'
+import casesJson from '../../../server/testdata/grant-prefix-cases.json?raw'
 import {
+  type DelegateProgram,
+  FLAG_OPTIONS,
   grantPrefixProblem,
-  grantPrefixTooWide,
   MAX_GRANT_PREFIX,
+  PROGRAMS,
+  TOOLS,
 } from './grant-prefix'
 
+const sorted = (a: readonly string[] = []) => [...a].sort()
+
+describe('the table', () => {
+  it("is the server's, word for word (order aside)", () => {
+    const table = JSON.parse(tableJson) as {
+      tools: string[]
+      programs: Record<string, DelegateProgram>
+      flagOptions: string[]
+    }
+    expect(sorted(TOOLS)).toEqual(sorted(table.tools))
+    expect(sorted(FLAG_OPTIONS)).toEqual(sorted(table.flagOptions))
+    expect(sorted(Object.keys(PROGRAMS))).toEqual(
+      sorted(Object.keys(table.programs)),
+    )
+    for (const [name, p] of Object.entries(table.programs)) {
+      const mine = PROGRAMS[name]
+      expect(sorted(mine.commands), name).toEqual(sorted(p.commands))
+      expect(sorted(mine.script), name).toEqual(sorted(p.script))
+      expect(sorted(mine.bare), name).toEqual(sorted(p.bare))
+      expect(!!mine.toolchain, name).toBe(!!p.toolchain)
+    }
+  })
+})
+
 describe('grantPrefixProblem', () => {
-  it('takes plain words with one space between them', () => {
-    for (const p of [
-      'pnpm test',
-      'go test ./...',
-      './scripts/check.sh fast',
-      ' cargo test ',
-    ])
-      expect(grantPrefixProblem(p), p).toBeNull()
+  // The server's TestGrantPrefixCases runs the same file: both refuse the
+  // same prefixes for the same reason.
+  it('agrees with the server on every shared case', () => {
+    const cases = JSON.parse(casesJson) as { prefix: string; want: string }[]
+    expect(cases.length).toBeGreaterThan(100)
+    for (const c of cases)
+      expect(grantPrefixProblem(c.prefix), JSON.stringify(c.prefix)).toBe(
+        c.want === '' ? null : c.want,
+      )
+  })
+
+  it('trims what the server trims', () => {
+    expect(grantPrefixProblem(' cargo test ')).toBeNull()
   })
 
   it('wants something typed', () => {
@@ -22,250 +56,18 @@ describe('grantPrefixProblem', () => {
   })
 
   it('refuses a prefix longer than the server takes', () => {
-    expect(grantPrefixProblem('a'.repeat(MAX_GRANT_PREFIX))).toBeNull()
-    expect(grantPrefixProblem('a'.repeat(MAX_GRANT_PREFIX + 1))).toBe('length')
+    const long = (n: number) => `rg ${'a'.repeat(n - 3)}`
+    expect(grantPrefixProblem(long(MAX_GRANT_PREFIX))).toBeNull()
+    expect(grantPrefixProblem(long(MAX_GRANT_PREFIX + 1))).toBe('length')
   })
 
-  it('refuses what a shell would read as more than words', () => {
-    for (const p of [
-      'pnpm test; rm -rf /',
-      'echo $HOME',
-      'ls *',
-      'cat ~/x',
-      'a && b',
-      'a | b',
-      'a > b',
-      "echo 'x'",
-      'echo "x"',
-      'echo `x`',
-      'echo \\x',
-      'a!',
-      'a #b',
-      'a\tb',
-      'a\nb',
-      'pnpm  test',
-      'café',
-      'a​b',
-    ])
+  it('refuses a character outside printable ASCII', () => {
+    for (const p of ['a\u200bb', 'pnpm test\u001b[2J', 'rg \u00e9'])
       expect(grantPrefixProblem(p), p).toBe('chars')
   })
 
-  it('refuses a program that runs any code, by its base name', () => {
-    for (const p of [
-      'bash',
-      'sh -c',
-      'npx vitest',
-      'make test',
-      'env FOO=1 ls',
-      'Python3 x',
-      '/usr/bin/env ls',
-      'node_modules/.bin/../../bin/node x',
-      '. ./x',
-      '/bin/sh/ x',
-      'git status',
-      'python3.12 x',
-      'node22 x',
-      'uvx ruff',
-      'ts-node x',
-      'BASH.EXE',
-      'sh.cmd.exe',
-      'sed',
-      'sed -n',
-      '/usr/bin/SED.exe x',
-      'ed',
-    ])
-      expect(grantPrefixProblem(p), p).toBe('interpreter')
-    // An extension is dropped once, in the server's order
-    expect(grantPrefixProblem('sh.exe.cmd')).toBeNull()
-  })
-
-  it('refuses a package manager running any package', () => {
-    for (const p of [
-      'pnpm dlx x',
-      'pnpm EXEC x',
-      'npm x y',
-      'yarn dlx z',
-      // after options too, at any position after the program's name
-      'pnpm -s exec',
-      'pnpm --filter termote exec',
-      'pnpm --filter termote dlx',
-      'npm --prefix a x',
-      'yarn workspace a exec',
-      'npm run build EXEC',
-      // create and init run a create-* package from the registry
-      'npm create vite',
-      'npm init vite',
-      'npm innit vite',
-      'npm init',
-      'npm --prefix pwa init',
-      'pnpm create vite',
-      'pnpm --filter termote create',
-      'yarn create vite',
-      'yarn workspace a create',
-      'bun create vite',
-      'npm CREATE',
-      // an install that names a package fetches it and runs its scripts
-      'npm install evil',
-      'npm i evil',
-      'npm isntall evil',
-      // install-test takes install's arguments, then runs npm test
-      'npm it evil',
-      'npm install-test evil',
-      'npm install-te evil',
-      // go runs and installs remote code; pip, gem and npm link install
-      'go run',
-      'go install example.com/x@latest',
-      'go generate',
-      'pip install evil',
-      'pip3.12 install evil',
-      'gem install evil',
-      'npm link evil',
-      // wrappers and task runners
-      'corepack pnpm',
-      'bundle exec',
-      'poetry run',
-      'just',
-      'npm --prefix pwa install evil',
-      'npm install --save-dev evil',
-      'pnpm add evil',
-      'pnpm --filter termote add -D evil',
-      'pnpm install --filter termote',
-      'yarn add evil',
-      'yarn workspace a add evil',
-      'bun a evil',
-      'npm ADD evil',
-      // npm runs a command from any unique start of its name
-      'npm --prefix pwa exe',
-      'npm cre evil',
-      'npm ini',
-      // config writes the manager's config past the grant, pkg package.json
-      'npm --prefix pwa config set',
-      'npm c',
-      'npm set',
-      'npm conf',
-      'npm pkg set',
-      'pnpm config',
-      'pnpm --filter termote c',
-      'yarn config set',
-      // the registry with the user's login
-      'npm --prefix pwa publish',
-      'npm pub',
-      'npm tok',
-      'npm owner',
-      'npm login',
-      'pnpm --filter termote publish',
-      'yarn npm publish',
-    ])
-      expect(grantPrefixProblem(p), p).toBe('interpreter')
-    for (const p of [
-      'pnpm test',
-      'npm run build',
-      'yarn',
-      'gcc -c x.c',
-      'pnpm --filter termote test',
-      'yarn x',
-      'npm dlx',
-      'pnpm init',
-      'yarn init',
-      'go mod init',
-      'go',
-      'go test',
-      'go build ./cmd/x',
-      'pip list',
-      'npm link',
-      'npm install',
-      'npm i',
-      'npm ci',
-      'pnpm install --frozen-lockfile',
-      'pnpm --filter termote install',
-      'pnpm add',
-      'yarn install',
-      'npm in',
-      'npm se react',
-      'npm add',
-      'npm un react',
-      'npm audit',
-      'npm --prefix pwa test',
-      'npm --prefix pwa run build',
-      'pnpm --filter termote',
-      'yarn workspace a',
-    ])
-      expect(grantPrefixProblem(p), p).toBeNull()
-  })
-
-  it('refuses a container engine', () => {
-    for (const p of [
-      'docker',
-      'docker run alpine',
-      'docker compose up',
-      '/usr/bin/Docker.exe ps',
-      'podman run alpine',
-      'nerdctl run alpine',
-      'docker-compose up',
-      'podman-compose up',
-    ])
-      expect(grantPrefixProblem(p), p).toBe('interpreter')
-  })
-
-  it('takes only build, test, check, clippy and fmt of cargo', () => {
-    for (const p of [
-      'cargo install evil',
-      'cargo add serde',
-      'cargo init',
-      'cargo exec',
-      'cargo evil',
-      'cargo run',
-      'cargo b',
-      'cargo Build',
-      'cargo --locked build',
-      'cargo -C build install evil',
-      'cargo +nightly install evil',
-      'cargo +nightly +stable build',
-      'cargo.exe install evil',
-    ])
-      expect(grantPrefixProblem(p), p).toBe('interpreter')
-    for (const p of [
-      'cargo',
-      'cargo build',
-      'cargo test',
-      'cargo check',
-      'cargo clippy',
-      'cargo fmt',
-      'cargo build --release',
-      'cargo +nightly',
-      'cargo +nightly test',
-      '/home/u/.cargo/bin/cargo.exe clippy',
-    ])
-      expect(grantPrefixProblem(p), p).toBeNull()
-  })
-
-  it('reads a name of slashes alone as itself', () => {
-    expect(grantPrefixProblem('/ x')).toBeNull()
-  })
-})
-
-describe('grantPrefixTooWide', () => {
-  it('warns of a prefix of one word', () => {
-    expect(grantPrefixTooWide('pnpm')).toBe(true)
-    expect(grantPrefixTooWide(' pnpm ')).toBe(true)
-    expect(grantPrefixTooWide('pnpm test')).toBe(false)
-    expect(grantPrefixTooWide('')).toBe(false)
-  })
-
-  it('refuses a variable set before the program, and more interpreters', () => {
-    for (const p of [
-      'X=1 bash',
-      'NODE_OPTIONS=x pnpm test',
-      'py',
-      'pypy3.10',
-      'stdbuf',
-      'gdb',
-      'java',
-      'gawk',
-      'mawk',
-      'gmake',
-    ])
-      expect(grantPrefixProblem(p), p).toBe('interpreter')
-    expect(grantPrefixProblem('gcc -O2')).toBeNull()
+  it('takes a name inherited from Object as no program', () => {
+    for (const p of ['constructor test', '__proto__ test', 'toString'])
+      expect(grantPrefixProblem(p), p).toBe('program')
   })
 })

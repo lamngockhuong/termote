@@ -998,7 +998,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   finishes or gets another agent, or the pane no longer runs that agent; 20 per job, 50 uses kept on
   each. A grant still unexpired that a change ends without a revoke of its own is logged `audit:
   grant_revoked` with a `reason` (`agent_changed`, `job_finished`, `job_removed` for an unfinished job
-  a browser removes, `replaced` for a `ci` grant a newer one ends), `by` and `via` (`auditWho`:
+  a browser removes, `replaced` for a `ci` grant a newer one ends, `rules_changed` for a bash grant whose
+  prefix the table no longer takes, `by=server` with no `via`), `by` and `via` (`auditWho`:
   `machine:<origin>` for another termote's bridge, whose `PATCH` and `DELETE` of a job end grants; it
   never reaches the grant routes), once the change is
   written; a `PATCH` or `DELETE` over the bridge ends grants as a browser's would: it can only take
@@ -1014,70 +1015,47 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   message only once both are done, so their dialogs find none and are refused); the header names the
   call's tool (`Bash command`/`Run command`: `Bash`; `Edit file`: `Edit`, `MultiEdit`; `Write
   file`, `Create file`, `Overwrite file`: `Write`). Bash: the input has only `command`,
-  `description`, `timeout` (`run_in_background` and anything else: `input_keys`); the command is
+  `description`, `timeout` (`run_in_background` and anything else: `input_keys`); the command, and a
+  grant's prefix when it is made (`checkGrantPrefix`, the same `parseDelegateCommand`), is
   printable ASCII with single spaces, none of ``;&|$(){}*?[]~\'"`><!#``, tab or line break
-  (`chars`), its first word (base name, lowercased, a Windows extension such as `.exe` dropped) is
-  no variable set before the program (`X=1 bash`, what `env` does: `interpreter`), and its first word
-  is no shell, interpreter, wrapper or versioned interpreter (`python3.12`; `gawk`, `mawk`, `gmake` as
-  `awk` and `make`) of the one list
-  `delegateInterpreters`, which holds `git` too (its options and config run any program:
-  `--upload-pack`, `-x`, `difftool`, `bisect run`), `sed` and `ed` (a script such as `1e./x.sh`
-  runs a program) and the container engines `docker`, `podman`, `nerdctl`, `docker-compose` and
-  `podman-compose` (`docker run <image>` runs any image of a registry, `docker compose up` reads a
-  compose file the agent can edit, which may mount the whole machine), the wrappers `corepack` (it runs a
-  package manager past these rules), `bundle` (its install evaluates the Gemfile, Ruby), `poetry`, `pipenv`,
-  `conda` and `mise`, and the task runners `rake`, `just` and `task` (they run a file the agent can edit, as
-  `make` does), and no word after a package manager's name is a runner of it (`pnpm dlx`, `npm
-  exec`, `npm`/`pnpm`/`yarn`/`bun` `create`, `npm init` and its alias `innit`, which fetch and run a
-  `create-*` package, also after options: `pnpm -s exec`, `pnpm --filter a exec`, `npm --prefix a
-  init x`; nor `config`, `c` or `set` of `npm`, `pnpm`, `yarn` (`config` only), which write the
-  manager's own config outside the worktree and past the grant, `npm config set
-  node-options=--require=x` loading `x` in every later npm script, nor npm's `pkg`, which writes
-  `package.json`, nor what acts on the registry with the user's login (`publish`, `unpublish`,
-  `deprecate`, `dist-tag`, `owner`, `access`, `token`, `adduser`, `login`, `logout`, `team`, `star`;
-  pnpm hands them to npm; yarn's `npm`, `tag`); npm also runs a command from any unique start of its name, `npm exe x` being `npm
-  exec x`, so a word of two letters or more that starts one of npm's is refused too, but `in`, `add`,
-  `un` and `se`, its aliases of install, uninstall and search (`delegateAbbrevNames`, the PWA's `ABBREV_NAMES`); the lists
-  of `delegateRunners` and the PWA's `RUNNERS` are the same), nor an install word of
-  it followed by any word that is no option (`delegateInstallers`, the PWA's `INSTALLERS`: `npm i x`, its
-  other aliases of install, `install-test` and its alias `it` (install's arguments, then the tests) with
-  the unique starts of that name, and `link`/`ln`, which installs a package it names; `pip` under any
-  versioned name (`pip3.12`, `pipNameRe`) and `gem` with `install`, which build a package and run its setup
-  code, `pip install -r requirements.txt` included, since the agent can edit that file, `pnpm add -D x`, `yarn add x`, `bun a x`: it fetches a package the agent names,
-  runs its install scripts and writes `package.json` and the lockfile, which no edit grant covers; an
-  install of the lockfile alone, `npm ci`, `pnpm install --frozen-lockfile`, `pnpm --filter a install`, is
-  not refused), and `cargo`'s command, the word after its name past one rustup `+toolchain` at most, is
-  `build`, `test`, `check`, `clippy` or `fmt`, spelled out and in that case (`delegateSubcommands`, the
-  PWA's `SUBCOMMANDS`: cargo runs any other word as the program `cargo-<x>` it finds on `PATH`, and
-  `cargo install` fetches and builds a crate the agent names; `cargo add`, `cargo run`, an option before
-  the command (`cargo -C build install x`) and the aliases `b`, `t`, `c`, which a cargo config may
-  redefine, are refused; after the grant's prefix a `+toolchain` is an option like any other), and `go`'s
-  is `build`, `test`, `vet`, `fmt`, `list`, `mod` or `version` (`go run` and `go install` build and run a
-  module the agent names at any version, `go run x@latest`; `go generate` runs the commands its source
-  names, `go tool` any tool, `go env -w` writes `GOFLAGS`, `-toolexec`, for every later go command)
-  (`interpreter`;
-  the same four checks hold a grant's prefix when it is made); pnpm and yarn run a word that is no command of
-  theirs as a script or, without one, as a program (`pnpm --filter a node x.js` runs node), so the
-  word that picks the command (`commandWord`: past options, an option without `=` and not of
-  `delegateFlagOptions` taking the word after it, and past `yarn workspace <name>`) is, when it
-  comes after the grant's prefix, one of `delegateKnownCommands` (`test`, `run`, `install`... ; for
-  yarn not `run`, whose name may be any program of `node_modules/.bin`, so a yarn script name after
-  `run` must be in the prefix too), else `interpreter`; a command the user typed into the prefix
-  (`pnpm --filter a lint`) is theirs; the words between the two dashed rules under the header (a wrapped row's leading `│`
-  dropped) are the command's words, in order (`mismatch`); it equals a grant's prefix or starts with
-  the prefix and a space (`no_grant`), and no word after the prefix is option-like (`optionLike`:
-  starts with `-`, `@` (a response file: `gcc @opts`), `+` (`vim +q`) or is `/name:` or `/name=`
-  (MSBuild's `/p:X=1`)) (`option`: a
-  granted program runs another through its own options, `rg --pre=x`, `tar --to-command=x`, `go
-  test -exec=x`, so only the options the user typed into the prefix are covered; `tar`, of
-  `delegateBundledOptions`, reads its first argument as option letters even without a dash, `tar
-  xIf ./x.sh a.tar` running `./x.sh`, so under a prefix of its name alone any further word is
-  `option`, and a prefix such as `tar xzf` or `tar -xf` covers what follows it). A grant for a
-  test, build or script command still runs code the agent can edit (its test files, a script it
-  wrote; for cargo its `build.rs`, and `clippy` and `fmt` are no commands of cargo's own, so an alias
-  of a cargo config the agent writes may redefine them); the grant sheet says so under the prefix
-  (`jobs.grant.runsCode`). `msbuild` and `dotnet` are not refused: they build what the agent can edit
-  like any build command. Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
+  (`chars`), and is held to one allowlist, `server/delegate_programs.json` (embedded; the PWA's
+  `grant-prefix.ts` keeps a copy, and `grant-prefix.test.ts` fails when it differs from the file):
+  a prefix never stands for any code at all because only what the table names is accepted, never
+  because a word is known to be dangerous, so no alias, abbreviation, camelCase spelling or command
+  that runs another one has to be guessed at. The first word is the program's bare name exactly as
+  the table spells it, no path, no `.exe` or `.cmd`, no other case, no variable set before it (`X=1
+  bash`); anything else, a shell, an interpreter, `git`, `make`, `tar`, `docker`, `brew`, `gem`,
+  `bun`, `npx`, `pip3`, is `program`. A `tools` entry (`rg`, `grep`, `ls`, `cat`, `head`, `tail`,
+  `wc`, `diff`, `tsc`, `eslint`, `jest`, `pytest`: one purpose and no command; `eslint`, `jest` and
+  `pytest` still run their config and test files, as a test command does) takes any words after its
+  name. A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
+  `dotnet`, `pip`, `vitest`, `biome`, `ruff`) needs the word that picks its command (`commandWord`:
+  past options, an option without `=` and not of the file's `flagOptions` taking the word after it;
+  for `cargo`, past one rustup `+toolchain`), spelled exactly as one of its `commands` (any word may
+  follow: `npm test src`, `pip show x`), its `script` commands (`run`, followed by the script's
+  name, so the agent never picks the script, `yarn run` included, which runs any program of
+  `node_modules/.bin` too) or its `bare` commands (`npm ci`, `npm audit`, `pnpm install`, `yarn
+  install`: no word after them but options, so no package is named and `npm audit fix` is refused);
+  else `command`. Since the command alone must pass, an install, an `exec`/`dlx`, a `config set`,
+  a `publish`, `go run`, `cargo install` and every word the table lacks are refused under any grant,
+  and pnpm's and yarn's run of a word that is no command of theirs (`pnpm lint`, `pnpm --filter a
+  node x.js`) and `yarn workspace <name>` never reach the shell. A grant whose prefix the table
+  refuses (one made under older rules, `npm` alone) covers nothing: `checkDelegateCommand` reads it
+  as `no_grant` and `grantInForce` holds it ended, and the ledger revokes it once when it opens
+  (`revokeRefusedGrants`, a `revoked` event, `audit: grant_revoked reason=rules_changed by=server`;
+  a failed write is logged and changes nothing else, `TestJobStoreRevokesRefusedGrants`). The words
+  between the two dashed rules under the header (a wrapped row's leading `│` dropped) are the
+  command's words, in order (`mismatch`); it equals a grant's prefix or starts with the prefix and a
+  space (`no_grant`), and no word after the prefix is option-like (`optionLike`: starts with `-`,
+  `@` (a response file: `tsc @opts`), `+` or is `/name:` or `/name=` (MSBuild's `/p:X=1`, which
+  `dotnet build` takes)) (`option`: a granted program runs another through its own options, `rg
+  --pre=x`, `go test -exec=x`, so only the options the user typed into the prefix are covered). The
+  shared cases `server/testdata/grant-prefix-cases.json` run through `TestGrantPrefixCases` and the
+  PWA's test alike. A grant for a test, build or script command still runs code the agent can edit
+  (its test files, a script `package.json` names, which no edit grant reaches; for cargo its
+  `build.rs`, and `clippy` and `fmt` are no commands of cargo's own, so an alias of a cargo config
+  the agent writes may redefine them; `dotnet build` and `test` run the project's MSBuild targets
+  and restore its NuGet packages); the grant sheet says so under the prefix (`jobs.grant.runsCode`). Edit: the file path is absolute, already in its clean form (`filepath.Clean`: no `.` or `..`
   component and no doubled separator, since `filepath.Rel` reads `sub/../x` as `x` while the OS walks
   `sub` first: `denied_path`), inside the grant's directory,
   shown on the row under the header as its path relative to that directory (`mismatch`), every

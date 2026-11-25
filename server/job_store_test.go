@@ -246,3 +246,96 @@ func TestJobStoreWriteBounded(t *testing.T) {
 		t.Errorf("create once there is room: %v", err)
 	}
 }
+
+// A bash grant made under older rules, whose prefix the table refuses, is
+// revoked once as the ledger opens: an event on its job and an audit line.
+func TestJobStoreRevokesRefusedGrants(t *testing.T) {
+	s, dir := newTestJobStore(t)
+	j, err := s.create(job{Title: "a", State: "working"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	expires := now.Add(time.Hour).UTC().Format(time.RFC3339Nano)
+	at := now.UTC().Format(activityTimeFormat)
+	if _, err := s.update(j.ID, "", func(j *job) error {
+		j.Grants = []grant{
+			{ID: "old", Kind: "bash", Prefix: "npm", Created: at, Expires: expires},
+			{ID: "ok", Kind: "bash", Prefix: "pnpm test", Created: at, Expires: expires},
+			{ID: "edit", Kind: "edit", Dir: dir, Created: at, Expires: expires},
+			{ID: "ended", Kind: "bash", Prefix: "gem", Created: at, Expires: now.Add(-time.Minute).UTC().Format(time.RFC3339Nano)},
+			{ID: "gone", Kind: "bash", Prefix: "tar", Created: at, Expires: expires, Revoked: at},
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	events := func(s *jobStore) int {
+		got, _ := s.job(j.ID)
+		return len(got.Events)
+	}
+	before := events(s)
+	logs := captureLog(t)
+	opened, err := newJobStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := opened.job(j.ID)
+	revoked := map[string]string{}
+	for _, g := range got.Grants {
+		revoked[g.ID] = g.Revoked
+	}
+	if revoked["old"] == "" || revoked["ok"] != "" || revoked["edit"] != "" || revoked["ended"] != "" || revoked["gone"] != at {
+		t.Errorf("revoked %v", revoked)
+	}
+	if n := len(got.Events); n != before+1 || got.Events[n-1].Kind != "revoked" || got.Events[n-1].Text != "run npm" {
+		t.Errorf("events %+v", got.Events)
+	}
+	line := logs.String()
+	if !strings.Contains(line, `grant_revoked grant="old"`) || !strings.Contains(line, `reason="rules_changed"`) ||
+		!strings.Contains(line, `by="server"`) || strings.Count(line, "grant_revoked") != 1 {
+		t.Errorf("audit %q", line)
+	}
+	// Opened again, nothing more is written.
+	if _, err := newJobStore(dir); err != nil {
+		t.Fatal(err)
+	}
+	if n := events(opened); n != before+1 {
+		t.Errorf("events after a second open: %d", n)
+	}
+	if strings.Count(logs.String(), "grant_revoked") != 1 {
+		t.Errorf("audit after a second open %q", logs.String())
+	}
+}
+
+// A ledger a newer version wrote is never written, and a write that fails
+// leaves the store open: grantInForce still holds the grant.
+func TestJobStoreRevokeRefusedGrantsNoWrite(t *testing.T) {
+	expires := time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)
+	file := `{"v":%d,"jobs":[{"id":"x","title":"a","state":"working","grants":[{"id":"g","kind":"bash","prefix":"npm","expires":"` + expires + `"}]}]}`
+	dir := t.TempDir()
+	path := filepath.Join(dir, jobsFile)
+	os.WriteFile(path, []byte(strings.Replace(file, "%d", "99", 1)), 0o600)
+	before, _ := os.ReadFile(path)
+	if _, err := newJobStore(dir); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Errorf("a newer version's file written: %s", after)
+	}
+	// The lock cannot be opened: a directory stands in its place.
+	os.WriteFile(path, []byte(strings.Replace(file, "%d", "1", 1)), 0o600)
+	os.Remove(filepath.Join(dir, jobsLock))
+	os.Mkdir(filepath.Join(dir, jobsLock), 0o700)
+	logs := captureLog(t)
+	s, err := newJobStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j, _ := s.job("x"); j.Grants[0].Revoked != "" {
+		t.Errorf("revoked without a write: %+v", j.Grants)
+	}
+	if !strings.Contains(logs.String(), "revoke grants the rules refuse") {
+		t.Errorf("log %q", logs.String())
+	}
+}

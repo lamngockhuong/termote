@@ -122,7 +122,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/job-detail.tsx`               | A job's details: pane, Grants, Edit, every field it has        |
 | `pwa/src/components/job-edit-sheet.tsx`           | Add or change a job: title, prompt, priority, after, workspace |
 | `pwa/src/components/job-grant-sheet.tsx`          | A job's grants: those in force, end one, give one more         |
-| `pwa/src/utils/grant-prefix.ts`                   | A grant's command prefix checked as the server checks it       |
+| `pwa/src/utils/grant-prefix.ts`                   | A grant's prefix checked as the server does, a table copy      |
 | `pwa/src/utils/job-ci.ts`                         | A job's pull requests: names and colours of the server's worst |
 | `pwa/src/hooks/use-jobs.ts`                       | Job ledger and open questions, read after each overview read   |
 | `pwa/src/components/overview-asks.tsx`            | Plan: the orchestrators' questions, answered or dismissed      |
@@ -496,7 +496,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/job-ci-section.tsx`           | A job's pull requests in its details: send, attach, done       |
 | `pwa/src/components/job-pr-chip.tsx`              | The pull request chip on a job's card                          |
 | `server/agent_delegate.go`                        | `answer --delegated`: dialog vs waiting tool call, grant check |
-| `server/agent_delegate_rules.go`                  | Command chars, interpreters, denied paths, links               |
+| `server/agent_delegate_rules.go`                  | Command chars, the allowlist check, denied paths, links        |
+| `server/delegate_programs.json`                   | The programs and commands a bash grant may name                |
 | `server/task_routes.go`                           | `/api/mux/tasks*`: list, save, delete                          |
 | `pwa/src/components/tasks-view.tsx`               | Tasks view: list, Run, Send to agent                           |
 | `pwa/src/components/task-row.tsx`                 | One task: command, hooks, last run, buttons                    |

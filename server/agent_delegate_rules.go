@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "embed"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -28,260 +30,161 @@ func refuseDelegation(reason string) error {
 // what chains, substitutes, expands, redirects or quotes in a shell.
 const delegateBadChars = ";&|$(){}*?[]~\\'\"`><!#\n\r\t"
 
-// delegateInterpreters are the first words a delegated command never
-// starts with: a shell, an interpreter, or a program that runs another
-// one, so a prefix never stands for any code at all.
-var delegateInterpreters = []string{
-	"bash", "sh", "zsh", "dash", "fish", "ksh", "csh", "tcsh", "pwsh", "powershell", "cmd",
-	"env", "sudo", "doas", "su", "command", "builtin", "nice", "time", "script", "ssh",
-	"npx", "pnpx", "bunx", "dlx", "uvx", "uv", "pipx", "tsx", "ts-node", "busybox", "node", "deno", "bun",
-	"python", "perl", "ruby", "php", "lua", "awk", "eval", "exec", "source", ".", "xargs", "find", "nohup", "timeout",
-	"watch", "make",
-	// GNU's and the other builds of awk and make.
-	"gawk", "mawk", "nawk", "gmake",
-	// sed and ed run a program from their script (sed's e command, ed's !).
-	"sed", "ed",
-	// More interpreters, and wrappers that run the program named after them.
-	"gsed", "pythonw", "py", "pypy", "pypy3", "java", "jshell", "rscript", "julia", "tclsh", "wish", "expect", "osascript", "stdbuf", "setsid", "flock", "strace", "ltrace", "gdb", "lldb", "valgrind", "chroot", "unshare", "nsenter", "runuser", "pkexec", "ionice", "taskset", "chrt", "xvfb-run", "systemd-run", "caffeinate",
-	// git runs any program through its options (--upload-pack, -x,
-	// --exec, difftool, bisect run, submodule foreach) and its config.
-	"git",
-	// Container engines: "docker run <image>" runs any image of a
-	// registry, and "docker compose up" reads a compose file the agent can
-	// edit, which may mount the whole machine.
-	"docker", "podman", "nerdctl", "docker-compose", "podman-compose",
-	// Wrappers that run the program named after them (corepack runs a
-	// package manager past the rules above; bundle install evaluates the
-	// Gemfile, Ruby), and task runners that run a file the agent can edit,
-	// as make does.
-	"corepack", "bundle", "poetry", "pipenv", "conda", "mise", "rake", "just", "task",
-}
-
-// delegateSubcommands are programs whose command, the word after the
-// name, must be one of these: cargo runs "cargo <x>", for any x no command
-// of its own, as the program cargo-<x> it finds on PATH, and its install
-// fetches and builds a crate the agent names. Each is spelled out: cargo's
-// aliases (b, t, c) are ones a cargo config may redefine. One +toolchain
-// (rustup's) may come before the command; after the grant's prefix it is
-// an option like any other. build and test still run code the agent can
-// edit (build.rs, its tests), as any build or test command does.
+// delegatePrograms is the one table a grant's prefix and a delegated
+// command are held to (delegate_programs.json, embedded; the PWA keeps a
+// copy, pwa/src/utils/grant-prefix.ts, which its tests check against this
+// file). Only a program it names is ever run under a grant, and only the
+// commands it names for that program: a prefix never stands for any code at
+// all because nothing outside the table is accepted, so no word has to be
+// guessed at (an alias, an abbreviation, a command that runs another one).
 //
-// go's run and install build and run a module the agent names, at any
-// version (go run x@latest), generate runs the commands its source names,
-// tool any tool, and env -w writes GOFLAGS (-toolexec) for every later go
-// command.
-var delegateSubcommands = map[string][]string{
-	"cargo": {"build", "test", "check", "clippy", "fmt"},
-	"go":    {"build", "test", "vet", "fmt", "list", "mod", "version"},
+//go:embed delegate_programs.json
+var delegateProgramsJSON []byte
+
+// delegateProgram is a program with commands: the word that picks its
+// command must be the user's, in the grant's prefix, and one of these.
+type delegateProgram struct {
+	// Commands take any word after them as an argument (npm test src).
+	Commands []string `json:"commands"`
+	// Script commands run a script by its name (npm run lint): the name is
+	// the user's too, so "npm run" alone is no prefix.
+	Script []string `json:"script"`
+	// Bare commands take no word after them but options (npm ci, pnpm
+	// install): with a name they install the package it names, and "npm
+	// audit fix" installs new versions.
+	Bare []string `json:"bare"`
+	// Toolchain: one +x (rustup's) may come between the name and the
+	// command (cargo +nightly test).
+	Toolchain bool `json:"toolchain"`
 }
 
-// delegateRunners are package managers with a word that runs any package:
-// "pnpm dlx x", "npm exec x", and also after options ("pnpm -s exec x",
-// "pnpm --filter a exec x"), so the word is refused at any position after
-// the program's name. create and init fetch and run a create-* package
-// ("npm init vite" is "npm exec create-vite"; innit is npm's alias).
-// config, c and set write the manager's own config, outside the worktree
-// and past the grant ("npm config set node-options=--require=x" loads x in
-// every later npm script), and npm's pkg writes package.json, which no
-// edit grant covers. The last ones act on the registry with the user's
-// login (publish the worktree, change an owner, make a token); pnpm hands
-// them to npm.
-var delegateRunners = map[string][]string{
-	"npm": {"exec", "x", "create", "init", "innit", "config", "c", "set", "pkg",
-		"publish", "unpublish", "deprecate", "dist-tag", "dist-tags", "owner", "author", "access", "token",
-		"adduser", "add-user", "login", "logout", "signin", "signout", "team", "org", "star", "unstar"},
-	"pnpm": {"dlx", "exec", "x", "create", "config", "c", "set", "pkg",
-		"publish", "unpublish", "deprecate", "dist-tag", "owner", "access", "token",
-		"adduser", "login", "logout", "team", "star", "unstar"},
-	"yarn": {"dlx", "exec", "create", "config", "publish", "login", "logout", "owner", "team", "tag", "npm"},
-	"bun":  {"x", "create"},
+type delegateTable struct {
+	// Tools are programs of one purpose, with no command that picks what
+	// they do: every word after the name is an argument. eslint, jest and
+	// pytest still run their config and test files from the worktree, as
+	// any test command does (jobs.grant.runsCode).
+	Tools    []string                   `json:"tools"`
+	Programs map[string]delegateProgram `json:"programs"`
+	// FlagOptions are the options taking no value. Any other option
+	// without "=" is taken to take the word after it, so the word picking
+	// the command is never mistaken for an option's value the user typed.
+	FlagOptions []string `json:"flagOptions"`
 }
 
-// delegateAbbrevNames are the exact words npm takes for one of its own
-// commands although they start a runner word of its: npm also runs a
-// command from any unique start of its name ("npm exe x" is "npm exec
-// x"), so another word of two letters or more that starts one is refused
-// too ("in", "add" are install's aliases, "un" uninstall's, "se" search's).
-var delegateAbbrevNames = []string{"in", "add", "un", "se"}
+var delegateRules = func() delegateTable {
+	var t delegateTable
+	if err := json.Unmarshal(delegateProgramsJSON, &t); err != nil {
+		panic("delegate_programs.json: " + err.Error())
+	}
+	return t
+}()
 
-// delegateKnownCommands are the commands of pnpm and yarn a delegated
-// command may name after the grant's prefix: both run a word that is no
-// command of theirs as a script or, without one, as a program ("pnpm
-// --filter a node x.js" runs node), so the word that picks the command is
-// one of these unless the user typed it into the prefix. yarn has no run
-// here: "yarn run <name>" runs any program of node_modules/.bin too.
-var delegateKnownCommands = map[string][]string{
-	"pnpm": {"add", "audit", "bin", "dedupe", "fetch", "i", "install", "install-test", "it", "licenses", "list", "ls",
-		"outdated", "pack", "prune", "rb", "rebuild", "remove", "rm", "root", "run", "run-script", "start", "store",
-		"t", "test", "tst", "un", "uninstall", "unlink", "up", "update", "upgrade", "why"},
-	"yarn": {"add", "audit", "info", "install", "licenses", "list", "outdated", "pack", "remove", "start", "test",
-		"up", "upgrade", "why"},
-}
-
-// delegateFlagOptions are pnpm's and yarn's options that take no value.
-// Any other option without "=" is taken to take the word after it, so the
-// word picking the command is never mistaken for an option's value the
-// user typed.
-var delegateFlagOptions = []string{"-r", "--recursive", "-s", "--silent", "-w", "--workspace-root", "--parallel",
-	"--stream", "--if-present", "--aggregate-output", "--bail", "--no-bail", "--sequential", "--color", "--no-color",
-	"--frozen-lockfile", "--prod", "--dev", "--offline", "--prefer-offline", "--reverse", "--include-workspace-root",
-	"-D", "-P", "-O"}
-
-// commandWord is the index in words (a pnpm or yarn command) of the word
-// that picks its command, past options and their values ("yarn workspace
-// <name>" is skipped too), or -1 when none does.
-func commandWord(words []string, first string) int {
-	for i := 1; i < len(words); i++ {
+// commandWord is the index in words of the word that picks the command of
+// a program, from start on, past options and their values, or -1 when
+// none does.
+func commandWord(words []string, start int) int {
+	for i := start; i < len(words); i++ {
 		w := words[i]
-		switch {
-		case strings.HasPrefix(w, "-"):
-			if !strings.Contains(w, "=") && !slices.Contains(delegateFlagOptions, w) {
-				i++
-			}
-		case first == "yarn" && strings.ToLower(w) == "workspace":
-			i++
-		default:
+		if !strings.HasPrefix(w, "-") {
 			return i
+		}
+		if !strings.Contains(w, "=") && !slices.Contains(delegateRules.FlagOptions, w) {
+			i++
 		}
 	}
 	return -1
 }
 
-// delegateInstallers are package managers' words that install the
-// packages named after them: an install fetches a package the agent names
-// and runs its install scripts, and writes package.json and the lockfile,
-// which no edit grant covers. Refused when any word after one is no option
-// ("npm i x", "pnpm add -D x"); an install with no package ("npm ci",
-// "pnpm install --frozen-lockfile", "pnpm --filter a install") installs
-// what the lockfile holds. npm's list holds its aliases of install, and
-// install-test (it), which takes install's arguments and then runs the
-// tests, with the unique starts of its name, and link, which installs a
-// package it names that is not linked yet. pip (any versioned name, pip3.12)
-// and gem build and install a package, running its setup code; a
-// requirements file the agent can edit names packages too.
-var delegateInstallers = map[string][]string{
-	"npm": {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add",
-		"install-test", "install-tes", "install-te", "install-t", "it", "link", "ln"},
-	"pip":  {"install"},
-	"gem":  {"install", "i"},
-	"pnpm": {"install", "i", "add"},
-	"yarn": {"install", "add"},
-	"bun":  {"install", "i", "add", "a"},
-}
-
-// delegateBundledOptions are programs that read their first argument as
-// option letters even without a dash (GNU tar: "tar xIf ./x.sh a.tar"
-// runs ./x.sh), so that word is an option when it comes after the prefix.
-var delegateBundledOptions = []string{"tar"}
-
-// pipNameRe: pip under any of its versioned names (pip3, pip3.12).
-var pipNameRe = regexp.MustCompile(`^pip[0-9.]*$`)
-
-// interpreterVersionRe: a versioned name of an interpreter (python3.12).
-var interpreterVersionRe = regexp.MustCompile(`^(python|pypy|perl|ruby|php|lua|node|deno|bun)[0-9.]*$`)
-
-// commandName is a command's first word as its program is found: its base
-// name, lowercased, without a Windows extension.
-func commandName(w string) string {
-	n := strings.ToLower(filepath.Base(strings.ReplaceAll(w, "\\", "/")))
-	for _, ext := range []string{".exe", ".cmd", ".bat", ".com", ".ps1"} {
-		n = strings.TrimSuffix(n, ext)
-	}
-	return n
-}
-
-// checkDelegateCommand is "" when cmd may be answered under a grant whose
-// prefix is prefix (an empty prefix: checks cmd alone, as a prefix is when
-// a grant is made), else the refusal code.
-func checkDelegateCommand(cmd, prefix string) string {
-	if cmd == "" || len(cmd) > maxGrantCommand {
+// parseDelegateCommand checks s, a grant's prefix or a delegated command,
+// against the table: "" when it names a tool, or a program with one of
+// its commands (and a script's name after a script command), else the
+// refusal code.
+func parseDelegateCommand(s string) string {
+	if s == "" || len(s) > maxGrantCommand {
 		return "chars"
 	}
-	for i := 0; i < len(cmd); i++ {
-		if c := cmd[i]; c < 0x20 || c > 0x7e || strings.IndexByte(delegateBadChars, c) >= 0 {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < 0x20 || c > 0x7e || strings.IndexByte(delegateBadChars, c) >= 0 {
 			return "chars"
 		}
 	}
-	words := strings.Fields(cmd)
+	words := strings.Fields(s)
 	// One space between words, none around: what the dialog shows wrapped
 	// compares word for word.
-	if strings.Join(words, " ") != cmd {
+	if strings.Join(words, " ") != s {
 		return "chars"
 	}
-	// A variable set before the program (X=1 bash) is what env does: the
-	// program is not the first word, and the variable can make any one run
-	// another (NODE_OPTIONS, LD_PRELOAD).
-	if strings.Contains(words[0], "=") {
-		return "interpreter"
+	// The first word is the program's bare name exactly as the table
+	// spells it: no path, no extension, no other case, and no variable set
+	// before it (X=1 bash).
+	if slices.Contains(delegateRules.Tools, words[0]) {
+		return ""
 	}
-	first := commandName(words[0])
-	if slices.Contains(delegateInterpreters, first) || interpreterVersionRe.MatchString(first) {
-		return "interpreter"
+	p, ok := delegateRules.Programs[words[0]]
+	if !ok {
+		return "program"
 	}
-	if runs, ok := delegateRunners[first]; ok {
-		for _, w := range words[1:] {
-			lw := strings.ToLower(w)
-			if slices.Contains(runs, lw) {
-				return "interpreter"
+	start := 1
+	if p.Toolchain && len(words) > 1 && strings.HasPrefix(words[1], "+") {
+		start = 2
+	}
+	k := commandWord(words, start)
+	if k < 0 {
+		return "command"
+	}
+	c := words[k]
+	switch {
+	case slices.Contains(p.Commands, c):
+		return ""
+	case slices.Contains(p.Script, c):
+		if commandWord(words, k+1) < 0 {
+			return "command"
+		}
+		return ""
+	case slices.Contains(p.Bare, c):
+		for _, w := range words[k+1:] {
+			if !strings.HasPrefix(w, "-") {
+				return "command"
 			}
-			if first == "npm" && len(lw) >= 2 && !slices.Contains(delegateAbbrevNames, lw) &&
-				slices.ContainsFunc(runs, func(r string) bool { return strings.HasPrefix(r, lw) }) {
-				return "interpreter"
-			}
 		}
+		return ""
 	}
-	installer := first
-	if pipNameRe.MatchString(first) {
-		installer = "pip"
+	return "command"
+}
+
+// checkGrantPrefix is "" when p may be a bash grant's prefix, else the
+// refusal code.
+func checkGrantPrefix(p string) string {
+	return parseDelegateCommand(p)
+}
+
+// checkDelegateCommand is "" when cmd may be answered under a grant whose
+// prefix is prefix (an empty prefix: checks cmd alone), else the refusal
+// code. A prefix the table refuses (a grant made under older rules)
+// covers nothing: no_grant.
+func checkDelegateCommand(cmd, prefix string) string {
+	// cmd is checked alone first, so a bare command's words past the
+	// prefix can only be options, refused below ("npm ci x" is refused
+	// under "npm ci" as it is alone).
+	if code := parseDelegateCommand(cmd); code != "" || prefix == "" {
+		return code
 	}
-	if inst, ok := delegateInstallers[installer]; ok {
-		for i := 1; i < len(words); i++ {
-			if slices.Contains(inst, strings.ToLower(words[i])) &&
-				slices.ContainsFunc(words[i+1:], func(w string) bool { return !strings.HasPrefix(w, "-") }) {
-				return "interpreter"
-			}
-		}
+	if checkGrantPrefix(prefix) != "" {
+		return "no_grant"
 	}
-	if allowed, ok := delegateSubcommands[first]; ok {
-		k := 1
-		if k < len(words) && strings.HasPrefix(words[k], "+") {
-			k++
-		}
-		if k < len(words) && !slices.Contains(allowed, words[k]) {
-			return "interpreter"
-		}
-	}
-	if prefix == "" || cmd == prefix {
+	if cmd == prefix {
 		return ""
 	}
 	if !strings.HasPrefix(cmd, prefix+" ") {
 		return "no_grant"
 	}
 	// A word after the prefix is never an option: a granted program runs
-	// another one through its own (rg --pre=x, tar --to-command=x, go test
-	// -exec=x), so only what the user typed in the prefix chooses options.
+	// another one through its own (rg --pre=x, go test -exec=x), so only
+	// what the user typed in the prefix chooses options.
 	for _, w := range strings.Fields(cmd[len(prefix):]) {
 		if optionLike(w) {
 			return "option"
 		}
-	}
-	// pnpm and yarn run a word that is no command of theirs as a program:
-	// one the user did not type in the prefix must be a known command, and
-	// yarn's name after run must be the user's too.
-	if known, ok := delegateKnownCommands[first]; ok {
-		n := len(strings.Fields(prefix))
-		k := commandWord(words, first)
-		if k >= n && !slices.Contains(known, strings.ToLower(words[k])) {
-			return "interpreter"
-		}
-		if first == "yarn" && k >= 0 && strings.ToLower(words[k]) == "run" && k+1 >= n && k+1 < len(words) {
-			return "interpreter"
-		}
-	}
-	// A prefix of the program's name alone leaves its first argument to
-	// the command: for tar that word is an option bundle, dash or not.
-	if slices.Contains(delegateBundledOptions, first) && len(strings.Fields(prefix)) == 1 && len(words) > 1 {
-		return "option"
 	}
 	return ""
 }

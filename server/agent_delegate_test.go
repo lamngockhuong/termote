@@ -185,14 +185,14 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		setup              func(dt *delegateTest)
 		reason             string
 	}{
-		"command chained":         {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
-		"command expands":         {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
-		"not the prefix":          {"bash", bashUse("pnpm testx --run"), nil, "mismatch"},
-		"screen differs":          {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
-		"background":              {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
-		"interpreter":             {"bash", bashUse("bash -c x"), nil, "interpreter"},
-		"option after the prefix": {"bash", bashUse("pnpm test --run"), nil, "option"},
-		"no grant for it":         {"touch", bashUse("touch MARK456.txt"), nil, "no_grant"},
+		"command chained":          {"bash", bashUse("pnpm test; rm -rf x"), nil, "chars"},
+		"command expands":          {"bash", bashUse("pnpm test $HOME"), nil, "chars"},
+		"not in the table":         {"bash", bashUse("pnpm testx --run"), nil, "command"},
+		"screen differs":           {"bash", bashUse("pnpm test --watch"), nil, "mismatch"},
+		"background":               {"bash-background", toolUseLine("t", "Bash", map[string]any{"command": "touch BG.txt", "run_in_background": true}, false), nil, "input_keys"},
+		"program":                  {"bash", bashUse("bash -c x"), nil, "program"},
+		"option after the prefix":  {"bash", bashUse("pnpm test --run"), nil, "option"},
+		"program not in the table": {"touch", bashUse("touch MARK456.txt"), nil, "program"},
 		"two waiting": {"bash", bashUse("pnpm test --run") + toolUseLine("toolu_2", "Bash", map[string]any{"command": "pnpm test --run"}, false),
 			nil, "pending_many"},
 		"none waiting (parallel calls)": {"parallel", "", nil, "unparsed"},
@@ -206,6 +206,22 @@ func TestDelegatedAnswerRefusals(t *testing.T) {
 		"grant expired": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
 			now := dt.agent.jobs.now
 			dt.agent.jobs.now = func() time.Time { return now().Add(25 * time.Hour) }
+		}, "no_grant"},
+		// A grant made under older rules, whose prefix the table now
+		// refuses, answers nothing, though the command alone is one the
+		// table takes.
+		"older grant, a bare program": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
+			for _, g := range dt.list()[0]["grants"].([]any) {
+				dt.do("full", http.MethodDelete, "/api/mux/jobs/"+dt.job+"/grants/"+g.(map[string]any)["id"].(string), nil)
+			}
+			now := dt.agent.jobs.now()
+			if _, err := dt.agent.jobs.update(dt.job, "", func(j *job) error {
+				j.Grants = append(j.Grants, grant{ID: newTemplateID(), Kind: "bash", Prefix: "pnpm", Agent: *j.Agent,
+					Created: now.UTC().Format(activityTimeFormat), Expires: now.Add(time.Hour).UTC().Format(time.RFC3339Nano)})
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 		}, "no_grant"},
 		"job done": {"bash", bashUse("pnpm test --run"), func(dt *delegateTest) {
 			dt.do("socket", http.MethodPatch, "/api/mux/jobs/"+dt.job, map[string]any{"state": "done"})
@@ -523,15 +539,22 @@ func TestGrantRoutes(t *testing.T) {
 	}
 	for name, b := range map[string]map[string]any{
 		"chained":      {"kind": "bash", "prefix": "pnpm test; rm"},
-		"interpreter":  {"kind": "bash", "prefix": "bash -c"},
+		"program":      {"kind": "bash", "prefix": "bash -c"},
+		"bare npm":     {"kind": "bash", "prefix": "npm"},
+		"no script":    {"kind": "bash", "prefix": "pnpm run"},
+		"abbreviation": {"kind": "bash", "prefix": "npm installTest"},
 		"empty":        {"kind": "bash", "prefix": " "},
 		"too long":     {"kind": "bash", "prefix": strings.Repeat("a", maxGrantPrefix+1)},
 		"edit, prefix": {"kind": "edit", "prefix": "x"},
 		"kind":         {"kind": "all"},
 		"minutes":      {"kind": "bash", "prefix": "pnpm test", "minutes": 24*60 + 1},
 	} {
-		if code, out := dt.do("full", http.MethodPost, path, b); code != http.StatusBadRequest {
+		code, out := dt.do("full", http.MethodPost, path, b)
+		if code != http.StatusBadRequest {
 			t.Errorf("%s = %d %v", name, code, out)
+		}
+		if b["kind"] == "bash" && name != "minutes" && out["code"] != "grant_invalid" {
+			t.Errorf("%s code = %v", name, out["code"])
 		}
 	}
 	// A device signed in full may; the grant is pinned to the agent now.

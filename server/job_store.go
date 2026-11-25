@@ -232,11 +232,59 @@ func newJobStore(dir string) (*jobStore, error) {
 	s := &jobStore{dir: dir, now: time.Now}
 	removeStateParts(dir, jobPartRe)
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.reloadLocked(); err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+	s.mu.Unlock()
+	s.revokeRefusedGrants()
 	return s, nil
+}
+
+// revokeRefusedGrants revokes, once as the ledger opens, every bash grant
+// still in force whose prefix the table refuses (one made under older
+// rules), so the PWA shows it ended rather than in force: grantInForce
+// already lets it answer nothing. Nothing is written when there is none;
+// a failed write is logged, and grantInForce still holds.
+func (s *jobStore) revokeRefusedGrants() {
+	refused := func(g grant, now time.Time) bool {
+		return g.Kind == "bash" && grantUnexpired(g, now) && checkGrantPrefix(g.Prefix) != ""
+	}
+	now := s.now()
+	list, readOnly := s.jobs()
+	if readOnly || !slices.ContainsFunc(list, func(j job) bool {
+		return slices.ContainsFunc(j.Grants, func(g grant) bool { return refused(g, now) })
+	}) {
+		return
+	}
+	type revoked struct{ job, grant string }
+	var done []revoked
+	err := s.change(func(list []job) ([]job, error) {
+		done = nil
+		for i := range list {
+			j := &list[i]
+			changed := false
+			for k := range j.Grants {
+				if refused(j.Grants[k], now) {
+					j.Grants[k].Revoked = now.UTC().Format(activityTimeFormat)
+					s.addEvent(j, "revoked", grantText(j.Grants[k]))
+					done = append(done, revoked{j.ID, j.Grants[k].ID})
+					changed = true
+				}
+			}
+			if changed {
+				j.Updated = s.stamp(j.Updated)
+			}
+		}
+		return list, nil
+	})
+	if err != nil {
+		log.Printf("jobs: revoke grants the rules refuse: %v", err)
+		return
+	}
+	for _, r := range done {
+		auditf("grant_revoked", "grant", r.grant, "job", r.job, "reason", "rules_changed", "by", "server")
+	}
 }
 
 func (s *jobStore) path() string { return filepath.Join(s.dir, jobsFile) }

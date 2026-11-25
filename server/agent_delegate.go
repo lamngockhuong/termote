@@ -186,8 +186,13 @@ type delegation struct {
 }
 
 // grantInForce: g of j still lets its agent's dialogs be answered at now.
+// A bash grant whose prefix the table refuses (made under older rules) is
+// not, whether or not the server has revoked it yet (revokeRefusedGrants).
 func grantInForce(j job, g grant, now time.Time) bool {
 	if g.Revoked != "" || jobFinished(j.State) || j.Agent == nil || !sameJobAgent(*j.Agent, g.Agent) {
+		return false
+	}
+	if g.Kind == "bash" && checkGrantPrefix(g.Prefix) != "" {
 		return false
 	}
 	exp, err := time.Parse(time.RFC3339Nano, g.Expires)

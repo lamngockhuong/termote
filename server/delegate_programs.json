@@ -1,0 +1,42 @@
+{
+  "tools": ["rg", "grep", "ls", "cat", "head", "tail", "wc", "diff", "tsc", "eslint", "jest", "pytest"],
+  "programs": {
+    "npm": { "commands": ["test", "start", "ls", "outdated", "explain"], "script": ["run"], "bare": ["ci", "audit"] },
+    "pnpm": { "commands": ["test", "start", "ls", "list", "outdated", "why"], "script": ["run"], "bare": ["install"] },
+    "yarn": { "commands": ["test", "start", "why"], "script": ["run"], "bare": ["install"] },
+    "cargo": { "commands": ["build", "test", "check", "clippy", "fmt"], "toolchain": true },
+    "go": { "commands": ["build", "test", "vet", "fmt", "list", "mod", "version"] },
+    "dotnet": { "commands": ["build", "test"] },
+    "pip": { "commands": ["list", "show"] },
+    "vitest": { "commands": ["run", "list"] },
+    "biome": { "commands": ["check", "format", "lint", "ci"] },
+    "ruff": { "commands": ["check", "format"] }
+  },
+  "flagOptions": [
+    "-r",
+    "--recursive",
+    "-s",
+    "--silent",
+    "-w",
+    "--workspace-root",
+    "--parallel",
+    "--stream",
+    "--if-present",
+    "--aggregate-output",
+    "--bail",
+    "--no-bail",
+    "--sequential",
+    "--color",
+    "--no-color",
+    "--frozen-lockfile",
+    "--prod",
+    "--dev",
+    "--offline",
+    "--prefer-offline",
+    "--reverse",
+    "--include-workspace-root",
+    "-D",
+    "-P",
+    "-O"
+  ]
+}

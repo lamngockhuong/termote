@@ -195,7 +195,7 @@ func newGrant(in grantInput, now time.Time) (grant, error) {
 		if len(p) > maxGrantPrefix {
 			return grant{}, invalidGrant("chars")
 		}
-		if code := checkDelegateCommand(p, ""); code != "" {
+		if code := checkGrantPrefix(p); code != "" {
 			return grant{}, invalidGrant(code)
 		}
 		g.Prefix = p
