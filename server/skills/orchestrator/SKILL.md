@@ -230,7 +230,8 @@ each question's id across a compacted conversation, and the user can answer in t
      `wait` as an ordinary command with a `--timeout` shorter than the limit your shell tool puts
      on one command, and run the `next:` or `wait again:` line again on exit 4. Claude Code
      itself stops an ordinary command after 10 minutes at most, sooner than the default
-     `--timeout` (30 minutes): one more reason to wait in the background there.
+     `--timeout` (30 minutes for panes, 20 for `--job` and `--mine`): one more reason to wait in
+     the background there.
 4. **Review before you report.** Before you tell the user an agent is done, or set `review`, read
    the end of its last answer. An agent may end its turn with a question for the user written in
    the text, not in a dialog: `wait` still exits 0, but says `ends with a question` (`wait --job`:
@@ -252,8 +253,10 @@ each question's id across a compacted conversation, and the user can answer in t
    the PWA or the terminal. Only the user gives a grant, in the PWA; never say you can give or
    widen one. Answer on your own only a question the user already answered in this
    conversation. A dialog termote cannot answer says so: the user answers it in the terminal.
-6. **Starting an agent needs a yes.** Before `start`, tell the user the workspace, its directory
-   (from `list`), the kind and the prompt, and wait for a clear yes. For a task that changes
+6. **Starting an agent needs a yes.** Before every `start`, tell the user the workspace, its
+   directory (from `list`), the kind and the whole prompt, and wait for a clear yes, also when
+   the user already told you to hand the work over: they approve the prompt, not only the
+   idea. For a task that changes
    code, start it with `--worktree <new branch>` by default (say so: it makes a new directory
    with a new branch), one start at a time, never several at once; `start` prints the
    directory it made. With `--worktree`, the agent runs in a new workspace of its own, not in the
@@ -273,20 +276,30 @@ each question's id across a compacted conversation, and the user can answer in t
    OpenCode alike); a long one can come from stdin (`-`). Give every new agent its task this way:
    Codex and OpenCode cannot be sent a first message with `send`. Never put a secret in it: the
    prompt is the agent's command-line argument, which other local users can see.
-7. **Stopping needs a yes.** Run `stop <pane> --cursor <cursor>` only when the user asks to
+7. **A new task gets a new agent.** When the work moves on to another task (from a plan to
+   building it, from building it to reviewing it), the default is a new job in a new tab of the
+   same workspace: `start --workspace <id> --title '<task>'` without `--worktree`, where `<id>` is
+   the worktree's own workspace when the work is in one (from `list`), so the new agent works on
+   the same branch. It starts with a clean context, and the ledger keeps one job and one agent per
+   task. `send` to the agent you have only what belongs to its task: a fix to its own change, the
+   user's answer to its question, its failed checks. When you propose the next task, name both
+   ways and what each costs: a new tab starts clean but knows only what its prompt says (give it
+   the plan's path, the branch, what was decided); the agent you have knows the history, but
+   brings its whole context along, and its job then holds two tasks. The user picks; then step 6.
+8. **Stopping needs a yes.** Run `stop <pane> --cursor <cursor>` only when the user asks to
    stop that agent or agrees to it; take the cursor from `read <pane> --json` you just read.
    Never stop an agent on your own. Stopping may leave a file half edited, as Esc would. `stop`
    follows the pane for a few seconds: exit 8 means Esc went but the agent still works; `read`
    it and tell the user rather than stopping again.
-8. **Report plainly.** One line per agent: `<job title or pane>: <state> - <one clause>`; give
+9. **Report plainly.** One line per agent: `<job title or pane>: <state> - <one clause>`; give
    details, quoting `read`, only when the user asks or when something needs their decision. End
    every reply that has open questions with them, taken from `ask list`: each id and its question
    on one line, nothing else repeated; with none open, leave that part out. Keep the user's
    decisions theirs.
-9. **Cleaning up needs a yes.** Run `job finish` only after the user said yes, only on a job you
-   started, with its agent at rest and its last turn `read`. Never close your own pane, and never
-   clean up with `herdr worktree remove`, `tmux kill-window`, `git worktree remove` or
-   `git branch -D`: `job finish` checks what they would lose.
+10. **Cleaning up needs a yes.** Run `job finish` only after the user said yes, only on a job you
+    started, with its agent at rest and its last turn `read`. Never close your own pane, and never
+    clean up with `herdr worktree remove`, `tmux kill-window`, `git worktree remove` or
+    `git branch -D`: `job finish` checks what they would lose.
 
 ## Errors
 

@@ -3250,6 +3250,8 @@ With `--worktree <new branch>`, `start` makes a git worktree of the workspace’
 
 Claude Code, Codex and OpenCode all take the prompt as they start, so a new agent gets its task without anyone typing in the terminal; `-` reads a long prompt from stdin. Termote never types the prompt into the shell: it writes it to a private file and the command line it types reads that file back, so quotes, `$(...)`, backticks and line breaks reach the agent as written. That works in `bash`, `zsh`, `sh` and `fish` on Linux and macOS; a tab whose shell is PowerShell, and any tab on Windows, refuses a prompt (`prompt_unsupported_shell`) and nothing starts. The prompt is the agent’s command-line argument, which other users of the machine can see, so keep secrets out of it.
 
+When the work moves on to another task, from a plan to building it or from building it to a review, the orchestrator proposes by default a new agent in a new tab of the same workspace (or of the worktree’s workspace, on the same branch), as a job of its own: it starts with a clean context, and the ledger keeps one agent per task. It names the other way too, sending the task to the agent you already have, which knows the history but carries its whole context, and you pick. Whichever you pick, it shows you the whole prompt before every `start` and waits for your yes, even when you already told it to hand the work over.
+
 ## What it will not do
 
 [Section titled “What it will not do”](#what-it-will-not-do)
