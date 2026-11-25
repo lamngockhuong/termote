@@ -818,7 +818,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `finishedKeepSeconds` and `jobsMax`, the two server constants above and no job's data, except over a
   newer-format ledger, which is never written and so never pruned (`TestJobListKeepAndMax`). A job's worktree is its branch and folder
   (a view-only client's `branch`) only while its agent's pane is in it (`dirInTree`, through
-  symlinks) or the agent has no pane; otherwise `live.outsideWorktree` (full clients only) is set
+  symlinks, names compared as `underDir` does: without case on macOS and Windows) or the agent has
+  no pane; otherwise `live.outsideWorktree` (full clients only) is set
   and the pane's are shown, the worktree record kept. Writes:
   `requireWriteRole` first; a browser's `PATCH` and `DELETE` need `updated` (a stale one is 409
   `job_conflict`); a `DELETE` over the local socket removes only a finished job (`done`, `failed`,
@@ -1091,8 +1092,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `scripts/x.sh`, since it would run at the user's next commit, past the grant: `denied_path`; what
   such a script runs in turn is not followed; nor a file in a folder `core.hooksPath` names for the
   grant's repository, read through `gitRunner` without the value it sets itself (scope `command`), a
-  relative one from the top of the work tree, `checkDelegateHooksPath`; a config git cannot read
-  denies the edit), and no component on the way, the last included, is a
+  relative one from the top of the work tree, `checkDelegateHooksPath`, compared without case on
+  macOS and Windows (`dirInTree`), where `Tools/hooks` is the folder `tools/hooks` names, each side
+  resolved through symlinks as deep as it exists, so a hooks folder not made yet still counts; a
+  config git cannot read denies the edit), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path
@@ -1199,7 +1202,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `finish_worktree_not_made`), a backend with worktrees (501 `unsupported`); the groups working in it
   are the backend's list for it (`ListWorktrees` from the worktree's group or the job's workspace,
   every `groupIDs`; the job's workspace of a bound job is never one a client chose: only the server
-  sets it once the job has an agent or a worktree, see Job ledger; a finish never reads `after`) and every group with a pane or process whose folder is in it (`dirInTree`); a
+  sets it once the job has an agent or a worktree, see Job ledger; a finish never reads `after`) and every group with a pane or process whose folder is in it (`dirInTree`, without case on macOS and Windows, `TestJobFinishWorktreeSharedOtherCase`); a
   backend with worktrees of its own (Herdr) whose list cannot be read is 503 `busy`, one whose list
   lacks the job's folder 409 `changed`. Any group there but the job tab's, a second tab in it, or a
   group the backend would remove another worktree of (Herdr: its list does not name the group for

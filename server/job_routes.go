@@ -970,18 +970,26 @@ func (a *agentAPI) jobLiveIn(snap Snapshot, j job) jobLive {
 	return live
 }
 
-// dirInTree: dir is the worktree at tree or a folder inside it, through
-// symlinks (a removed worktree holds nothing).
+// dirInTree: dir is the worktree at tree or a folder inside it, as written
+// or through symlinks, each side resolved as deep as it exists (a hooks
+// folder a write would create, under a worktree reached through /var).
+// Names are compared as underDir does, without case on macOS and Windows:
+// EvalSymlinks keeps the caller's case on macOS, while the file system
+// still finds tools/hooks under Tools/hooks. A match refuses an edit or a
+// finish, or widens what a finish closes; through OutsideWorktree it also
+// shows the worktree's branch and folder for the pane and makes the
+// worktree the folder of a new grant, which then checks each file and
+// tool path against that folder by its exact name.
 func dirInTree(tree, dir string) bool {
-	in := func(t, d string) bool {
-		return filepath.Clean(t) == filepath.Clean(d) || pathWithin(filepath.Clean(t), filepath.Clean(d))
+	if tree == "" || dir == "" {
+		return false
 	}
-	if in(tree, dir) {
+	if underDir(tree, dir) {
 		return true
 	}
-	rt, err1 := filepath.EvalSymlinks(tree)
-	rd, err2 := filepath.EvalSymlinks(dir)
-	return err1 == nil && err2 == nil && in(rt, rd)
+	rt, ok1 := resolveExisting(tree)
+	rd, ok2 := resolveExisting(dir)
+	return ok1 && ok2 && underDir(rt, rd)
 }
 
 // decodeJobBody reads a JSON body of at most jobBody bytes into v.

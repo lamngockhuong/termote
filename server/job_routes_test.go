@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -707,9 +708,41 @@ func TestDirInTree(t *testing.T) {
 		{tree, filepath.Dir(tree), false},
 		{tree, tree + "-other", false},
 		{"/gone/wt", "/src/web", false},
+		{"", "", false},
+		{tree, "", false},
+		// A folder not made yet (a hooks folder a write would create),
+		// named through a symlink on one side only.
+		{filepath.Join(link, "tools", "hooks"), filepath.Join(tree, "tools", "hooks", "pre-commit"), true},
+		{filepath.Join(tree, "tools", "hooks"), filepath.Join(link, "tools", "hooks", "pre-commit"), true},
+		{filepath.Join(link, "tools", "hooks"), filepath.Join(tree, "tools", "other", "x"), false},
 	} {
 		if got := dirInTree(c.tree, c.dir); got != c.want {
 			t.Errorf("dirInTree(%q, %q) = %v", c.tree, c.dir, got)
+		}
+	}
+}
+
+// A name in another case is the same folder where the file system usually
+// ignores it (macOS, Windows): an existing one, and one not made yet (a
+// hooks folder a write would create). Elsewhere it is another folder.
+func TestDirInTreeCase(t *testing.T) {
+	tree := t.TempDir()
+	hooks := filepath.Join(tree, "hooks")
+	if err := os.Mkdir(hooks, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fold := runtime.GOOS == "darwin" || runtime.GOOS == "windows"
+	for _, c := range []struct {
+		tree, dir string
+		want      bool
+	}{
+		{hooks, filepath.Join(tree, "Hooks", "pre-commit"), fold},
+		{hooks, filepath.Join(tree, "HOOKS"), fold},
+		{filepath.Join(tree, "tools", "hooks"), filepath.Join(tree, "Tools", "hooks", "pre-commit"), fold},
+		{hooks, filepath.Join(tree, "Hooks-other"), false},
+	} {
+		if got := dirInTree(c.tree, c.dir); got != c.want {
+			t.Errorf("dirInTree(%q, %q) = %v, want %v", c.tree, c.dir, got, c.want)
 		}
 	}
 }
