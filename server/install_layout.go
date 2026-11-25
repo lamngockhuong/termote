@@ -334,11 +334,45 @@ func (c *cli) uploadsDir() string { return filepath.Join(c.cacheDir(), "termote"
 // trashDir is the server's trash (trashDir): what the Files view deleted.
 func (c *cli) trashDir() string { return filepath.Join(c.cacheDir(), "termote", "trash") }
 
+// startPromptsDir is the server's store of agents start prompts
+// (startPromptDir).
+func (c *cli) startPromptsDir() string {
+	return filepath.Join(c.cacheDir(), "termote", "start-prompts")
+}
+
+// worktreesDir is where agents start --worktree puts the checkouts of the
+// tmux and Zellij backends (worktreeBase); herdr-core's go to herdr-app's
+// own folder.
+func (c *cli) worktreesDir() string { return worktreeBaseFor("tmux", c.home, false) }
+
 // removeUploads deletes the images sent from the PWA: the store is a cache
 // (7-day retention), so nothing in it is worth keeping once Termote goes.
 // It returns the store when it could not be removed yet.
 func (c *cli) removeUploads() []string {
 	return c.removeCacheDir(c.uploadsDir(), "Removed the uploaded images in %s")
+}
+
+// removeStartPrompts deletes the files agents start typed a prompt from:
+// each lives seconds, so what is left is what a stopped server left.
+func (c *cli) removeStartPrompts() []string {
+	return c.removeCacheDir(c.startPromptsDir(), "Removed the agent start prompts in %s")
+}
+
+// removeInstalledSkills removes the orchestrator skill termote wrote for
+// each agent, as skills uninstall does: it only drives this termote. A
+// directory termote did not write stays untouched; one it wrote that now
+// holds other files stays and is named.
+func (c *cli) removeInstalledSkills() {
+	for _, a := range c.skillAgents() {
+		if _, ok, _ := installedSkill(a); !ok {
+			continue
+		}
+		if err := removeSkill(a.skillDir()); err != nil {
+			c.warnf("%s: %v", a.label, err)
+			continue
+		}
+		c.infof("Removed the termote-orchestrator skill for %s", a.label)
+	}
 }
 
 // removeTrash deletes the files the Files view deleted, for uninstall

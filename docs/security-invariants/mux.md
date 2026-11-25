@@ -472,7 +472,8 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
     (409 `not_git`), as the psmux paragraph below says. A new checkout's path is built by the server only:
     `<base>/<main checkout's base name>/<branchSlug(branch)>`, base fixed per backend
     (`worktreeBase`: hc `~/.herdr/worktrees`, tmux and Zellij `~/.termote/worktrees`, in the
-    container under `/workspace`); refused (`create_failed`) when the repository name is not one
+    container under `/workspace`; `termote uninstall`, `--purge` included, never removes the base,
+    the user's code, and only prints `~/.termote/worktrees`); refused (`create_failed`) when the repository name is not one
     clean path element, the target exists, or it (as given, or resolved for the part that exists)
     is under a files deny dir (on Windows a junction on the way is resolved too, `resolveLinkedDir`
     through an open handle: `filepath.EvalSymlinks` leaves one as it is), when a folder between the

@@ -502,7 +502,7 @@ Commands:
                        signins revoke <id> | --all signs them out
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
-  uninstall [--purge]  Remove the service, the command, the install and uploaded images
+  uninstall [--purge]  Remove the service, the command, the install, caches and the skill
                        (config, logs, recent group directories and deleted files stay;
                        --purge removes them too)
   logs [service]       View logs (server, all, follow, clean)

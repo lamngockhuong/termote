@@ -357,3 +357,102 @@ func TestUninstallHomebrewKeepsOtherInstallLink(t *testing.T) {
 		t.Fatalf("output:\n%s", tc.stdout.String())
 	}
 }
+
+func TestUninstallRemovesStartPrompts(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		t.Run(goos, func(t *testing.T) {
+			tc := installedCLI(t, goos)
+			os.RemoveAll(tc.trashDir())
+			writeFile(t, filepath.Join(tc.startPromptsDir(), "prompt-123.txt"), "fix it")
+			if code := tc.main([]string{"uninstall"}); code != 0 {
+				t.Fatal(tc.stderr.String())
+			}
+			if isDir(tc.startPromptsDir()) {
+				t.Fatal("start prompts stayed")
+			}
+			// With the uploads and the prompts gone, nothing keeps the
+			// termote cache dir (on Windows it is the install root).
+			if goos != "windows" && isDir(filepath.Dir(tc.startPromptsDir())) {
+				t.Fatal("empty termote cache dir stayed")
+			}
+		})
+	}
+}
+
+func TestStartPromptsDirMatchesServer(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	if got, want := tc.startPromptsDir(), filepath.Join(tc.home, ".cache", "termote", "start-prompts"); got != want {
+		t.Fatalf("%s, want %s", got, want)
+	}
+}
+
+func TestUninstallRemovesInstalledSkills(t *testing.T) {
+	tc := installedCLI(t, runtime.GOOS)
+	for _, dir := range []string{".claude", ".codex"} {
+		if err := os.MkdirAll(filepath.Join(tc.home, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tc.dispatch("skills", []string{"install", "--agent", "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	// Codex holds a directory of the skill's name termote did not write.
+	writeFile(t, filepath.Join(codexSkillDir(tc), "SKILL.md"), "mine")
+	tc.stdout.Reset()
+	if code := tc.main([]string{"uninstall"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if isDir(claudeSkillDir(tc)) {
+		t.Fatal("the skill termote wrote stayed")
+	}
+	if !fileExists(filepath.Join(codexSkillDir(tc), "SKILL.md")) {
+		t.Fatal("removed a skill directory termote did not write")
+	}
+	if !strings.Contains(tc.stdout.String(), "Removed the termote-orchestrator skill for Claude Code") {
+		t.Fatalf("output:\n%s", tc.stdout.String())
+	}
+}
+
+func TestUninstallFromCheckoutKeepsSkillsOfAnotherInstall(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	writeFile(t, tc.versionBinary("1.0.0"), "ELF")
+	if err := os.MkdirAll(filepath.Join(tc.home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := tc.dispatch("skills", []string{"install", "--agent", "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	tc.exe = "/src/termote/server/termote-dev"
+	if code := tc.main([]string{"uninstall"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if !isDir(claudeSkillDir(tc)) {
+		t.Fatal("the skill of the install elsewhere was removed")
+	}
+}
+
+func TestUninstallNamesWorktrees(t *testing.T) {
+	for _, purge := range []bool{false, true} {
+		tc := installedCLI(t, "linux")
+		tree := filepath.Join(tc.home, ".termote", "worktrees", "repo", "feature")
+		writeFile(t, filepath.Join(tree, "main.go"), "package main")
+		args := []string{"uninstall"}
+		if purge {
+			args = append(args, "--purge")
+		}
+		if code := tc.main(args); code != 0 {
+			t.Fatal(tc.stderr.String())
+		}
+		if !fileExists(filepath.Join(tree, "main.go")) {
+			t.Fatalf("purge %v: a worktree was removed", purge)
+		}
+		if !strings.Contains(tc.stdout.String(), "Kept the worktrees agents started in "+tc.worktreesDir()) {
+			t.Fatalf("purge %v: output:\n%s", purge, tc.stdout.String())
+		}
+	}
+	tc := installedCLI(t, "linux")
+	tc.main([]string{"uninstall"})
+	if strings.Contains(tc.stdout.String(), "worktrees") {
+		t.Fatalf("named worktrees that do not exist:\n%s", tc.stdout.String())
+	}
+}

@@ -379,6 +379,14 @@ Các file bạn đã xoá từ view Files cũng được giữ lại (chúng n�
 như `~/.cache/termote/trash`), vì đó là file của bạn chứ không phải bộ nhớ đệm; `uninstall` in ra thư mục này.
 `--purge` xoá luôn nó.
 
+`uninstall` cũng xoá skill orchestrator mà `termote skills install` đã ghi cho Claude Code và Codex (thư mục
+cùng tên do bạn tự tạo thì được giữ lại) và các file prompt mà `agents start` để lại trong bộ nhớ đệm của
+Termote.
+
+Các worktree mà agent tạo bằng `--worktree` (`~/.termote/worktrees`) chứa code của bạn, nên cả `uninstall`
+lẫn `--purge` đều không xoá chúng; `uninstall` in ra thư mục này. Hãy xoá từng cái bằng `git worktree remove`
+từ repository của nó.
+
 Trên Windows, các file của `termote.exe` đang chạy được xóa ngay sau khi lệnh kết thúc.
 
 ## Ngăn macOS ngủ

@@ -1132,6 +1132,10 @@ This removes the service registration, Termote’s Tailscale mapping, the `termo
 
 The files you deleted from the Files view stay as well (they move to a trash next to the uploads, such as `~/.cache/termote/trash`), since they are your files and not a cache; `uninstall` prints the folder. `--purge` removes it too.
 
+`uninstall` also removes the orchestrator skill that `termote skills install` wrote for Claude Code and Codex (a folder of that name you made yourself stays) and the prompt files `agents start` left in Termote’s cache.
+
+The worktrees an agent started with `--worktree` (`~/.termote/worktrees`) hold your code, so neither `uninstall` nor `--purge` removes them; `uninstall` prints the folder. Remove each with `git worktree remove` from its repository.
+
 On Windows, the files of the running `termote.exe` are removed a moment after the command exits.
 
 ## Prevent macOS Sleep
