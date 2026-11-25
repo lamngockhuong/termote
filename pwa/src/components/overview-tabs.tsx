@@ -108,7 +108,7 @@ export function OverviewTabs({
             onKeyDown={(e) => move(e, i)}
             className={`flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-[13px] tabular-nums transition-colors duration-(--duration-fast) ease-standard pointer-coarse:h-9 ${
               selected
-                ? 'bg-surface-raised font-semibold text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                ? 'bg-surface-raised font-semibold text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent-text ui-terminal:shadow-none'
                 : 'font-medium text-fg-muted hover:text-fg'
             } ${FOCUS_RING}`}
           >

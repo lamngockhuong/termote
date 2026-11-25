@@ -110,7 +110,7 @@ export function ViewSwitcher<T extends string>({
             title={label}
             className={`relative before:absolute before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${BUTTON_SIZE[orientation]} text-[12px] ${
               selected
-                ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent-text ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'
             }`}
           >

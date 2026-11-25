@@ -313,6 +313,7 @@ describe('accent colors', () => {
       ] as const) {
         expect(m.get('--tm-accent'), a.id).toBe(pair[0])
         expect(m.get('--tm-accent-fg'), a.id).toBe(pair[1])
+        expect(m.get('--tm-accent-text'), a.id).toBe(pair[2])
         const [r, g, b] = parseColor(pair[0]).rgb
         expect(m.get('--tm-accent-soft'), a.id).toBe(
           `rgb(${r} ${g} ${b} / var(--tm-accent-soft-alpha))`,
@@ -356,35 +357,70 @@ describe('accent colors', () => {
     }
   })
 
-  // Accent text on the soft tint (the selected tab, segment or item). The
-  // style accents already miss 4.5 there; a chosen color may be no worse
-  // than the worst of them, and never below 3.
-  const autoSoftWorst = Math.min(
-    ...modes.flatMap(({ t }) => {
-      const soft = parseColor(t.get('--tm-accent-soft')!)
-      return softBases.map((bg) =>
-        contrast(t.get('--tm-accent')!, over(soft.rgb, soft.alpha, t.get(bg)!)),
+  // Accent text on the soft tint (the selected tab, segment or item):
+  // --tm-accent-text keeps 4.5:1 on the tint laid over every surface, for each
+  // style's own accent and for every chosen color on every style.
+  function expectTextOnTint(
+    text: string,
+    tint: { rgb: number[]; alpha: number },
+    t: Map<string, string>,
+  ) {
+    for (const bg of softBases) {
+      const ratio = contrast(text, over(tint.rgb, tint.alpha, t.get(bg)!))
+      expect(ratio, `on the tint over ${bg}`).toBeGreaterThanOrEqual(4.5)
+    }
+    for (const bg of surfaces) {
+      expect(contrast(text, t.get(bg)!), bg).toBeGreaterThanOrEqual(4.5)
+    }
+  }
+
+  it.each(modes.map((m) => ({ ...m, mode: m.dark ? 'dark' : 'light' })))(
+    '$style $mode: selected accent text keeps 4.5:1 on the tint',
+    ({ t }) => {
+      expectTextOnTint(
+        t.get('--tm-accent-text')!,
+        parseColor(t.get('--tm-accent-soft')!),
+        t,
       )
-    }),
+    },
   )
 
   it.each(
     accentBlocks.flatMap(({ a }) =>
       modes.map((m) => ({
         name: `${a.id} on ${m.style} ${m.dark ? 'dark' : 'light'}`,
-        accent: (m.dark ? a.dark : a.light)[0],
+        pair: m.dark ? a.dark : a.light,
         t: m.t,
       })),
     ),
-  )(
-    '$name: accent text on the soft tint is no worse than the style accents',
-    ({ accent, t }) => {
-      const rgb = parseColor(accent).rgb
-      for (const bg of softBases) {
-        const ratio = contrast(accent, over(rgb, softAlpha(t), t.get(bg)!))
-        expect(ratio, bg).toBeGreaterThanOrEqual(3)
-        expect(ratio, bg).toBeGreaterThanOrEqual(autoSoftWorst)
+  )('$name: selected accent text keeps 4.5:1 on the tint', ({ pair, t }) => {
+    const tint = { rgb: parseColor(pair[0]).rgb, alpha: softAlpha(t) }
+    expectTextOnTint(pair[2], tint, t)
+  })
+})
+
+// A class string that puts text on the tint must use text-accent-text: plain
+// text-accent misses 4.5:1 there in several styles.
+describe('accent text on the tint in components', () => {
+  const sources = import.meta.glob('./components/**/*.{ts,tsx}', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>
+
+  it('never pairs bg-accent-soft with text-accent', () => {
+    const offenders: string[] = []
+    for (const [path, src] of Object.entries(sources)) {
+      if (path.includes('.test.')) continue
+      for (const [literal] of src.matchAll(/'[^'\n]*'|`[^`]*`|"[^"\n]*"/g)) {
+        if (
+          literal.includes('bg-accent-soft') &&
+          /(?:^|[\s'"`:])text-accent(?![\w-])/.test(literal)
+        ) {
+          offenders.push(`${path}: ${literal}`)
+        }
       }
-    },
-  )
+    }
+    expect(offenders).toEqual([])
+  })
 })

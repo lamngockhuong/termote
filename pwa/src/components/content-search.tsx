@@ -424,7 +424,7 @@ function Toggle({
       onClick={onClick}
       className={`flex size-8 shrink-0 items-center justify-center rounded-control pointer-coarse:size-touch ${FOCUS_RING} ${
         on
-          ? 'bg-accent-soft text-accent'
+          ? 'bg-accent-soft text-accent-text'
           : 'text-fg-muted hover:bg-surface hover:text-fg'
       }`}
     >

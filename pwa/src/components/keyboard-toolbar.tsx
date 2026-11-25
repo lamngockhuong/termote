@@ -211,7 +211,7 @@ const KEYCAP =
 const KEYCAP_ON = 'bg-accent! text-accent-fg! border-accent!'
 // Ctrl+ combos while Ctrl is on
 const KEYCAP_COMBO =
-  'bg-accent-soft! text-accent! border-transparent! px-2 font-label'
+  'bg-accent-soft! text-accent-text! border-transparent! px-2 font-label'
 
 interface KeycapProps extends ComponentProps<'button'> {
   // Set for keys that toggle (exposed as aria-pressed)

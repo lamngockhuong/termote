@@ -44,7 +44,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
             key={pane.id}
             className={`group flex shrink-0 items-center rounded-control transition-colors duration-(--duration-fast) ${
               active
-                ? 'bg-accent-soft text-accent'
+                ? 'bg-accent-soft text-accent-text'
                 : 'text-fg-muted hover:bg-surface hover:text-fg'
             }`}
           >
