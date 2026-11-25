@@ -24,8 +24,8 @@ import (
 )
 
 // savedConfig is what start saves and serve, restart and update read. The
-// native server's settings come first; the container keeps its own, and the
-// password is shared by both.
+// native server's settings come first; the container keeps its own, its
+// password included: only the username is shared by both.
 type savedConfig struct {
 	LAN       bool
 	NoAuth    bool
@@ -51,10 +51,12 @@ type savedConfig struct {
 	// (HC_SESSION, HC_SOCKET), so the service reaches the same core: Windows
 	// tasks take no environment of their own.
 	HcEnv hcEnv
-	// User is the Basic auth username, shared by native and container like
-	// the password; "" (a config saved before it existed) means admin.
-	User     string
-	Password string // decrypted
+	// User is the Basic auth username, shared by native and container; ""
+	// (a config saved before it existed) means admin.
+	User string
+	// Password is the native server's, decrypted. The container never gets
+	// it: code running there could sign in to the host with it.
+	Password string
 	// PasswordUnreadable is set when a saved password exists but cannot be
 	// decrypted (the secret file is gone, or another user); start then sets
 	// a new one.
@@ -80,6 +82,11 @@ type containerConfig struct {
 	// "" until the first up picks one.
 	Mux              string
 	HerdrAllowNoAuth bool
+	// Password is the container's own, decrypted, never the native
+	// server's; "" in a config saved before it had one (container up then
+	// sets a new one). PasswordUnreadable is as for the native one.
+	Password           string
+	PasswordUnreadable bool
 }
 
 // savedContainer keeps the container's settings when the native ones are
@@ -99,13 +106,28 @@ func (s *savedConfig) authUser() string {
 	return s.User
 }
 
-// keptPassword is the password to save: the new one, or with auth off (an
-// empty one) the saved one, which the other of native and container shares.
-func (c *cli) keptPassword(pass string, saved *savedConfig) string {
-	if pass == "" && saved != nil {
-		return saved.Password
+// keptPassword is the password one side (native or container) saves: the
+// new one, or with auth off (an empty one) its own saved one, kept for when
+// auth is turned on again.
+func keptPassword(pass, saved string) string {
+	if pass == "" {
+		return saved
 	}
 	return pass
+}
+
+// passwordFor is the saved password the CLI sends to the server on port: the
+// container's on the container's saved port, else the native server's. The
+// native password never goes to the container's port, not even when both are
+// saved on one port: the container may be the one listening there.
+func (s *savedConfig) passwordFor(port int) string {
+	switch {
+	case s == nil:
+		return ""
+	case s.Container != nil && s.Container.Port == port:
+		return s.Container.Password
+	}
+	return s.Password
 }
 
 // loadConfig returns nil when no config was saved yet.
@@ -204,24 +226,28 @@ func (c *cli) ensureSecret() (string, error) {
 
 // Unix format: KEY="value" lines, parsed without sourcing.
 const (
-	keyLAN              = "TERMOTE_LAN"
-	keyNoAuth           = "TERMOTE_NO_AUTH"
-	keyPort             = "TERMOTE_PORT"
-	keyTailscale        = "TERMOTE_TAILSCALE"
-	keySavedPass        = "TERMOTE_SAVED_PASS"
-	keySavedPassMAC     = "TERMOTE_SAVED_PASS_MAC"
-	keyMux              = "TERMOTE_MUX"
-	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
-	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
-	keyHcAllowNoAuth    = "TERMOTE_HC_ALLOW_NO_AUTH"
-	keyHcBin            = "TERMOTE_HC_BIN"
-	keyHcSession        = "TERMOTE_HC_SESSION"
-	keyHcSocket         = "TERMOTE_HC_SOCKET"
-	keyUser             = "TERMOTE_USER"
-	keyAllowLocalUsers  = "TERMOTE_ALLOWED_LOCAL_USERS"
-	keyAllowPaths       = "TERMOTE_ALLOWED_PATHS" // ':'-separated
-	keyCloudflare       = "TERMOTE_CLOUDFLARE"
-	keyProxyHeader      = "TERMOTE_PROXY_CLIENT_HEADER"
+	keyLAN          = "TERMOTE_LAN"
+	keyNoAuth       = "TERMOTE_NO_AUTH"
+	keyPort         = "TERMOTE_PORT"
+	keyTailscale    = "TERMOTE_TAILSCALE"
+	keySavedPass    = "TERMOTE_SAVED_PASS"
+	keySavedPassMAC = "TERMOTE_SAVED_PASS_MAC"
+	// The container's own password, encrypted like the native one, with a
+	// MAC of its own; present once container up saved one.
+	keyContainerSavedPass    = "TERMOTE_CONTAINER_SAVED_PASS"
+	keyContainerSavedPassMAC = "TERMOTE_CONTAINER_SAVED_PASS_MAC"
+	keyMux                   = "TERMOTE_MUX"
+	keyAllowedHosts          = "TERMOTE_ALLOWED_HOSTS"
+	keyHerdrAllowNoAuth      = "TERMOTE_HERDR_ALLOW_NO_AUTH"
+	keyHcAllowNoAuth         = "TERMOTE_HC_ALLOW_NO_AUTH"
+	keyHcBin                 = "TERMOTE_HC_BIN"
+	keyHcSession             = "TERMOTE_HC_SESSION"
+	keyHcSocket              = "TERMOTE_HC_SOCKET"
+	keyUser                  = "TERMOTE_USER"
+	keyAllowLocalUsers       = "TERMOTE_ALLOWED_LOCAL_USERS"
+	keyAllowPaths            = "TERMOTE_ALLOWED_PATHS" // ':'-separated
+	keyCloudflare            = "TERMOTE_CLOUDFLARE"
+	keyProxyHeader           = "TERMOTE_PROXY_CLIENT_HEADER"
 
 	// The container's keys; present once `container up` ran.
 	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
@@ -286,27 +312,41 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 			HerdrAllowNoAuth:  kv[keyContainerHerdrNoAuth] == "true",
 		}
 		cc.Port, _ = strconv.Atoi(kv[keyContainerPort])
+		if enc := kv[keyContainerSavedPass]; enc != "" {
+			pass, err := decryptPassword(enc, kv[keyContainerSavedPassMAC], key(), containerPasswordMAC)
+			cc.Password, cc.PasswordUnreadable = pass, err != nil
+		}
 		cfg.Container = cc
 	}
 	if enc := kv[keySavedPass]; enc != "" {
 		pass, err := decryptSavedPassword(enc, kv[keySavedPassMAC], key())
-		if err != nil {
-			cfg.PasswordUnreadable = true
-		} else {
-			cfg.Password = pass
-		}
+		cfg.Password, cfg.PasswordUnreadable = pass, err != nil
 	}
 	return cfg, nil
 }
 
+// encryptPassword is pass in the openssl format with its MAC (macOf), or two
+// empty strings for no password.
+func encryptPassword(pass, key string, macOf func(enc, key string) string) (enc, mac string, err error) {
+	if pass == "" {
+		return "", "", nil
+	}
+	if enc, err = encryptOpenSSL(pass, key); err != nil {
+		return "", "", err
+	}
+	return enc, macOf(enc, key), nil
+}
+
 func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
-	enc, mac := "", ""
-	if cfg.Password != "" {
-		var err error
-		if enc, err = encryptOpenSSL(cfg.Password, key); err != nil {
+	enc, mac, err := encryptPassword(cfg.Password, key, passwordMAC)
+	if err != nil {
+		return nil, err
+	}
+	ccEnc, ccMAC := "", ""
+	if cc := cfg.Container; cc != nil {
+		if ccEnc, ccMAC, err = encryptPassword(cc.Password, key, containerPasswordMAC); err != nil {
 			return nil, err
 		}
-		mac = passwordMAC(enc, key)
 	}
 	values := []string{cfg.Tailscale, cfg.Cloudflare, cfg.ProxyClientHeader, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User, cfg.HcBin, cfg.HcEnv.Session, cfg.HcEnv.Socket}
 	paths := slices.Clone(cfg.AllowPaths)
@@ -374,12 +414,17 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		if cc.ProxyClientHeader != "" {
 			w(keyContainerProxyHeader, cc.ProxyClientHeader)
 		}
+		if ccEnc != "" {
+			w(keyContainerSavedPass, ccEnc)
+			w(keyContainerSavedPassMAC, ccMAC)
+		}
 	}
 	return []byte(b.String()), nil
 }
 
-// windowsConfigFile is the JSON config on Windows; the password is DPAPI
-// encrypted for the current user.
+// windowsConfigFile is the JSON config on Windows; the passwords (the native
+// server's here, the container's in Container) are DPAPI encrypted for the
+// current user.
 type windowsConfigFile struct {
 	Lan              bool                 `json:"Lan"`
 	NoAuth           bool                 `json:"NoAuth"`
@@ -414,6 +459,7 @@ type windowsContainerCfg struct {
 	Workspace        string   `json:"Workspace,omitempty"`
 	Mux              string   `json:"Mux,omitempty"`
 	HerdrAllowNoAuth bool     `json:"HerdrAllowNoAuth,omitempty"`
+	EncryptedPass    string   `json:"EncryptedPass,omitempty"`
 }
 
 // dpapiProtect and dpapiUnprotect encrypt for the current Windows user; they
@@ -451,20 +497,39 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, Cloudflare: cc.Cloudflare, ProxyClientHeader: cc.ProxyHeader,
 			AllowHosts: cc.AllowHost, AllowPaths: cc.AllowPath,
 			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
+		cfg.Container.Password, cfg.Container.PasswordUnreadable = dpapiDecryptPassword(cc.EncryptedPass)
 	}
-	if f.EncryptedPass != "" {
-		blob, err := base64.StdEncoding.DecodeString(f.EncryptedPass)
-		var plain []byte
-		if err == nil {
-			plain, err = dpapiUnprotect(blob)
-		}
-		if err != nil {
-			cfg.PasswordUnreadable = true
-		} else {
-			cfg.Password = string(plain)
-		}
-	}
+	cfg.Password, cfg.PasswordUnreadable = dpapiDecryptPassword(f.EncryptedPass)
 	return cfg, nil
+}
+
+// dpapiDecryptPassword reads an EncryptedPass field: "" is no password; one
+// that does not decrypt is unreadable.
+func dpapiDecryptPassword(enc string) (pass string, unreadable bool) {
+	if enc == "" {
+		return "", false
+	}
+	blob, err := base64.StdEncoding.DecodeString(enc)
+	var plain []byte
+	if err == nil {
+		plain, err = dpapiUnprotect(blob)
+	}
+	if err != nil {
+		return "", true
+	}
+	return string(plain), false
+}
+
+// dpapiEncryptPassword is the EncryptedPass field of pass ("" for none).
+func dpapiEncryptPassword(pass string) (string, error) {
+	if pass == "" {
+		return "", nil
+	}
+	blob, err := dpapiProtect([]byte(pass))
+	if err != nil {
+		return "", fmt.Errorf("encrypt password: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(blob), nil
 }
 
 func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
@@ -491,13 +556,14 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, Cloudflare: cc.Cloudflare, ProxyHeader: cc.ProxyClientHeader,
 			AllowHost: cc.AllowHosts, AllowPath: cc.AllowPaths,
 			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
-	}
-	if cfg.Password != "" {
-		blob, err := dpapiProtect([]byte(cfg.Password))
-		if err != nil {
-			return nil, fmt.Errorf("encrypt password: %w", err)
+		var err error
+		if f.Container.EncryptedPass, err = dpapiEncryptPassword(cc.Password); err != nil {
+			return nil, err
 		}
-		f.EncryptedPass = base64.StdEncoding.EncodeToString(blob)
+	}
+	var err error
+	if f.EncryptedPass, err = dpapiEncryptPassword(cfg.Password); err != nil {
+		return nil, err
 	}
 	return json.MarshalIndent(f, "", "    ")
 }
@@ -574,9 +640,18 @@ func decryptOpenSSL(data []byte, pass string) (string, error) {
 // passwordMAC authenticates the encrypted password with the key: CBC alone
 // only checks padding, so a wrong or missing key would "decrypt" to garbage
 // about once in 200 tries instead of failing.
-func passwordMAC(enc, key string) string {
+func passwordMAC(enc, key string) string { return labelledMAC("termote-saved-pass", enc, key) }
+
+// containerPasswordMAC is passwordMAC for the container's password, under a
+// label of its own: the native password's value and MAC copied into the
+// container's keys do not verify.
+func containerPasswordMAC(enc, key string) string {
+	return labelledMAC("termote-container-saved-pass", enc, key)
+}
+
+func labelledMAC(label, enc, key string) string {
 	m := hmac.New(sha256.New, []byte(key))
-	m.Write([]byte("termote-saved-pass\x00" + enc))
+	m.Write([]byte(label + "\x00" + enc))
 	return hex.EncodeToString(m.Sum(nil))
 }
 
@@ -584,10 +659,15 @@ func passwordMAC(enc, key string) string {
 // checking its MAC. Without a key, or with a MAC that does not match, the
 // password is unreadable.
 func decryptSavedPassword(enc, mac, key string) (string, error) {
+	return decryptPassword(enc, mac, key, passwordMAC)
+}
+
+// decryptPassword is decryptSavedPassword with the MAC macOf.
+func decryptPassword(enc, mac, key string, macOf func(enc, key string) string) (string, error) {
 	if key == "" {
 		return "", errBadCiphertext
 	}
-	if !hmac.Equal([]byte(strings.ToLower(mac)), []byte(passwordMAC(enc, key))) {
+	if !hmac.Equal([]byte(strings.ToLower(mac)), []byte(macOf(enc, key))) {
 		return "", errBadCiphertext
 	}
 	data, err := base64.StdEncoding.DecodeString(enc)

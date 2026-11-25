@@ -227,6 +227,15 @@ func TestCheckDelegatePath(t *testing.T) {
 		"lefthook.yaml":                   "denied_path",
 		".lefthook-local.toml":            "denied_path",
 		"lefthook.json":                   "denied_path",
+		"lint-staged.config.js":           "denied_path",
+		"lint-staged.config.mjs":          "denied_path",
+		"sub/.lintstagedrc":               "denied_path",
+		"sub/.lintstagedrc.json":          "denied_path",
+		".lintstagedrc.yaml":              "denied_path",
+		"commitlint.config.ts":            "denied_path",
+		".commitlintrc.cjs":               "denied_path",
+		".commitlintrc":                   "denied_path",
+		"src/lint-staged-notes.md":        "",
 		".pnpmfile.cjs":                   "denied_path",
 		".pnpmfile.mjs":                   "denied_path",
 		"pnpm-workspace.yaml":             "denied_path",
@@ -488,6 +497,41 @@ func TestGrantRulesRefuse(t *testing.T) {
 	} {
 		if got := grantRulesRefuse(tc.g); got != tc.want {
 			t.Errorf("%+v = %v, want %v", tc.g, got, tc.want)
+		}
+	}
+}
+
+// A tool grant never reads the home folder's keys, nor a sensitive file of
+// its own folder, and diff never walks a folder, where a link committed to
+// the repository can lead out of it.
+func TestCheckToolCommand(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	wt := filepath.Join(home, "proj")
+	outside := filepath.Join(base, "outside-key")
+	writeFile(t, outside, "k\n")
+	writeFile(t, filepath.Join(home, ".ssh", "id_test"), "k\n")
+	writeFile(t, filepath.Join(wt, ".env"), "k\n")
+	writeFile(t, filepath.Join(wt, "src", "a.ts"), "a\n")
+	writeFile(t, filepath.Join(wt, "dirB", "k"), "x\n")
+	os.MkdirAll(filepath.Join(wt, "dirA"), 0o755)
+	if err := os.Symlink(outside, filepath.Join(wt, "dirA", "k")); err != nil {
+		t.Skip(err)
+	}
+	for _, tc := range []struct {
+		dir, cwd, cmd, want string
+	}{
+		{wt, wt, "cat src/a.ts", ""},
+		{wt, wt, "rg foo src", ""},
+		{wt, wt, "diff src/a.ts dirB/k", ""},
+		{wt, wt, "diff dirA dirB", "directory"},
+		{wt, wt, "cat .env", "denied_path"},
+		{home, home, "cat .ssh/id_test", "outside"},
+		{home, wt, "cat src/a.ts", "outside"},
+		{base, wt, "cat src/a.ts", "outside"},
+	} {
+		if got := checkToolCommand(tc.dir, tc.cwd, home, strings.Fields(tc.cmd)); got != tc.want {
+			t.Errorf("%q in %s under %s = %q, want %q", tc.cmd, tc.cwd, tc.dir, got, tc.want)
 		}
 	}
 }

@@ -226,6 +226,8 @@ export default {
   'errors.session_live': 'Phiên này đang chạy ở một tab khác',
   'errors.session_not_found': 'Phiên này không còn trong thư mục này',
   'errors.shell_busy': 'Shell của tab đang bận',
+  'errors.shell_refused':
+    'Tin nhắn gửi từ dòng lệnh không được bắt đầu bằng "!": agent sẽ chạy nó như một lệnh shell',
   'errors.signed_out': 'Phiên đăng nhập này đã kết thúc. Hãy đăng nhập lại',
   'errors.socket_only': 'Chỉ termote agents trên máy này mới làm được việc này',
   'errors.stale_hunk': 'Thay đổi không còn khớp với file',

@@ -97,10 +97,12 @@ func cleanMeta(tokens map[string]string) []MetaToken {
 	return out
 }
 
-// withoutMeta is s with no metadata: tokens come from any process that
-// reaches Herdr's socket, and a view-only client is a device paired from
-// afar. s is copied, never changed: a backend can hand out its cached
-// snapshot.
+// withoutMeta is s for a view-only client: no metadata (tokens come from
+// any process that reaches Herdr's socket, and a view-only client is a
+// device paired from afar) and no working directory of a pane's process
+// (it names projects, as the recent groups a view-only client is not sent
+// do, and of panes it may not watch). s is copied, never changed: a
+// backend can hand out its cached snapshot.
 func withoutMeta(s Snapshot) Snapshot {
 	groups := slices.Clone(s.Groups)
 	for gi := range groups {
@@ -109,9 +111,17 @@ func withoutMeta(s Snapshot) Snapshot {
 		g.Tabs = slices.Clone(g.Tabs)
 		for ti := range g.Tabs {
 			t := &g.Tabs[ti]
+			t.Processes = slices.Clone(t.Processes)
+			for i := range t.Processes {
+				t.Processes[i].Cwd = ""
+			}
 			t.Panes = slices.Clone(t.Panes)
 			for pi := range t.Panes {
-				t.Panes[pi].Meta = nil
+				p := &t.Panes[pi]
+				p.Meta = nil
+				if p.Process != nil {
+					p.Process = &ProcessInfo{Name: p.Process.Name}
+				}
 			}
 		}
 	}

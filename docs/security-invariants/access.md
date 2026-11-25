@@ -158,11 +158,13 @@ Part of the [security invariants](README.md): who gets in and as what: config, s
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands (the pane's project commands and skills only where Files would show them: none under a
   root Files hides from view-only, else only files git tracks, `projectView`; the user's and the
-  plugins' stay), snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
+  plugins' stay), snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started; `withoutMeta`: no metadata and no pane process's `cwd`, which names projects, of panes the view stream may not show too, `TestWithoutMetaDropsCwd`), push key and `worktrees` GET are allowed; `agent/prompt` carries no
   `promptId`, body, options or free-text option, a form's fields by key, type and title only, and no
   title taken from the dialog's text rather than its header (a Claude dialog's title is kept only
   when it is a question's or one of `claudeDialogHeaders`, since a rule the text draws at column 0
-  can pass for the top edge; `viewCard`: these can hold the tool's
+  can pass for the top edge), and a row of question tabs (`steps`) only on a question (`select`,
+  `multiselect`): Claude Code wraps a long line of a file it shows at the card's width, so a wrapped
+  row of the file can read as tabs (`viewCard`: these can hold the tool's
   input, the command or the file and its new content, and the card is read for any pane, not only
   one the view stream can show; its `activity` is the same as for `full`). Through the machine proxy
   the remote machine builds the card, so a machine on 2.29.1 or older still sends the whole card to
@@ -365,7 +367,11 @@ Part of the [security invariants](README.md): who gets in and as what: config, s
   never returns `/login/link`; `hash` only `#` + URI-safe bytes, 512. Files older than 2 min are
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
-- **CLI and the saved password**: on Windows the native server (any port but the saved
+- **CLI and the saved password**: each command sends the password of the server it talks to
+  (`savedConfig.passwordFor`, `server/cli_config.go`): the container's own on the container's saved
+  port, a port the native server is saved on too included, the native one on any other port; the
+  native password never goes to the container's port. `start`'s own health wait sends the new native
+  password to the port it has just found free. On Windows the native server (any port but the saved
   container's; a port both are saved on is the container's only while no native server is registered
   or running, `installedSupervisor`, and the runtime reports the container running,
   `containerRunning`, so a failed `schtasks`, `podman` or `docker` lookup keeps the password home)
@@ -434,10 +440,27 @@ Part of the [security invariants](README.md): who gets in and as what: config, s
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)
-- **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
-  per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod
-  600. The password is never written to the systemd unit, launchd plist, Scheduled Task or any
-  process command line; print it again with `termote show-password`. `start` and `container up`
+- **Config persistence**: the native server and the container each have their own saved password
+  (only the username is shared). Each is AES-256-CBC with an HMAC, keyed by a random per-install
+  `secret` file (0600) on Unix (`TERMOTE_SAVED_PASS` and `TERMOTE_CONTAINER_SAVED_PASS`, each with
+  its `_MAC`, labelled apart so one's value and MAC do not verify as the other's), DPAPI on Windows
+  (`EncryptedPass`, and the container's own `EncryptedPass` in `Container`); the config file is also
+  chmod 600. One that does not decrypt is unreadable and replaced by a new one at that side's next
+  `start` or `container up`. The password is never written to the systemd unit, launchd plist,
+  Scheduled Task or any process command line; print it again with `termote show-password` (the
+  username, then each saved password labelled native or container). `start` and `container up`
   print a new password (`showAccessInfo`) only when stdout is a terminal and no Herdr plugin runs
   them (`HERDR_PLUGIN_ID`); otherwise only the username and `termote show-password`, since a coding
-  agent's output, a pipe or a log can end up in a transcript or a file.
+  agent's output, a pipe or a log can end up in a transcript or a file. The container never gets
+  the native password (`server/cli_container.go`, `containerAuth`/`setupAuth` in
+  `server/cli_start.go`): the container's password is in its PID 1's
+  environment, where code running in the container reads it, so it opens the container only.
+  `container up` runs with the container's saved password; with none saved (the first up, or a
+  config an older version saved, when the container shared the native password) it sets a new one
+  and never copies the native one; for an older config it then says once that the container has its
+  own password and that the container's browsers sign in and its paired devices pair again (they are
+  bound to the password). `container up --fresh`
+  replaces only the container's password, `start --fresh` only the native one; `--no-auth` on
+  either side keeps that side's saved password. A password typed at the prompt that equals the
+  other side's is refused (a generated one is used), and a generated one never equals it. Neither
+  command writes the other side's password.

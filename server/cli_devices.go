@@ -86,16 +86,21 @@ type deviceTarget struct {
 	// pipeOnly: the native server on Windows, which gets the password over
 	// its local socket only (cli.pipeOnly).
 	pipeOnly bool
-	urls     accessURLs
+	// container: the target is the container, whose password is its own.
+	container bool
+	urls      accessURLs
 }
+
+// freshCommand is the command that sets a new password on t's server.
+func (t deviceTarget) freshCommand() string { return freshCommand(t.container) }
 
 func (c *cli) deviceTarget() deviceTarget {
 	saved, _ := c.loadConfig()
 	if saved != nil && saved.Container != nil && c.installedSupervisor() == nil {
 		ct := saved.Container
-		t := deviceTarget{port: ct.Port, user: saved.authUser(), noAuth: ct.NoAuth}
+		t := deviceTarget{port: ct.Port, user: saved.authUser(), noAuth: ct.NoAuth, container: true}
 		if !ct.NoAuth {
-			t.pass = saved.Password
+			t.pass = ct.Password
 		}
 		t.urls = c.accessURLs(&savedConfig{LAN: ct.LAN, Tailscale: ct.Tailscale, Cloudflare: ct.Cloudflare}, ct.Port)
 		return t
@@ -104,7 +109,9 @@ func (c *cli) deviceTarget() deviceTarget {
 	if saved != nil {
 		t.noAuth = saved.NoAuth
 		if !saved.NoAuth {
-			t.pass = saved.Password
+			// Never the native password on a port the container is saved
+			// on too: the container may be the one listening there.
+			t.pass = saved.passwordFor(t.port)
 		}
 	}
 	return t
@@ -158,7 +165,7 @@ func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, err
 	case out == socketMaybeSent:
 		return errors.New(socketNoAnswerMsg)
 	case t.pass == "":
-		return errors.New("no saved password to sign in with; set one: termote start --fresh")
+		return fmt.Errorf("no saved password to sign in with; set one: %s", t.freshCommand())
 	case t.pipeOnly:
 		// Nothing TCP answers is used: it only tells a stopped server from
 		// one whose local socket did not answer.
@@ -381,7 +388,7 @@ func (c *cli) revokeDevice(id string) error {
 	}
 	for _, d := range list.Devices {
 		if d.ID == id && d.Role == roleFull {
-			c.warnf("A full device could open a terminal; to be sure, run `termote start --fresh`.")
+			c.warnf("A full device could open a terminal; to be sure, run `%s`.", t.freshCommand())
 		}
 	}
 	return nil

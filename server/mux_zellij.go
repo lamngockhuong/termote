@@ -319,7 +319,7 @@ func (m *zellijMux) buildGroup(session string, r zellijRead) Group {
 			Name: cleanLabel(t.Name), Active: t.Active, Panes: []Pane{}}
 		for _, p := range panes {
 			pane := Pane{ID: zellijPaneID(session, p.ID), Active: p.IsFocused,
-				Title: stripUnsafeRunes(p.Title), key: zellijPaneKey(session, p.ID)}
+				Title: cleanPaneName(p.Title), key: zellijPaneKey(session, p.ID)}
 			pane.Name = cleanPaneName(m.paneName(pane.key, p.Title, r.at))
 			if name := processName(p.Command); name != "" {
 				pane.Process = &ProcessInfo{Name: name, Cwd: processCwd(p.Cwd)}

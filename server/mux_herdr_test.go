@@ -1058,8 +1058,13 @@ func TestHerdrTabOps(t *testing.T) {
 
 	// The tab vanished between the snapshot check and the call.
 	f.failCode = "tab_not_found"
-	if err := m.CloseTab(ctx, "wR:tK", ""); !errors.As(err, &ie) {
+	if err := m.CloseTab(ctx, "wR:tK", ""); !errors.As(err, &ie) || err.Error() != "tab not found" {
 		t.Errorf("tab_not_found = %v, want inputError", err)
+	}
+	// A code herdr may add later reads as termote's own text, never herdr's.
+	f.failCode = "session_xyz_not_found"
+	if err := m.CloseTab(ctx, "wR:tK", ""); !errors.As(err, &ie) || err.Error() != "not found" {
+		t.Errorf("session_xyz_not_found = %v, want inputError \"not found\"", err)
 	}
 	// Herdr asks the user to confirm closing a workspace's last tab: the
 	// close is refused with a code of termote's, not passed as Herdr's text.

@@ -43,6 +43,12 @@ const (
 	// each until its answer is written (escaped, up to six times the file);
 	// the next gets 429.
 	largeReadMaxRunning = 2
+	// readMaxRunning content reads of any size run at once, server-wide,
+	// each until its answer is written: a client that stops reading holds
+	// one for at most rawWriteTimeout, and the answers held in memory stay
+	// bounded (a 1 MiB file of control bytes escapes to about 6 MiB). The
+	// next gets 429.
+	readMaxRunning = 16
 )
 
 var (
@@ -52,6 +58,7 @@ var (
 	errBadEncoding    = inputError("unknown encoding")
 	errDecodeBusy     = &codedError{"busy", "too many files being decoded at once; try again", http.StatusTooManyRequests}
 	errLargeReadBusy  = &codedError{"busy", "too many large files being read at once; try again", http.StatusTooManyRequests}
+	errReadBusy       = &codedError{"busy", "too many files being read at once; try again", http.StatusTooManyRequests}
 )
 
 // rootChangedError: the client sent a root other than the pane's current one.
@@ -95,6 +102,8 @@ type filesAPI struct {
 	// largeReadSlots are the content reads past maxPreviewSize running,
 	// server-wide.
 	largeReadSlots chan struct{}
+	// readSlots are the content reads of any size running, server-wide.
+	readSlots chan struct{}
 	// writeDeny are directories a save never writes to, on top of deny:
 	// the install's data dir (its current pointer picks the binary the
 	// service runs) and the upload store.
@@ -150,6 +159,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		searchSlots:    make(chan struct{}, searchMaxRunning),
 		decodeSlots:    make(chan struct{}, decodeMaxRunning),
 		largeReadSlots: make(chan struct{}, largeReadMaxRunning),
+		readSlots:      make(chan struct{}, readMaxRunning),
 		deny:           slices.Concat(filesDenyDirs(systemDenyDirs...), filesDenyDirs(keyDirs()...), filesDenyDirs(denyDirs...)),
 		placeNow:       newTTLCache[string](placeCheckTTL),
 		mentioned:      newMentionedFiles(),
@@ -766,9 +776,9 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 }
 
 // content reads the file p for the content route, decoded from enc, or
-// from the encoding detectEncoding finds when enc is empty. A file past
-// maxPreviewSize takes one of largeReadSlots: release, when not nil, frees
-// it once the answer is written. linked: a path leaving the root is read
+// from the encoding detectEncoding finds when enc is empty. Every read takes
+// one of readSlots, and a file past maxPreviewSize one of largeReadSlots
+// too: release, when not nil, frees them once the answer is written. linked: a path leaving the root is read
 // when it leads into another work tree of the repository (rootFor).
 func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal bool, enc textEncoding, linked bool) (res any, release func(), err error) {
 	rel, err := cleanRelPath(p)
@@ -798,17 +808,25 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 		}
 		return sensitiveResponse{Root: root.Root, Path: slash, Sensitive: true}, nil, nil
 	}
-	// A view-only client never holds the last large-read or decode slot
-	// (takeSlot).
+	// A view-only client never holds the last read, large-read or decode
+	// slot (takeSlot).
 	viewOnly := requestRole(ctx) == roleView
+	if !takeSlot(f.readSlots, viewOnly) {
+		fh.Close()
+		return nil, nil, errReadBusy
+	}
+	release = func() { <-f.readSlots }
+	largeTaken := false
 	large := func() error {
-		if release != nil {
+		if largeTaken {
 			return nil
 		}
 		if !takeSlot(f.largeReadSlots, viewOnly) {
 			return errLargeReadBusy
 		}
-		release = func() { <-f.largeReadSlots }
+		largeTaken = true
+		read := release
+		release = func() { <-f.largeReadSlots; read() }
 		return nil
 	}
 	// Taken before the read by its size, and again after it for a file
@@ -816,7 +834,7 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 	if fi, err := fh.Stat(); err == nil && fi.Mode().IsRegular() && fi.Size() > maxPreviewSize && fi.Size() <= maxViewSize {
 		if err := large(); err != nil {
 			fh.Close()
-			return nil, nil, err
+			return nil, release, err
 		}
 	}
 	b, size, reason, err := readRawFile(fh, maxViewSize)

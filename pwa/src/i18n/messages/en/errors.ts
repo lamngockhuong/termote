@@ -231,6 +231,8 @@ export default {
   'errors.session_live': 'This session is running in another tab',
   'errors.session_not_found': 'This session is no longer in this folder',
   'errors.shell_busy': "The tab's shell is busy",
+  'errors.shell_refused':
+    'A message sent from the command line never starts with "!": the agent would run it as a shell command',
   'errors.signed_out': 'This sign-in has ended. Sign in again',
   'errors.socket_only': 'Only termote agents on this machine can do this',
   'errors.stale_hunk': 'The change no longer matches the file',

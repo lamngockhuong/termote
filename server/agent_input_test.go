@@ -1758,3 +1758,46 @@ func TestMessageRechecksDialogBeforePaste(t *testing.T) {
 		}
 	})
 }
+
+// postFromSocket is postJSON as the CLI sends it, over the local socket.
+func postFromSocket(t *testing.T, h http.Handler, path string, body any) (int, map[string]any) {
+	t.Helper()
+	b, _ := json.Marshal(body)
+	req := onLocalSocket(httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(b))))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var out map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &out)
+	return rec.Code, out
+}
+
+// A message from the CLI that the agent would run as a shell command ("!"
+// first, after any blank) is refused before anything is typed; text with a
+// "!" elsewhere, or after an image (then it is text, never a command), is
+// sent. The PWA's user may still send one.
+func TestMessageFromCLIRefusesShellEscape(t *testing.T) {
+	shortConfirm(t)
+	cur := cursorFor(testSessionID)
+	for _, text := range []string{"!touch /tmp/x", "  \n!id", "\t!ls"} {
+		f := newFakeWriter()
+		code, body := postFromSocket(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": text, "cursor": cur})
+		if code != http.StatusForbidden || body["code"] != "shell_refused" {
+			t.Errorf("%q from the CLI = %d %v, want 403 shell_refused", text, code, body)
+		}
+		if len(f.pasted) != 0 || len(f.keys) != 0 {
+			t.Errorf("%q from the CLI typed %v %v", text, f.pasted, f.keys)
+		}
+	}
+	f := newFakeWriter()
+	if code, body := postFromSocket(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "fix it!", "cursor": cur}); code != http.StatusNoContent {
+		t.Errorf("text with a later ! from the CLI = %d %v", code, body)
+	}
+	f = newFakeWriter()
+	if code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "!ls", "cursor": cur}); code != http.StatusNoContent || len(f.pasted) != 1 {
+		t.Errorf("! from the PWA = %d %v, pasted %v", code, body, f.pasted)
+	}
+	if !shellEscape([]string{" !x"}) || shellEscape([]string{"", "!x"}) || shellEscape([]string{"x !y"}) || shellEscape(nil) {
+		t.Error("shellEscape: wrong part or position")
+	}
+}

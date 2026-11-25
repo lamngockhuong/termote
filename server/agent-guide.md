@@ -121,7 +121,8 @@ Tell the user to see the password themselves:
 
 - `termote show-password` in a terminal of their own, not through you: a command they run through
   you (`!` in Claude Code) goes into your transcript too, and a view-only device watching the
-  terminal sees it;
+  terminal sees it. It shows the native server's password and the container's, each labelled: the
+  container has its own, which does not sign in to the native server;
 - or `termote panel`, which shows the links and a QR code to open on the phone.
 
 To sign a phone in without the password, the user can run `termote pair --role full` and enter

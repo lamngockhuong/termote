@@ -50,9 +50,14 @@ it when the terminals do not need your host tools (like `claude` or `git` as ins
 - The password and settings reach the container through the environment of the `docker`/`podman` process
   (`-e NAME`, no value), so they never appear on a command line or in a file on disk (`docker inspect` still shows
   them, as with any environment variable).
-- The container settings are saved apart from the native `termote start` options, but the username and password
-  are shared: a new one (`--user`, `--fresh`) applies to both, and the native server takes it at its next
+- The container settings are saved apart from the native `termote start` options, its password included: code
+  running in the container can read the container's password, so it opens only the container, never the native
+  server on the host. `--fresh` sets a new password for the container only; `termote show-password` shows both.
+  The username is shared: a new one (`--user`) applies to both, and the native server takes it at its next
   `termote restart`.
+- Updating from a version where the container shared the native password, the next `container up` gives the
+  container its own and says so once: browsers signed in to the container with the password sign in again,
+  and devices paired with the container pair again. The native server's are unaffected.
 - The container's default port is 7680. If the native server already uses that port, `container up` refuses and
   suggests `--port`.
 - From a git checkout, or with `--build`, it builds `termote:local` from the Dockerfile instead of pulling.
@@ -114,7 +119,7 @@ off with `=false`.
 | `--allow-path <dir>`        | Mount a host folder as a [Place](/usage/files/#places) in Files (repeatable; `--remove-path` drops one) |
 | `--workspace <dir>`         | Directory mounted at `/workspace` (default `~/termote-workspace`)      |
 | `--user <name>`             | Login username (default `admin`; shared with the native server)        |
-| `--fresh`                   | Set a new password (shared with the native server)                     |
+| `--fresh`                   | Set a new password for the container (not the native server's)         |
 | `--build`                   | Build the image from a checkout instead of pulling it                  |
 
 <Aside type="note" title="Windows and --lan">

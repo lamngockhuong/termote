@@ -101,7 +101,7 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 	pass := ""
 	r := statusReport{Port: port, Auth: true, URLs: c.accessURLs(saved, port)}
 	if saved != nil {
-		pass = saved.Password
+		pass = saved.passwordFor(port)
 		r.LAN, r.Auth, r.Tailscale, r.Cloudflare = saved.LAN, !saved.NoAuth, saved.Tailscale, saved.Cloudflare
 	}
 	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)

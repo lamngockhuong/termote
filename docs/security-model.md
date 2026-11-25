@@ -37,6 +37,10 @@ what Termote can reach, run it as another user with less access.
   Without the socket (the container, an older server) it falls back to TCP and the password, except to
   the native server on Windows, which gets the password over its pipe only: without the pipe the CLI
   reports that it did not send it.
+- The container (`termote container up`) has a password of its own, apart from the native server's
+  (only the username is shared). Code running in the container can read its password, which opens the
+  container only, never the native server on the host; the CLI sends each server its own password and
+  never the native one to the container's port. `termote show-password` shows both, each labelled.
 - Settings > Signed-in browsers and `termote signins` list the browsers signed in with the password (the
   sign-in form, Basic auth, a CLI link); each can be signed out, or every one but the current. A
   sign-out closes that browser's open terminals, one still opening included. A full device sees the list
@@ -149,7 +153,8 @@ what Termote can reach, run it as another user with less access.
   another user does not multiply that work. It can still slow the server through other means (using
   up ports, CPU); Termote does not promise to stop a local denial of service.
 - **The container and `termote serve` configured from the environment.** Neither checks the local user
-  of a connection, and the container has no CLI socket.
+  of a connection, and the container has no CLI socket. The container's password is in its environment,
+  so anything you run in the container can read it and sign in to the container.
 - **Sessions live in memory.** Restarting the server signs every browser out (devices stay paired).
 - **A sign-out ends the cookie, not the password.** A client that sends the password with every request
   (Basic auth) is signed in again at once; change the password for that.

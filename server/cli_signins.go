@@ -77,8 +77,8 @@ func (c *cli) listSignins() error {
 }
 
 // warnPasswordKnown: a sign-out ends the cookie, not what the browser knows.
-func (c *cli) warnPasswordKnown() {
-	c.warnf("If the password may be known, run `termote start --fresh`: a browser that has it signs in again.")
+func (c *cli) warnPasswordKnown(t deviceTarget) {
+	c.warnf("If the password may be known, run `%s`: a browser that has it signs in again.", t.freshCommand())
 }
 
 // devicesRevokedNote says how many paired devices a sign-out revoked with it
@@ -109,11 +109,12 @@ func (c *cli) revokeSignin(id string) error {
 		SignedOut *bool `json:"signedOut"`
 		Devices   int   `json:"devices"`
 	}
-	err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins/"+url.PathEscape(id), nil, &res, signinCallErrs)
+	t := c.deviceTarget()
+	err := c.serverCall(t, http.MethodDelete, "/api/mux/signins/"+url.PathEscape(id), nil, &res, signinCallErrs)
 	switch {
 	case errors.Is(err, errDevicesKept):
 		c.infof("Signed out browser %s: its open terminals are closed", id)
-		c.warnPasswordKnown()
+		c.warnPasswordKnown(t)
 		return err
 	case err != nil:
 		return err
@@ -122,7 +123,7 @@ func (c *cli) revokeSignin(id string) error {
 	default:
 		c.infof("Signed out browser %s: its open terminals are closed%s", id, devicesRevokedNote(res.Devices))
 	}
-	c.warnPasswordKnown()
+	c.warnPasswordKnown(t)
 	return nil
 }
 
@@ -134,16 +135,17 @@ func (c *cli) revokeAllSignins() error {
 		Revoked int  `json:"revoked"`
 		Devices int  `json:"devices"`
 	}
-	err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins", nil, &res, signinCallErrs)
+	t := c.deviceTarget()
+	err := c.serverCall(t, http.MethodDelete, "/api/mux/signins", nil, &res, signinCallErrs)
 	if errors.Is(err, errDevicesKept) {
 		c.infof("Signed out the browsers: their open terminals are closed")
-		c.warnPasswordKnown()
+		c.warnPasswordKnown(t)
 		return err
 	}
 	if err != nil {
 		return err
 	}
 	c.infof("Signed out %s: their open terminals are closed%s", plural(res.Revoked, "browser"), devicesRevokedNote(res.Devices))
-	c.warnPasswordKnown()
+	c.warnPasswordKnown(t)
 	return nil
 }

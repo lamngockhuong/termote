@@ -79,6 +79,7 @@ jobs:
           # The whole history: each page's "last updated" date and its sitemap
           # lastmod come from the last commit to its source
           fetch-depth: 0
+          persist-credentials: false
 
       # Before any dependency runs: the commit is the tag's (as release.yml
       # passed it, or as checked out), on main, and already that version
@@ -247,6 +248,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.build.outputs.sha }}
+          persist-credentials: false
 
       - name: Check the served installers, agent guide and llms files
         run: |

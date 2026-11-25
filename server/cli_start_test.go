@@ -222,30 +222,97 @@ func TestDetectMux(t *testing.T) {
 
 func TestSetupAuth(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	pass, reused, _ := tc.setupAuth(startOptions{}, &savedConfig{Password: "kept"})
+	pass, reused, _ := tc.setupAuth(startOptions{}, nativeAuth(&savedConfig{Password: "kept"}))
 	if pass != "kept" || !reused {
 		t.Fatalf("saved password not reused: %q %v", pass, reused)
 	}
-	pass, reused, _ = tc.setupAuth(startOptions{fresh: true}, &savedConfig{Password: "kept"})
+	pass, reused, _ = tc.setupAuth(startOptions{fresh: true}, nativeAuth(&savedConfig{Password: "kept"}))
 	if pass == "kept" || reused || len(pass) != 12 {
 		t.Fatalf("--fresh reused password: %q", pass)
 	}
 	// Auth on and no saved password: a new one is set, never no auth.
-	if pass, _, _ = tc.setupAuth(startOptions{}, &savedConfig{}); len(pass) != 12 {
+	if pass, _, _ = tc.setupAuth(startOptions{}, nativeAuth(&savedConfig{})); len(pass) != 12 {
 		t.Fatalf("empty saved password: %q", pass)
 	}
 	tc.stdout.Reset()
-	tc.setupAuth(startOptions{}, &savedConfig{PasswordUnreadable: true})
+	tc.setupAuth(startOptions{}, nativeAuth(&savedConfig{PasswordUnreadable: true}))
 	if !strings.Contains(tc.stdout.String(), "cannot be decrypted") {
 		t.Fatalf("unreadable password not reported: %q", tc.stdout.String())
 	}
-	if pass, _, _ := tc.setupAuth(startOptions{noAuth: true}, &savedConfig{Password: "x"}); pass != "" {
+	tc.stdout.Reset()
+	tc.setupAuth(startOptions{}, containerAuth(&savedConfig{Container: &containerConfig{PasswordUnreadable: true}}))
+	if !strings.Contains(tc.stdout.String(), "container password cannot be decrypted") {
+		t.Fatalf("unreadable container password not reported: %q", tc.stdout.String())
+	}
+	if pass, _, _ := tc.setupAuth(startOptions{noAuth: true}, nativeAuth(&savedConfig{Password: "x"})); pass != "" {
 		t.Fatalf("--no-auth returned password %q", pass)
 	}
 	tc.interactive = true
 	tc.readPassword = func() (string, error) { return "typed-in", nil }
-	if pass, _, _ := tc.setupAuth(startOptions{}, nil); pass != "typed-in" {
+	if pass, _, _ := tc.setupAuth(startOptions{}, nativeAuth(nil)); pass != "typed-in" {
 		t.Fatalf("typed password ignored: %q", pass)
+	}
+}
+
+// Each side reads its own saved password and never takes the other's, not
+// even when it has none or is asked for a new one.
+func TestSetupAuthKeepsTheSidesApart(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	saved := &savedConfig{Password: "native-pass", Container: &containerConfig{Port: 7680, Password: "container-pass"}}
+	if pass, reused, _ := tc.setupAuth(startOptions{}, containerAuth(saved)); pass != "container-pass" || !reused {
+		t.Fatalf("container: %q %v", pass, reused)
+	}
+	if pass, reused, _ := tc.setupAuth(startOptions{}, nativeAuth(saved)); pass != "native-pass" || !reused {
+		t.Fatalf("native: %q %v", pass, reused)
+	}
+	// A config from before the container had its own password.
+	old := &savedConfig{Password: "native-pass", Container: &containerConfig{Port: 7680}}
+	if pass, reused, _ := tc.setupAuth(startOptions{}, containerAuth(old)); pass == "native-pass" || reused || len(pass) != 12 {
+		t.Fatalf("old config: container got %q %v", pass, reused)
+	}
+	// A typed password equal to the other side's is refused.
+	tc.interactive = true
+	tc.readPassword = func() (string, error) { return "native-pass", nil }
+	tc.stdout.Reset()
+	if pass, _, _ := tc.setupAuth(startOptions{fresh: true}, containerAuth(saved)); pass == "native-pass" || len(pass) != 12 {
+		t.Fatalf("container took the native password: %q", pass)
+	}
+	if !strings.Contains(tc.stdout.String(), "other server's password") {
+		t.Errorf("refusal not reported: %q", tc.stdout.String())
+	}
+	tc.readPassword = func() (string, error) { return "container-pass", nil }
+	if pass, _, _ := tc.setupAuth(startOptions{fresh: true}, nativeAuth(saved)); pass == "container-pass" {
+		t.Fatalf("native took the container password: %q", pass)
+	}
+	// --no-auth keeps each side's own saved one.
+	if got := keptPassword("", nativeAuth(saved).pass); got != "native-pass" {
+		t.Errorf("native --no-auth keeps %q", got)
+	}
+	if got := keptPassword("", containerAuth(saved).pass); got != "container-pass" {
+		t.Errorf("container --no-auth keeps %q", got)
+	}
+}
+
+// The CLI sends the container's password to the container's port and the
+// native one elsewhere: never the native one to the container's port.
+func TestPasswordFor(t *testing.T) {
+	saved := &savedConfig{Port: 7680, Password: "native-pass", Container: &containerConfig{Port: 7681, Password: "container-pass"}}
+	if got := saved.passwordFor(7681); got != "container-pass" {
+		t.Errorf("container port: %q", got)
+	}
+	if got := saved.passwordFor(7680); got != "native-pass" {
+		t.Errorf("native port: %q", got)
+	}
+	saved.Container.Port = 7680
+	if got := saved.passwordFor(7680); got != "container-pass" {
+		t.Errorf("a port both are saved on: %q", got)
+	}
+	saved.Container.Password = ""
+	if got := saved.passwordFor(7680); got != "" {
+		t.Errorf("container without a password got %q", got)
+	}
+	if got := (*savedConfig)(nil).passwordFor(7680); got != "" {
+		t.Errorf("no config: %q", got)
 	}
 }
 

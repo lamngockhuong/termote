@@ -128,8 +128,13 @@ Manual testing checklist for Termote features before release.
 - [ ] `container up --build` (from a checkout) builds `termote:local` instead of pulling
 - [ ] A native server already on the port makes `container up` refuse with a hint
 - [ ] `container down` / `container logs [-f]` / `container status` work
-- [ ] Setting a new password with `--fresh` on either side updates the other's saved password too
-- [ ] `--no-auth` keeps the previously saved shared password (does not clear it)
+- [ ] `container up` never passes the native password: the container's `TERMOTE_PASS` differs from it, and
+      the container's password does not sign in to the native server
+- [ ] On a config an older version saved (container without its own password), `container up` sets a new
+      container password, says so once, and leaves the native one unchanged
+- [ ] `container up --fresh` changes only the container's password, `start --fresh` only the native one
+- [ ] `--no-auth` on either side keeps that side's saved password (does not clear it)
+- [ ] `termote show-password` shows the username and each saved password, labelled native and container
 
 ### Options (`start` and `container up`)
 

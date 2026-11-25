@@ -624,3 +624,19 @@ func TestZellijNewSessionWaitsUntilListed(t *testing.T) {
 		t.Errorf("commands:\n%s", got)
 	}
 }
+
+// A pane's title is what its program sets (an OSC title from output it
+// prints): cleaned and capped like Herdr's and hc's, so one long title does
+// not swell every snapshot.
+func TestZellijPaneTitleCapped(t *testing.T) {
+	m := newTestZellijMux()
+	long := strings.Repeat("t", 4096) + "‮"
+	g := m.buildGroup("main", zellijRead{
+		tabs:  []zellijTabInfo{{TabID: 0, Name: "tab"}},
+		panes: []zellijPaneInfo{{ID: 1, Title: long}},
+	})
+	title := g.Tabs[0].Panes[0].Title
+	if len(title) > maxPaneName || strings.ContainsRune(title, '‮') {
+		t.Errorf("title is %d bytes (%q...), want at most %d with no bidi control", len(title), title[:min(len(title), 16)], maxPaneName)
+	}
+}

@@ -123,8 +123,13 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `container up --build` (từ một checkout) build `termote:local` thay vì kéo image có sẵn
 - [ ] Khi một server native đã chiếm cổng, `container up` từ chối kèm gợi ý
 - [ ] `container down` / `container logs [-f]` / `container status` hoạt động
-- [ ] Đặt mật khẩu mới bằng `--fresh` ở một phía cũng cập nhật mật khẩu đã lưu ở phía kia
-- [ ] `--no-auth` vẫn giữ nguyên mật khẩu chung đã lưu (không xóa nó)
+- [ ] `container up` không bao giờ truyền mật khẩu native: `TERMOTE_PASS` của container khác nó, và
+      mật khẩu của container không đăng nhập được vào server native
+- [ ] Với cấu hình do phiên bản cũ lưu (container chưa có mật khẩu riêng), `container up` đặt mật khẩu
+      container mới, báo một lần, và giữ nguyên mật khẩu native
+- [ ] `container up --fresh` chỉ đổi mật khẩu của container, `start --fresh` chỉ đổi mật khẩu native
+- [ ] `--no-auth` ở phía nào cũng giữ nguyên mật khẩu đã lưu của phía đó (không xóa nó)
+- [ ] `termote show-password` hiện tên đăng nhập và từng mật khẩu đã lưu, ghi rõ native và container
 
 ### Tùy Chọn (`start` và `container up`)
 

@@ -33,6 +33,7 @@ then marked `"self": true` among the agents); when it is absent, ask the user wh
 termote agents list [--json]                  # every agent: pane id, workspace, name, status, directory
 termote agents read <pane> [--all] [--json]   # its last turn: the request and everything since
 termote agents send <pane> '<message>'        # or: ... | termote agents send <pane> -
+                                              # a message starting with ! (a shell command there) is refused: ask the agent instead
 termote agents wait <pane>@<seq>... [--timeout 20m]  # until one ends a turn or needs an answer
 termote agents answer <pane>                  # show the dialog it waits on
 termote agents answer <pane> <number>         # or: cancel | next | --text '<answer>'

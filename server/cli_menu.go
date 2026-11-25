@@ -161,22 +161,54 @@ func (c *cli) menuStart() error {
 	return c.cmdStart(args)
 }
 
+// cmdShowPassword prints the username and the saved passwords, the native
+// server's and the container's, each labelled; a side without one (never
+// set up, --no-auth, unreadable) is named instead.
 func (c *cli) cmdShowPassword() error {
 	cfg, err := c.loadConfig()
 	if err != nil {
 		return err
 	}
-	switch {
-	case cfg == nil:
+	if cfg == nil {
 		return fmt.Errorf("no saved config at %s; run 'termote start' first", c.configFile())
-	case cfg.NoAuth:
-		c.infof("Authentication is disabled (started with --no-auth)")
-		return nil
-	case cfg.PasswordUnreadable:
-		return errors.New("the saved password cannot be decrypted by this user on this machine; reset it with: termote start --fresh")
-	case cfg.Password == "":
-		return errors.New("no password saved; set one with: termote start --fresh")
 	}
-	fmt.Fprintf(c.out, "Username: %s\nPassword: %s\n", cfg.authUser(), cfg.Password)
+	type side struct {
+		label, pass, fresh string
+		noAuth, unreadable bool
+	}
+	var sides []side
+	// A config only container up saved has no native server to name.
+	if cfg.Container == nil || cfg.Port != 0 || cfg.Password != "" || cfg.PasswordUnreadable {
+		sides = append(sides, side{label: "Native password", pass: cfg.Password, fresh: freshCommand(false), noAuth: cfg.NoAuth, unreadable: cfg.PasswordUnreadable})
+	}
+	if cc := cfg.Container; cc != nil {
+		sides = append(sides, side{label: "Container password", pass: cc.Password, fresh: freshCommand(true), noAuth: cc.NoAuth, unreadable: cc.PasswordUnreadable})
+	}
+	var lines, notes []string
+	allNoAuth := true
+	for _, s := range sides {
+		allNoAuth = allNoAuth && s.noAuth
+		switch {
+		case s.noAuth:
+			notes = append(notes, fmt.Sprintf("%s: none, authentication is disabled (--no-auth)", s.label))
+		case s.unreadable:
+			notes = append(notes, fmt.Sprintf("%s: cannot be decrypted by this user on this machine; reset it with: %s", s.label, s.fresh))
+		case s.pass == "":
+			notes = append(notes, fmt.Sprintf("%s: none saved; set one with: %s", s.label, s.fresh))
+		default:
+			lines = append(lines, fmt.Sprintf("%s: %s", s.label, s.pass))
+		}
+	}
+	if len(lines) == 0 {
+		if allNoAuth {
+			c.infof("Authentication is disabled (started with --no-auth)")
+			return nil
+		}
+		return errors.New(strings.Join(notes, "; "))
+	}
+	fmt.Fprintf(c.out, "Username: %s\n%s\n", cfg.authUser(), strings.Join(lines, "\n"))
+	for _, n := range notes {
+		c.infof("%s", n)
+	}
 	return nil
 }

@@ -1917,6 +1917,15 @@ func (m *herdrMux) requirePane(ctx context.Context, id string) (Size, error) {
 	return size, nil
 }
 
+// herdrNotFound is the client's text for each "not found" code herdr
+// replies with; any other such code reads "not found". The text is
+// termote's own: none of herdr's reaches a client.
+var herdrNotFound = map[string]string{
+	"tab_not_found":       "tab not found",
+	"workspace_not_found": "workspace not found",
+	"agent_not_found":     "agent not found",
+}
+
 // herdrInputError turns herdr's "not found" replies (the target vanished
 // between the check and the call) into client errors.
 func herdrInputError(err error) error {
@@ -1925,7 +1934,11 @@ func herdrInputError(err error) error {
 		return errUnknownPane
 	}
 	if errors.As(err, &he) && strings.HasSuffix(he.Code, "_not_found") {
-		return inputError(strings.ReplaceAll(he.Code, "_", " "))
+		msg, ok := herdrNotFound[he.Code]
+		if !ok {
+			msg = "not found"
+		}
+		return inputError(msg)
 	}
 	return err
 }

@@ -274,7 +274,7 @@ func TestMenu(t *testing.T) {
 	tc.saveConfig(savedConfig{Password: "From-Menu"})
 	tc.in = bufio.NewReader(strings.NewReader("x\n99\n8\n"))
 	tc.stdout.Reset()
-	if code := tc.main([]string{"menu"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: From-Menu") {
+	if code := tc.main([]string{"menu"}); code != 0 || !strings.Contains(tc.stdout.String(), "Native password: From-Menu") {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 }

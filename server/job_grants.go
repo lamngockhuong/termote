@@ -158,8 +158,14 @@ func (a *agentAPI) handleGrants(w http.ResponseWriter, r *http.Request) {
 			if j.Worktree != nil && j.Worktree.Dir != "" && !live.OutsideWorktree {
 				g.Dir = j.Worktree.Dir
 			}
-			if first, _, _ := strings.Cut(g.Prefix, " "); g.Dir == "" && isDelegateTool(first) {
+			first, _, _ := strings.Cut(g.Prefix, " ")
+			if g.Dir == "" && isDelegateTool(first) {
 				return invalidJob("the agent's folder is not known: a grant for " + first + " needs it")
+			}
+			// A tool reads the files of its folder: never the home dir's,
+			// which hold every key and token of the user.
+			if isDelegateTool(first) && jobDirTooWide(g.Dir, a.home) {
+				return invalidJob("the agent works in the home folder or above it: a grant for " + first + " needs a project folder")
 			}
 		}
 		if g.Kind == "edit" {
