@@ -324,7 +324,8 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   title read more than 2 s after the rename, a session rename or a restart of the server forgets
   it). Every name a backend reports (another process
   can set Herdr's label over its socket, or the tmux option) is `stripUnsafeRunes` and capped
-  at 64 bytes (`cleanPaneName`). So is every tab and group name (tmux window and session, Herdr tab
+  at 64 bytes (`cleanPaneName`), as is every pane title a backend reports (Herdr, hc and Zellij,
+  whose `list-panes` title is the one a program in the pane set, `TestZellijPaneTitleCapped`). So is every tab and group name (tmux window and session, Herdr tab
   and workspace label, Zellij tab), which a pane's output can set through a terminal title, but
   not trimmed (`cleanLabel`). Metadata is read only, never written by termote: Herdr's
   `panes[].tokens` and `workspaces[].tokens`, which any process that reaches Herdr's socket
@@ -412,7 +413,9 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   id → 409); without a key, as before. `CloseTab` has a second caller, job finish, which passes the
   key its snapshot read. Herdr's `confirmation_required` for `tab.close` (the last tab of a workspace
   with `ui.confirm_close` on; its API takes no confirmation) is 409 `tab_confirm_required`, the user
-  closing it in Herdr; the other replies map as before (`herdrInputError`). hc renames a tab by writing its `name` into herdr-app's
+  closing it in Herdr; the other replies map as before (`herdrInputError`: `pane_not_found` →
+  `unknown_pane`, any other `*_not_found` → 400 with a text of termote's own from a fixed table,
+  "not found" for a code it does not know, never Herdr's code or text). hc renames a tab by writing its `name` into herdr-app's
   document (`doc.set`, above; `caps.renameTab` only once a document is read; a tab placed by its
   labels alone → 404 `unknown_tab`). Accepted gaps: deep links and saved selections to a shifted
   index open another tab; `send-keys` and the stream carry no key, so keys typed on another

@@ -148,10 +148,13 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   which a view-only client never takes the last free one (`takeSlot`); a UTF-8 read none. It reads at most 4 MiB (`maxViewSize`, past it `previewable: false`,
   `too-large`); a save, a discard, content search and a whole-file diff stay at 1 MiB
   (`maxPreviewSize`), so a file shown past that is `editable: false`, `notEditable: too-large`.
-  A read past 1 MiB (by its size before the read, or the bytes read) takes one of 2 server-wide
-  `largeReadSlots` (429 `busy`; a view-only client never takes the last free one, `takeSlot`), held until the answer is written under a 2-minute write deadline
-  (its JSON escapes `<`, `>`, `&` and control bytes to six bytes each); a sensitive name not
-  revealed takes none.
+  Every read, of any size, takes one of 16 server-wide `readSlots`, and a read past 1 MiB (by its
+  size before the read, or the bytes read) one of 2 server-wide `largeReadSlots` too (429 `busy`; a
+  view-only client never takes the last free one of either, `takeSlot`), held until the answer is
+  written under a 2-minute write deadline (its JSON escapes `<`, `>`, `&` and control bytes to six
+  bytes each, so a 1 MiB file of control bytes answers about 6 MiB): many clients that never read
+  their answers hold at most 16 of them in memory, each for 2 minutes at most
+  (`TestFilesContentReadViewLeavesLastSlot`); a sensitive name not revealed takes none.
   The answer is gzipped when `Accept-Encoding` takes gzip (`jsonOKGzip`, `Vary: Accept-Encoding`):
   it holds a file's text and hash but no session token; a browser request from another site carries
   no session (`SameSite=Strict` cookies) or is refused by `Sec-Fetch-Site`/`Origin`, and the PWA
@@ -272,7 +275,9 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   sensitive name answers `sensitive` without its text unless `reveal`; a view-only client sees only
   the files it could open, never a deleted file's or a rename source's text, and never reveals.
   Errors are codes (`invalid_base`, `base_not_found`, `base_required`, `no_merge_base`); git's text
-  is logged only.
+  is logged only. `merge-base` and `rev-list --count`, whose cost grows with the history, run as
+  heavy commands (the git semaphore, one per root), so a client's requests, a view-only one's
+  included, never start more of them at once than it allows.
 - **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
   operator names on the host with `termote start --allow-path <dir>` / `--remove-path <dir>`
   (saved like `--allow-host`, `TERMOTE_ALLOWED_PATHS` `:`-separated on Unix, refused by the Unix

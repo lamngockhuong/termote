@@ -87,6 +87,47 @@ func TestFilesContentLargeReadViewLeavesLastSlot(t *testing.T) {
 	}
 }
 
+// Every content read takes a slot until its answer is written, small ones
+// too: many clients that never read their answers cannot pile them up in
+// memory. A view-only client never takes the last; each read gives its
+// slot back.
+func TestFilesContentReadViewLeavesLastSlot(t *testing.T) {
+	fx := newEncFixture(t)
+	small := strings.Repeat("\x01", 4096)
+	if err := os.WriteFile(filepath.Join(fx.root, "small.txt"), []byte(small), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	viewReadable(t, fx.root)
+	q := url.Values{"path": {"small.txt"}}
+	if code, body := fx.contentAs(t, true, q); code != http.StatusOK || body["text"] != small {
+		t.Fatalf("view-only with free slots = %d %v", code, body["code"])
+	}
+	if len(fx.f.readSlots) != 0 {
+		t.Fatalf("slots held after the answer = %d", len(fx.f.readSlots))
+	}
+	fillSlotsButOne(t, fx.f.readSlots)
+	if code, body := fx.contentAs(t, true, q); code != http.StatusTooManyRequests || body["code"] != "busy" {
+		t.Errorf("view-only = %d %v", code, body["code"])
+	}
+	if code, body := fx.contentAs(t, false, q); code != http.StatusOK || body["text"] != small {
+		t.Errorf("full = %d %v", code, body["code"])
+	}
+	if len(fx.f.readSlots) != cap(fx.f.readSlots)-1 {
+		t.Errorf("slots held = %d", len(fx.f.readSlots))
+	}
+	// A large read takes both, and gives both back.
+	big := strings.Repeat("a\n", maxPreviewSize/2+1)
+	if err := os.WriteFile(filepath.Join(fx.root, "big.txt"), []byte(big), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.contentAs(t, false, url.Values{"path": {"big.txt"}}); code != http.StatusOK || body["text"] != big {
+		t.Errorf("large = %d %v", code, body["code"])
+	}
+	if len(fx.f.readSlots) != cap(fx.f.readSlots)-1 || len(fx.f.largeReadSlots) != 0 {
+		t.Errorf("after a large read: read slots %d, large %d", len(fx.f.readSlots), len(fx.f.largeReadSlots))
+	}
+}
+
 func TestFilesContentDecodeViewLeavesLastSlot(t *testing.T) {
 	fx := newEncFixture(t)
 	viewReadable(t, fx.root)

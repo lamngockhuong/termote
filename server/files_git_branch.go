@@ -82,7 +82,12 @@ func (f *filesAPI) branchRange(ctx context.Context, root filesRoot, base string)
 	if from == "" {
 		return br, errBaseNotFound
 	}
-	out, _, err := f.git.output(ctx, c, "merge-base", from, head)
+	// Its cost grows with the history: heavy, so the requests of a client
+	// (a view-only one included) never run more of them at once than the
+	// semaphore allows.
+	hc := c
+	hc.heavy = true
+	out, _, err := f.git.output(ctx, hc, "merge-base", from, head)
 	var ge *gitError
 	if errors.As(err, &ge) && len(bytes.TrimSpace(out)) == 0 && ctx.Err() == nil {
 		return br, errNoMergeBase
@@ -173,7 +178,7 @@ func (f *filesAPI) handleBranch(w http.ResponseWriter, r *http.Request) {
 		res.Branch, res.Base = br.branch, br.base
 		if br.head != "" {
 			res.MergeBase = br.mergeBase[:12]
-			out, _, err := f.git.output(req.ctx, gitCall{root: req.root.Root, safeDir: req.root.SafeDir}, "rev-list", "--count", br.mergeBase+".."+br.head)
+			out, _, err := f.git.output(req.ctx, gitCall{root: req.root.Root, safeDir: req.root.SafeDir, heavy: true}, "rev-list", "--count", br.mergeBase+".."+br.head)
 			if err != nil {
 				f.error(w, "git branch", err)
 				return
