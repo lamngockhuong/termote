@@ -285,7 +285,7 @@ before grants kept a folder is revoked when the server starts.
 
 Type the command in full: `pnpm run lint`, not `pnpm lint` (nor `yarn workspace a lint`), and a
 script command needs the script's name (`npm run` alone is refused). `install`, `ci` and `npm audit`
-take no package name (`pnpm install x` and `npm audit fix` are refused). The program is its bare name
+take no package name: an install that names a package is refused, and so is `npm audit fix`. The program is its bare name
 (`rg`, not `/usr/bin/rg` or `rg.exe`). Every other program is refused, a shell, an interpreter,
 `git`, `make`, `tar`, `docker`, `npx`, `brew` and `gem` among them. A grant given under older rules
 whose prefix the list refuses (a bare `npm`) answers nothing, and the server revokes it when it

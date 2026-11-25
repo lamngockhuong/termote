@@ -284,7 +284,7 @@ công cụ này được cấp trước khi có quy tắc thư mục sẽ bị t
 
 Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (`yarn workspace a lint` cũng không
 được), và lệnh chạy script cần có tên script (`npm run` mà thiếu tên script sẽ bị từ chối). `install`,
-`ci` và `npm audit` không được kèm tên gói (`pnpm install x` và `npm audit fix` bị từ chối). Chỉ gõ tên
+`ci` và `npm audit` không được kèm tên gói: lệnh cài có nêu tên gói bị từ chối, `npm audit fix` cũng vậy. Chỉ gõ tên
 chương trình, không kèm đường dẫn hay đuôi (`rg`, không phải `/usr/bin/rg` hay `rg.exe`). Mọi chương
 trình khác đều bị từ chối, trong đó có shell, trình thông dịch, `git`, `make`, `tar`, `docker`, `npx`,
 `brew` và `gem`. Những ủy quyền cấp theo quy tắc cũ có tiền tố không còn hợp lệ (ví dụ chỉ có `npm`) sẽ
