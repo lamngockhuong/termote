@@ -897,6 +897,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   and only ever to a group whose folder resolves to the job's own `repo`. Job finish lists worktrees
   from that group too and still removes only a folder that list names (`TestJobRepoRecorded`,
   `TestJobRepoWorkspaceNow`, `TestJobFinishAfterWorkspaceRecreated`).
+  The PWA takes a job only with an id as `newTemplateID` makes it, 16 lowercase hex digits (`isJob`,
+  `pwa/src/hooks/use-mux-api.ts`): a listing leaves any other out, a reply carrying one is refused
+  and a `job_conflict` keeps no job, since another machine's jobs arrive through the machine proxy as
+  that machine wrote them. The Copy ID line marks every unsafe character as `⟨U+XXXX⟩`, tab and line
+  feed included (`markAllUnsafe`), so a line pasted into a shell holds no control character
+  (`use-mux-api-jobs.test.ts`, `job-detail.test.tsx`).
 - **Orchestrator asks** (`/api/mux/asks*`, `POST /api/mux/asks/{id}/dismiss` among them,
   `server/ask_store.go`, `server/ask_routes.go`, `server/cli_agents_ask.go`): an ask is `open`,
   `answered` or `dismissed`. The orchestrator's questions for the user live in `jobs.json` (`asks`,
