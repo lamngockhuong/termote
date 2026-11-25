@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.33.0](https://github.com/lamngockhuong/termote/compare/v2.32.0...v2.33.0) (2026-11-25)
+
+
+### Features
+
+* **agents:** finish a job by closing its tab and removing its worktree ([#970](https://github.com/lamngockhuong/termote/issues/970)) ([0b07db1](https://github.com/lamngockhuong/termote/commit/0b07db167e9914cff14ee1b2955904ad1dc2868b))
+* **agents:** keep the orchestrator's questions for the user and answer them in the PWA ([#960](https://github.com/lamngockhuong/termote/issues/960)) ([be98fcf](https://github.com/lamngockhuong/termote/commit/be98fcfab0ac76892d9084ae13c8a56e4d3361ee))
+* dismiss an orchestrator question from the PWA ([#982](https://github.com/lamngockhuong/termote/issues/982)) ([06eb75a](https://github.com/lamngockhuong/termote/commit/06eb75a81a11d5ada3cd57fc2357d2ed75ecf824))
+* **jobs:** priority, dependencies and workspace for the job ledger ([#983](https://github.com/lamngockhuong/termote/issues/983)) ([26710b5](https://github.com/lamngockhuong/termote/commit/26710b54c30000780de434b30c25e0b85e950940))
+* **machines:** show a machine's Plan tab and answer its orchestrator's questions ([#969](https://github.com/lamngockhuong/termote/issues/969)) ([fd62c3d](https://github.com/lamngockhuong/termote/commit/fd62c3d12e52cca0b5fb6b9fc3bdb692a86fd203))
+* **pwa:** add an accent color shared by every style ([#959](https://github.com/lamngockhuong/termote/issues/959)) ([e2a6428](https://github.com/lamngockhuong/termote/commit/e2a64289321e40cdfa683e596da078fd2bf2d8f2))
+* **pwa:** copy a job's id from its details to point an agent at it ([#978](https://github.com/lamngockhuong/termote/issues/978)) ([65b226b](https://github.com/lamngockhuong/termote/commit/65b226ba3f90dc8a3e83baa8c981c8025f7857c5))
+* **pwa:** count waiting orchestrator questions on the overview button and list them in its chat ([#973](https://github.com/lamngockhuong/termote/issues/973)) ([41bd303](https://github.com/lamngockhuong/termote/commit/41bd303cbb8dfb517c5d13701dfa26f31e07b3a3))
+* **pwa:** hide workspaces on this browser ([#997](https://github.com/lamngockhuong/termote/issues/997)) ([9b71086](https://github.com/lamngockhuong/termote/commit/9b71086b35fcf5cd20521f88ca3798372c582fcd))
+* **pwa:** show how to install the orchestrator skill from the Plan tab ([#981](https://github.com/lamngockhuong/termote/issues/981)) ([88ae7b4](https://github.com/lamngockhuong/termote/commit/88ae7b4f05694dd3869f6f1a26ec3dd528ed73b3))
+* **server:** hold dialog grants to an allowlist of programs and commands ([#1002](https://github.com/lamngockhuong/termote/issues/1002)) ([7f0869d](https://github.com/lamngockhuong/termote/commit/7f0869ddeedaa6a8bee51b99221edb9eba0c53a6))
+* tell when finished jobs are removed and mark the ones close to it ([#984](https://github.com/lamngockhuong/termote/issues/984)) ([5283525](https://github.com/lamngockhuong/termote/commit/528352586347a43d2c16ea393cb8b4b8102c1f97))
+
+
+### Bug Fixes
+
+* **agents:** mark a turn read on a job in review too ([#968](https://github.com/lamngockhuong/termote/issues/968)) ([f1fe66a](https://github.com/lamngockhuong/termote/commit/f1fe66a6382a2171e4b56b16c639463ada01889c))
+* **agents:** read the host of an SSH remote alias with ssh -G for job ci ([#995](https://github.com/lamngockhuong/termote/issues/995)) ([df85a4a](https://github.com/lamngockhuong/termote/commit/df85a4af797c037daecd80cefd1ea52d4798eb4b))
+* **deps:** update astro monorepo ([#958](https://github.com/lamngockhuong/termote/issues/958)) ([c7b6194](https://github.com/lamngockhuong/termote/commit/c7b6194914d72fa5b48a6f8ab89eb5738b56f6ef))
+* **deps:** update dependency @astrojs/starlight to v0.43.1 ([#785](https://github.com/lamngockhuong/termote/issues/785)) ([410115f](https://github.com/lamngockhuong/termote/commit/410115fe9de5130841c9c3b7b65a23b4cc74b289))
+* **deps:** update dependency lucide-react to v1.77.0 ([#988](https://github.com/lamngockhuong/termote/issues/988)) ([f86edbc](https://github.com/lamngockhuong/termote/commit/f86edbccdd6b054bdba1e8516cdce341c6512654))
+* **deps:** update dependency pdfjs-dist to v6.5.438 ([#989](https://github.com/lamngockhuong/termote/issues/989)) ([fa04bfe](https://github.com/lamngockhuong/termote/commit/fa04bfe79ed2e5f10c2c63b5fd46010dc90ade1b))
+* **deps:** update dependency pele to v1.13.0 ([#990](https://github.com/lamngockhuong/termote/issues/990)) ([450acc4](https://github.com/lamngockhuong/termote/commit/450acc4ffd13b3df63fdbbc989ce102e4fad7d7c))
+* **deps:** update dependency shiki to v4.6.0 ([#991](https://github.com/lamngockhuong/termote/issues/991)) ([ba07e95](https://github.com/lamngockhuong/termote/commit/ba07e95a84df412f2a4453056eec69efc9fe18d8))
+* **deps:** update dependency starlight-versions to v0.10.2 ([#966](https://github.com/lamngockhuong/termote/issues/966)) ([5abf7cd](https://github.com/lamngockhuong/termote/commit/5abf7cd5eb5d4626c1f932b2f401053289c7da69))
+* **deps:** update module golang.org/x/sys to v0.50.0 ([#992](https://github.com/lamngockhuong/termote/issues/992)) ([48d438e](https://github.com/lamngockhuong/termote/commit/48d438e2062593199c89889a1f801e3491abae64))
+* **deps:** update module golang.org/x/text to v0.44.0 ([#993](https://github.com/lamngockhuong/termote/issues/993)) ([9f03ae6](https://github.com/lamngockhuong/termote/commit/9f03ae6ba40827a4cbc32062f316d890f94c0d38))
+* **pwa:** fold the waiting questions in a chat and stop them scrolling the whole chat ([#975](https://github.com/lamngockhuong/termote/issues/975)) ([fa4701d](https://github.com/lamngockhuong/termote/commit/fa4701db45bb4dcefc424f9990d73f7b1da0625c))
+* **pwa:** give selected accent text on the tint 4.5:1 in every style ([#1006](https://github.com/lamngockhuong/termote/issues/1006)) ([2b68a76](https://github.com/lamngockhuong/termote/commit/2b68a76e35a05fb6d6ee8e8ecd305d0f3297e2d6)), closes [#963](https://github.com/lamngockhuong/termote/issues/963)
+* **pwa:** keep a job's details in view beside a long Plan list ([#974](https://github.com/lamngockhuong/termote/issues/974)) ([e9e026c](https://github.com/lamngockhuong/termote/commit/e9e026c8c931e8c648132e7ff328d2bcb98cf785))
+* **pwa:** leave a gap between an accent dot and its selection ring ([#964](https://github.com/lamngockhuong/termote/issues/964)) ([bb5cece](https://github.com/lamngockhuong/termote/commit/bb5cece03ce78779ca30d67153b32db8efc05823))
+* **pwa:** leave a hidden workspace's questions out of the overview ([#998](https://github.com/lamngockhuong/termote/issues/998)) ([4b4e47f](https://github.com/lamngockhuong/termote/commit/4b4e47ff6b8fc8e1262cbb744c80b8d3449dcbcd))
+* **pwa:** make the newer Vietnamese strings read naturally ([#1000](https://github.com/lamngockhuong/termote/issues/1000)) ([6708ece](https://github.com/lamngockhuong/termote/commit/6708ece396ef33ba15db2f06486d3e8ba0ca03de))
+* **pwa:** take only jobs with a server-made id and mark control characters in Copy ID ([#1003](https://github.com/lamngockhuong/termote/issues/1003)) ([555a44a](https://github.com/lamngockhuong/termote/commit/555a44a2ac5d3295fc9d3caf3e725fe2365d0359))
+* **server:** compare worktree and hooks folders without case on macOS and Windows ([#1004](https://github.com/lamngockhuong/termote/issues/1004)) ([b6e5943](https://github.com/lamngockhuong/termote/commit/b6e5943d2dc7dcb113b7510b05576f85e05c9985))
+* **server:** hold grant options to the table and drop tsc from its tools ([#1005](https://github.com/lamngockhuong/termote/issues/1005)) ([35a7174](https://github.com/lamngockhuong/termote/commit/35a717476c93a76dabcfdac709396fef7a8445be))
+* **server:** tighten dialog grants and job finish; align security invariants ([#999](https://github.com/lamngockhuong/termote/issues/999)) ([64214a6](https://github.com/lamngockhuong/termote/commit/64214a64a3a4a9801ac02ea46022cf0967525207))
+* show jobs whose agent waits on a dialog under Waiting for you ([#961](https://github.com/lamngockhuong/termote/issues/961)) ([7302887](https://github.com/lamngockhuong/termote/commit/730288758d86aa3946f1f0a8bc418d32795c58ba))
+
 ## [2.32.0](https://github.com/lamngockhuong/termote/compare/v2.31.0...v2.32.0) (2026-11-24)
 
 
