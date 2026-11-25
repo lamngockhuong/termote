@@ -90,14 +90,15 @@ func (c *cli) preferredSupervisor() supervisor {
 // (ZELLIJ_SOCKET_DIR, XDG_RUNTIME_DIR, and on macOS TMPDIR: launchd gives a
 // job another one, so zellij would look elsewhere than the user's shell), the
 // XDG dirs that locate the config and the install (update run from a pane
-// must find it), the locale tmux needs for UTF-8, and where gh keeps its
+// must find it) and the cache (the Files trash and the uploads, which
+// uninstall --purge finds through the same XDG_CACHE_HOME), the locale tmux needs for UTF-8, and where gh keeps its
 // login (GH_CONFIG_DIR, for the jobs' pull requests; never GH_TOKEN, which
 // a unit file would hold). Never a TERMOTE_*
 // variable: serve reads its settings from the config file (herdr-core's
 // HC_SESSION and HC_SOCKET too: a Windows task takes no environment).
 func (c *cli) serviceEnv() map[string]string {
 	env := map[string]string{}
-	keys := []string{"PATH", "HERDR_SOCKET_PATH", "ZELLIJ_SOCKET_DIR", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "LANG", "LC_ALL", "GH_CONFIG_DIR"}
+	keys := []string{"PATH", "HERDR_SOCKET_PATH", "ZELLIJ_SOCKET_DIR", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "LANG", "LC_ALL", "GH_CONFIG_DIR"}
 	if c.goos == "darwin" {
 		keys = append(keys, "TMPDIR")
 	}

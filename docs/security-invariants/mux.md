@@ -90,7 +90,9 @@ Part of the [security invariants](README.md): tmux, psmux, Herdr, Zellij and her
   of another `contract_version_*` running → 503 `zellij_version_mismatch` before creating.
   Closing a session runs `delete-session --force` (no resurrection entry). Children lose
   `ZELLIJ`, `ZELLIJ_SESSION_NAME`, `ZELLIJ_PANE_ID` (`terminalEnv`); `ZELLIJ_SOCKET_DIR` stays,
-  and `serviceEnv` passes it with `XDG_RUNTIME_DIR` (and `TMPDIR` on macOS). A `TERMOTE_*`
+  and `serviceEnv` passes it with `XDG_RUNTIME_DIR` (and `TMPDIR` on macOS). `serviceEnv` also
+  passes `XDG_CACHE_HOME`, so the service keeps the Files trash and the uploads where
+  `uninstall --purge`, reading its own shell's, removes them (`TestServiceEnvKeepsCacheHome`). A `TERMOTE_*`
   variable in a Zellij server's environment is logged at start (it cannot be unset). The Chat
   view finds a pane's shell only among the children of the one same-uid `zellij --server`
   holding the session socket (Linux: `sock_diag` `UNIX_DIAG_VFS` matches the socket file's
