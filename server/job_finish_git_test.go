@@ -111,6 +111,62 @@ func TestFinishTreeNeverPushed(t *testing.T) {
 	}
 }
 
+// A branch with no commit of its own, never pushed: HEAD is already on the
+// remote's default branch, so nothing is lost with the checkout.
+func TestFinishTreeNoCommitsNeverPushed(t *testing.T) {
+	r := newFinishRepo(t)
+	gitIn(t, r.wt, "reset", "-q", "--hard", "main")
+	f := r.mustRead(t)
+	if f.pushRef != "" || f.onPush || !f.onRemote || !f.safe(nil) {
+		t.Errorf("no commits, never pushed: %+v", f)
+	}
+
+	// Through the remote's HEAD as well, whatever its default branch is named.
+	gitIn(t, r.origin, "symbolic-ref", "HEAD", "refs/heads/trunk")
+	gitIn(t, r.main, "push", "-q", "origin", "main:trunk", ":main")
+	gitIn(t, r.main, "fetch", "-q", "--prune", "origin")
+	gitIn(t, r.main, "remote", "set-head", "origin", "--auto")
+	if f := r.mustRead(t); !f.onRemote || !f.safe(nil) {
+		t.Errorf("on origin/HEAD -> origin/trunk: %+v", f)
+	}
+}
+
+// HEAD on another remote branch than the default one counts too.
+func TestFinishTreeOnOtherRemoteBranch(t *testing.T) {
+	r := newFinishRepo(t)
+	gitIn(t, r.wt, "push", "-q", "origin", "HEAD:refs/heads/other")
+	f := r.mustRead(t)
+	if f.pushRef != "" || !f.onRemote || !f.safe(nil) {
+		t.Errorf("on origin/other: %+v", f)
+	}
+}
+
+// Commits of its own on top of the remote's branch, never pushed, stay
+// refused: on no remote ref, and a branch that only local main holds is not
+// on the remote either.
+func TestFinishTreeOwnCommitsNeverPushed(t *testing.T) {
+	r := newFinishRepo(t)
+	if f := r.mustRead(t); f.onRemote || f.safe(nil) {
+		t.Errorf("own commit, never pushed: %+v", f)
+	}
+	gitIn(t, r.main, "commit", "-q", "--allow-empty", "-m", "local only")
+	gitIn(t, r.wt, "reset", "-q", "--hard", "main")
+	if f := r.mustRead(t); f.onRemote || f.safe(nil) {
+		t.Errorf("on local main only: %+v", f)
+	}
+	// Another remote's ref does not count for the push remote.
+	other := filepath.Join(filepath.Dir(r.origin), "other.git")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, other, "init", "-q", "--bare")
+	gitIn(t, r.main, "remote", "add", "zzz", other)
+	gitIn(t, r.main, "push", "-q", "zzz", "main")
+	if f := r.mustRead(t); f.onRemote || f.safe(nil) {
+		t.Errorf("only on a remote that is not the push remote: %+v", f)
+	}
+}
+
 // The remote branch deleted once its pull request merged, and pruned here:
 // the merged pull request at HEAD is what makes it safe.
 func TestFinishTreePrunedMerged(t *testing.T) {
@@ -376,5 +432,21 @@ func TestWorktreeDirtyWindowsLineEndings(t *testing.T) {
 	}
 	if !dirty(win) {
 		t.Error("a real change read as clean on Windows")
+	}
+}
+
+func TestRemoteOfRef(t *testing.T) {
+	remotes := []string{"origin", "origin/fork", "up"}
+	for ref, want := range map[string]string{
+		"refs/remotes/origin/main":      "origin",
+		"refs/remotes/origin/HEAD":      "origin",
+		"refs/remotes/origin/fork/main": "origin/fork",
+		"refs/remotes/up/main":          "up",
+		"refs/remotes/originx/main":     "",
+		"refs/heads/main":               "",
+	} {
+		if got := remoteOfRef(ref, remotes); got != want {
+			t.Errorf("remoteOfRef(%s) = %q, want %q", ref, got, want)
+		}
 	}
 }
