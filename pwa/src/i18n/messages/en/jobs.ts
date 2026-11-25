@@ -229,6 +229,20 @@ export default {
   'jobs.grant.revoke': 'End',
   'jobs.grant.revokeName': 'End the grant {label}',
   'jobs.grant.revokeTitle': 'End this grant?',
+  'jobs.envConfirm.note_one':
+    "The orchestrator's cleanup waits for you: removing the worktree deletes {count} .env file git ignores that the main checkout does not hold the same",
+  'jobs.envConfirm.note_other':
+    "The orchestrator's cleanup waits for you: removing the worktree deletes {count} .env files git ignores that the main checkout does not hold the same",
+  'jobs.envConfirm.review': 'Review files',
+  'jobs.envConfirm.dismiss': 'Dismiss',
+  'jobs.envConfirm.title': 'Delete these files with the worktree?',
+  'jobs.envConfirm.body':
+    'They are deleted for good with the worktree, and the job is cleaned up as the orchestrator asked. Save any you still need first.',
+  'jobs.envConfirm.confirm': 'Delete and clean up',
+  'jobs.envConfirm.done': 'The job was cleaned up',
+  'jobs.envConfirm.failed': 'Could not clean up the job',
+  'jobs.envConfirm.noGrant':
+    'Confirm this in the app signed in with the password or a paired device',
   'jobs.grant.revoked': 'The grant ended',
   'jobs.grant.new': 'New grant',
   'jobs.grant.kind': 'What it lets the orchestrator answer',

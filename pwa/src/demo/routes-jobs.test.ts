@@ -172,3 +172,65 @@ describe('demo plan routes: priority, dependencies and workspace', () => {
     expect((await patch(BLOG, { pane: 'nope' })).body.code).toBe('job_no_agent')
   })
 })
+
+describe('demo plan routes: a cleanup waiting on .env files', () => {
+  let state: DemoState
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await route(
+      state,
+      method,
+      new URL(URL_BASE + path),
+      body === undefined ? undefined : JSON.stringify(body),
+    )
+    return { status: res.status, body: await res.json() }
+  }
+  const waiting = () => {
+    const j = state.jobs.find((x) => x.id === DARK)!
+    j.envConfirm = { files: ['.env.local', 'app/.env'], at: 'x' }
+    return j
+  }
+
+  beforeEach(() => {
+    state = createState(() => Date.parse('2026-11-24T08:00:00Z'))
+  })
+
+  it('runs the cleanup on the names that wait, else says why', async () => {
+    const path = `/jobs/${DARK}/finish/env`
+    let res = await call('POST', path, { updated: 'x', files: ['.env'] })
+    expect(res.body.code).toBe('finish_env_none')
+    const j = waiting()
+    res = await call('POST', path, {
+      updated: j.updated,
+      files: ['.env.local'],
+    })
+    expect(res.body.code).toBe('finish_env_changed')
+    res = await call('POST', path, { updated: j.updated, files: 'x' })
+    expect(res.body.code).toBe('finish_env_changed')
+    res = await call('POST', path, {
+      updated: 'old',
+      files: ['app/.env', '.env.local'],
+    })
+    expect(res.body.code).toBe('job_conflict')
+    res = await call('POST', path, {
+      updated: j.updated,
+      files: ['app/.env', '.env.local'],
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.worktreeRemoved).toBe(true)
+    expect(res.body.job.state).toBe('done')
+    expect(res.body.job.envConfirm).toBeUndefined()
+    expect(res.body.job.worktree).toBeUndefined()
+    res = await call('POST', '/jobs/0000000000000000/finish/env', {})
+    expect(res.status).toBe(404)
+  })
+
+  it('drops the ask', async () => {
+    waiting()
+    const res = await call('DELETE', `/jobs/${DARK}/finish/env`)
+    expect(res.status).toBe(200)
+    expect(res.body.job.envConfirm).toBeUndefined()
+    expect(
+      (await call('DELETE', '/jobs/0000000000000000/finish/env')).status,
+    ).toBe(404)
+  })
+})

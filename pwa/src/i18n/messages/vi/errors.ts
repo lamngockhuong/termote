@@ -62,6 +62,12 @@ export default {
     'Agent vẫn còn việc chạy nền. Hãy chờ nó xong',
   'errors.finish_agent_changed': 'Pane của việc này giờ chạy một agent khác',
   'errors.finish_agent_working': 'Agent đang làm. Hãy chờ nó dừng',
+  'errors.finish_env_changed':
+    'Các file .env cần xác nhận đã thay đổi. Hãy xem lại',
+  'errors.finish_env_none':
+    'Không còn lần dọn nào chờ xác nhận này. Hãy nhờ orchestrator chạy lại',
+  'errors.finish_env_pwa_only':
+    'Chỉ bạn xác nhận được việc này, trong ứng dụng đã đăng nhập bằng mật khẩu hoặc thiết bị đã ghép',
   'errors.finish_failed': 'Không dọn được việc này',
   'errors.finish_job_active':
     'Chỉ dọn được việc đang chờ xem lại hoặc đã kết thúc',

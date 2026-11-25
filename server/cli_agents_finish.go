@@ -154,7 +154,8 @@ func finishedLine(out jobFinishReply, j jobView) string {
 func finishRefusal(r agentsReply, j jobView) error {
 	id := plainText(j.ID)
 	var extra struct {
-		Closed bool `json:"closed"`
+		Closed      bool `json:"closed"`
+		Confirmable bool `json:"confirmable"`
 	}
 	json.Unmarshal(r.body, &extra)
 	hint := ""
@@ -169,7 +170,13 @@ func finishRefusal(r agentsReply, j jobView) error {
 	case "dirty":
 		hint = "; ask the agent to commit its changes; never discard them"
 	case "finish_worktree_env":
-		hint = "; the user saves or deletes those files, then run this again; never read or delete them yourself"
+		if extra.Confirmable {
+			hint = "; tell the user: they confirm the removal of those files in the PWA (the job's details), which then " +
+				"finishes the job there, or they save or delete them and you run this again"
+		} else {
+			hint = "; the user saves or deletes those files, then run this again"
+		}
+		hint += "; never read, copy or delete them yourself"
 	case "finish_tab_busy", "finish_worktree_shared":
 		hint = "; ask the user to close the other tab or workspace first"
 	case "finish_needs_close", "finish_needs_remove":

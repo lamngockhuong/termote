@@ -184,6 +184,18 @@ export default {
   'jobs.grant.revoke': 'Thu hồi',
   'jobs.grant.revokeName': 'Thu hồi ủy quyền {label}',
   'jobs.grant.revokeTitle': 'Thu hồi ủy quyền này?',
+  'jobs.envConfirm.note_other':
+    'Lần dọn orchestrator yêu cầu đang chờ bạn: xóa worktree sẽ xóa {count} file .env mà git bỏ qua, không giống bản ở main checkout',
+  'jobs.envConfirm.review': 'Xem các file',
+  'jobs.envConfirm.dismiss': 'Bỏ qua',
+  'jobs.envConfirm.title': 'Xóa các file này cùng worktree?',
+  'jobs.envConfirm.body':
+    'Các file sẽ bị xóa hẳn cùng worktree, và việc được dọn như orchestrator yêu cầu. Hãy lưu lại file nào bạn còn cần trước.',
+  'jobs.envConfirm.confirm': 'Xóa và dọn',
+  'jobs.envConfirm.done': 'Đã dọn việc này',
+  'jobs.envConfirm.failed': 'Không dọn được việc này',
+  'jobs.envConfirm.noGrant':
+    'Hãy xác nhận trong ứng dụng đã đăng nhập bằng mật khẩu hoặc thiết bị đã ghép',
   'jobs.grant.revoked': 'Đã thu hồi ủy quyền',
   'jobs.grant.new': 'Ủy quyền mới',
   'jobs.grant.kind': 'Orchestrator được trả lời loại hộp thoại nào',

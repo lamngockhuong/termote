@@ -37,8 +37,13 @@ type finishTree struct {
 	// its own, never pushed, is on the remote's default branch.
 	onRemote bool
 	// envFiles: the worktree holds an ignored file whose name starts with
-	// .env, which a remove deletes and nothing makes again.
+	// .env, which a remove deletes and nothing makes again, and which is not
+	// the same in the main checkout (job_finish_env.go). envLost names them
+	// (maxEnvNames at most); envCut: there are more, or git's list was cut
+	// short.
 	envFiles bool
+	envLost  []string
+	envCut   bool
 }
 
 // headSHARe is a full object name, SHA-1 or SHA-256.
@@ -114,7 +119,12 @@ func readFinishTree(ctx context.Context, git *gitRunner, rr *rootResolver, home 
 	if err != nil {
 		return finishTree{}, fmt.Errorf("ls-files in %s: %w", repo.Top, err)
 	}
-	f.envFiles = truncated || len(out) > 0
+	names, cut := envList(out, truncated)
+	f.envLost, f.envCut = envLost(repo.Top, repo.Main, names), cut
+	if len(f.envLost) > maxEnvNames {
+		f.envLost, f.envCut = f.envLost[:maxEnvNames], true
+	}
+	f.envFiles = f.envCut || len(f.envLost) > 0
 	return f, nil
 }
 

@@ -1235,8 +1235,26 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   with no commit of its own, never pushed, sits on the default branch), the refs read locally
   (termote never fetches, so a stale ref refuses), or is the head of a merged pull request of the
   job's that is not `foreign` (409 `worktree_not_pushed`); an ignored `.env*` file anywhere in it
-  (`ls-files --others --ignored` on a `**/.env*` pathspec, a list cut short counting) is 409
-  `finish_worktree_env`. An open ask of the job's is 409 `finish_open_ask`. For a job in `review`
+  (`ls-files --others --ignored` on a `**/.env*` pathspec) is 409 `finish_worktree_env` unless the
+  repository's main checkout (`gitRepoInfo.Main`, not the worktree itself) holds a file at the same
+  relative path with the same bytes (`job_finish_env.go`: opened through `os.Root` on both sides, every
+  folder on the way and the file itself `Lstat`ed, a symlink anywhere refused, the opened file checked
+  with `os.SameFile` against that `Lstat`, both at most 8 MiB, the same size, compared in the server
+  only); a missing copy, other bytes, a read error, a symlink or a list cut short counts as a file a
+  remove may lose. The refusal names those files (200 at most; more, or a list cut short, is not
+  confirmable) in its message and `files`, with `confirmable`, never their contents: no log line,
+  answer, error or ledger text holds a byte of them. A confirmable refusal is kept in the server's
+  memory only (`finishEnvAsks`, by job: the CLI's `by` and `close`, the names, when), shown to a full
+  client as the job's `envConfirm`; a finish that goes through, or one refused over files it cannot
+  name, drops it. `POST /api/mux/jobs/{id}/finish/env` (the user's yes, `{updated, files}`, 64 KiB at
+  most) and `DELETE` (dismiss) answer only `canGrant` (a browser signed in with the password or a full
+  paired device: never the local socket, the bridge, Basic auth or a server without sign-in, 403
+  `finish_env_pwa_only`), after `requireWriteRole`; the names sent must be the names waiting, in any
+  order (409 `finish_env_changed`; none waiting 409 `finish_env_none`). It then runs the same finish
+  the CLI asked for (`finishJob`, its `updated` the job as the user read it, `by` and `close` from the
+  ask, `--remove-worktree`), every check above again, with those names allowed (`jobFinishInput.envOK`,
+  unexported, so no request body sets it): a file that differs and is not among them still refuses.
+  `audit: job_env_confirmed` (job, the count of files, via) and `job_env_dismissed` (job, via). An open ask of the job's is 409 `finish_open_ask`. For a job in `review`
   with no merged pull request at HEAD known, the job's pull requests are read once
   (`ciPoller.refresh`) before any lock, waited for 20 s at most (the read goes on in the
   background); what it says only decides whether the branch goes. Then the agent's pane lock
@@ -1275,7 +1293,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the checks above (only a clean worktree whose work is pushed or merged; "made by the job" is what the CLI said
   when the start recorded it, a claim like `by`, so it keeps a finish from removing a worktree the
   job only opened again by mistake, not from a process of the user). Accepted
-  gaps: ignored files go with the worktree (`.env*` refused); the push ref is local and may be stale
+  gaps: ignored files go with the worktree (`.env*` refused unless the same in the main checkout or
+  confirmed by the user in the PWA; a `.env*` file changed between the comparison and the remove goes
+  with it); the push ref is local and may be stale
   (it refuses rather than removes); a tab opened through `/api/mux/tabs` between the last check and
   the close (milliseconds, outside the slot) is closed with the workspace; a file a process outside the
   mux writes into the worktree between the last dirty check and `git worktree remove --force` (milliseconds;

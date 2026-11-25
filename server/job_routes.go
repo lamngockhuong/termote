@@ -78,6 +78,9 @@ type jobView struct {
 	// CIChecked: when its pull requests were last read or tried (kept in
 	// memory, not in the ledger).
 	CIChecked string `json:"ciChecked,omitempty"`
+	// EnvConfirm: a finish refused over ignored .env files waits for the
+	// user's confirm (in memory, job_finish_env.go).
+	EnvConfirm *jobEnvConfirm `json:"envConfirm,omitempty"`
 }
 
 // jobBrief is a job as a view-only client sees it: never the prompt, the
@@ -155,6 +158,7 @@ func (a *agentAPI) registerJobRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/jobs/{id}/event", a.handleJobEvent)
 	mux.HandleFunc("/api/mux/jobs/{id}/ci", a.handleJobCI)
 	mux.HandleFunc("/api/mux/jobs/{id}/finish", a.handleJobFinish)
+	mux.HandleFunc("/api/mux/jobs/{id}/finish/env", a.handleFinishEnv)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants", a.handleGrants)
 	mux.HandleFunc("/api/mux/jobs/{id}/grants/{gid}", a.handleGrants)
 	a.registerAskRoutes(mux)
@@ -882,6 +886,7 @@ func (a *agentAPI) jobViewOf(list []job, j job, live jobLive) jobView {
 	if t := a.ci.checkedAt(j.ID); !t.IsZero() {
 		v.CIChecked = t.UTC().Format(activityTimeFormat)
 	}
+	v.EnvConfirm = a.finishEnv.view(j.ID)
 	return v
 }
 

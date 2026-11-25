@@ -464,7 +464,10 @@ type agentAPI struct {
 	// ci follows the jobs' pull requests (job_ci.go); nil in a container
 	// or without the files routes.
 	ci *ciPoller
-	wm worktreeMux
+	// finishEnv: the finishes refused over ignored .env files, waiting for
+	// the user's confirm in the PWA (job_finish_env.go).
+	finishEnv finishEnvAsks
+	wm        worktreeMux
 	// worktreeSlot is the worktree routes' change slot, which job finish
 	// takes too; set by buildServer.
 	worktreeSlot worktreeSlot

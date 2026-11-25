@@ -148,7 +148,7 @@ func TestAgentsJobFinishRefusedByServer(t *testing.T) {
 		"finish_agent_working":     "termote agents wait --job j1",
 		"worktree_not_pushed":      "termote agents job ci j1 --refresh (never push a merged branch again",
 		"dirty":                    "never discard them",
-		"finish_worktree_env":      "never read or delete them yourself",
+		"finish_worktree_env":      "the user saves or deletes those files, then run this again; never read, copy or delete them yourself",
 		"finish_worktree_shared":   "close the other tab or workspace",
 		"finish_needs_remove":      "termote agents job finish j1 --close --remove-worktree",
 		"finish_worktree_not_made": "the user finishes it in the PWA",
@@ -159,6 +159,14 @@ func TestAgentsJobFinishRefusedByServer(t *testing.T) {
 		if err == nil || exitCode(err) != 1 || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), hint) {
 			t.Errorf("%s: %v", code, err)
 		}
+	}
+	// .env files the user may confirm in the PWA: named, and where.
+	s.set("POST /api/mux/jobs/j1/finish", answer(http.StatusConflict,
+		`{"error":"the worktree holds 1 .env files (.env.local)","code":"finish_worktree_env","files":[".env.local"],"confirmable":true}`))
+	if err := finishRun(tc, "j1", "--close", "--remove-worktree"); err == nil || !strings.Contains(err.Error(), "(.env.local)") ||
+		!strings.Contains(err.Error(), "they confirm the removal of those files in the PWA") ||
+		!strings.Contains(err.Error(), "never read, copy or delete them yourself") {
+		t.Errorf("confirmable env: %v", err)
 	}
 	s.set("POST /api/mux/jobs/j1/finish", answer(http.StatusConflict, `{"error":"in use","code":"in_use","closed":true}`))
 	if err := finishRun(tc, "j1", "--close", "--remove-worktree"); err == nil ||

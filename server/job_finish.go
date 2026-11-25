@@ -66,6 +66,9 @@ type jobFinishInput struct {
 	By             string `json:"by"`
 	Close          bool   `json:"close"`
 	RemoveWorktree bool   `json:"removeWorktree"`
+	// envOK: the ignored .env files the user confirmed in the PWA
+	// (job_finish_env.go); never read from a request body.
+	envOK []string
 }
 
 // freshSnapshotter is a backend that keeps its snapshot a while (Herdr):
@@ -136,6 +139,18 @@ func (a *agentAPI) finishJob(ctx context.Context, w http.ResponseWriter, id stri
 	if !validTemplateID(id) {
 		return nil, false, errJobNotFound
 	}
+	// A refusal over .env files the user may confirm waits for it in the
+	// PWA; a finish that went through, or one refused over too many to name,
+	// leaves nothing waiting.
+	defer func() {
+		var er *envRefusal
+		switch {
+		case errors.As(err, &er) && er.confirmable():
+			a.finishEnv.set(id, finishEnvAsk{by: in.By, close: in.Close, files: er.files, at: time.Now()})
+		case err == nil, errors.As(err, &er):
+			a.finishEnv.drop(id)
+		}
+	}()
 	if in.By == "" {
 		return nil, false, errFinishSelfUnknown
 	}
@@ -328,8 +343,8 @@ func finishTreeRefusal(tree finishTree, ci *jobCI, in jobFinishInput) error {
 		return errWorktreeDirty
 	case !tree.safe(ci):
 		return errWorktreeNotPushed
-	case tree.envFiles:
-		return errFinishWorktreeEnv
+	case tree.envFiles && !envAllowed(tree, in.envOK):
+		return &envRefusal{files: tree.envLost, cut: tree.envCut}
 	}
 	return nil
 }
@@ -658,6 +673,7 @@ func finishError(w http.ResponseWriter, err error, closed bool) {
 		conflict *jobConflict
 		af       *agentFailure
 		ce       *codedError
+		er       *envRefusal
 	)
 	body := map[string]any{}
 	status := http.StatusInternalServerError
@@ -667,6 +683,9 @@ func finishError(w http.ResponseWriter, err error, closed bool) {
 		body["job"] = conflict.job
 	case errors.As(err, &af):
 		body["code"], body["error"], status = af.code, af.msg, af.status
+	case errors.As(err, &er):
+		body["code"], body["error"], status = errFinishWorktreeEnv.code, er.Error(), errFinishWorktreeEnv.status
+		body["files"], body["confirmable"] = er.files, er.confirmable()
 	case isContextError(err):
 		log.Printf("job finish: %v", err)
 		body["code"], body["error"], status = errWorktreeUnknown.code, errWorktreeUnknown.msg, errWorktreeUnknown.status

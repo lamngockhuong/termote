@@ -29,6 +29,7 @@ import { serverErrorText } from '../utils/server-error'
 import { markAllUnsafe, visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { JobCISection } from './job-ci-section'
+import { JobEnvConfirmNotice } from './job-env-confirm'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
@@ -226,6 +227,9 @@ export function JobDetail({
             ? t('jobs.expiry.soonLong', { count: expiry.days })
             : t(onEdit ? 'jobs.expiry.dueLong' : 'jobs.expiry.dueLongNoEdit')}
         </p>
+      )}
+      {job.envConfirm && job.envConfirm.files.length > 0 && (
+        <JobEnvConfirmNotice job={job} canConfirm={!!canEndGrants} />
       )}
       {((ref && paneId && onOpenPane) || onGrants || onEdit) && (
         <div className="flex flex-wrap items-center gap-2">
