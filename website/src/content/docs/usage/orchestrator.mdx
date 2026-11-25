@@ -257,22 +257,39 @@ the job's worktree while its agent works there, for up to a day. Only you give g
 another Termote and a server without sign-in cannot. For a machine open through
 [Machines](/usage/machines/), give them on that machine's own Termote; here they are only shown.
 
+A command prefix names a program and the command you allow, as you would type them. Termote takes
+only the programs and commands of one short list:
+
+| Program  | Commands you can grant                                                       |
+| -------- | ---------------------------------------------------------------------------- |
+| `npm`    | `test`, `start`, `ls`, `outdated`, `explain`, `run <script>`, `ci`, `audit`  |
+| `pnpm`   | `test`, `start`, `ls`, `list`, `outdated`, `why`, `run <script>`, `install`  |
+| `yarn`   | `test`, `start`, `why`, `run <script>`, `install`                            |
+| `cargo`  | `build`, `test`, `check`, `clippy`, `fmt`, also after one `+toolchain`       |
+| `go`     | `build`, `test`, `vet`, `fmt`, `list`, `mod`, `version`                      |
+| `dotnet` | `build`, `test`                                                              |
+| `pip`    | `list`, `show`                                                               |
+| `vitest` | `run`, `list`                                                                |
+| `biome`  | `check`, `format`, `lint`, `ci`                                              |
+| `ruff`   | `check`, `format`                                                            |
+
+`rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` and `pytest` do one
+thing each and take no command: grant the name alone, or with the options you allow (`rg -n`).
+
+Type the command in full: `pnpm run lint`, not `pnpm lint` (nor `yarn workspace a lint`), and a
+script command needs the script's name (`npm run` alone is refused). `install`, `ci` and `npm audit`
+take no package name (`pnpm install x` and `npm audit fix` are refused). The program is its bare name
+(`rg`, not `/usr/bin/rg` or `rg.exe`). Every other program is refused, a shell, an interpreter,
+`git`, `make`, `tar`, `docker`, `npx`, `brew` and `gem` among them. A grant given under older rules
+whose prefix the list refuses (a bare `npm`) answers nothing, and the server revokes it when it
+starts.
+
 The orchestrator then tries `answer <pane> --delegated` first. Termote itself checks the dialog
 and answers "Yes" for this one time only when the dialog on screen and the one tool call the
 agent's transcript has waiting name the same command or file, no subagent runs, the command holds
-nothing a shell would chain, expand or redirect and does not start with a shell, an interpreter or
-a container engine (`docker`, `podman`: they run any image, or a compose file the agent can edit), no
-word after your prefix is an option (starts with `-`, `@` or `+`, or is `/p:`: `rg --pre=x` or `go test -exec=x` runs
-another program, so type into the prefix the options you allow; `tar` reads its first word as
-options even without a dash, so grant `tar xzf`, not `tar`), a package manager is not asked to
-run or install a package it names or to change its config (`pnpm dlx x`, `npm init x`, `pnpm add x`,
-`npm i x`, `npm config set`, `npm publish`; a bare `pnpm install`, with no package, is fine), a pnpm or yarn command after your
-prefix is one of theirs (`pnpm --filter a node x.js` would run node: grant `pnpm --filter a lint` to
-let it run your `lint` script), a cargo command is `build`, `test`, `check`, `clippy` or `fmt`
-(cargo runs any other word as a program `cargo-<x>` on your `PATH`, and its `install` builds a crate the
-agent names), a go command is `build`, `test`, `vet`, `fmt`, `list`, `mod` or `version` (its `run` and `install`
-build a module the agent names, at any version), pip's and gem's `install` and npm's `link` do not name a
-package to install, and
+nothing a shell would chain, expand or redirect, is itself on the list above and starts with your
+prefix, no word after your prefix is an option (starts with `-`, `@` or `+`, or is `/p:`: `rg
+--pre=x` or `go test -exec=x` runs another program, so type into the prefix the options you allow), and
 the file is in the worktree, reached through no link, and not one that configures the agent, runs
 as a hook or is run by one of your git hooks, or holds secrets (`.claude/`, `.git`, `CLAUDE.md`, `package.json`, lockfiles, a CI pipeline, a `justfile`, `.env`...).
 A file in the folder your repository's `core.hooksPath` names counts as run by a hook too.
@@ -281,9 +298,9 @@ server's audit log.
 
 <Aside type="caution">
   A grant to run a test, build or script command runs code the agent can edit: `pnpm test` runs
-  the test files and whatever `package.json` declares for `test`, and an agent that can edit files
-  in the worktree could change them. Give grants for short, well-known commands, on jobs
-  you follow.
+  the test files and whatever `package.json` declares for `test`, `dotnet build` the project's
+  build targets, and an agent that can edit files in the worktree could change them. Give grants
+  for short, well-known commands, on jobs you follow.
 </Aside>
 
 From the command line, an option that stops a dialog from asking again ("don't ask again",

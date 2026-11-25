@@ -255,23 +255,41 @@ sửa file trong worktree của việc khi agent đang làm trong đó, tối đ
 dòng lệnh, một Termote khác và server không bật đăng nhập đều không cấp được. Với một máy mở qua
 [Machines](/vi/usage/machines/), hãy cấp trên Termote của chính máy đó; ở đây chỉ xem được.
 
+Tiền tố lệnh gồm tên chương trình và lệnh bạn cho phép, gõ như khi bạn tự chạy. Termote chỉ nhận
+các chương trình và lệnh trong một danh sách ngắn:
+
+| Chương trình | Lệnh có thể ủy quyền                                                         |
+| ------------ | ---------------------------------------------------------------------------- |
+| `npm`        | `test`, `start`, `ls`, `outdated`, `explain`, `run <script>`, `ci`, `audit`  |
+| `pnpm`       | `test`, `start`, `ls`, `list`, `outdated`, `why`, `run <script>`, `install`  |
+| `yarn`       | `test`, `start`, `why`, `run <script>`, `install`                            |
+| `cargo`      | `build`, `test`, `check`, `clippy`, `fmt`, kể cả sau một `+toolchain`        |
+| `go`         | `build`, `test`, `vet`, `fmt`, `list`, `mod`, `version`                      |
+| `dotnet`     | `build`, `test`                                                              |
+| `pip`        | `list`, `show`                                                               |
+| `vitest`     | `run`, `list`                                                                |
+| `biome`      | `check`, `format`, `lint`, `ci`                                              |
+| `ruff`       | `check`, `format`                                                            |
+
+Mỗi công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
+`pytest` chỉ làm một việc và không có lệnh con: cấp riêng tên của nó, hoặc kèm các tùy chọn bạn cho
+phép (`rg -n`).
+
+Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (cũng không dùng `yarn workspace a lint`),
+và lệnh chạy script cần có tên script (`npm run` không kèm tên bị từ chối). `install`, `ci` và
+`npm audit` không nhận tên gói (`pnpm install x` và `npm audit fix` bị từ chối). Tên chương trình viết
+trần (`rg`, không phải `/usr/bin/rg` hay `rg.exe`). Mọi chương trình khác đều bị từ chối, trong đó có
+shell, trình thông dịch, `git`, `make`, `tar`, `docker`, `npx`, `brew` và `gem`. Ủy quyền cấp theo quy
+tắc cũ mà danh sách này không nhận tiền tố của nó (chỉ có `npm`, chẳng hạn) không còn trả lời được hộp
+thoại nào, và server thu hồi nó khi khởi động.
+
 Khi đó orchestrator thử `answer <pane> --delegated` trước. Chính Termote kiểm tra hộp thoại và chỉ
 chọn "Yes" cho đúng lần này khi mọi điều sau đều đúng: hộp thoại trên màn hình và lời gọi công cụ
 duy nhất đang chờ trong transcript của agent cùng nêu một lệnh hoặc một file; không subagent nào
-đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, và không bắt đầu
-bằng một shell, một trình thông dịch hay một công cụ container (`docker`, `podman`: chúng chạy
-được mọi image, hay một file compose mà agent sửa được); không từ nào sau tiền tố của bạn là tùy chọn (bắt đầu bằng `-`, `@` hay `+`, hoặc có dạng `/p:`:
-`rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên tùy chọn nào bạn cho phép thì
-gõ luôn vào tiền tố; `tar` đọc từ đầu tiên sau nó là tùy chọn dù không có `-`, nên hãy cấp
-`tar xzf` thay vì `tar`); trình quản lý gói không được yêu cầu chạy hay cài một gói do agent nêu tên, hay sửa cấu hình
-của nó (`pnpm dlx x`, `npm init x`, `pnpm add x`, `npm i x`, `npm config set`, `npm publish`; riêng `pnpm install`, không kèm
-gói, thì vẫn được); lệnh pnpm hay yarn đứng sau tiền tố phải là lệnh của chính chúng
-(`pnpm --filter a node x.js` sẽ chạy node: muốn cho chạy script `lint` của bạn thì cấp
-`pnpm --filter a lint`); lệnh cargo chỉ được là `build`, `test`, `check`, `clippy` hay `fmt` (với từ
-nào khác, cargo chạy chương trình `cargo-<x>` tìm thấy trên `PATH`, còn lệnh `install` của nó build một
-crate do agent nêu tên); lệnh go chỉ được là `build`, `test`, `vet`, `fmt`, `list`, `mod` hay `version`
-(lệnh `run` và `install` của nó build một module do agent nêu tên, ở phiên bản bất kỳ); lệnh `install` của
-pip, gem và lệnh `link` của npm không được kèm tên một gói cần cài;
+đang chạy; lệnh không chứa thứ gì để shell nối lệnh, mở rộng hay chuyển hướng, chính nó có trong danh
+sách trên và bắt đầu bằng tiền tố của bạn; không từ nào sau tiền tố là tùy chọn (bắt đầu bằng `-`,
+`@` hay `+`, hoặc có dạng `/p:`: `rg --pre=x` hay `go test -exec=x` sẽ chạy một chương trình khác, nên
+tùy chọn nào bạn cho phép thì gõ luôn vào tiền tố);
 file nằm trong worktree, không đi qua liên kết nào, và không
 phải file cấu hình agent, file chạy như hook hay được git hook của bạn chạy, hay file chứa bí mật (`.claude/`, `.git`, `CLAUDE.md`,
 `package.json`, các file khóa phụ thuộc, pipeline CI, `justfile`, `.env`...). File nằm trong thư mục mà
@@ -280,9 +298,9 @@ bạn như trước. Mỗi câu trả lời hiện trên thẻ của việc và 
 
 <Aside type="caution">
   Ủy quyền chạy một lệnh test, build hay script là cho chạy mã mà agent sửa được: `pnpm test` chạy
-  các file test và mọi lệnh `package.json` khai báo cho `test`, và agent được sửa file trong
-  worktree có thể đổi chúng. Chỉ cấp ủy quyền cho lệnh ngắn, quen thuộc,
-  trên những việc bạn đang theo dõi.
+  các file test và mọi lệnh `package.json` khai báo cho `test`, `dotnet build` chạy các target build
+  của project, và agent được sửa file trong worktree có thể đổi chúng. Chỉ cấp ủy quyền cho lệnh
+  ngắn, quen thuộc, trên những việc bạn đang theo dõi.
 </Aside>
 
 Từ dòng lệnh, lựa chọn khiến hộp thoại không hỏi lại nữa (`don't ask again`, `always allow`,
