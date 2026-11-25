@@ -14,9 +14,10 @@ import (
 
 // What termote agents job finish (job_finish.go) asks git of a job's
 // worktree before it removes it: is the checkout clean, and is its work safe
-// elsewhere (HEAD on the branch's push ref, or the head of a merged pull
-// request of the job); then the branch's deletion, matched to the SHA that
-// was checked, and the removal of a worktree no workspace shows any more.
+// elsewhere (HEAD on the branch's push ref or on any other ref of its push
+// remote, or the head of a merged pull request of the job); then the
+// branch's deletion, matched to the SHA that was checked, and the removal
+// of a worktree no workspace shows any more.
 // Every call goes through gitRunner as argv; git's own text is logged, never
 // answered.
 
@@ -31,6 +32,10 @@ type finishTree struct {
 	pushRef string
 	// onPush: HEAD is pushRef or an ancestor of it.
 	onPush bool
+	// onRemote: HEAD is on a ref of the push remote, pushRef or another
+	// (refs/remotes/<remote>/*, its HEAD too): a branch with no commit of
+	// its own, never pushed, is on the remote's default branch.
+	onRemote bool
 	// envFiles: the worktree holds an ignored file whose name starts with
 	// .env, which a remove deletes and nothing makes again.
 	envFiles bool
@@ -80,7 +85,9 @@ func readFinishTree(ctx context.Context, git *gitRunner, rr *rootResolver, home 
 		}
 		return strings.TrimSpace(string(out))
 	}
-	if remote := pushRemoteName(run, strings.Fields(run("remote")), t.Branch); remote != "" {
+	remotes := strings.Fields(run("remote"))
+	remote := pushRemoteName(run, remotes, t.Branch)
+	if remote != "" {
 		ref := "refs/remotes/" + remote + "/" + t.Branch
 		if f.pushRef, err = refIfExists(ctx, git, c, ref); err != nil {
 			return finishTree{}, err
@@ -95,6 +102,11 @@ func readFinishTree(ctx context.Context, git *gitRunner, rr *rootResolver, home 
 		case errors.As(err, &ee) && ee.ExitCode() == 1:
 		default:
 			return finishTree{}, fmt.Errorf("merge-base in %s: %w", repo.Top, err)
+		}
+	}
+	if f.onRemote = f.onPush; !f.onRemote && remote != "" {
+		if f.onRemote, err = onRemoteRef(ctx, git, gitCall{root: repo.Top, safeDir: repo.SafeDir, limit: 64 << 10}, f.head, remote, remotes); err != nil {
+			return finishTree{}, fmt.Errorf("for-each-ref in %s: %w", repo.Top, err)
 		}
 	}
 	env := gitCall{root: repo.Top, safeDir: repo.SafeDir, heavy: true, noFilters: true, limit: 4 << 20}
@@ -119,6 +131,34 @@ func refIfExists(ctx context.Context, git *gitRunner, c gitCall, ref string) (st
 	return "", fmt.Errorf("show-ref %s: %w", ref, err)
 }
 
+// onRemoteRef reports whether head is on a ref of remote here, read
+// locally (termote never fetches). A ref of another remote whose name starts
+// with remote's and a slash (origin/fork) is that remote's, not remote's.
+func onRemoteRef(ctx context.Context, git *gitRunner, c gitCall, head, remote string, remotes []string) (bool, error) {
+	out, _, err := git.output(ctx, c, "for-each-ref", "--contains", head, "--format=%(refname)", "refs/remotes/"+remote)
+	if err != nil {
+		return false, err
+	}
+	for ref := range strings.Lines(string(out)) {
+		if remoteOfRef(strings.TrimSpace(ref), remotes) == remote {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// remoteOfRef is the remote of remotes whose refs/remotes/<name>/ is the
+// longest prefix of ref, "" when none is.
+func remoteOfRef(ref string, remotes []string) string {
+	owner := ""
+	for _, r := range remotes {
+		if strings.HasPrefix(ref, "refs/remotes/"+r+"/") && len(r) > len(owner) {
+			owner = r
+		}
+	}
+	return owner
+}
+
 // mergedPRAt is the first merged pull request of ci, the job's own (not
 // foreign), whose head is head.
 func mergedPRAt(ci *jobCI, head string) (jobPR, bool) {
@@ -134,14 +174,15 @@ func mergedPRAt(ci *jobCI, head string) (jobPR, bool) {
 }
 
 // safe: nothing is lost with the checkout. It is clean, and its HEAD is on
-// the pushed branch or is the head of a merged pull request of the job (the
-// remote branch is often deleted once merged, and a fetch --prune drops its
-// ref here).
+// the pushed branch or another ref of its push remote (a branch with no
+// commit of its own sits on the default branch), or is the head of a merged
+// pull request of the job (the remote branch is often deleted once merged,
+// and a fetch --prune drops its ref here).
 func (f finishTree) safe(ci *jobCI) bool {
 	if f.dirty {
 		return false
 	}
-	if f.onPush {
+	if f.onPush || f.onRemote {
 		return true
 	}
 	_, merged := mergedPRAt(ci, f.head)

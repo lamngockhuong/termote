@@ -367,8 +367,9 @@ là không đóng gì:
   nó đã được đọc; agent đã thoát thì còn lại shell, shell đó cũng được đóng;
 - trong tab không còn gì khác đang chạy, và không có tab hay workspace nào khác làm việc trong worktree;
 - lần mở agent của việc đã tạo worktree đó (worktree bạn có từ trước thì để bạn tự quyết);
-- worktree không có thay đổi chưa commit hay file chưa theo dõi, các commit đã nằm trên nhánh đã push
-  hoặc là head của một pull request đã merge, và không có file `.env` nào bị git bỏ qua.
+- worktree không có thay đổi chưa commit hay file chưa theo dõi, các commit đã có trên remote (nhánh
+  đã push hoặc bất kỳ nhánh nào khác của remote đó, nên nhánh chưa có commit riêng vẫn qua) hoặc là
+  head của một pull request đã merge, và không có file `.env` nào bị git bỏ qua.
 
 Các file git bỏ qua trong worktree (cơ sở dữ liệu cục bộ, `node_modules`, kết quả build) bị xóa theo.
 Nhánh chỉ bị xóa khi một pull request đã merge của việc có head trùng với head của worktree; nếu

@@ -3255,7 +3255,7 @@ It closes the job’s tab and removes the worktree, through the same calls as th
 * its agent is at rest (not working, no dialog, nothing in the background) and its last turn was read; an agent that exited leaves a shell, which closes too;
 * nothing else runs in the tab, and no other tab or workspace works in the worktree;
 * the job’s start made the worktree (one you had before is left to you);
-* the worktree has no uncommitted or untracked change, its commits are on the pushed branch or are the head of a merged pull request, and it holds no `.env` file git ignores.
+* the worktree has no uncommitted or untracked change, its commits are on the remote (the pushed branch or any other branch of that remote, so a branch with no commit of its own passes) or are the head of a merged pull request, and it holds no `.env` file git ignores.
 
 Files git ignores in the worktree (local databases, `node_modules`, build output) are removed with it. The branch is deleted only when a merged pull request of the job has the worktree’s head; otherwise it stays and the command says why. A remove that fails after the tab closed says so; the same command run again removes the rest. On psmux and herdr-core termote cannot tell which pane the command runs in, so it refuses: close the tab and remove the worktree in the PWA.
 

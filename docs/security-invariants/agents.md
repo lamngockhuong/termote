@@ -1229,9 +1229,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `changed`, `not_linked`, 404 `not_found`); dirty as the worktree routes count it (409 `dirty`; on
   Windows a CRLF checkout made by git with Git for Windows' `core.autocrlf` is not dirty, see
   Worktrees in mux.md);
-  safe only when HEAD is on the branch's push ref (`merge-base --is-ancestor`, the ref read locally:
-  termote never fetches, so a stale ref refuses) or is the head of a merged pull request of the job's
-  that is not `foreign` (409 `worktree_not_pushed`); an ignored `.env*` file anywhere in it
+  safe only when HEAD is on the branch's push ref (`merge-base --is-ancestor`), or on any other ref of
+  that push remote (`for-each-ref --contains` on `refs/remotes/<remote>`, its `HEAD` and default
+  branch included, a ref of another remote whose name starts with `<remote>/` not counted: a branch
+  with no commit of its own, never pushed, sits on the default branch), the refs read locally
+  (termote never fetches, so a stale ref refuses), or is the head of a merged pull request of the
+  job's that is not `foreign` (409 `worktree_not_pushed`); an ignored `.env*` file anywhere in it
   (`ls-files --others --ignored` on a `**/.env*` pathspec, a list cut short counting) is 409
   `finish_worktree_env`. An open ask of the job's is 409 `finish_open_ask`. For a job in `review`
   with no merged pull request at HEAD known, the job's pull requests are read once
@@ -1253,7 +1256,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   names it linked and unlocked), never opened again. The local branch goes only with a merged pull
   request at HEAD, from the repository's shared git dir, after the worktree is gone, refused while a
   worktree has it checked out, and by `update-ref -d refs/heads/<b> <sha>` so a branch that moved
-  stays (`branch_moved`). Herdr's `confirmation_required` for `tab.close` (the last tab of a
+  stays (`branch_moved`). A worktree safe only because HEAD is on a remote ref (a branch with no
+  commit of its own) keeps its branch too: no merged pull request names it, and the branch is the
+  user's to drop. Herdr's `confirmation_required` for `tab.close` (the last tab of a
   workspace with `ui.confirm_close` on) is 409 `tab_confirm_required`, never passed through. A remove
   that fails once the job's tab closed (with its workspace, or on its own before) answers its code
   with `closed: true`, logs the tab's close and adds a `finish_partial` event; a finish again removes the rest. Then the job: `review` becomes
