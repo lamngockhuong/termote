@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.34.0](https://github.com/lamngockhuong/termote/compare/v2.33.0...v2.34.0) (2026-11-25)
+
+
+### Features
+
+* **server:** let job finish remove .env files that are in the main checkout or the user confirms ([#1011](https://github.com/lamngockhuong/termote/issues/1011)) ([6750d91](https://github.com/lamngockhuong/termote/commit/6750d91423a91df62418ae22ba1f27a5a0e1c38a))
+
+
+### Bug Fixes
+
+* **pwa:** align a job's pull request row and size its open link like other small icons ([#1010](https://github.com/lamngockhuong/termote/issues/1010)) ([f753061](https://github.com/lamngockhuong/termote/commit/f7530616e72eee5c322d40f0ec0680fa509b3e3e))
+* security hardening of orchestrator grants, container password, view-only reads and read bounds ([#1012](https://github.com/lamngockhuong/termote/issues/1012)) ([5538601](https://github.com/lamngockhuong/termote/commit/553860133289341799416018cba4f56bc3ae066b))
+* **server:** let job finish remove a worktree whose HEAD is already on the remote ([#1009](https://github.com/lamngockhuong/termote/issues/1009)) ([1df7d6c](https://github.com/lamngockhuong/termote/commit/1df7d6c50e3a3d13ca134d35219d491353c0087c))
+* **server:** uninstall removes the start prompts and the orchestrator skill, names the worktrees ([#1007](https://github.com/lamngockhuong/termote/issues/1007)) ([d70a78b](https://github.com/lamngockhuong/termote/commit/d70a78bd64a35aa8c2ffc0fdadf2cc739fbd79f8))
+
 ## [2.33.0](https://github.com/lamngockhuong/termote/compare/v2.32.0...v2.33.0) (2026-11-25)
 
 
