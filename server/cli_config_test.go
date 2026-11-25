@@ -72,7 +72,7 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
 		AllowHosts: []string{"mybox.local", "proxy.lan"}, AllowLocalUsers: []string{"caddy", "www-data"}, HerdrAllowNoAuth: true, User: "bob.smith", Password: `p@ss w0rd$!`,
-		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work", Mux: "herdr", HerdrAllowNoAuth: true}}
+		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work", Mux: "herdr", HerdrAllowNoAuth: true, Password: "c0ntainer pass"}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
 		t.Fatal(err)
@@ -95,8 +95,17 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 		t.Fatalf("username not written:\n%s", data)
 	}
 	if cc := out.Container; cc == nil || !cc.LAN || cc.NoAuth || cc.Port != 7681 || cc.Tailscale != "c.ts.net:8443" ||
-		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" || cc.Mux != "herdr" || !cc.HerdrAllowNoAuth {
+		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" || cc.Mux != "herdr" || !cc.HerdrAllowNoAuth ||
+		cc.Password != "c0ntainer pass" || cc.PasswordUnreadable {
 		t.Fatalf("container round trip: %+v", out.Container)
+	}
+	if strings.Contains(string(data), "c0ntainer") || !strings.Contains(string(data), "\nTERMOTE_CONTAINER_SAVED_PASS_MAC=") {
+		t.Fatalf("container password not written encrypted with its MAC:\n%s", data)
+	}
+	// Without the key the container's password is unreadable like the
+	// native one.
+	if nokey, _ := parseUnixConfig(data, func() string { return "" }); nokey.Container.Password != "" || !nokey.Container.PasswordUnreadable || !nokey.PasswordUnreadable {
+		t.Fatalf("container password without the key: %+v", nokey.Container)
 	}
 	// A config saved before the container had a backend reads as none chosen.
 	old := strings.NewReplacer("TERMOTE_CONTAINER_MUX=\"herdr\"\n", "", "TERMOTE_CONTAINER_HERDR_ALLOW_NO_AUTH=\"true\"\n", "").Replace(string(data))
@@ -106,6 +115,24 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	if prev, err := parseUnixConfig([]byte(old), func() string { return key }); err != nil || prev.Container == nil ||
 		prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth || prev.Mux != "herdr" {
 		t.Fatalf("config without the container backend: %+v, %v", prev, err)
+	}
+	// A config saved before the container had its own password reads as
+	// none saved (not unreadable), the native one as it was.
+	var lines []string
+	for _, l := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(l, "TERMOTE_CONTAINER_SAVED_PASS") {
+			lines = append(lines, l)
+		}
+	}
+	if prev, err := parseUnixConfig([]byte(strings.Join(lines, "\n")), func() string { return key }); err != nil || prev.Container == nil ||
+		prev.Container.Password != "" || prev.Container.PasswordUnreadable || prev.Password != in.Password {
+		t.Fatalf("config without the container password: %+v %+v, %v", prev, prev.Container, err)
+	}
+	// The native password's value and MAC copied into the container's keys
+	// do not verify: the MACs are labelled apart.
+	swapped := strings.Replace(strings.Join(lines, "\n"), "TERMOTE_SAVED_PASS", "TERMOTE_CONTAINER_SAVED_PASS", 2)
+	if prev, _ := parseUnixConfig([]byte(swapped), func() string { return key }); prev.Container.Password != "" || !prev.Container.PasswordUnreadable {
+		t.Fatalf("native password accepted as the container's: %+v", prev.Container)
 	}
 	if !strings.HasPrefix(string(data), "# Termote config (written by termote start)\nTERMOTE_LAN=\"true\"\n") {
 		t.Fatalf("unexpected layout:\n%s", data)
@@ -202,7 +229,7 @@ func TestParseWindowsConfig(t *testing.T) {
 
 func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, AllowLocalUsers: []string{`PC\proxy`}, User: "bob", Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, AllowLocalUsers: []string{`PC\proxy`}, User: "bob", Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true, Password: "cpw"}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -212,13 +239,21 @@ func TestWindowsConfigRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" ||
-		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth || out.User != "bob" || strings.Join(out.AllowLocalUsers, ",") != `PC\proxy` {
-		t.Fatalf("round trip got %+v", *out)
+		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth || out.User != "bob" || strings.Join(out.AllowLocalUsers, ",") != `PC\proxy` ||
+		out.Container.Password != "cpw" || out.Container.PasswordUnreadable {
+		t.Fatalf("round trip got %+v %+v", *out, out.Container)
+	}
+	if strings.Contains(string(data), `"cpw"`) || strings.Count(string(data), `"EncryptedPass"`) != 2 {
+		t.Fatalf("container password not in its own encrypted field:\n%s", data)
 	}
 	// A config saved before the container had a backend reads as none chosen.
 	prev, err := parseWindowsConfig([]byte(`{"Port":7690,"Mux":"herdr","Container":{"Lan":false,"NoAuth":false,"Port":7680}}`))
 	if err != nil || prev.Container == nil || prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth || prev.authUser() != adminUser {
 		t.Fatalf("config without the container backend: %+v, %v", prev, err)
+	}
+	// ...and, saved before it had its own password, as none saved.
+	if prev.Container.Password != "" || prev.Container.PasswordUnreadable {
+		t.Fatalf("config without the container password: %+v", prev.Container)
 	}
 }
 
@@ -230,6 +265,11 @@ func TestWindowsConfigUnreadablePassword(t *testing.T) {
 	}
 	if !cfg.PasswordUnreadable {
 		t.Fatal("password from another user not flagged")
+	}
+	other := base64.StdEncoding.EncodeToString([]byte("other-user"))
+	cfg, err = parseWindowsConfig([]byte(`{"Port":7690,"Container":{"Port":7680,"EncryptedPass":"` + other + `"}}`))
+	if err != nil || cfg.Container == nil || !cfg.Container.PasswordUnreadable || cfg.Container.Password != "" || cfg.PasswordUnreadable {
+		t.Fatalf("container password from another user: %+v %v", cfg, err)
 	}
 }
 
@@ -324,13 +364,34 @@ func TestShowPassword(t *testing.T) {
 	}
 	tc.saveConfig(savedConfig{Password: "Shown-01"})
 	tc.stdout.Reset()
-	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: admin\nPassword: Shown-01") {
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: admin\nNative password: Shown-01\n") ||
+		strings.Contains(tc.stdout.String(), "Container") {
 		t.Fatalf("code %d out %q", code, tc.stdout.String())
 	}
 	tc.saveConfig(savedConfig{User: "bob", Password: "Shown-01"})
 	tc.stdout.Reset()
-	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: bob\nPassword: Shown-01") {
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: bob\nNative password: Shown-01") {
 		t.Fatalf("saved user: code %d out %q", code, tc.stdout.String())
+	}
+	// Both, each labelled.
+	tc.saveConfig(savedConfig{Port: 7690, Password: "Shown-01", Container: &containerConfig{Port: 7680, Password: "Shown-02"}})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: admin\nNative password: Shown-01\nContainer password: Shown-02\n") {
+		t.Fatalf("both: code %d out %q", code, tc.stdout.String())
+	}
+	// A config only container up saved names no native server.
+	tc.saveConfig(savedConfig{Container: &containerConfig{Port: 7680, Password: "Shown-02"}})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: admin\nContainer password: Shown-02\n") ||
+		strings.Contains(tc.stdout.String(), "Native") {
+		t.Fatalf("container only: code %d out %q", code, tc.stdout.String())
+	}
+	// A container saved before it had its own password says how to set one.
+	tc.saveConfig(savedConfig{Port: 7690, Password: "Shown-01", Container: &containerConfig{Port: 7680}})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Native password: Shown-01\n") ||
+		!strings.Contains(tc.stdout.String(), "container up --fresh") {
+		t.Fatalf("old container: code %d out %q", code, tc.stdout.String())
 	}
 	tc.saveConfig(savedConfig{NoAuth: true})
 	tc.stdout.Reset()

@@ -174,7 +174,7 @@ uninstall [--purge]  Remove the service, the command, the install, caches and th
                      ~/.termote/worktrees is only named)
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
-show-password        Show the saved username and password
+show-password        Show the saved username and passwords (native, container)
 machine <cmd>        Machines reached over SSH: add <alias> [--label --print-key --remote-exe --no-check --yes], list, remove, status, import --herdr
 bridge               The forced command another termote's key runs here (never by hand)
 settings <cmd>       PWA settings an agent may propose: schema [--json], propose <json|-> (native only, the user applies it per browser)
@@ -217,8 +217,8 @@ runs; refused with `--no-auth`, and in `container up` with `--lan`),
 `--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
 `--allow-path <dir>`/`--remove-path <dir>` (repeatable; a Place in Files, refused at or above home,
 `~/.ssh`, `~/.gnupg`, termote's dirs or a git dir; `container up` keeps its own list and mounts it),
-`--allow-herdr-no-auth`, `--allow-hc-no-auth`, `--user <name>` (default `admin`, shared with the container like the
-password), `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
+`--allow-herdr-no-auth`, `--allow-hc-no-auth`, `--user <name>` (default `admin`, shared with the container; the
+password is not: each has its own), `--fresh` (a new password for that side only). `update` takes `--version <X.Y.Z>` and `--force`.
 `container up` additionally takes `--workspace <dir>` and `--build`. `url` prints `http://127.0.0.1:<port>` for this machine (never `localhost`, whose `::1` another
 user could hold), and takes `--herdr` (ids from
 the Herdr plugin context) or `--group/--tab/--pane`, `--view`, and `--open`/`--copy`/`--qr`; only

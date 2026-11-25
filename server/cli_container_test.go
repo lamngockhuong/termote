@@ -68,7 +68,7 @@ func newContainerCLI(t *testing.T) *containerCLI {
 
 func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	cc := newContainerCLI(t)
-	cc.saveConfig(savedConfig{Port: 7690, Mux: "herdr", Password: "shared-pass", AllowHosts: []string{"native.lan"}})
+	cc.saveConfig(savedConfig{Port: 7690, Mux: "herdr", Password: "native-pass", AllowHosts: []string{"native.lan"}})
 	port := freePort(t)
 	ws := filepath.Join(t.TempDir(), "ws")
 	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(port), "--lan", "--allow-host", "c.lan", "--workspace", ws}); code != 0 {
@@ -89,10 +89,21 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 			t.Errorf("run args miss %q: %s", want, args)
 		}
 	}
-	if strings.Contains(args, "shared-pass") || strings.Contains(args, "TERMOTE_PASS=") {
+	cfg, _ := cc.loadConfig()
+	containerPass := cfg.Container.Password
+	if strings.Contains(args, containerPass) || strings.Contains(args, "native-pass") || strings.Contains(args, "TERMOTE_PASS=") {
 		t.Fatalf("password on the command line: %s", args)
 	}
-	if cc.runEnv["TERMOTE_PASS"] != "shared-pass" || cc.runEnv["NO_AUTH"] != "false" || cc.runEnv["TERMOTE_USER"] != adminUser ||
+	// The container gets a password of its own, never the native one.
+	if len(containerPass) != 12 || containerPass == "native-pass" {
+		t.Fatalf("container password %q", containerPass)
+	}
+	for k, v := range cc.runEnv {
+		if strings.Contains(v, "native-pass") {
+			t.Fatalf("native password passed to the container in %s", k)
+		}
+	}
+	if cc.runEnv["TERMOTE_PASS"] != containerPass || cc.runEnv["NO_AUTH"] != "false" || cc.runEnv["TERMOTE_USER"] != adminUser ||
 		!strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "c.lan") || !strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "192.168.1.20") {
 		t.Fatalf("run env %v", cc.runEnv)
 	}
@@ -103,9 +114,8 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 		t.Errorf("TERMOTE_WORKSPACE_HOME = %q for a workspace below no home", cc.runEnv["TERMOTE_WORKSPACE_HOME"])
 	}
 	// The container settings are saved apart; the native ones and the
-	// shared password stay.
-	cfg, _ := cc.loadConfig()
-	if cfg.Port != 7690 || cfg.Mux != "herdr" || strings.Join(cfg.AllowHosts, ",") != "native.lan" || cfg.Password != "shared-pass" {
+	// native password stay.
+	if cfg.Port != 7690 || cfg.Mux != "herdr" || strings.Join(cfg.AllowHosts, ",") != "native.lan" || cfg.Password != "native-pass" {
 		t.Fatalf("native config changed: %+v", cfg)
 	}
 	if k := cfg.Container; k == nil || k.Port != port || !k.LAN || k.Workspace != ws || strings.Join(k.AllowHosts, ",") != "c.lan" {
@@ -121,6 +131,58 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	}
 	if args := strings.Join(cc.runArgs, " "); !strings.Contains(args, fmt.Sprintf("-p 127.0.0.1:%d:7680", port)) || !strings.Contains(args, ws) {
 		t.Fatalf("saved settings not reused: %s", args)
+	}
+	if cc.runEnv["TERMOTE_PASS"] != containerPass {
+		t.Fatalf("saved container password not reused: %q", cc.runEnv["TERMOTE_PASS"])
+	}
+}
+
+// A config an older version saved, where the container ran with the native
+// server's password: up gives the container a new one of its own, says so
+// once, and leaves the native one as it was.
+func TestContainerUpGivesTheContainerItsOwnPassword(t *testing.T) {
+	cc := newContainerCLI(t)
+	port := freePort(t)
+	cc.saveConfig(savedConfig{Port: 7690, Password: "native-pass", Container: &containerConfig{Port: port, Mux: "tmux", Workspace: filepath.Join(t.TempDir(), "ws")}})
+	if code := cc.main([]string{"container", "up"}); code != 0 {
+		t.Fatalf("up: %s%s", cc.stdout.String(), cc.stderr.String())
+	}
+	cfg, _ := cc.loadConfig()
+	got := cfg.Container.Password
+	if cfg.Password != "native-pass" || len(got) != 12 || got == "native-pass" {
+		t.Fatalf("native %q, container %q", cfg.Password, got)
+	}
+	if cc.runEnv["TERMOTE_PASS"] != got {
+		t.Fatalf("container ran with %q, saved %q", cc.runEnv["TERMOTE_PASS"], got)
+	}
+	out := cc.stdout.String()
+	if !strings.Contains(out, "container now has its own password") || !strings.Contains(out, "termote show-password") {
+		t.Errorf("change not reported:\n%s", out)
+	}
+	if strings.Contains(out, "native server shares") || strings.Contains(out, got) {
+		t.Errorf("shared password reported, or the password printed off a terminal:\n%s", out)
+	}
+
+	// Once: the next up reuses it and says nothing about it.
+	cc.srv.Close()
+	cc.srv = nil
+	cc.stdout.Reset()
+	if code := cc.main([]string{"container", "up"}); code != 0 {
+		t.Fatalf("second up: %s", cc.stderr.String())
+	}
+	if cc.runEnv["TERMOTE_PASS"] != got || strings.Contains(cc.stdout.String(), "now has its own password") {
+		t.Fatalf("second up: env %q\n%s", cc.runEnv["TERMOTE_PASS"], cc.stdout.String())
+	}
+
+	// --fresh changes the container's only.
+	cc.srv.Close()
+	cc.srv = nil
+	if code := cc.main([]string{"container", "up", "--fresh"}); code != 0 {
+		t.Fatalf("up --fresh: %s", cc.stderr.String())
+	}
+	cfg, _ = cc.loadConfig()
+	if cfg.Password != "native-pass" || cfg.Container.Password == got || cfg.Container.Password == "native-pass" || cc.runEnv["TERMOTE_PASS"] != cfg.Container.Password {
+		t.Fatalf("--fresh: native %q, container %q, env %q", cfg.Password, cfg.Container.Password, cc.runEnv["TERMOTE_PASS"])
 	}
 }
 
@@ -193,12 +255,11 @@ func TestContainerDownLogsStatus(t *testing.T) {
 	}
 }
 
-// --no-auth on either side keeps the password the other one uses.
-// The username is shared like the password: up passes the saved one (or
+// The username is shared with the native server: up passes the saved one (or
 // --user) to the container through the environment, never the command line.
 func TestContainerUpUser(t *testing.T) {
 	cc := newContainerCLI(t)
-	cc.saveConfig(savedConfig{Port: 7690, User: "bob", Password: "shared-pass"})
+	cc.saveConfig(savedConfig{Port: 7690, User: "bob", Password: "native-pass"})
 	port := strconv.Itoa(freePort(t))
 	if code := cc.main([]string{"container", "up", "--port", port}); code != 0 {
 		t.Fatalf("up: %s", cc.stderr.String())
@@ -233,17 +294,20 @@ func TestContainerUpUser(t *testing.T) {
 	}
 }
 
-func TestNoAuthKeepsTheSharedPassword(t *testing.T) {
+// --no-auth on the container keeps its own saved password and the native
+// one, and passes neither to the container.
+func TestContainerNoAuthKeepsThePasswords(t *testing.T) {
 	cc := newContainerCLI(t)
-	cc.saveConfig(savedConfig{Port: 7690, Password: "shared-pass"})
-	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t)), "--no-auth"}); code != 0 {
+	port := freePort(t)
+	cc.saveConfig(savedConfig{Port: 7690, Password: "native-pass", Container: &containerConfig{Port: port, Mux: "tmux", Workspace: filepath.Join(t.TempDir(), "ws"), Password: "container-pass"}})
+	if code := cc.main([]string{"container", "up", "--no-auth"}); code != 0 {
 		t.Fatalf("up: %s", cc.stderr.String())
 	}
-	if cfg, _ := cc.loadConfig(); cfg.Password != "shared-pass" || !cfg.Container.NoAuth {
-		t.Fatalf("container --no-auth dropped the password: %+v", cfg)
+	if cfg, _ := cc.loadConfig(); cfg.Password != "native-pass" || cfg.Container.Password != "container-pass" || !cfg.Container.NoAuth {
+		t.Fatalf("container --no-auth changed a password: %+v %+v", cfg, cfg.Container)
 	}
-	if got := cc.keptPassword("", &savedConfig{Password: "shared-pass"}); got != "shared-pass" {
-		t.Fatalf("native --no-auth keeps %q", got)
+	if cc.runEnv["TERMOTE_PASS"] != "" || cc.runEnv["NO_AUTH"] != "true" {
+		t.Fatalf("--no-auth env %v", cc.runEnv)
 	}
 }
 

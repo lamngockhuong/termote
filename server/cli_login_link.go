@@ -86,9 +86,7 @@ func (c *cli) loginLinkFile(info linkInfo) (string, error) {
 	}
 	saved, _ := c.loadConfig()
 	t := deviceTarget{port: info.report.Port, user: saved.authUser(), pipeOnly: c.pipeOnly(info.report.Port)}
-	if saved != nil {
-		t.pass = saved.Password
-	}
+	t.pass = saved.passwordFor(info.report.Port)
 	u, err := url.Parse(info.url)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return "", fmt.Errorf("cannot read the link %q", info.url)

@@ -507,7 +507,7 @@ Commands:
                        --purge removes them too)
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
-  show-password        Show the saved username and password
+  show-password        Show the saved username and passwords (native, container)
   machine <cmd>        Machines this termote reaches over SSH: add <ssh alias>, list,
                        remove <id|label>, status, import --herdr
   settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
@@ -555,9 +555,9 @@ Options of start (saved; a flag not given keeps its saved value):
   --allow-herdr-no-auth      Allow herdr without auth
   --allow-hc-no-auth         Allow hc without auth
   --user <name>              Login username (default: admin; shared with the container)
-  --fresh                    Set a new password
+  --fresh                    Set a new password (the native server's only)
 
-Options of container up (saved apart from start's; the username and password are shared):
+Options of container up (saved apart from start's, the password too; the username is shared):
   --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --user --fresh
   --cloudflare --no-cloudflare --proxy-client-header --no-proxy-client-header
                              As for start, with the tunnel on this host; refused with --lan

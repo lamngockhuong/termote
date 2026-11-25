@@ -135,10 +135,8 @@ func (c *cli) cmdUpdate(args []string) error {
 		return nil
 	}
 	saved, _ := c.loadConfig()
-	port, pass := c.savedPort(saved), ""
-	if saved != nil {
-		pass = saved.Password
-	}
+	port := c.savedPort(saved)
+	pass := saved.passwordFor(port)
 	user := saved.authUser()
 	if err := c.restartAndCheck(sup, port, user, pass, target); err == nil {
 		c.pruneVersions()

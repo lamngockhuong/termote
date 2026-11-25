@@ -23,6 +23,8 @@ import (
 
 // startOptions are the flags of start after merging the saved config.
 type startOptions struct {
+	// container: the options of container up, whose password is its own.
+	container   bool
 	lan         bool
 	noAuth      bool
 	fresh       bool
@@ -373,7 +375,7 @@ func (c *cli) cmdStart(args []string) error {
 	if err := c.startAllowPaths(o, saved); err != nil {
 		return err
 	}
-	pass, reused, err := c.setupAuth(o, saved)
+	pass, reused, err := c.setupAuth(o, nativeAuth(saved))
 	if err != nil {
 		return err
 	}
@@ -455,7 +457,7 @@ func (c *cli) cmdStart(args []string) error {
 		HcBin:             o.hcBin,
 		HcEnv:             o.hcEnv,
 		User:              o.user,
-		Password:          c.keptPassword(pass, saved),
+		Password:          keptPassword(pass, nativeAuth(saved).pass),
 		Container:         c.savedContainer(saved),
 	}); err != nil {
 		return fmt.Errorf("save config: %w", err)
@@ -521,31 +523,91 @@ func (c *cli) registerService() (supervisor, error) {
 	return sup, nil
 }
 
+// authSide is the saved password of one server, the native one or the
+// container, as setupAuth reads it. Each has its own: code running in the
+// container could sign in to the native server with the native password.
+type authSide struct {
+	container  bool
+	pass       string
+	unreadable bool
+	// other is the other server's saved password, which this one never
+	// takes.
+	other string
+}
+
+// nativeAuth is the native server's side of saved.
+func nativeAuth(saved *savedConfig) authSide {
+	if saved == nil {
+		return authSide{}
+	}
+	a := authSide{pass: saved.Password, unreadable: saved.PasswordUnreadable}
+	if saved.Container != nil {
+		a.other = saved.Container.Password
+	}
+	return a
+}
+
+// containerAuth is the container's side of saved.
+func containerAuth(saved *savedConfig) authSide {
+	a := authSide{container: true}
+	if saved == nil {
+		return a
+	}
+	a.other = saved.Password
+	if cc := saved.Container; cc != nil {
+		a.pass, a.unreadable = cc.Password, cc.PasswordUnreadable
+	}
+	return a
+}
+
+// freshCommand is the command that sets a new password on the container or
+// the native server.
+func freshCommand(container bool) string {
+	if container {
+		return "termote container up --fresh"
+	}
+	return "termote start --fresh"
+}
+
 // setupAuth returns the password to run with; empty means auth is off.
-func (c *cli) setupAuth(o startOptions, saved *savedConfig) (pass string, reused bool, err error) {
+func (c *cli) setupAuth(o startOptions, side authSide) (pass string, reused bool, err error) {
 	if o.noAuth {
 		return "", false, nil
 	}
-	if !o.fresh && saved != nil {
+	whose, fresh := "", freshCommand(side.container)
+	if side.container {
+		whose = "container "
+	}
+	if !o.fresh {
 		switch {
-		case saved.Password != "":
-			return saved.Password, true, nil
-		case saved.PasswordUnreadable:
-			c.warnf("Saved password cannot be decrypted (%s missing or changed); setting a new one", c.secretFile())
+		case side.pass != "":
+			return side.pass, true, nil
+		case side.unreadable:
+			c.warnf("Saved %spassword cannot be decrypted (%s missing or changed); setting a new one", whose, c.secretFile())
 		}
 	}
 	if c.interactive {
-		fmt.Fprint(c.out, "Enter password for admin (Enter = auto-generate): ")
+		fmt.Fprintf(c.out, "Enter the %spassword for admin (Enter = auto-generate): ", whose)
 		p, err := c.readPassword()
-		if err == nil && p != "" {
+		switch {
+		case err != nil || p == "":
+		case side.other != "" && p == side.other:
+			// One password for both would let code in the container sign
+			// in to the native server.
+			c.warnf("That is the other server's password (native and container each have their own); using a generated one (set another with: %s)", fresh)
+		default:
 			return p, false, nil
 		}
 	}
-	p, err := generatePassword()
-	if err != nil {
-		return "", false, err
+	for {
+		p, err := generatePassword()
+		if err != nil {
+			return "", false, err
+		}
+		if p != side.other {
+			return p, false, nil
+		}
 	}
-	return p, false, nil
 }
 
 // serverHealth is /api/mux/health.
@@ -920,7 +982,7 @@ func (c *cli) cmdRestart(args []string) error {
 	if err := sup.Start(); err != nil {
 		return err
 	}
-	if err := c.waitForServer(port, saved.authUser(), saved.Password, c.version, serverStartWait, c.detachedExited); err != nil {
+	if err := c.waitForServer(port, saved.authUser(), saved.passwordFor(port), c.version, serverStartWait, c.detachedExited); err != nil {
 		return fmt.Errorf("%v; last log lines:\n%s", err, tailFile(c.serverLog(), 15))
 	}
 	c.infof("Termote restarted (%s)", sup.Name())
@@ -952,10 +1014,8 @@ func (c *cli) cmdStatus(args []string) error {
 	if port == 0 {
 		port = c.savedPort(saved)
 	}
-	pass := ""
-	if saved != nil {
-		pass = saved.Password
-	}
+	// The container's password on its port, never the native one there.
+	pass := saved.passwordFor(port)
 	c.heading("Termote Status")
 	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)
 	running := code == http.StatusOK
@@ -1211,7 +1271,7 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 	}
 	// The username is no secret, so it is shown even when the password is not.
 	if reused {
-		c.infof("Username: %s, with the saved password (show it with: termote show-password; new one: termote start --fresh)", o.user)
+		c.infof("Username: %s, with the saved password (show it with: termote show-password; new one: %s)", o.user, freshCommand(o.container))
 		return
 	}
 	// A new password is printed only to a terminal: a Herdr plugin action's

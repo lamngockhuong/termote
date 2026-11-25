@@ -201,7 +201,7 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved username and password
+termote show-password                # Print the saved username and passwords (native, container)
 termote url --qr                     # The link to open, as a QR code for a phone
 termote pair                         # A one-time code that signs a new device in
 termote devices                      # List the paired devices (devices revoke <id>)
@@ -238,7 +238,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` and `--build` (a checkout only), saved apart from the options of `start`; the username and password are shared with the native server. Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
+`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` and `--build` (a checkout only), saved apart from the options of `start`; the username is shared with the native server, but the container has its own password (`--fresh` changes only its own; `termote show-password` shows both). Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
 
 > **Security note**: Avoid mounting `$HOME` directly — sensitive directories like `.ssh`, `.gnupg` will be accessible in container. Mount specific project directories instead.
 

@@ -49,9 +49,14 @@ này khi các terminal không cần công cụ trên máy (như `claude` hay `gi
 - Mật khẩu và cấu hình đi qua biến môi trường của tiến trình `docker`/`podman` (`-e TÊN`, không kèm giá trị), nên
   chúng không bao giờ xuất hiện trên dòng lệnh hay nằm trong file nào trên đĩa (`docker inspect` vẫn thấy, như với
   mọi biến môi trường).
-- Cấu hình container được lưu riêng với các tùy chọn `termote start` của bản native, nhưng hai bên dùng chung tên
-  đăng nhập và mật khẩu: giá trị mới (`--user`, `--fresh`) áp dụng cho cả hai, và server native nhận nó ở lần
+- Cấu hình container được lưu riêng với các tùy chọn `termote start` của bản native, kể cả mật khẩu: code chạy
+  trong container đọc được mật khẩu của container, nên mật khẩu đó chỉ mở được container, không bao giờ mở được
+  server native trên máy host. `--fresh` chỉ đặt mật khẩu mới cho container; `termote show-password` hiện cả hai.
+  Tên đăng nhập thì dùng chung: tên mới (`--user`) áp dụng cho cả hai, và server native nhận nó ở lần
   `termote restart` tới.
+- Khi cập nhật từ phiên bản mà container dùng chung mật khẩu với bản native, lần `container up` kế tiếp cấp cho
+  container mật khẩu riêng và báo một lần: các trình duyệt đã đăng nhập container bằng mật khẩu phải đăng nhập lại,
+  và các thiết bị đã ghép nối với container phải ghép nối lại. Phía server native không bị ảnh hưởng.
 - Cổng mặc định của container là 7680. Nếu server native đang giữ cổng đó, `container up` từ chối và gợi ý dùng
   `--port`.
 - Khi chạy từ thư mục mã nguồn clone bằng git, hoặc với `--build`, nó tự dựng `termote:local` từ Dockerfile
@@ -114,7 +119,7 @@ bật/tắt được tắt bằng `=false`.
 | `--allow-path <dir>`        | Mount một thư mục trên máy host thành [Place](/vi/usage/files/#places) trong Files (lặp được; `--remove-path` để bỏ) |
 | `--workspace <dir>`         | Thư mục được mount vào `/workspace` (mặc định `~/termote-workspace`)   |
 | `--user <name>`             | Tên đăng nhập (mặc định `admin`; dùng chung với server native)         |
-| `--fresh`                   | Đặt mật khẩu mới (dùng chung với server native)                        |
+| `--fresh`                   | Đặt mật khẩu mới cho container (không đổi mật khẩu của server native)  |
 | `--build`                   | Tự dựng từ mã nguồn clone bằng git thay vì tải về                      |
 
 <Aside type="note" title="Windows và --lan">

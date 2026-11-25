@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -184,13 +185,15 @@ func TestNativeWindowsPanelPipeOnly(t *testing.T) {
 }
 
 // The saved container's port is not the native server's: status and the
-// device commands still send the password there, to a trusted listener.
+// device commands still send the container's own password there, to a
+// trusted listener, never the native one.
 func TestWindowsContainerKeepsPasswordOverTCP(t *testing.T) {
 	noLocalSocket(t)
 	srv := newPasswordServer(t, false, `{"status":"ok","version":"1.0.0","devices":[]}`)
 	tc := newTestCLI(t, "windows")
-	tc.saveConfig(savedConfig{Password: "secret", Container: &containerConfig{Port: srv.port}})
-	if r := tc.statusReport(&savedConfig{Port: srv.port, Password: "secret"}, srv.port); !r.Running || r.Version != "1.0.0" {
+	saved := savedConfig{Password: "native-pass", Container: &containerConfig{Port: srv.port, Password: "secret"}}
+	tc.saveConfig(saved)
+	if r := tc.statusReport(&saved, srv.port); !r.Running || r.Version != "1.0.0" {
 		t.Errorf("container status report = %+v", r)
 	}
 	if code, _, errOut := runDevCLI(tc, "devices"); code != 0 {
@@ -207,9 +210,9 @@ func TestWindowsContainerUpSendsPassword(t *testing.T) {
 	noLocalSocket(t)
 	cc := newContainerCLI(t)
 	cc.goos = "windows"
-	cc.needPass = "shared-pass"
-	cc.saveConfig(savedConfig{Password: "shared-pass"})
-	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t))}); code != 0 {
+	cc.needPass = "container-pass"
+	cc.saveConfig(savedConfig{Password: "native-pass", Container: &containerConfig{Port: freePort(t), Mux: "tmux", Workspace: filepath.Join(t.TempDir(), "ws"), Password: "container-pass"}})
+	if code := cc.main([]string{"container", "up"}); code != 0 {
 		t.Fatalf("up: %d\n%s%s", code, cc.stdout.String(), cc.stderr.String())
 	}
 }
@@ -298,10 +301,10 @@ func TestWindowsContainerUpWithNativeServiceSendsPassword(t *testing.T) {
 	noLocalSocket(t)
 	cc := newContainerCLI(t)
 	cc.goos = "windows"
-	cc.needPass = "shared-pass"
+	cc.needPass = "container-pass"
 	cc.runner.outputs["schtasks /Query /TN Termote"] = "Termote"
-	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "shared-pass"})
-	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t))}); code != 0 {
+	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "native-pass", Container: &containerConfig{Port: freePort(t), Mux: "tmux", Workspace: filepath.Join(t.TempDir(), "ws"), Password: "container-pass"}})
+	if code := cc.main([]string{"container", "up"}); code != 0 {
 		t.Fatalf("up: %d\n%s%s", code, cc.stdout.String(), cc.stderr.String())
 	}
 }
@@ -316,7 +319,7 @@ func TestWindowsContainerStatus(t *testing.T) {
 	cc.goos = "windows"
 	cc.runner.outputs["docker ps -a --filter name=^termote$ --format {{.Status}}\t{{.Image}}"] = "Up 1 minute\ttermote:1.0.0"
 	cc.runner.outputs["schtasks /Query /TN Termote"] = "Termote"
-	cc.saveConfig(savedConfig{Port: srv.port, Password: "secret", Container: &containerConfig{Port: srv.port}})
+	cc.saveConfig(savedConfig{Port: srv.port, Password: "native-pass", Container: &containerConfig{Port: srv.port, Password: "secret"}})
 	if code := cc.main([]string{"container", "status"}); code != 1 || !strings.Contains(cc.stdout.String(), sharedPortMsg) {
 		t.Errorf("shared port: code %d\n%s", code, cc.stdout.String())
 	}
@@ -325,7 +328,7 @@ func TestWindowsContainerStatus(t *testing.T) {
 	}
 
 	cc.stdout.Reset()
-	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "secret", Container: &containerConfig{Port: srv.port}})
+	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "native-pass", Container: &containerConfig{Port: srv.port, Password: "secret"}})
 	if code := cc.main([]string{"container", "status"}); code != 0 || !srv.gotPassword() {
 		t.Errorf("container's own port: code %d, password sent %v\n%s", code, srv.gotPassword(), cc.stdout.String())
 	}

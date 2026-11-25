@@ -61,7 +61,7 @@ type containerOptions struct {
 	workspace   string
 	mux         string
 	herdrNoAuth bool
-	user        string // Basic auth username, shared with the native server
+	user        string // Basic auth username, shared with the native server (the password is not)
 	allowHosts  []string
 	removeHosts []string
 	// allowPaths are the host folders mounted as Places; newPaths the ones
@@ -286,7 +286,7 @@ func (c *cli) containerUp(args []string) error {
 	if err := c.mergeContainer(&o, set, prev); err != nil {
 		return err
 	}
-	// The username is shared like the password, so it is not in prev.
+	// The username is shared with the native server, so it is not in prev.
 	if !set["user"] {
 		o.user = saved.authUser()
 	}
@@ -308,7 +308,11 @@ func (c *cli) containerUp(args []string) error {
 	if build && !fileExists(filepath.Join(c.projectDir, "Dockerfile")) {
 		return errors.New("--build needs a git checkout (it builds the image from its Dockerfile)")
 	}
-	pass, reused, err := c.setupAuth(startOptions{noAuth: o.noAuth, fresh: o.fresh}, saved)
+	// The container has its own password, never the native server's: one
+	// saved before it had one (by an older version, which shared it) is
+	// replaced by a new one.
+	side := containerAuth(saved)
+	pass, reused, err := c.setupAuth(startOptions{noAuth: o.noAuth, fresh: o.fresh}, side)
 	if err != nil {
 		return err
 	}
@@ -395,15 +399,12 @@ func (c *cli) containerUp(args []string) error {
 	if saved != nil {
 		cfg = *saved
 	}
-	// --no-auth runs the container without a password but keeps the one
-	// the native server shares.
-	if pass != "" {
-		cfg.Password = pass
-	}
 	cfg.User = o.user
+	// --no-auth runs the container without a password but keeps its saved
+	// one; the native server's is never touched here.
 	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale,
 		Cloudflare: o.proxy.cloudflare, ProxyClientHeader: o.proxy.proxyHeader, AllowHosts: o.allowHosts, AllowPaths: o.allowPaths,
-		Workspace: o.workspace, Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
+		Workspace: o.workspace, Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth, Password: keptPassword(pass, side.pass)}
 	if err := c.saveConfig(cfg); err != nil {
 		c.warnf("Could not save the container settings: %v", err)
 	}
@@ -421,15 +422,19 @@ func (c *cli) containerUp(args []string) error {
 		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
 	}
 	c.infof("Container running (%s, image %s)", rt, image)
-	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, proxy: o.proxy, mux: o.mux, user: o.user, allowHosts: o.allowHosts, allowPaths: o.mounted}, pass, reused)
+	c.showAccessInfo(startOptions{container: true, lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, proxy: o.proxy, mux: o.mux, user: o.user, allowHosts: o.allowHosts, allowPaths: o.mounted}, pass, reused)
 	if o.proxy.cloudflare != "" {
 		c.reportCloudflareAccess(o.proxy.cloudflare)
 	}
-	// One password and username for both: a new one also changes the native
-	// server's.
-	if !reused && pass != "" && saved != nil && saved.Password != "" {
-		c.infof("The native server shares this new password; it takes it at its next restart (termote restart)")
+	// A container an older version ran had the native server's password.
+	if pass != "" && !reused && prev != nil && side.pass == "" && !side.unreadable {
+		c.infof("The container now has its own password, apart from the native server's, which is unchanged: browsers signed in to the container with the password must sign in again, and devices paired with the container must be paired again (the native server's browsers and devices are unaffected). Show both passwords with: termote show-password")
+		if saved.Password != "" {
+			c.infof("Code that ran in the container could read the password it shared with the native server; to change that one: termote start --fresh")
+		}
 	}
+	// The username is shared: the native server takes a new one at its next
+	// restart.
 	if saved != nil && saved.Port != 0 && o.user != saved.authUser() {
 		c.infof("The native server shares this username; it takes it at its next restart (termote restart)")
 	}
@@ -708,7 +713,7 @@ func (c *cli) containerStatus(args []string) error {
 	port := saved.Container.Port
 	pass := ""
 	if !saved.Container.NoAuth {
-		pass = saved.Password
+		pass = saved.Container.Password
 	}
 	// Over TCP: the container's server has no local socket of this user.
 	// The password still stays home on a port pipeOnly gives the native

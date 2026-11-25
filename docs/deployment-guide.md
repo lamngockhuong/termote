@@ -210,10 +210,15 @@ instead of pulling. Default workspace `~/termote-workspace`, mounted with `--mou
 (rootless podman: `--userns=keep-id` instead; rootless Docker: no `--user` at all). The
 username, password and Host allowlist are passed as `-e NAME` values taken from the CLI's own process
 environment — never written to a file or a command-line argument (`docker inspect` still shows
-them, as with any container env var). The container's password is shared with the native
-server (setting a new one with `--fresh` applies to both; `--no-auth` on either side keeps the
-shared password saved rather than clearing it), and so is the username (`--user` on either side;
-the other takes it at its next `termote restart` or `container up`).
+them, as with any container env var). The container has its own password, apart from the native
+server's: code running in the container can read it, so it opens only the container, never the host.
+`container up --fresh` sets a new one for the container only and `start --fresh` for the native server
+only; `--no-auth` on either side keeps that side's saved password rather than clearing it. The first
+`container up` after an update from a version that shared the password gives the container a new one
+and says so once: browsers signed in to the container with the password sign in again and devices
+paired with the container pair again; the native server's are unaffected. `termote show-password`
+shows both. The username is shared (`--user` on either side; the other takes it at its next
+`termote restart` or `container up`).
 
 **Container Runtime:** Auto-detects podman (preferred) or docker.
 
@@ -268,11 +273,11 @@ PowerShell `-Flag` parameter names in 1.0.
 ## Config Persistence
 
 `start` and `container up` save their settings automatically, separately from each other (a
-`container` config and a native config can coexist, but share the same username and password):
+`container` config and a native config can coexist, but share the same username; each has its own password):
 
 - **Unix:** `~/.config/termote/config` (`$XDG_CONFIG_HOME`), plus a `secret` file (0600) that
-  keys the password's encryption
-- **Windows:** `%APPDATA%\termote\config.json` (password DPAPI-encrypted)
+  keys the passwords' encryption
+- **Windows:** `%APPDATA%\termote\config.json` (passwords DPAPI-encrypted)
 
 Saved settings include the port, network flags (`--lan`, `--tailscale`), auth setting
 (`--no-auth`), mux backend, the Host allowlist, the workspace (container only), the login
@@ -913,7 +918,7 @@ install root and the images uploaded from the PWA (a cache: `~/.cache/termote/up
 `termote skills install` wrote for Claude Code and Codex (a folder of that name termote did not
 write stays; one it wrote that now holds other files stays and is named). The saved
 config (`~/.config/termote/`) and logs (`~/.local/state/termote/`) stay, so a reinstall keeps the
-password (signed-in devices stay signed in) and the container still shares it; the command prints
+passwords, the native server's and the container's (signed-in devices stay signed in); the command prints
 both paths. The files deleted from the PWA's Files view stay as well, in the trash next to the
 uploads (`~/.cache/termote/trash`, `~/Library/Caches/termote/trash` on macOS): they are the
 user's files, not a cache, so a plain `uninstall` prints their path and keeps them. `--purge`

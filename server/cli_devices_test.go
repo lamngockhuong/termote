@@ -97,13 +97,13 @@ func TestDevicesTargetContainer(t *testing.T) {
 	h, _, _, _ := newDeviceServer(t)
 	port := listen(t, h)
 	tc := newTestCLI(t, "linux")
-	tc.saveConfig(savedConfig{Port: 1, Password: "secret", Container: &containerConfig{Port: port, LAN: true}})
+	tc.saveConfig(savedConfig{Port: 1, Password: "native-pass", Container: &containerConfig{Port: port, LAN: true, Password: "secret"}})
 	code, out, errOut := runDevCLI(tc, "pair")
 	if code != 0 || !strings.Contains(out, fmt.Sprintf("http://192.168.1.20:%d/pair?code=", port)) {
 		t.Fatalf("pair on the container: %d\n%s%s", code, out, errOut)
 	}
 	// A container without auth cannot pair: nothing is asked.
-	tc.saveConfig(savedConfig{Port: 1, Password: "secret", Container: &containerConfig{Port: port, NoAuth: true}})
+	tc.saveConfig(savedConfig{Port: 1, Password: "native-pass", Container: &containerConfig{Port: port, NoAuth: true, Password: "secret"}})
 	if code, _, errOut = runDevCLI(tc, "devices"); code != 1 || !strings.Contains(errOut, "runs with --no-auth") {
 		t.Errorf("container without auth: %d %s", code, errOut)
 	}
