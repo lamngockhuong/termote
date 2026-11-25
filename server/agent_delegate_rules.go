@@ -409,7 +409,11 @@ var delegateDeniedDirs = []string{".git", ".claude", ".codex", ".opencode", ".ag
 	// a dev container's commands.
 	".gemini", ".cursor", ".devcontainer",
 	// CircleCI's pipeline, and mise's other config folders.
-	".circleci", ".mise", ".config/mise", ".config/mise.toml"}
+	".circleci", ".mise", ".config/mise", ".config/mise.toml",
+	// Yarn Berry runs the release its config names (.yarn/releases) for
+	// every yarn command, why and install alike, and loads the plugins in
+	// .yarn/plugins.
+	".yarn"}
 
 // checkDelegatePath is "" when rel, a path relative to a grant's dir, may
 // be edited under it, else the refusal code. Only the names are read here;

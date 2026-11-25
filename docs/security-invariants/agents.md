@@ -1074,7 +1074,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   short name or stream, nothing case folding or Windows maps onto another name), not a
   denied name or directory whatever the user wrote (`.git` anywhere, `.claude`, `.codex`,
   `.opencode`, `.agents`, `.gemini`, `.cursor`, `.devcontainer`, `.husky`, `.githooks`, `.lefthook`,
-  `.vscode`, `.idea`, `.cargo`, `.circleci`, `.mise`, `.config/mise`, `.config/mise.toml`,
+  `.vscode`, `.idea`, `.cargo`, `.circleci`, `.mise`, `.config/mise`, `.config/mise.toml`, `.yarn` (Yarn Berry runs
+  the release in `.yarn/releases` its config names for every yarn command, and the plugins in `.yarn/plugins`),
   `.gitlab-ci.yml`, `Jenkinsfile`, `rust-toolchain`, `rust-toolchain.toml`, `mise.local.toml`,
   `.mise.local.toml`, `.vimrc`, `.nvimrc`, `_exrc`, `justfile`, `.justfile`, `Taskfile.yml`,
   `Taskfile.yaml`, `Gemfile`, `Rakefile`,
