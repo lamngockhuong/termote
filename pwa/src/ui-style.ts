@@ -29,18 +29,49 @@ export function applyUiStyle(style: UiStyle) {
 
 // Accent colors, independent of the style the way light and dark are. 'auto'
 // keeps the style's own accent; any other one sets data-accent on <html>, whose
-// blocks in index.css override --tm-accent, --tm-accent-fg and --tm-accent-soft
-// (theme-tokens.test.ts checks the values match and the contrast on every
-// style). index.html applies it before React runs, like the style.
+// blocks in index.css override --tm-accent, --tm-accent-fg, --tm-accent-text and
+// --tm-accent-soft (theme-tokens.test.ts checks the values match and the
+// contrast on every style). Each pair is [accent, accent-fg, accent-text]:
+// accent-text is the accent text of a selected item on the tint, darker in
+// light and lighter in dark where the accent itself misses 4.5:1 there.
+// index.html applies it before React runs, like the style.
 export const UI_ACCENTS = [
   { id: 'auto' },
-  { id: 'indigo', light: ['#4f46e5', '#ffffff'], dark: ['#818cf8', '#0b0b1a'] },
-  { id: 'blue', light: ['#0062cc', '#ffffff'], dark: ['#4c9cf8', '#050d18'] },
-  { id: 'teal', light: ['#0f766e', '#ffffff'], dark: ['#2dd4bf', '#04201c'] },
-  { id: 'green', light: ['#0d7a41', '#ffffff'], dark: ['#3ddc84', '#04140b'] },
-  { id: 'orange', light: ['#b83f0b', '#ffffff'], dark: ['#fb923c', '#1f0d02'] },
-  { id: 'pink', light: ['#be185d', '#ffffff'], dark: ['#f472b6', '#22061a'] },
-  { id: 'violet', light: ['#7c3aed', '#ffffff'], dark: ['#a78bfa', '#120a26'] },
+  {
+    id: 'indigo',
+    light: ['#4f46e5', '#ffffff', '#4f46e5'],
+    dark: ['#818cf8', '#0b0b1a', '#97a0f9'],
+  },
+  {
+    id: 'blue',
+    light: ['#0062cc', '#ffffff', '#0060c8'],
+    dark: ['#4c9cf8', '#050d18', '#67abf9'],
+  },
+  {
+    id: 'teal',
+    light: ['#0f766e', '#ffffff', '#0e7069'],
+    dark: ['#2dd4bf', '#04201c', '#2dd4bf'],
+  },
+  {
+    id: 'green',
+    light: ['#0d7a41', '#ffffff', '#0c733d'],
+    dark: ['#3ddc84', '#04140b', '#3ddc84'],
+  },
+  {
+    id: 'orange',
+    light: ['#b83f0b', '#ffffff', '#b03c0b'],
+    dark: ['#fb923c', '#1f0d02', '#fb923c'],
+  },
+  {
+    id: 'pink',
+    light: ['#be185d', '#ffffff', '#bc185c'],
+    dark: ['#f472b6', '#22061a', '#f581be'],
+  },
+  {
+    id: 'violet',
+    light: ['#7c3aed', '#ffffff', '#7834ec'],
+    dark: ['#a78bfa', '#120a26', '#b299fb'],
+  },
 ] as const
 
 export type UiAccent = (typeof UI_ACCENTS)[number]['id']

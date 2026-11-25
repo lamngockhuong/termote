@@ -32,10 +32,14 @@ and keeps each style's own accent; each of the seven colors has one light and on
 by every style.
 
 - `data-accent` on `<html>` selects a `:root[data-accent="<id>"]` block (and its `.dark` one) that
-  overrides only `--tm-accent`, `--tm-accent-fg` and `--tm-accent-soft`. These blocks come after
+  overrides only `--tm-accent`, `--tm-accent-fg`, `--tm-accent-text` and `--tm-accent-soft`. These blocks come after
   every style block: at equal specificity only that order makes them win.
 - The tint is `rgb(<accent> / var(--tm-accent-soft-alpha))`; each style sets
   `--tm-accent-soft-alpha` so the tint keeps that style's weight.
+- Text of a selected item on the tint uses `text-accent-text` (`--tm-accent-text`), never
+  `text-accent`: the accent itself misses 4.5:1 on the tint in several styles, so this token is a
+  darker accent in light and a lighter one in dark where needed. Every style and every color sets
+  it.
 - `UI_ACCENTS` in `pwa/src/ui-style.ts` holds the values; the inline script in `pwa/index.html`
   applies the attribute before paint, like the style.
 - With a color chosen, the terminal cursor and selection take it (`terminalTheme` in
@@ -43,8 +47,8 @@ by every style.
 - Settings draws each style's own accent (`UI_STYLES[].accent`) for "Follow style" and the style
   previews, never `bg-accent`, which is the chosen color.
 - A new color must pass `theme-tokens.test.ts` and `terminal-view.test.tsx` on every style and
-  mode: 4.5:1 for buttons, accent text and selected terminal text, and accent text on the tint no
-  worse than the styles' own accents (those already miss 4.5:1 there).
+  mode: 4.5:1 for buttons, accent text, selected terminal text and `--tm-accent-text` on the tint.
+  The same test fails a component class that pairs `bg-accent-soft` with `text-accent`.
 
 ### Token groups
 
@@ -53,7 +57,7 @@ by every style.
 | Surfaces | `bg`, `surface`, `surface-raised`, `overlay`, `term-bg`              |
 | Text     | `fg`, `fg-muted`, `fg-subtle`                                        |
 | Lines    | `border`, `border-strong`                                            |
-| Accent   | `accent`, `accent-fg`, `accent-soft`                                 |
+| Accent   | `accent`, `accent-fg`, `accent-text`, `accent-soft`                  |
 | Status   | `success`, `warning`, `danger`, `info`                               |
 | Shape    | `radius-control`, `radius-panel`, `radius-sheet` (differ per style)  |
 | Type     | `font-ui`, `font-label` (Terminal labels are monospace)              |

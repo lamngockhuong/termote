@@ -38,6 +38,7 @@
   --color-border-strong: var(--tm-border-strong);
   --color-accent: var(--tm-accent);
   --color-accent-fg: var(--tm-accent-fg);
+  --color-accent-text: var(--tm-accent-text);
   --color-accent-soft: var(--tm-accent-soft);
   --color-success: var(--tm-success);
   --color-warning: var(--tm-warning);
@@ -102,6 +103,7 @@
   --tm-border-strong: #d1d1d6;
   --tm-accent: #4f46e5;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #4f46e5;
   --tm-accent-soft: rgb(79 70 229 / 0.08);
   --tm-accent-soft-alpha: 0.08;
   --tm-success: #15773a;
@@ -139,6 +141,7 @@
   --tm-border-strong: #424249;
   --tm-accent: #818cf8;
   --tm-accent-fg: #0b0b1a;
+  --tm-accent-text: #909af9;
   --tm-accent-soft: rgb(129 140 248 / 0.14);
   --tm-accent-soft-alpha: 0.14;
   --tm-success: #4ade80;
@@ -171,6 +174,7 @@
   --tm-border-strong: #b9c1b8;
   --tm-accent: #0d7a41;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #0c743e;
   --tm-accent-soft: rgb(13 122 65 / 0.1);
   --tm-accent-soft-alpha: 0.1;
   --tm-success: #0d7a41;
@@ -208,6 +212,7 @@
   --tm-border-strong: #384039;
   --tm-accent: #3ddc84;
   --tm-accent-fg: #04140b;
+  --tm-accent-text: #3ddc84;
   --tm-accent-soft: rgb(61 220 132 / 0.12);
   --tm-accent-soft-alpha: 0.12;
   --tm-success: #3ddc84;
@@ -240,6 +245,7 @@
   --tm-border-strong: #c2c2c8;
   --tm-accent: #0062cc;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #0062cb;
   --tm-accent-soft: rgb(0 122 255 / 0.12);
   --tm-accent-soft-alpha: 0.12;
   --tm-success: #1f7a36;
@@ -276,6 +282,7 @@
   --tm-border-strong: #4a4a4d;
   --tm-accent: #4c9cf8;
   --tm-accent-fg: #050d18;
+  --tm-accent-text: #6fb0f9;
   --tm-accent-soft: rgb(76 156 248 / 0.2);
   /* Below the 0.2 above: accent text keeps no less contrast on a chosen color's tint */
   --tm-accent-soft-alpha: 0.16;
@@ -301,89 +308,106 @@
  * blocks: a light block here has the specificity of a light style block and a
  * dark one that of a dark style block, so only their order makes them win.
  * --tm-accent-soft-alpha comes from the style, so the tint keeps its weight.
+ * --tm-accent-text is the text of a selected item on that tint (text-accent-text
+ * on bg-accent-soft): the accent, or a darker (light) or lighter (dark) one where
+ * the accent misses 4.5:1 on the tint of some style.
  */
 
 :root[data-accent="indigo"] {
   --tm-accent: #4f46e5;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #4f46e5;
   --tm-accent-soft: rgb(79 70 229 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="indigo"].dark {
   --tm-accent: #818cf8;
   --tm-accent-fg: #0b0b1a;
+  --tm-accent-text: #97a0f9;
   --tm-accent-soft: rgb(129 140 248 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="blue"] {
   --tm-accent: #0062cc;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #0060c8;
   --tm-accent-soft: rgb(0 98 204 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="blue"].dark {
   --tm-accent: #4c9cf8;
   --tm-accent-fg: #050d18;
+  --tm-accent-text: #67abf9;
   --tm-accent-soft: rgb(76 156 248 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="teal"] {
   --tm-accent: #0f766e;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #0e7069;
   --tm-accent-soft: rgb(15 118 110 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="teal"].dark {
   --tm-accent: #2dd4bf;
   --tm-accent-fg: #04201c;
+  --tm-accent-text: #2dd4bf;
   --tm-accent-soft: rgb(45 212 191 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="green"] {
   --tm-accent: #0d7a41;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #0c733d;
   --tm-accent-soft: rgb(13 122 65 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="green"].dark {
   --tm-accent: #3ddc84;
   --tm-accent-fg: #04140b;
+  --tm-accent-text: #3ddc84;
   --tm-accent-soft: rgb(61 220 132 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="orange"] {
   --tm-accent: #b83f0b;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #b03c0b;
   --tm-accent-soft: rgb(184 63 11 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="orange"].dark {
   --tm-accent: #fb923c;
   --tm-accent-fg: #1f0d02;
+  --tm-accent-text: #fb923c;
   --tm-accent-soft: rgb(251 146 60 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="pink"] {
   --tm-accent: #be185d;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #bc185c;
   --tm-accent-soft: rgb(190 24 93 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="pink"].dark {
   --tm-accent: #f472b6;
   --tm-accent-fg: #22061a;
+  --tm-accent-text: #f581be;
   --tm-accent-soft: rgb(244 114 182 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="violet"] {
   --tm-accent: #7c3aed;
   --tm-accent-fg: #ffffff;
+  --tm-accent-text: #7834ec;
   --tm-accent-soft: rgb(124 58 237 / var(--tm-accent-soft-alpha));
 }
 
 :root[data-accent="violet"].dark {
   --tm-accent: #a78bfa;
   --tm-accent-fg: #120a26;
+  --tm-accent-text: #b299fb;
   --tm-accent-soft: rgb(167 139 250 / var(--tm-accent-soft-alpha));
 }
 

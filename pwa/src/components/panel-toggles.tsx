@@ -52,7 +52,7 @@ export function PanelToggles({
             }
             className={`relative before:absolute before:content-[''] flex ${BUTTON_SIZE[orientation]} items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] text-[12px] ui-native:rounded-full ${FOCUS_RING} ${
               pressed
-                ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
+                ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent-text ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'
             }`}
           >
