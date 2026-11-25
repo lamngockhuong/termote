@@ -57,6 +57,17 @@ type delegateProgram struct {
 	// Toolchain: one +x (rustup's) may come between the name and the
 	// command (cargo +nightly test).
 	Toolchain bool `json:"toolchain"`
+	// Switches are the options taking no value that may come before the
+	// command (pnpm -r test), and ValueOptions those taking the next word
+	// as their value (npm --prefix pwa test, also --prefix=pwa). Any other
+	// option there is refused rather than guessed at: a switch taken for an
+	// option with a value hides the word picking the command (cargo
+	// --locked install x), and a value taken for a switch is read as that
+	// word (npm -w test install x). Each list is per program, as the same
+	// option differs between them (-w is a switch to pnpm, takes a value
+	// to npm).
+	Switches     []string `json:"switches"`
+	ValueOptions []string `json:"valueOptions"`
 }
 
 type delegateTable struct {
@@ -66,10 +77,6 @@ type delegateTable struct {
 	// any test command does (jobs.grant.runsCode).
 	Tools    []string                   `json:"tools"`
 	Programs map[string]delegateProgram `json:"programs"`
-	// FlagOptions are the options taking no value. Any other option
-	// without "=" is taken to take the word after it, so the word picking
-	// the command is never mistaken for an option's value the user typed.
-	FlagOptions []string `json:"flagOptions"`
 }
 
 var delegateRules = func() delegateTable {
@@ -81,16 +88,29 @@ var delegateRules = func() delegateTable {
 }()
 
 // commandWord is the index in words of the word that picks the command of
-// a program, from start on, past options and their values, or -1 when
-// none does.
-func commandWord(words []string, start int) int {
+// p, from start on, past the options p lists and their values, or -1 when
+// none does or an option before it is not one p lists: one of its
+// Switches, one of its ValueOptions followed by a word that is no option,
+// or one of those written --name=value (a short option with = and the
+// --name=value of an option not listed are refused too: cargo
+// --config=alias.clippy=install would make clippy an install).
+func commandWord(p delegateProgram, words []string, start int) int {
 	for i := start; i < len(words); i++ {
 		w := words[i]
-		if !strings.HasPrefix(w, "-") {
+		switch {
+		case !strings.HasPrefix(w, "-"):
 			return i
-		}
-		if !strings.Contains(w, "=") && !slices.Contains(delegateRules.FlagOptions, w) {
+		case slices.Contains(p.Switches, w):
+		case slices.Contains(p.ValueOptions, w):
 			i++
+			if i >= len(words) || strings.HasPrefix(words[i], "-") {
+				return -1
+			}
+		default:
+			name, _, ok := strings.Cut(w, "=")
+			if !ok || !strings.HasPrefix(name, "--") || !slices.Contains(p.ValueOptions, name) {
+				return -1
+			}
 		}
 	}
 	return -1
@@ -137,7 +157,7 @@ func parseDelegateCommand(s string) string {
 	if p.Toolchain && len(words) > 1 && strings.HasPrefix(words[1], "+") {
 		start = 2
 	}
-	k := commandWord(words, start)
+	k := commandWord(p, words, start)
 	if k < 0 {
 		return "command"
 	}
@@ -146,7 +166,7 @@ func parseDelegateCommand(s string) string {
 	case slices.Contains(p.Commands, c):
 		return ""
 	case slices.Contains(p.Script, c):
-		if commandWord(words, k+1) < 0 {
+		if commandWord(p, words, k+1) < 0 {
 			return "command"
 		}
 		return ""

@@ -1033,8 +1033,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the table spells it, no path, no `.exe` or `.cmd`, no other case, no variable set before it (`X=1
   bash`); anything else, a shell, an interpreter, `git`, `make`, `tar`, `docker`, `brew`, `gem`,
   `bun`, `npx`, `pip3`, is `program`. A `tools` entry (`rg`, `grep`, `ls`, `cat`, `head`, `tail`,
-  `wc`, `diff`, `tsc`, `eslint`, `jest`, `pytest`: one purpose and no command; `eslint`, `jest` and
-  `pytest` still run their config and test files, as a test command does) takes words after its name
+  `wc`, `diff`, `eslint`, `jest`, `pytest`: one purpose and no command; `eslint`, `jest` and
+  `pytest` still run their config and test files, as a test command does; `tsc` is none, as its
+  `tsconfig.json`, which the agent can write, sends output (`outDir`, `declarationDir`, `outFile`,
+  `tsBuildInfoFile`, even under `--noEmit`) to any absolute path) takes words after its name
   that name no file outside the folder it runs in: no word, nor an option's value (after `=`, a short
   option's attached `-fx`, or past `@` and `+`), is an absolute path (`/x`, `//host/share`), a Windows
   drive (`C:x`) or holds a `..` component (`path`, in a prefix as in a command, the PWA checking the
@@ -1047,8 +1049,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   pattern) passing, any other error refusing, an absolute link target included (`checkToolPaths`,
   `outside`; `TestCheckToolPaths`, `TestDelegatedToolPaths`). A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
   `dotnet`, `pip`, `vitest`, `biome`, `ruff`) needs the word that picks its command (`commandWord`:
-  past options, an option without `=` and not of the file's `flagOptions` taking the word after it;
-  for `cargo`, past one rustup `+toolchain`), spelled exactly as one of its `commands` (any word may
+  past only the options the program's entry lists, never guessing an option's arity: one of its
+  `switches`, one of its `valueOptions` and the word after it (no option), or `--name=value` of one
+  of its `valueOptions`; any other option before the command, a short one with `=` included, is
+  `command` (`cargo --locked install x`, `npm -w test install x`, `pip -v install show x`, `cargo
+  --config=alias.clippy=install clippy`), the lists being per program as an option's arity differs
+  between them (`-w`); for `cargo`, past one rustup `+toolchain`), spelled exactly as one of its `commands` (any word may
   follow: `npm test src`, `pip show x`), its `script` commands (`run`, followed by the script's
   name, so the agent never picks the script, `yarn run` included, which runs any program of
   `node_modules/.bin` too) or its `bare` commands (`npm ci`, `npm audit`, `pnpm install`, `yarn
@@ -1065,7 +1071,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   between the two dashed rules under the header (a wrapped row's leading `│` dropped) are the
   command's words, in order (`mismatch`); it equals a grant's prefix or starts with the prefix and a
   space (`no_grant`), and no word after the prefix is option-like (`optionLike`: starts with `-`,
-  `@` (a response file: `tsc @opts`), `+` or is `/name:` or `/name=` (MSBuild's `/p:X=1`, which
+  `@` (a response file: `eslint @opts`), `+` or is `/name:` or `/name=` (MSBuild's `/p:X=1`, which
   `dotnet build` takes)) (`option`: a granted program runs another through its own options, `rg
   --pre=x`, `go test -exec=x`, so only the options the user typed into the prefix are covered). The
   shared cases `server/testdata/grant-prefix-cases.json` run through `TestGrantPrefixCases` and the

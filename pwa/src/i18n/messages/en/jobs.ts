@@ -244,7 +244,7 @@ export default {
   'jobs.grant.problem.chars':
     'Use plain words with one space between them: no quotes, no ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # and no tab',
   'jobs.grant.problem.program':
-    'This program cannot be granted: only npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome and ruff with one of their commands, and rg, grep, ls, cat, head, tail, wc, diff, tsc, eslint, jest and pytest. Type its bare name, without a path or .exe',
+    'This program cannot be granted: only npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome and ruff with one of their commands, and rg, grep, ls, cat, head, tail, wc, diff, eslint, jest and pytest. Type its bare name, without a path or .exe',
   'jobs.grant.problem.command':
     'Type the command you allow after the program, spelled out: npm test, cargo build, pip show. After run, the name of the script too (pnpm run lint, not pnpm lint). install and ci take no package name, and npm audit takes no fix. An option before the command is written --x=y',
   'jobs.grant.problem.path':

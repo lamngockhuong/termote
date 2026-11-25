@@ -3,7 +3,6 @@ import tableJson from '../../../server/delegate_programs.json?raw'
 import casesJson from '../../../server/testdata/grant-prefix-cases.json?raw'
 import {
   type DelegateProgram,
-  FLAG_OPTIONS,
   grantPrefixProblem,
   MAX_GRANT_PREFIX,
   PROGRAMS,
@@ -17,10 +16,8 @@ describe('the table', () => {
     const table = JSON.parse(tableJson) as {
       tools: string[]
       programs: Record<string, DelegateProgram>
-      flagOptions: string[]
     }
     expect(sorted(TOOLS)).toEqual(sorted(table.tools))
-    expect(sorted(FLAG_OPTIONS)).toEqual(sorted(table.flagOptions))
     expect(sorted(Object.keys(PROGRAMS))).toEqual(
       sorted(Object.keys(table.programs)),
     )
@@ -30,6 +27,8 @@ describe('the table', () => {
       expect(sorted(mine.script), name).toEqual(sorted(p.script))
       expect(sorted(mine.bare), name).toEqual(sorted(p.bare))
       expect(!!mine.toolchain, name).toBe(!!p.toolchain)
+      expect(sorted(mine.switches), name).toEqual(sorted(p.switches))
+      expect(sorted(mine.valueOptions), name).toEqual(sorted(p.valueOptions))
     }
   })
 })

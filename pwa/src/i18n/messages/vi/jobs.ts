@@ -199,7 +199,7 @@ export default {
   'jobs.grant.problem.chars':
     'Chỉ dùng các từ thường, cách nhau đúng một dấu cách: không có dấu nháy, không có ; & | $ ( ) { } * ? [ ] ~ \\ ` > < ! # và không có tab',
   'jobs.grant.problem.program':
-    'Không thể ủy quyền cho chương trình này. Chỉ cấp được cho npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome và ruff (kèm một lệnh của chúng) và cho rg, grep, ls, cat, head, tail, wc, diff, tsc, eslint, jest và pytest. Chỉ gõ tên chương trình, không kèm đường dẫn hay đuôi .exe',
+    'Không thể ủy quyền cho chương trình này. Chỉ cấp được cho npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome và ruff (kèm một lệnh của chúng) và cho rg, grep, ls, cat, head, tail, wc, diff, eslint, jest và pytest. Chỉ gõ tên chương trình, không kèm đường dẫn hay đuôi .exe',
   'jobs.grant.problem.command':
     'Gõ đầy đủ lệnh bạn cho phép ngay sau tên chương trình: npm test, cargo build, pip show. Sau run cần thêm tên script (pnpm run lint, không phải pnpm lint). install và ci không được kèm tên gói, npm audit không được kèm fix. Tùy chọn đứng trước lệnh thì viết dạng --x=y',
   'jobs.grant.problem.path':

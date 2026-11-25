@@ -14,12 +14,17 @@ const BAD_CHARS = ';&|$(){}*?[]~\\\'"`><!#'
 // prefix and one of these. commands take any word after them; script ones
 // run a script by the name that must follow them in the prefix (npm run
 // lint); bare ones take no word but options (npm ci, pnpm install, npm
-// audit); toolchain lets one +x come before the command (cargo +nightly)
+// audit); toolchain lets one +x come before the command (cargo +nightly).
+// switches and valueOptions are the only options that may come before the
+// command, per program (-w is a switch to pnpm, takes a value to npm):
+// any other is refused, never guessed at
 export interface DelegateProgram {
   commands?: string[]
   script?: string[]
   bare?: string[]
   toolchain?: boolean
+  switches?: string[]
+  valueOptions?: string[]
 }
 
 // Programs of one purpose: every word after the name is an argument
@@ -34,7 +39,6 @@ export const TOOLS = [
   'tail',
   'wc',
   'diff',
-  'tsc',
   'eslint',
   'jest',
   'pytest',
@@ -45,11 +49,14 @@ export const PROGRAMS: Record<string, DelegateProgram> = {
     commands: ['test', 'start', 'ls', 'outdated', 'explain'],
     script: ['run'],
     bare: ['ci', 'audit'],
+    valueOptions: ['--prefix'],
   },
   pnpm: {
     commands: ['test', 'start', 'ls', 'list', 'outdated', 'why'],
     script: ['run'],
     bare: ['install'],
+    switches: ['-r', '--recursive', '--if-present'],
+    valueOptions: ['--filter'],
   },
   yarn: {
     commands: ['test', 'start', 'why'],
@@ -68,40 +75,11 @@ export const PROGRAMS: Record<string, DelegateProgram> = {
   ruff: { commands: ['check', 'format'] },
 }
 
-// Options taking no value: any other option without = takes the word
-// after it, so the word picking the command is never an option's value
-export const FLAG_OPTIONS = [
-  '-r',
-  '--recursive',
-  '-s',
-  '--silent',
-  '-w',
-  '--workspace-root',
-  '--parallel',
-  '--stream',
-  '--if-present',
-  '--aggregate-output',
-  '--bail',
-  '--no-bail',
-  '--sequential',
-  '--color',
-  '--no-color',
-  '--frozen-lockfile',
-  '--prod',
-  '--dev',
-  '--offline',
-  '--prefer-offline',
-  '--reverse',
-  '--include-workspace-root',
-  '-D',
-  '-P',
-  '-O',
-]
-
 // empty: nothing typed; length: longer than the server takes; chars: a
 // character or a spacing it refuses; program: a first word that is not a
 // program of the table, spelled as it spells it (no path, no extension, no
-// other case); command: a program without one of its commands, a script
+// other case); command: a program without one of its commands, an option
+// before the command that the table does not list for the program, a script
 // command without the script's name, or a bare command with a word that
 // is no option; path: a tool's word that is an absolute path, a Windows
 // drive or holds a .. component. The server also refuses, which a prefix
@@ -137,12 +115,12 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   if (!Object.hasOwn(PROGRAMS, words[0])) return 'program'
   const prog = PROGRAMS[words[0]]
   const start = prog.toolchain && words[1]?.startsWith('+') ? 2 : 1
-  const k = commandWord(words, start)
+  const k = commandWord(prog, words, start)
   if (k < 0) return 'command'
   const c = words[k]
   if (prog.commands?.includes(c)) return null
   if (prog.script?.includes(c))
-    return commandWord(words, k + 1) < 0 ? 'command' : null
+    return commandWord(prog, words, k + 1) < 0 ? 'command' : null
   if (prog.bare?.includes(c))
     return words.slice(k + 1).every((w) => w.startsWith('-')) ? null : 'command'
   return 'command'
@@ -170,12 +148,26 @@ function pathWordLeaves(w: string): boolean {
 }
 
 // The index of the word picking a program's command, from start on, past
-// options and their values, or -1 (commandWord)
-function commandWord(words: string[], start: number): number {
+// the options it lists (a switch, a value option and the word after it, or
+// --name=value of a value option), or -1 when none does or another option
+// comes first (commandWord)
+function commandWord(
+  prog: DelegateProgram,
+  words: string[],
+  start: number,
+): number {
   for (let i = start; i < words.length; i++) {
     const w = words[i]
     if (!w.startsWith('-')) return i
-    if (!w.includes('=') && !FLAG_OPTIONS.includes(w)) i++
+    if (prog.switches?.includes(w)) continue
+    if (prog.valueOptions?.includes(w)) {
+      i++
+      if (i >= words.length || words[i].startsWith('-')) return -1
+      continue
+    }
+    const eq = w.indexOf('=')
+    const name = eq < 0 ? '' : w.slice(0, eq)
+    if (!name.startsWith('--') || !prog.valueOptions?.includes(name)) return -1
   }
   return -1
 }
