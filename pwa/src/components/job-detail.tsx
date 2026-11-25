@@ -26,7 +26,7 @@ import {
   workspaceName,
 } from '../utils/jobs'
 import { serverErrorText } from '../utils/server-error'
-import { visibleUnsafe } from '../utils/unsafe-chars'
+import { markAllUnsafe, visibleUnsafe } from '../utils/unsafe-chars'
 import { JOB_STATE_WORDS, jobBranch, jobLiveWords, LIVE_TONE } from './job-card'
 import { JobCISection } from './job-ci-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -133,9 +133,10 @@ export function JobDetail({
   }
   const title = visibleUnsafe(job.title)
   // A line an agent can act on without the skill: the id, the title a person
-  // knows the job by, and the command that shows the rest
+  // knows the job by, and the command that shows the rest. It may be pasted
+  // into a shell, so no control character goes in, whatever a machine sent
   const copyRef = async () => {
-    const line = t('jobs.detail.idLine', { id: job.id, title })
+    const line = markAllUnsafe(t('jobs.detail.idLine', { id: job.id, title }))
     setCopied({ id: job.id, ok: (await copyText(line)) === 'ok' })
   }
   const copy = copied?.id === job.id ? copied : null

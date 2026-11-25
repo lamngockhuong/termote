@@ -1165,7 +1165,7 @@ async function requestError(
       size: typeof body.size === 'number' ? body.size : undefined,
       field: body.field,
       task: body.task,
-      job: body.job && typeof body.job === 'object' ? body.job : undefined,
+      job: isJob(body.job) ? body.job : undefined,
       runId: body.runId,
       tabId: body.tabId,
       paneId: typeof body.paneId === 'string' ? body.paneId : undefined,
@@ -3284,12 +3284,34 @@ function positive(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 
+// A job id as the server makes it (newTemplateID): 16 hex digits. Another
+// machine's jobs come through the proxy as that machine wrote them, and an
+// id goes into the line Copy ID puts on the clipboard and into request
+// paths, so a job with any other id is never taken.
+const JOB_ID = /^[0-9a-f]{16}$/
+
+function isJob(v: unknown): v is Job {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { id?: unknown }).id === 'string' &&
+    JOB_ID.test((v as { id: string }).id)
+  )
+}
+
+// The job a reply carries; throws when it is not one
+function replyJob(v: unknown): Job {
+  if (!isJob(v)) throw new Error('job reply without a valid job')
+  return v
+}
+
 async function jobRequest(
   url: string,
   method: string,
   body?: unknown,
 ): Promise<{ job: Job }> {
-  return (await templateRequest(url, method, body)).json()
+  const reply = await (await templateRequest(url, method, body)).json()
+  return { job: replyJob(reply?.job) }
 }
 
 // Every job, finished ones too. Throws RequestError (jobs_unavailable).
@@ -3300,7 +3322,7 @@ export async function fetchJobs(): Promise<JobList> {
   if (!res.ok) throw await requestError(res, true)
   const body = await res.json()
   return {
-    jobs: Array.isArray(body.jobs) ? body.jobs : [],
+    jobs: Array.isArray(body.jobs) ? body.jobs.filter(isJob) : [],
     readOnly: body.readOnly === true,
     serverNow: typeof body.serverNow === 'string' ? body.serverNow : '',
     canGrant: body.canGrant === true,
@@ -3416,7 +3438,7 @@ export async function jobCI(
   })
   if (!res.ok) throw await requestError(res)
   const body = await res.json()
-  return { job: body.job, queued: body.queued === true }
+  return { job: replyJob(body.job), queued: body.queued === true }
 }
 
 // A refresh runs several gh calls on the server (90 s at most there)
