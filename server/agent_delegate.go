@@ -53,6 +53,9 @@ type pendingTool struct {
 	ID    string
 	Name  string
 	Input map[string]any
+	// Cwd: the folder the transcript row records, where a Bash call runs
+	// (it follows the agent's cd).
+	Cwd string
 }
 
 // pendingTools reads, from the end of s's transcript, the tool calls of the
@@ -98,6 +101,7 @@ func pendingTools(s AgentSession) ([]pendingTool, error) {
 		var row struct {
 			Type        string `json:"type"`
 			IsSidechain bool   `json:"isSidechain"`
+			Cwd         string `json:"cwd"`
 			Message     struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
@@ -118,7 +122,7 @@ func pendingTools(s AgentSession) ([]pendingTool, error) {
 		for _, b := range blocks {
 			switch b.Type {
 			case "tool_use":
-				uses = append(uses, pendingTool{ID: b.ID, Name: b.Name, Input: b.Input})
+				uses = append(uses, pendingTool{ID: b.ID, Name: b.Name, Input: b.Input, Cwd: row.Cwd})
 			case "tool_result":
 				done[b.ToolUseID] = true
 			}
@@ -186,13 +190,14 @@ type delegation struct {
 }
 
 // grantInForce: g of j still lets its agent's dialogs be answered at now.
-// A bash grant whose prefix the table refuses (made under older rules) is
-// not, whether or not the server has revoked it yet (revokeRefusedGrants).
+// A bash grant the rules no longer take (grantRulesRefuse: made under older
+// ones) is not, whether or not the server has revoked it yet
+// (revokeRefusedGrants).
 func grantInForce(j job, g grant, now time.Time) bool {
 	if g.Revoked != "" || jobFinished(j.State) || j.Agent == nil || !sameJobAgent(*j.Agent, g.Agent) {
 		return false
 	}
-	if g.Kind == "bash" && checkGrantPrefix(g.Prefix) != "" {
+	if grantRulesRefuse(g) {
 		return false
 	}
 	exp, err := time.Parse(time.RFC3339Nano, g.Expires)
@@ -268,13 +273,19 @@ func (a *agentAPI) checkDelegation(ctx context.Context, p snapPane, s AgentSessi
 		}
 		why := "no_grant"
 		for _, g := range grants {
-			switch code := checkDelegateCommand(cmd, g.grant.Prefix); code {
+			code := checkDelegateCommand(cmd, g.grant.Prefix)
+			if code == "" && isDelegateTool(words[0]) {
+				// A tool's files stay in the grant's folder.
+				code = checkToolPaths(g.grant.Dir, call.Cwd, words[1:])
+			}
+			switch code {
 			case "":
 				d.jobID, d.grantID, d.command = g.job, g.grant.ID, cmd
 				return d, nil
 			case "no_grant":
 			default:
-				// The prefix matched but a word after it is an option.
+				// The prefix matched but a word after it is an option,
+				// or a tool's file is outside the grant's folder.
 				why = code
 			}
 		}

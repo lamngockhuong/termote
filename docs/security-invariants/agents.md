@@ -1027,8 +1027,18 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   bash`); anything else, a shell, an interpreter, `git`, `make`, `tar`, `docker`, `brew`, `gem`,
   `bun`, `npx`, `pip3`, is `program`. A `tools` entry (`rg`, `grep`, `ls`, `cat`, `head`, `tail`,
   `wc`, `diff`, `tsc`, `eslint`, `jest`, `pytest`: one purpose and no command; `eslint`, `jest` and
-  `pytest` still run their config and test files, as a test command does) takes any words after its
-  name. A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
+  `pytest` still run their config and test files, as a test command does) takes words after its name
+  that name no file outside the folder it runs in: no word, nor an option's value (after `=`, a short
+  option's attached `-fx`, or past `@` and `+`), is an absolute path (`/x`, `//host/share`), a Windows
+  drive (`C:x`) or holds a `..` component (`path`, in a prefix as in a command, the PWA checking the
+  prefix the same way; `~` and `\` never pass `chars`). A bash grant holds a folder when it is made
+  (`Dir`: the job's worktree while the agent's pane is in it, else the pane's folder then; a tool's
+  grant with neither is refused, `job_invalid`), and a
+  tool's command is answered only when the folder its call runs in, the `cwd` of its transcript row
+  (which follows the agent's `cd`), is in that folder once both are resolved, and no word leads out of
+  it through a symbolic link: each is opened through `os.Root` at that folder, one naming no file (a
+  pattern) passing, any other error refusing, an absolute link target included (`checkToolPaths`,
+  `outside`; `TestCheckToolPaths`, `TestDelegatedToolPaths`). A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
   `dotnet`, `pip`, `vitest`, `biome`, `ruff`) needs the word that picks its command (`commandWord`:
   past options, an option without `=` and not of the file's `flagOptions` taking the word after it;
   for `cargo`, past one rustup `+toolchain`), spelled exactly as one of its `commands` (any word may
@@ -1041,7 +1051,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   and pnpm's and yarn's run of a word that is no command of theirs (`pnpm lint`, `pnpm --filter a
   node x.js`) and `yarn workspace <name>` never reach the shell. A grant whose prefix the table
   refuses (one made under older rules, `npm` alone) covers nothing: `checkDelegateCommand` reads it
-  as `no_grant` and `grantInForce` holds it ended, and the ledger revokes it once when it opens
+  as `no_grant` and `grantInForce` holds it ended (`grantRulesRefuse`, which also holds a tool's
+  grant with no folder, made before grants held one), and the ledger revokes it once when it opens
   (`revokeRefusedGrants`, a `revoked` event, `audit: grant_revoked reason=rules_changed by=server`;
   a failed write is logged and changes nothing else, `TestJobStoreRevokesRefusedGrants`). The words
   between the two dashed rules under the header (a wrapped row's leading `│` dropped) are the

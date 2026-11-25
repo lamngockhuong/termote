@@ -1021,7 +1021,7 @@
  },
  {
   "prefix": "ls /tmp",
-  "want": ""
+  "want": "path"
  },
  {
   "prefix": "cat",
@@ -1109,6 +1109,130 @@
  },
  {
   "prefix": "pip show requests",
+  "want": ""
+ },
+ {
+  "prefix": "cat /etc/hosts",
+  "want": "path"
+ },
+ {
+  "prefix": "cat ../x",
+  "want": "path"
+ },
+ {
+  "prefix": "cat a/../../b",
+  "want": "path"
+ },
+ {
+  "prefix": "rg -n foo ..",
+  "want": "path"
+ },
+ {
+  "prefix": "rg -n foo src/..",
+  "want": "path"
+ },
+ {
+  "prefix": "grep -f/etc/passwd",
+  "want": "path"
+ },
+ {
+  "prefix": "grep --file=/etc/passwd",
+  "want": "path"
+ },
+ {
+  "prefix": "grep -rn x //host/share",
+  "want": "path"
+ },
+ {
+  "prefix": "rg x C:x",
+  "want": "path"
+ },
+ {
+  "prefix": "rg x c:/w",
+  "want": "path"
+ },
+ {
+  "prefix": "tsc @/etc/opts",
+  "want": "path"
+ },
+ {
+  "prefix": "pytest +../x",
+  "want": "path"
+ },
+ {
+  "prefix": "head /dev/zero",
+  "want": "path"
+ },
+ {
+  "prefix": "diff a ../b",
+  "want": "path"
+ },
+ {
+  "prefix": "wc -l /x",
+  "want": "path"
+ },
+ {
+  "prefix": "ls /",
+  "want": "path"
+ },
+ {
+  "prefix": "eslint ../src",
+  "want": "path"
+ },
+ {
+  "prefix": "jest ..",
+  "want": "path"
+ },
+ {
+  "prefix": "cat ~/x",
+  "want": "chars"
+ },
+ {
+  "prefix": "cat C:\\x",
+  "want": "chars"
+ },
+ {
+  "prefix": "cat src/a.ts",
+  "want": ""
+ },
+ {
+  "prefix": "cat .hidden/x",
+  "want": ""
+ },
+ {
+  "prefix": "cat ...",
+  "want": ""
+ },
+ {
+  "prefix": "cat a..b",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n foo src",
+  "want": ""
+ },
+ {
+  "prefix": "grep -f./patterns",
+  "want": ""
+ },
+ {
+  "prefix": "grep --file=a/b",
+  "want": ""
+ },
+ {
+  "prefix": "diff a b",
+  "want": ""
+ },
+ {
+  "prefix": "wc -l ./x",
+  "want": ""
+ },
+ {
+  "prefix": "ls src",
+  "want": ""
+ },
+ {
+  "prefix": "rg -n foo .",
   "want": ""
  }
 ]

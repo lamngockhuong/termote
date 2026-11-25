@@ -103,9 +103,18 @@ export const FLAG_OPTIONS = [
 // program of the table, spelled as it spells it (no path, no extension, no
 // other case); command: a program without one of its commands, a script
 // command without the script's name, or a bare command with a word that
-// is no option. The server also refuses, which a prefix alone cannot show:
-// a command whose words after the prefix look like options
-export type PrefixProblem = 'empty' | 'length' | 'chars' | 'program' | 'command'
+// is no option; path: a tool's word that is an absolute path, a Windows
+// drive or holds a .. component. The server also refuses, which a prefix
+// alone cannot show: a command whose words after the prefix look like
+// options, and a tool run outside the grant's folder or led out of it
+// through a link
+export type PrefixProblem =
+  | 'empty'
+  | 'length'
+  | 'chars'
+  | 'program'
+  | 'command'
+  | 'path'
 
 // What is wrong with prefix, or null when the server would take it. The
 // prefix is checked as typed: the server trims it, but a space typed inside
@@ -121,7 +130,10 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   const words = p.split(' ')
   // One space between words, none around
   if (words.includes('')) return 'chars'
-  if (TOOLS.includes(words[0])) return null
+  // A tool reads the files its words name: none may be absolute or climb
+  // out with .. (the server also holds where it runs to the grant's folder)
+  if (TOOLS.includes(words[0]))
+    return words.slice(1).some(pathWordLeaves) ? 'path' : null
   if (!Object.hasOwn(PROGRAMS, words[0])) return 'program'
   const prog = PROGRAMS[words[0]]
   const start = prog.toolchain && words[1]?.startsWith('+') ? 2 : 1
@@ -134,6 +146,27 @@ export function grantPrefixProblem(prefix: string): PrefixProblem | null {
   if (prog.bare?.includes(c))
     return words.slice(k + 1).every((w) => w.startsWith('-')) ? null : 'command'
   return 'command'
+}
+
+// The path a word of a tool may name: the word, an option's value after =,
+// a short option's attached value (-fx), what follows @ or +; '' for an
+// option with none (pathWordValue)
+function pathWordValue(w: string): string {
+  if (w.startsWith('-')) {
+    const i = w.indexOf('=')
+    if (i >= 0) return w.slice(i + 1)
+    return !w.startsWith('--') && w.length > 2 ? w.slice(2) : ''
+  }
+  if (w.startsWith('@') || w.startsWith('+')) return w.slice(1)
+  return w
+}
+
+// An absolute path, a Windows drive (C:x) or a .. component (pathWordLeaves)
+function pathWordLeaves(w: string): boolean {
+  const v = pathWordValue(w)
+  return (
+    v.startsWith('/') || /^[A-Za-z]:/.test(v) || v.split('/').includes('..')
+  )
 }
 
 // The index of the word picking a program's command, from start on, past

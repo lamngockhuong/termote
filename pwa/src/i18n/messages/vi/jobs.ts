@@ -191,7 +191,7 @@ export default {
   'jobs.grant.kindEdit': 'Sửa file',
   'jobs.grant.prefix': 'Tiền tố lệnh',
   'jobs.grant.prefixHint':
-    'Tiền tố gồm tên chương trình và lệnh bạn cho phép, gõ như khi tự chạy: npm test, pnpm run lint, cargo build, go test -run, rg -n. Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:). Tùy chọn nào cần dùng thì gõ luôn vào tiền tố',
+    'Tiền tố gồm tên chương trình và lệnh bạn cho phép, gõ như khi tự chạy: npm test, pnpm run lint, cargo build, go test -run, rg -n. Lệnh agent xin chạy sẽ được trả lời khi nó đúng bằng tiền tố này, hoặc bắt đầu bằng tiền tố này, một dấu cách rồi những từ không phải tùy chọn (không từ nào bắt đầu bằng -, @, + hay /tên:). Tùy chọn nào cần dùng thì gõ luôn vào tiền tố. rg, cat, grep và các công cụ khác chỉ đọc file trong worktree của việc, hoặc trong thư mục agent đang làm việc lúc bạn cấp ủy quyền',
   'jobs.grant.runsCode':
     'Lệnh test, build hay script chạy mã mà agent sửa được: pnpm test chạy các file test và mọi thứ package.json khai báo cho test, go test chạy test của package. Chỉ ủy quyền khi bạn chấp nhận để agent chạy mã đó',
   'jobs.grant.problem.empty': 'Hãy gõ tiền tố lệnh',
@@ -202,6 +202,8 @@ export default {
     'Không thể ủy quyền cho chương trình này. Chỉ có npm, pnpm, yarn, cargo, go, dotnet, pip, vitest, biome và ruff kèm một lệnh của chúng, cùng rg, grep, ls, cat, head, tail, wc, diff, tsc, eslint, jest và pytest. Gõ tên trần của chương trình, không kèm đường dẫn hay .exe',
   'jobs.grant.problem.command':
     'Gõ đầy đủ lệnh bạn cho phép ngay sau tên chương trình: npm test, cargo build, pip show. Sau run cần thêm tên script (pnpm run lint, không phải pnpm lint). install và ci không nhận tên gói, npm audit không nhận fix. Tùy chọn đứng trước lệnh thì viết dạng --x=y',
+  'jobs.grant.problem.path':
+    'rg, cat, grep và các công cụ khác chỉ đọc trong thư mục của ủy quyền (worktree, hoặc thư mục agent đang làm việc): không dùng đường dẫn bắt đầu bằng / hay một ổ đĩa như C:, và không có ..',
   'jobs.grant.editHint':
     'Mọi yêu cầu sửa file trong worktree của việc này sẽ được trả lời, trừ những file không ủy quyền nào áp dụng được',
   'jobs.grant.editOutsideWorktree':

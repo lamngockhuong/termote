@@ -597,6 +597,27 @@ func TestGrantRoutes(t *testing.T) {
 	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", map[string]any{"kind": "edit"}); code != http.StatusBadRequest {
 		t.Errorf("edit without worktree = %d %v", code, out)
 	}
+	// A bash grant there holds the pane's folder; a tool's needs one.
+	rg := map[string]any{"kind": "bash", "prefix": "rg"}
+	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", rg); code != http.StatusBadRequest || out["code"] != "job_invalid" {
+		t.Errorf("tool without a folder = %d %v", code, out)
+	}
+	dt.f.mu.Lock()
+	dt.f.snap.Groups[0].Tabs[0].Panes[0].Process = &ProcessInfo{Cwd: t.TempDir()}
+	dt.f.mu.Unlock()
+	dt.snapshot()
+	if code, out := dt.do("full", http.MethodPost, "/api/mux/jobs/"+id+"/grants", rg); code != http.StatusCreated {
+		t.Fatalf("bash without worktree = %d %v", code, out)
+	}
+	for _, j := range dt.list() {
+		if j["id"] == id {
+			live, _ := j["live"].(map[string]any)
+			g := j["grants"].([]any)[0].(map[string]any)
+			if live == nil || live["dir"] == nil || live["dir"] == "" || g["dir"] != live["dir"] {
+				t.Errorf("bash grant dir %v, pane folder %v", g["dir"], live)
+			}
+		}
+	}
 	// The GET says whether this client may give grants.
 	if _, out := dt.do("full", http.MethodGet, "/api/mux/jobs", nil); out["canGrant"] != true {
 		t.Errorf("full canGrant %v", out["canGrant"])
@@ -646,4 +667,66 @@ func TestGrantEditOutsideWorktree(t *testing.T) {
 		t.Errorf("edit outside = %d %v", code, out)
 	}
 	dt.grant("bash", "pnpm test", 30)
+}
+
+// A tool's grant holds the job's worktree: the call's folder, from the
+// transcript, must be in it, and its words must not lead out of it.
+func TestDelegatedToolPaths(t *testing.T) {
+	screen := func(t *testing.T) string {
+		s := delegateScreen(t, "touch")
+		if !strings.Contains(s, "touch MARK456.txt") {
+			t.Fatal("fixture changed")
+		}
+		return strings.ReplaceAll(s, "touch MARK456.txt", "cat MARK456.txt")
+	}
+	use := func(cwd string) string {
+		b, _ := json.Marshal(map[string]any{"type": "assistant", "cwd": cwd, "timestamp": "2026-11-23T09:01:00.000Z",
+			"message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": "toolu_c", "name": "Bash",
+				"input": map[string]any{"command": "cat MARK456.txt"}}}}})
+		return string(b) + "\n"
+	}
+	for name, tc := range map[string]struct {
+		cwd    func(dt *delegateTest) string
+		setup  func(t *testing.T, dt *delegateTest)
+		reason string
+	}{
+		"in the worktree": {func(dt *delegateTest) string { return dt.wt }, nil, ""},
+		"in a subfolder":  {func(dt *delegateTest) string { return filepath.Join(dt.wt, "sub") }, nil, ""},
+		"outside it":      {func(dt *delegateTest) string { return dt.t.TempDir() }, nil, "outside"},
+		"no folder (cwd)": {func(dt *delegateTest) string { return "" }, nil, "outside"},
+		"a link out of it": {func(dt *delegateTest) string { return dt.wt }, func(t *testing.T, dt *delegateTest) {
+			secret := filepath.Join(t.TempDir(), "secret")
+			writeFile(t, secret, "x")
+			if err := os.Symlink(secret, filepath.Join(dt.wt, "MARK456.txt")); err != nil {
+				t.Skipf("no symlinks: %v", err)
+			}
+		}, "outside"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newDelegateTest(t, screen(t), "")
+			os.MkdirAll(filepath.Join(dt.wt, "sub"), 0o700)
+			if tc.setup != nil {
+				tc.setup(t, dt)
+			}
+			os.WriteFile(dt.path, []byte(jobsTranscript+use(tc.cwd(dt))), 0o600)
+			dt.grant("bash", "cat", 0)
+			g := dt.list()[0]["grants"].([]any)[0].(map[string]any)
+			if g["dir"] != dt.wt {
+				t.Fatalf("grant dir %v, want the worktree %s", g["dir"], dt.wt)
+			}
+			code, out := dt.answer()
+			if tc.reason == "" {
+				if code != http.StatusNoContent {
+					t.Errorf("= %d %v", code, out)
+				}
+				return
+			}
+			if code != http.StatusConflict || out["reason"] != tc.reason {
+				t.Errorf("= %d %v, want %s", code, out, tc.reason)
+			}
+			if keys := dt.keys(); len(keys) != 0 {
+				t.Errorf("keys sent: %v", keys)
+			}
+		})
+	}
 }

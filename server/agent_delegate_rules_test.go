@@ -87,8 +87,8 @@ func TestCheckDelegateCommand(t *testing.T) {
 		{"dotnet test tests/a.csproj", "dotnet test", ""},
 		{"pip show requests", "pip show", ""},
 		{"go mod init x", "go mod", ""},
-		{"ls /tmp", "ls", ""},
-		{"cat /etc/hosts", "cat", ""},
+		{"ls src", "ls", ""},
+		{"cat notes.txt", "cat", ""},
 		{"rg foo user@example", "rg foo", ""},
 		// Checked alone, a command may hold options: a grant's prefix may.
 		{"rg -n --pre=./x.sh foo .", "", ""},
@@ -359,5 +359,118 @@ func TestCheckDelegateHook(t *testing.T) {
 	}
 	if got := checkDelegateHook(filepath.Join(dir, "missing"), "a.ts"); got != "denied_path" {
 		t.Errorf("missing dir = %q", got)
+	}
+}
+
+func TestCheckDelegateCommandToolPaths(t *testing.T) {
+	for _, tc := range []struct{ cmd, prefix, want string }{
+		{"cat src/a.ts", "cat", ""},
+		{"rg foo src", "rg", ""},
+		{"cat /etc/hosts", "cat", "path"},
+		{"cat ../x", "cat", "path"},
+		{"rg foo src/../../x", "rg", "path"},
+		{"head C:x", "head", "path"},
+		{"diff a //host/share", "diff", "path"},
+		// A program's command is not held to it: npm test takes a name.
+		{"npm test /x", "npm test", ""},
+	} {
+		if got := checkDelegateCommand(tc.cmd, tc.prefix); got != tc.want {
+			t.Errorf("%q under %q = %q, want %q", tc.cmd, tc.prefix, got, tc.want)
+		}
+	}
+}
+
+func TestPathWordValue(t *testing.T) {
+	for w, want := range map[string]string{
+		"a": "a", "-n": "", "--count": "", "-fx": "x", "-f=x": "x", "--file=a/b": "a/b", "@opts": "opts", "+x": "x",
+	} {
+		if got := pathWordValue(w); got != want {
+			t.Errorf("%q = %q, want %q", w, got, want)
+		}
+	}
+}
+
+// checkToolPaths holds a tool to the grant's folder: where it runs, and
+// where a word leads through a symbolic link.
+func TestCheckToolPaths(t *testing.T) {
+	dir := t.TempDir()
+	out := t.TempDir()
+	writeFile(t, filepath.Join(dir, "src", "a.ts"), "x")
+	writeFile(t, filepath.Join(dir, "notes.txt"), "x")
+	writeFile(t, filepath.Join(out, "secret.txt"), "x")
+	src := filepath.Join(dir, "src")
+	for _, tc := range []struct {
+		dir, cwd string
+		words    []string
+		want     string
+	}{
+		{dir, dir, []string{"notes.txt", "src/a.ts"}, ""},
+		{dir, src, []string{"a.ts", "-n", "--count", "pattern"}, ""},
+		{dir, dir, nil, ""},
+		// A word naming no file, or a file under one, is a pattern.
+		{dir, dir, []string{"no-such", "notes.txt/x"}, ""},
+		{dir, out, []string{"secret.txt"}, "outside"},
+		{dir, filepath.Join(dir, "gone"), nil, "outside"},
+		{"", dir, nil, "outside"},
+		{dir, "", nil, "outside"},
+		{"rel", dir, nil, "outside"},
+		{dir, "rel", nil, "outside"},
+		{filepath.Join(dir, "gone"), dir, nil, "outside"},
+		{src, dir, nil, "outside"},
+		// A file is no folder to open.
+		{filepath.Join(dir, "notes.txt"), filepath.Join(dir, "notes.txt"), nil, "outside"},
+	} {
+		if got := checkToolPaths(tc.dir, tc.cwd, tc.words); got != tc.want {
+			t.Errorf("%q in %q under %q = %q, want %q", tc.words, tc.cwd, tc.dir, got, tc.want)
+		}
+	}
+	if err := os.Symlink(out, filepath.Join(dir, "away")); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	os.Symlink(filepath.Join(out, "secret.txt"), filepath.Join(dir, "key.txt"))
+	os.Symlink(filepath.Join(out, "none"), filepath.Join(dir, "dangling"))
+	os.Symlink("notes.txt", filepath.Join(dir, "in.txt"))
+	// os.Root takes an absolute target as leaving, wherever it points.
+	os.Symlink(filepath.Join(dir, "notes.txt"), filepath.Join(dir, "abs.txt"))
+	for _, tc := range []struct {
+		cwd   string
+		words []string
+		want  string
+	}{
+		{dir, []string{"in.txt"}, ""},
+		{dir, []string{"key.txt"}, "outside"},
+		{dir, []string{"abs.txt"}, "outside"},
+		{dir, []string{"away/secret.txt"}, "outside"},
+		{dir, []string{"away/none"}, "outside"},
+		{dir, []string{"dangling"}, "outside"},
+		{dir, []string{"-fkey.txt"}, "outside"},
+		{dir, []string{"--file=key.txt"}, "outside"},
+		// A folder reached through a link out of the grant's.
+		{filepath.Join(dir, "away"), []string{"secret.txt"}, "outside"},
+	} {
+		if got := checkToolPaths(dir, tc.cwd, tc.words); got != tc.want {
+			t.Errorf("%q in %q = %q, want %q", tc.words, tc.cwd, got, tc.want)
+		}
+	}
+}
+
+func TestGrantRulesRefuse(t *testing.T) {
+	for _, tc := range []struct {
+		g    grant
+		want bool
+	}{
+		{grant{Kind: "bash", Prefix: "npm test"}, false},
+		{grant{Kind: "bash", Prefix: "npm"}, true},
+		{grant{Kind: "bash", Prefix: "cat", Dir: "/w"}, false},
+		{grant{Kind: "bash", Prefix: "rg -n", Dir: "/w"}, false},
+		// A tool's grant made before grants held a folder.
+		{grant{Kind: "bash", Prefix: "cat"}, true},
+		{grant{Kind: "bash", Prefix: "cat /etc", Dir: "/w"}, true},
+		{grant{Kind: "edit", Dir: "/w"}, false},
+		{grant{Kind: "ci"}, false},
+	} {
+		if got := grantRulesRefuse(tc.g); got != tc.want {
+			t.Errorf("%+v = %v, want %v", tc.g, got, tc.want)
+		}
 	}
 }

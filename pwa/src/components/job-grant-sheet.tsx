@@ -52,6 +52,7 @@ const PROBLEM_WORDS: Record<Exclude<PrefixProblem, 'empty'>, MessageKey> = {
   chars: 'jobs.grant.problem.chars',
   program: 'jobs.grant.problem.program',
   command: 'jobs.grant.problem.command',
+  path: 'jobs.grant.problem.path',
 }
 
 const FIELD =

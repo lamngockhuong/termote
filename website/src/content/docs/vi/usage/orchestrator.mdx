@@ -274,6 +274,12 @@ các chương trình và lệnh trong một danh sách ngắn:
 Mỗi công cụ `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` và
 `pytest` chỉ làm một việc và không có lệnh con: cấp riêng tên của nó, hoặc kèm các tùy chọn bạn cho
 phép (`rg -n`).
+Các công cụ này chỉ đọc trong thư mục của ủy quyền: worktree của việc khi agent đang làm trong đó,
+nếu không thì thư mục agent đang làm việc lúc bạn cấp ủy quyền (ủy quyền có ghi thư mục này). Từ nào
+bắt đầu bằng `/` hay một ổ đĩa như `C:`, hoặc có `..`, đều bị từ chối, cả trong tiền tố bạn gõ lẫn
+trong lệnh agent xin (`cat /etc/hosts`, `rg foo ../other`). Lệnh agent chạy từ một thư mục khác, hay
+file đi qua một liên kết dẫn ra ngoài thư mục của ủy quyền, cũng bị từ chối. Ủy quyền cho các công cụ
+này cấp từ trước khi ủy quyền có thư mục sẽ bị thu hồi khi server khởi động.
 
 Hãy gõ đủ cả lệnh: `pnpm run lint` chứ không phải `pnpm lint` (cũng không dùng `yarn workspace a lint`),
 và lệnh chạy script cần có tên script (`npm run` không kèm tên bị từ chối). `install`, `ci` và

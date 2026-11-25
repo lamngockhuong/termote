@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // The rules a delegated answer (agent_delegate.go) holds a dialog's command
@@ -117,7 +118,15 @@ func parseDelegateCommand(s string) string {
 	// The first word is the program's bare name exactly as the table
 	// spells it: no path, no extension, no other case, and no variable set
 	// before it (X=1 bash).
-	if slices.Contains(delegateRules.Tools, words[0]) {
+	if isDelegateTool(words[0]) {
+		// A tool reads the files its words name: none is absolute or
+		// climbs out with .., so it stays in the folder it runs in
+		// (checkToolPaths holds that folder to the grant's).
+		for _, w := range words[1:] {
+			if pathWordLeaves(w) {
+				return "path"
+			}
+		}
 		return ""
 	}
 	p, ok := delegateRules.Programs[words[0]]
@@ -150,6 +159,95 @@ func parseDelegateCommand(s string) string {
 		return ""
 	}
 	return "command"
+}
+
+// isDelegateTool: name is a tool of the table.
+func isDelegateTool(name string) bool { return slices.Contains(delegateRules.Tools, name) }
+
+// pathWordValue is the path a word of a tool's command may name: the word
+// itself, an option's value after = (--file=x), a short option's attached
+// value (-fx), or what follows @ or + (a response file); "" for an option
+// with none (-n, --count).
+func pathWordValue(w string) string {
+	switch {
+	case strings.HasPrefix(w, "-"):
+		if i := strings.IndexByte(w, '='); i >= 0 {
+			return w[i+1:]
+		}
+		if !strings.HasPrefix(w, "--") && len(w) > 2 {
+			return w[2:]
+		}
+		return ""
+	case strings.HasPrefix(w, "@"), strings.HasPrefix(w, "+"):
+		return w[1:]
+	}
+	return w
+}
+
+// pathWordLeaves: w may name a file outside the folder the command runs
+// in, as written: an absolute path (/x, //host/share), a Windows drive
+// (C:x, C:/x), or a .. component. ~ and \ never pass delegateBadChars.
+// A pattern spelled that way (rg /api/) is refused too.
+func pathWordLeaves(w string) bool {
+	v := pathWordValue(w)
+	if strings.HasPrefix(v, "/") {
+		return true
+	}
+	if len(v) >= 2 && v[1] == ':' && ('a' <= v[0]|0x20 && v[0]|0x20 <= 'z') {
+		return true
+	}
+	return slices.Contains(strings.Split(v, "/"), "..")
+}
+
+// checkToolPaths is "" when a tool's command, run in cwd (the transcript's
+// folder for the call), names no file outside dir, the grant's folder:
+// cwd is in dir once both are resolved, and no word leads out of it
+// through a symbolic link (os.Root refuses one that does). A word naming
+// no file (a pattern) passes. Else "outside", also when either folder is
+// unknown. The words already passed pathWordLeaves.
+func checkToolPaths(dir, cwd string, words []string) string {
+	if dir == "" || cwd == "" || !filepath.IsAbs(dir) || !filepath.IsAbs(cwd) {
+		return "outside"
+	}
+	rd, err1 := filepath.EvalSymlinks(dir)
+	rc, err2 := filepath.EvalSymlinks(cwd)
+	if err1 != nil || err2 != nil {
+		return "outside"
+	}
+	rel, err := filepath.Rel(rd, rc)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "outside"
+	}
+	root, err := os.OpenRoot(rd)
+	if err != nil {
+		return "outside"
+	}
+	defer root.Close()
+	for _, w := range words {
+		v := pathWordValue(w)
+		if v == "" {
+			continue
+		}
+		_, err := root.Stat(filepath.Join(rel, filepath.FromSlash(v)))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+			return "outside"
+		}
+	}
+	return ""
+}
+
+// grantRulesRefuse: g, a bash grant, is one these rules no longer take
+// (made under older ones): its prefix is refused, or it names a tool and
+// holds no folder to keep the tool's files in.
+func grantRulesRefuse(g grant) bool {
+	if g.Kind != "bash" {
+		return false
+	}
+	if checkGrantPrefix(g.Prefix) != "" {
+		return true
+	}
+	first, _, _ := strings.Cut(g.Prefix, " ")
+	return isDelegateTool(first) && g.Dir == ""
 }
 
 // checkGrantPrefix is "" when p may be a bash grant's prefix, else the

@@ -275,6 +275,12 @@ only the programs and commands of one short list:
 
 `rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` and `pytest` do one
 thing each and take no command: grant the name alone, or with the options you allow (`rg -n`).
+They read only inside the grant's folder: the job's worktree while the agent works there, else the
+folder the agent works in when you give the grant (the grant shows it). A word that starts with `/`
+or a drive such as `C:`, or holds `..`, is refused, in the prefix you type and in what the agent asks
+(`cat /etc/hosts`, `rg foo ../other`), and so is a command the agent runs from another folder or a
+file reached through a link that leads out of the grant's folder. A grant for one of these tools given
+before grants kept a folder is revoked when the server starts.
 
 Type the command in full: `pnpm run lint`, not `pnpm lint` (nor `yarn workspace a lint`), and a
 script command needs the script's name (`npm run` alone is refused). `install`, `ci` and `npm audit`

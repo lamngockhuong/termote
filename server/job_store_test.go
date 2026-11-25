@@ -265,6 +265,9 @@ func TestJobStoreRevokesRefusedGrants(t *testing.T) {
 			{ID: "edit", Kind: "edit", Dir: dir, Created: at, Expires: expires},
 			{ID: "ended", Kind: "bash", Prefix: "gem", Created: at, Expires: now.Add(-time.Minute).UTC().Format(time.RFC3339Nano)},
 			{ID: "gone", Kind: "bash", Prefix: "tar", Created: at, Expires: expires, Revoked: at},
+			// A tool's grant made before grants held a folder, and one after.
+			{ID: "nodir", Kind: "bash", Prefix: "rg", Created: at, Expires: expires},
+			{ID: "withdir", Kind: "bash", Prefix: "rg", Dir: dir, Created: at, Expires: expires},
 		}
 		return nil
 	}); err != nil {
@@ -285,25 +288,27 @@ func TestJobStoreRevokesRefusedGrants(t *testing.T) {
 	for _, g := range got.Grants {
 		revoked[g.ID] = g.Revoked
 	}
-	if revoked["old"] == "" || revoked["ok"] != "" || revoked["edit"] != "" || revoked["ended"] != "" || revoked["gone"] != at {
+	if revoked["old"] == "" || revoked["nodir"] == "" || revoked["ok"] != "" || revoked["edit"] != "" || revoked["ended"] != "" ||
+		revoked["gone"] != at || revoked["withdir"] != "" {
 		t.Errorf("revoked %v", revoked)
 	}
-	if n := len(got.Events); n != before+1 || got.Events[n-1].Kind != "revoked" || got.Events[n-1].Text != "run npm" {
+	if n := len(got.Events); n != before+2 || got.Events[n-2].Text != "run npm" || got.Events[n-1].Text != "run rg" {
 		t.Errorf("events %+v", got.Events)
 	}
 	line := logs.String()
 	if !strings.Contains(line, `grant_revoked grant="old"`) || !strings.Contains(line, `reason="rules_changed"`) ||
-		!strings.Contains(line, `by="server"`) || strings.Count(line, "grant_revoked") != 1 {
+		!strings.Contains(line, `by="server"`) || !strings.Contains(line, `grant_revoked grant="nodir"`) ||
+		strings.Count(line, "grant_revoked") != 2 {
 		t.Errorf("audit %q", line)
 	}
 	// Opened again, nothing more is written.
 	if _, err := newJobStore(dir); err != nil {
 		t.Fatal(err)
 	}
-	if n := events(opened); n != before+1 {
+	if n := events(opened); n != before+2 {
 		t.Errorf("events after a second open: %d", n)
 	}
-	if strings.Count(logs.String(), "grant_revoked") != 1 {
+	if strings.Count(logs.String(), "grant_revoked") != 2 {
 		t.Errorf("audit after a second open %q", logs.String())
 	}
 }

@@ -242,13 +242,13 @@ func newJobStore(dir string) (*jobStore, error) {
 }
 
 // revokeRefusedGrants revokes, once as the ledger opens, every bash grant
-// still in force whose prefix the table refuses (one made under older
-// rules), so the PWA shows it ended rather than in force: grantInForce
+// still in force that the rules refuse (grantRulesRefuse: one made under
+// older rules), so the PWA shows it ended rather than in force: grantInForce
 // already lets it answer nothing. Nothing is written when there is none;
 // a failed write is logged, and grantInForce still holds.
 func (s *jobStore) revokeRefusedGrants() {
 	refused := func(g grant, now time.Time) bool {
-		return g.Kind == "bash" && grantUnexpired(g, now) && checkGrantPrefix(g.Prefix) != ""
+		return grantUnexpired(g, now) && grantRulesRefuse(g)
 	}
 	now := s.now()
 	list, readOnly := s.jobs()

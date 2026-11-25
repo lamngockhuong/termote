@@ -143,6 +143,10 @@ describe('JobGrantSheet', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       /This program cannot be granted/,
     )
+    typePrefix('cat /etc/hosts')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /read only inside the folder the grant keeps/,
+    )
     typePrefix('pnpm lint')
     expect(screen.getByRole('alert')).toHaveTextContent(/not pnpm lint/)
     typePrefix('x'.repeat(201))
