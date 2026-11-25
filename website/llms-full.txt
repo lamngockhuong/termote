@@ -1132,6 +1132,10 @@ This removes the service registration, Termote’s Tailscale mapping, the `termo
 
 The files you deleted from the Files view stay as well (they move to a trash next to the uploads, such as `~/.cache/termote/trash`), since they are your files and not a cache; `uninstall` prints the folder. `--purge` removes it too.
 
+`uninstall` also removes the orchestrator skill that `termote skills install` wrote for Claude Code and Codex (a folder of that name you made yourself stays) and the prompt files `agents start` left in Termote’s cache.
+
+The worktrees an agent started with `--worktree` (`~/.termote/worktrees`) hold your code, so neither `uninstall` nor `--purge` removes them; `uninstall` prints the folder. Remove each with `git worktree remove` from its repository.
+
 On Windows, the files of the running `termote.exe` are removed a moment after the command exits.
 
 ## Prevent macOS Sleep
@@ -3205,7 +3209,9 @@ A command prefix names a program and the command you allow, as you would type th
 | `biome`  | `check`, `format`, `lint`, `ci`                                             |
 | `ruff`   | `check`, `format`                                                           |
 
-`rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `tsc`, `eslint`, `jest` and `pytest` do one thing each and take no command: grant the name alone, or with the options you allow (`rg -n`).
+Before the command, a prefix takes only `npm --prefix <folder>` and pnpm’s `-r`, `--recursive`, `--if-present` and `--filter <name>` (also as `--prefix=<folder>`, `--filter=<name>`); type any other option after the command (`cargo build --locked`, not `cargo --locked build`).
+
+`rg`, `grep`, `ls`, `cat`, `head`, `tail`, `wc`, `diff`, `eslint`, `jest` and `pytest` do one thing each and take no command: grant the name alone, or with the options you allow (`rg -n`).
 
 They read only inside the grant’s folder: the job’s worktree while the agent works there, else the folder the agent works in when you give the grant (the grant shows it). A word that starts with `/` or a drive such as `C:`, or holds `..`, is refused, in the prefix you type and in what the agent asks (`cat /etc/hosts`, `rg foo ../other`), and so is a command the agent runs from another folder or a file reached through a link that leads out of the grant’s folder. A grant for one of these tools given before grants kept a folder is revoked when the server starts.
 
