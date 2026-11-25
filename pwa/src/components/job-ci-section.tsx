@@ -156,7 +156,7 @@ export function JobCISection({ job, now }: Props) {
               <li
                 key={`${pr.repo}#${pr.number}`}
                 data-testid="job-pr"
-                className="flex items-start gap-2.5 rounded-control border border-border px-3 py-2.5 text-[12px]"
+                className="flex items-center gap-2.5 rounded-control border border-border px-3 py-2 text-[12px]"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-baseline gap-x-2">
@@ -190,7 +190,7 @@ export function JobCISection({ job, now }: Props) {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={t('jobs.ci.open', { n: pr.number })}
-                    className="inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-control text-fg-muted hover:text-fg"
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-fg-muted hover:text-fg pointer-coarse:size-touch"
                   >
                     <ExternalLink aria-hidden="true" className="size-4" />
                   </a>
