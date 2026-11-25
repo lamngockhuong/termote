@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -728,5 +729,35 @@ func TestDelegatedToolPaths(t *testing.T) {
 				t.Errorf("keys sent: %v", keys)
 			}
 		})
+	}
+}
+
+// A hook a git config defines (hook.<name>.command) runs at the user's next
+// commit whatever core.hooksPath says: the file its command names is
+// denied, by a path from the work tree's top, and other files are not.
+func TestDelegatedEditConfigHookCommand(t *testing.T) {
+	dt := newDelegateTest(t, delegateScreen(t, "edit"), "")
+	gitIn(t, dt.wt, "init", "-q")
+	gitIn(t, dt.wt, "config", "hook.lint.event", "pre-commit")
+	gitIn(t, dt.wt, "config", "hook.lint.command", "tools/check.sh --fix")
+	gitIn(t, dt.wt, "config", "hook.fmt.event", "pre-commit")
+	gitIn(t, dt.wt, "config", "hook.fmt.command", "./bin/format-all")
+	ctx := context.Background()
+	for rel, want := range map[string]string{
+		"tools/check.sh":   "denied_path",
+		"bin/format-all":   "denied_path",
+		"notes.txt":        "",
+		"tools/other.sh":   "",
+		"tools/check.sh.x": "",
+	} {
+		if got := dt.agent.checkDelegateHooksPath(ctx, dt.wt, rel); got != want {
+			t.Errorf("%s = %q, want %q", rel, got, want)
+		}
+	}
+	// A repository with no hook in its config denies nothing more.
+	dt2 := newDelegateTest(t, delegateScreen(t, "edit"), "")
+	gitIn(t, dt2.wt, "init", "-q")
+	if got := dt2.agent.checkDelegateHooksPath(ctx, dt2.wt, "tools/check.sh"); got != "" {
+		t.Errorf("no config hook = %q", got)
 	}
 }

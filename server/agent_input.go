@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -491,6 +492,15 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		a.writeFailure(w, fail(http.StatusBadRequest, "invalid_request", "invalid image positions"))
 		return
 	}
+	cli := cliRequest(r)
+	// What reaches the input box first is parts[0]: a "!" there makes the
+	// agent run the rest as a shell command, past every permission dialog
+	// and grant. The CLI (an orchestrator agent, maybe steered by what it
+	// read) never sends one; the PWA's user still can.
+	if cli && shellEscape(parts) {
+		a.writeFailure(w, errShellFromCLI)
+		return
+	}
 	text := strings.Join(parts, "")
 	if len(text) > agentMaxText {
 		a.writeFailure(w, errTextTooLong)
@@ -543,7 +553,15 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	// away, or the text stays stranded in the input box.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
-	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft); {
+	err = a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft)
+	if cli {
+		// Every message the CLI sends, as every answer: its hash and size,
+		// never its text, and who sent it.
+		sum := sha256.Sum256([]byte(text))
+		auditf("agent_message", "pane", paneID, "text_sha256", hex.EncodeToString(sum[:]), "chars", len(text),
+			"images", len(paths), "sent", err == nil || errors.Is(err, errQueued), "by", cliAuditBy(r), "peer_pid", localPeerPID(r.Context()))
+	}
+	switch {
 	case errors.Is(err, errQueued):
 		// The agent took the message into its queue, to read when ready
 		a.follower.follow(paneID)
@@ -1110,6 +1128,36 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc), Activity: sc.activity})
 }
 
+// errShellFromCLI refuses a message from the CLI that the agent would run as
+// a shell command.
+var errShellFromCLI = fail(http.StatusForbidden, "shell_refused", "a message sent from the CLI never starts with \"!\": the agent would run it as a shell command")
+
+// cliRequest: r comes from the CLI rather than a browser: over the local
+// socket, with Basic auth (the CLI's sign-in over TCP; a browser has a
+// session by then), or from another termote forwarding its own CLI's
+// request over the bridge.
+func cliRequest(r *http.Request) bool {
+	auth, _ := authFrom(r.Context())
+	return isLocalSocket(r.Context()) || auth.Kind == authBasic || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
+}
+
+// cliAuditBy names who sent a CLI request in an audit line: the socket
+// (its peer pid goes beside it), else how it signed in.
+func cliAuditBy(r *http.Request) string {
+	if isLocalSocket(r.Context()) {
+		return "socket"
+	}
+	auth, _ := authFrom(r.Context())
+	return auditBy(auth)
+}
+
+// shellEscape: the first text of parts (what the agent's input box gets
+// first) starts with "!", after any blank: Claude Code, Codex and OpenCode
+// each run such a line as a shell command.
+func shellEscape(parts []string) bool {
+	return len(parts) > 0 && strings.HasPrefix(strings.TrimLeftFunc(parts[0], unicode.IsSpace), "!")
+}
+
 // viewPrompt is the card a view-only client gets for a screen's dialog.
 func viewPrompt(sc agentScreen) *AgentPrompt {
 	if sc.prompt == nil {
@@ -1182,10 +1230,7 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	socket := isLocalSocket(r.Context())
-	auth, _ := authFrom(r.Context())
-	// Basic auth is the CLI's sign-in over TCP (a browser has a session by
-	// then), held like the socket and like a forwarded "basic" origin.
-	cli := socket || auth.Kind == authBasic || (auth.Kind == authMachine && !browserOrigin(auth.OriginAuth))
+	cli := cliRequest(r)
 	if body.Delegated && (!socket || (len(body.Choice) > 0 && string(body.Choice) != "null")) {
 		jsonErrorCode(w, "invalid_request", "only termote agents answers under a grant, and names no option", http.StatusBadRequest)
 		return
@@ -1220,11 +1265,7 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var f *agentFailure
 	if err == nil || (errors.As(err, &f) && f.keySent) {
 		confirmed := err == nil
-		// Who answered: the socket names the process at its other end.
-		via := "socket"
-		if !socket {
-			via = auditBy(auth)
-		}
+		via := cliAuditBy(r)
 		peer := localPeerPID(r.Context())
 		if body.Delegated {
 			a.recordDelegation(paneID, d, confirmed, via, peer)

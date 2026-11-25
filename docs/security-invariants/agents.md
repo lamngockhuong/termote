@@ -748,7 +748,16 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   installed in the repository (`post-checkout`, say) runs as when the user types `git worktree add`;
   an accepted risk, since git copies no hook when it clones, so only the user puts one there.
   `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
-  `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
+  `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again. The
+  server refuses a message from the CLI (the socket, Basic auth, or another termote's CLI over the
+  bridge, `cliRequest`) whose first text, after any blank, starts with `!` (403 `shell_refused`,
+  before anything is typed): Claude Code, Codex and OpenCode run such a line as a shell command,
+  past every permission dialog and grant, so an orchestrator the user lets run `termote agents`
+  unasked would otherwise run any command in any agent's pane; text after an image, or with a `!`
+  further on, is sent, and the PWA's user may still send one (`shellEscape`,
+  `TestMessageFromCLIRefusesShellEscape`). Every message the CLI sends is logged once its text is
+  typed or refused by the agent, as `audit: agent_message` (pane, the text's SHA-256 and length,
+  never the text, images, sent, by, peer_pid).
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
   `{"text"}`), so the server's dialog checks decide; over the socket the server refuses a permission
   dialog's option that stops it asking (see Dialog delegation), and `answer --delegated` sends the
@@ -1047,7 +1056,14 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   (which follows the agent's `cd`), is in that folder once both are resolved, and no word leads out of
   it through a symbolic link: each is opened through `os.Root` at that folder, one naming no file (a
   pattern) passing, any other error refusing, an absolute link target included (`checkToolPaths`,
-  `outside`; `TestCheckToolPaths`, `TestDelegatedToolPaths`). A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
+  `outside`; `TestCheckToolPaths`, `TestDelegatedToolPaths`). A tool's grant is never made, nor
+  answers, in the home dir or a folder holding it (`jobDirTooWide`: `job_invalid` when it is made,
+  `outside` when one made before is used), since every key and token of the user is there; no word
+  names a file `isSensitive` counts (a key, a `.env`, what `.ssh` holds: `denied_path`); and `diff`
+  names no folder (`directory`: it would compare every file of that name in both, following a
+  symbolic link a repository can commit pointing anywhere) (`checkToolCommand`, `TestCheckToolCommand`).
+  A folder given to `rg` or `grep` is still searched whole, its ignored files included for `grep`,
+  as the user's prefix chose. A `programs` entry (`npm`, `pnpm`, `yarn`, `cargo`, `go`,
   `dotnet`, `pip`, `vitest`, `biome`, `ruff`) needs the word that picks its command (`commandWord`:
   past only the options the program's entry lists, never guessing an option's arity: one of its
   `switches`, one of its `valueOptions` and the word after it (no option), or `--name=value` of one
@@ -1096,7 +1112,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, `mise.toml`, `.mise.toml`, `.exrc`,
   `.nvim.lua`, `Directory.Build.props`, `Directory.Build.targets`, `.envrc`, `.env*`, `package.json`, lockfiles,
   `.pnpmfile.cjs`, `.pnpmfile.mjs`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc*`, `bunfig.toml`,
-  `Makefile`, hook configs, sensitive
+  `Makefile`, hook configs, the configs a tool a hook runs loads as code or commands while the hook
+  names only the tool (`npx lint-staged`): every `.lintstagedrc*`, `lint-staged.config.*`,
+  `.commitlintrc*` and `commitlint.config.*` (`delegateDeniedConfigPrefixes`), sensitive
   names by `isSensitive`: `denied_path`), not a file a git hook of the grant's directory runs
   (`checkDelegateHook`: a word naming a script, `.sh`, `.js`, `.mjs`, `.py`..., in a lefthook config
   of any extension, `.pre-commit-config.yaml` or a script of `.husky` at that directory's root, 64
@@ -1106,8 +1124,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   grant's repository, read through `gitRunner` without the value it sets itself (scope `command`), a
   relative one from the top of the work tree, `checkDelegateHooksPath`, compared without case on
   macOS and Windows (`dirInTree`), where `Tools/hooks` is the folder `tools/hooks` names, each side
-  resolved through symlinks as deep as it exists, so a hooks folder not made yet still counts; a
-  config git cannot read denies the edit), and no component on the way, the last included, is a
+  resolved through symlinks as deep as it exists, so a hooks folder not made yet still counts; nor
+  a file a hook a git config defines runs (`hook.<name>.command`, git 2.54 and later, which runs
+  whatever `core.hooksPath` says): each command's words naming a script by its extension or holding
+  a `/` (`tools/check`), matched as `checkDelegateHook` matches from the top of the work tree,
+  without the values of scope `command` (`TestDelegatedEditConfigHookCommand`); a
+  config git cannot read denies the edit, one with no hook command denies nothing more), and no component on the way, the last included, is a
   symlink or a file with more than one link, read through `os.OpenRoot` with `Lstat` (`symlink`);
   between this check and Claude Code's write a link can still appear, which an agent that can run
   commands there could make anyway. The option sent is the `Yes` one, through the same `answer` path

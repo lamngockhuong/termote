@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -275,8 +276,9 @@ func (a *agentAPI) checkDelegation(ctx context.Context, p snapPane, s AgentSessi
 		for _, g := range grants {
 			code := checkDelegateCommand(cmd, g.grant.Prefix)
 			if code == "" && isDelegateTool(words[0]) {
-				// A tool's files stay in the grant's folder.
-				code = checkToolPaths(g.grant.Dir, call.Cwd, words[1:])
+				// A tool's files stay in the grant's folder, and are no
+				// key or token.
+				code = checkToolCommand(g.grant.Dir, call.Cwd, a.home, words)
 			}
 			switch code {
 			case "":
@@ -285,7 +287,8 @@ func (a *agentAPI) checkDelegation(ctx context.Context, p snapPane, s AgentSessi
 			case "no_grant":
 			default:
 				// The prefix matched but a word after it is an option,
-				// or a tool's file is outside the grant's folder.
+				// or a tool's file is outside the grant's folder, a
+				// sensitive one, or a folder diff would walk.
 				why = code
 			}
 		}
@@ -367,6 +370,34 @@ func (a *agentAPI) checkDelegateHooksPath(ctx context.Context, dir, rel string) 
 			hooks = filepath.Join(repo.Top, hooks)
 		}
 		if dirInTree(hooks, file) || dirInTree(hooks, filepath.Dir(file)) {
+			return "denied_path"
+		}
+	}
+	// A hook a git config defines (hook.<name>.command, git 2.54 and later)
+	// runs at the user's next commit whatever core.hooksPath says: a file
+	// its command names is denied as a hook config's script is. Commands
+	// run from the top of the work tree, so rel is compared from there.
+	out, truncated, err = a.files.git.output(ctx, gitCall{root: repo.Top, safeDir: repo.SafeDir, limit: 64 << 10},
+		"config", "-z", "--show-scope", "--get-regexp", `^hook\..*\.command$`)
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return "" // no hook defined
+	}
+	if err != nil || truncated {
+		return "denied_path"
+	}
+	top, err := filepath.Rel(repo.Top, file)
+	if err != nil {
+		return "denied_path"
+	}
+	parts = strings.Split(string(out), "\x00")
+	for i := 0; i+1 < len(parts); i += 2 {
+		scope, entry := parts[i], parts[i+1]
+		_, cmd, _ := strings.Cut(entry, "\n")
+		if scope == "command" {
+			continue
+		}
+		if namesFile(hookCommandScripts(cmd), top) || namesFile(hookCommandScripts(cmd), rel) {
 			return "denied_path"
 		}
 	}

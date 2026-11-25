@@ -256,6 +256,51 @@ func checkToolPaths(dir, cwd string, words []string) string {
 	return ""
 }
 
+// checkToolCommand is "" when words, a tool's command (its name first), may
+// run under a grant whose folder is dir, from cwd: the folder is below the
+// home dir, never the home dir or one holding it ("outside": every key and
+// token of the user would be in reach), checkToolPaths holds, no word names
+// a file the Files view counts as sensitive ("denied_path": a key, a token,
+// a .env, what .ssh holds), and diff names no folder ("directory": it then
+// reads every file of that name in both, following a symbolic link, which
+// a link committed to the repository can aim anywhere). home is the home
+// dir, "" for the OS's.
+func checkToolCommand(dir, cwd, home string, words []string) string {
+	if len(words) == 0 || jobDirTooWide(dir, home) {
+		return "outside"
+	}
+	if code := checkToolPaths(dir, cwd, words[1:]); code != "" {
+		return code
+	}
+	rd, err1 := filepath.EvalSymlinks(dir)
+	rc, err2 := filepath.EvalSymlinks(cwd)
+	rel, err3 := filepath.Rel(rd, rc)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return "outside"
+	}
+	root, err := os.OpenRoot(rd)
+	if err != nil {
+		return "outside"
+	}
+	defer root.Close()
+	for _, w := range words[1:] {
+		v := pathWordValue(w)
+		if v == "" {
+			continue
+		}
+		p := filepath.Join(rel, filepath.FromSlash(v))
+		if isSensitive("/" + filepath.ToSlash(p)) {
+			return "denied_path"
+		}
+		if words[0] == "diff" {
+			if fi, err := root.Stat(p); err == nil && fi.IsDir() {
+				return "directory"
+			}
+		}
+	}
+	return ""
+}
+
 // grantRulesRefuse: g, a bash grant, is one these rules no longer take
 // (made under older ones): its prefix is refused, or it names a tool and
 // holds no folder to keep the tool's files in.
@@ -353,6 +398,12 @@ var delegateDeniedNames = []string{
 	".vimrc", ".nvimrc", "_exrc", "justfile", ".justfile", "taskfile.yml", "taskfile.yaml", "gemfile", "rakefile",
 }
 
+// delegateDeniedConfigPrefixes start the base names of the configs a tool a
+// git hook runs loads as code or as commands, while the hook names only the
+// tool (npx lint-staged): lint-staged's and commitlint's, in every form
+// (.lintstagedrc.json, lint-staged.config.mjs, .commitlintrc.ts...).
+var delegateDeniedConfigPrefixes = []string{".lintstagedrc", "lint-staged.config.", ".commitlintrc", "commitlint.config."}
+
 // delegateHookConfigs are the files that make git hooks run a program:
 // lefthook's (also denied names) and pre-commit's. checkDelegateHook reads
 // them, and the scripts of .husky, for the files they run.
@@ -399,7 +450,6 @@ func checkDelegateHook(dir, rel string) string {
 			files = append(files, ".husky/"+n)
 		}
 	}
-	rel = strings.ToLower(filepath.ToSlash(rel))
 	for _, name := range files {
 		f, err := root.Open(name)
 		if err != nil {
@@ -407,18 +457,43 @@ func checkDelegateHook(dir, rel string) string {
 		}
 		b, _ := io.ReadAll(io.LimitReader(f, maxHookConfig))
 		f.Close()
-		for _, w := range hookScriptRe.FindAllString(string(b), -1) {
-			w = strings.ToLower(w)
-			for strings.HasPrefix(w, "./") || strings.HasPrefix(w, "../") {
-				w = w[strings.Index(w, "/")+1:]
-			}
-			w = strings.TrimPrefix(w, "/")
-			if w != "" && (rel == w || strings.HasSuffix(rel, "/"+w)) {
-				return "denied_path"
-			}
+		if namesFile(hookScriptRe.FindAllString(string(b), -1), rel) {
+			return "denied_path"
 		}
 	}
 	return ""
+}
+
+// namesFile: one of words, a path a hook runs, names rel (under the
+// worktree's root), compared by the end of its path, as checkDelegateHook
+// describes, without case.
+func namesFile(words []string, rel string) bool {
+	rel = strings.ToLower(filepath.ToSlash(rel))
+	for _, w := range words {
+		w = strings.ToLower(filepath.ToSlash(strings.Trim(w, `"'`)))
+		for strings.HasPrefix(w, "./") || strings.HasPrefix(w, "../") {
+			w = w[strings.Index(w, "/")+1:]
+		}
+		w = strings.TrimPrefix(w, "/")
+		if w != "" && (rel == w || strings.HasSuffix(rel, "/"+w)) {
+			return true
+		}
+	}
+	return false
+}
+
+// hookCommandScripts are the words of a hook command a git config defines
+// (hook.<name>.command) that can name a file it runs: a script by its
+// extension, and any word with a path in it ("tools/check", the program
+// run first, whatever its name).
+func hookCommandScripts(cmd string) []string {
+	words := hookScriptRe.FindAllString(cmd, -1)
+	for _, w := range strings.Fields(cmd) {
+		if strings.Contains(w, "/") {
+			words = append(words, w)
+		}
+	}
+	return words
 }
 
 // delegateDeniedDirs are directories nothing under which a grant covers
@@ -464,6 +539,11 @@ func checkDelegatePath(rel string) string {
 	base := parts[len(parts)-1]
 	if slices.Contains(delegateDeniedNames, base) || strings.HasPrefix(base, ".env") || isSensitive("/"+strings.Join(parts, "/")) {
 		return "denied_path"
+	}
+	for _, p := range delegateDeniedConfigPrefixes {
+		if strings.HasPrefix(base, p) {
+			return "denied_path"
+		}
 	}
 	joined := strings.Join(parts, "/")
 	for _, d := range delegateDeniedDirs {
