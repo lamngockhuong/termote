@@ -16,7 +16,9 @@ Part of the [security invariants](README.md): Homebrew, release integrity, the w
   or whose `server/cli_version.go` names another version (an old commit tagged as a newer version
   would be offered to every unpinned `update`),
   and every later job, and `deploy-website.yml` when it calls it, checks out that commit by hash,
-  so the tag moved during the run changes nothing. `deploy-website.yml` started by hand (Run
+  so the tag moved during the run changes nothing. Every checkout of both workflows sets
+  `persist-credentials: false`: no job leaves the `GITHUB_TOKEN` in `.git/config` while the
+  dependencies it installs run (`gh` reads its token from `GH_TOKEN`, and no job pushes). `deploy-website.yml` started by hand (Run
   workflow on `main`, naming a tag; no `sha` input) deploys only the latest published stable
   release: before checkout it refuses a tag that is not `vX.Y.Z`, is no published release
   (`gh api releases/tags/<tag>` with the job's `GITHUB_TOKEN`, `contents: read`), is a draft or a
