@@ -122,7 +122,11 @@ vi.mock('./use-user-tasks', async (orig) => ({
 }))
 
 import { isDraftDirty, resetFilesStores } from './use-files'
-import { nextClockOffset, useLocalSessions } from './use-local-sessions'
+import {
+  closeNeighbour,
+  nextClockOffset,
+  useLocalSessions,
+} from './use-local-sessions'
 import { RequestError } from './use-mux-api'
 
 const WIN_SHELL = { id: '0', name: 'shell', active: true, panes: [] }
@@ -2843,5 +2847,183 @@ describe('useLocalSessions pane layout', () => {
     })
     expect(mockSplitPane).not.toHaveBeenCalled()
     expect(mockZoomPane).not.toHaveBeenCalled()
+  })
+})
+
+describe('closing the tab on screen shows its neighbour', () => {
+  const tab = (id: string, name: string, active = false) => ({
+    id,
+    name,
+    active,
+    panes: [{ id: id.replace(':t', ':p'), active: true }],
+  })
+  // One workspace of three tabs and one of a single tab; the desktop is on
+  // w1:t1 and w2:t1.
+  const herdr = (w1: ReturnType<typeof tab>[]) => ({
+    backend: 'herdr',
+    caps: { clientSideSelect: true, copyMode: false },
+    groups: [
+      { id: 'w1', name: 'api', tabs: w1 },
+      { id: 'w2', name: 'web', tabs: [tab('w2:t1', 'dev', true)] },
+    ],
+  })
+  const three = () => [
+    tab('w1:t1', 'one', true),
+    tab('w1:t2', 'two'),
+    tab('w1:t3', 'three'),
+  ]
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockCloseTab.mockResolvedValue(true)
+    mockSelectTab.mockResolvedValue(true)
+  })
+
+  // Opens the hook on w1's tabs with shown on screen
+  const open = async (shown: string, w1 = three()) => {
+    mockSnapshot.extra = herdr(w1)
+    const hook = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    await act(async () => {
+      await hook.result.current.switchSession(shown)
+    })
+    expect(hook.result.current.activeSession.id).toBe(shown)
+    return hook
+  }
+  // Closes id, the next snapshot without it
+  const close = async (
+    result: { current: ReturnType<typeof useLocalSessions> },
+    id: string,
+  ) => {
+    mockSnapshot.extra = herdr(three().filter((t) => t.id !== id))
+    await act(async () => {
+      await result.current.removeSession(id)
+    })
+  }
+
+  it('picks the tab after it', async () => {
+    const { result } = await open('w1:t2')
+    await close(result, 'w1:t2')
+    expect(result.current.activeSession.id).toBe('w1:t3')
+    expect(result.current.activeSession.paneId).toBe('w1:p3')
+  })
+
+  it('picks the tab before the last one of its group', async () => {
+    const { result } = await open('w1:t3')
+    await close(result, 'w1:t3')
+    expect(result.current.activeSession.id).toBe('w1:t2')
+  })
+
+  it('keeps the tab on screen when another one is closed', async () => {
+    const { result } = await open('w1:t3')
+    await close(result, 'w1:t1')
+    expect(result.current.activeSession.id).toBe('w1:t3')
+  })
+
+  it("a group's only tab gives way as before", async () => {
+    const { result } = await open('w2:t1')
+    mockSnapshot.extra = {
+      ...herdr(three()),
+      groups: [herdr(three()).groups[0]],
+    }
+    await act(async () => {
+      await result.current.removeSession('w2:t1')
+    })
+    expect(result.current.activeSession.id).toBe('w1:t1')
+  })
+
+  it('a close refused or failed leaves the tab on screen', async () => {
+    const { result } = await open('w1:t2')
+    mockCloseTab.mockResolvedValueOnce(false)
+    await act(async () => {
+      await result.current.removeSession('w1:t2')
+    })
+    expect(result.current.activeSession.id).toBe('w1:t2')
+    mockCloseTab.mockRejectedValueOnce(new Error('network'))
+    await act(async () => {
+      await result.current.removeSession('w1:t2')
+    })
+    expect(result.current.activeSession.id).toBe('w1:t2')
+    mockCloseTab.mockRejectedValueOnce(new RequestError(409, 'changed', 'x'))
+    await act(async () => {
+      await result.current.removeSession('w1:t2').catch(() => {})
+    })
+    expect(result.current.activeSession.id).toBe('w1:t2')
+  })
+
+  it('a tab closed on another device leaves this one where it is', async () => {
+    const { result } = await open('w1:t2')
+    mockSnapshot.extra = herdr(three().filter((t) => t.id !== 'w1:t3'))
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.id).toBe('w1:t2')
+  })
+
+  it('tmux: picks the neighbour by its pane when the windows renumber', async () => {
+    mockSnapshot.extra = {}
+    const win = (id: string, key: string, pane: string, active = false) => ({
+      id,
+      key,
+      name: key,
+      active,
+      panes: [{ id: pane, active: true }],
+    })
+    mockFetchTabs.mockResolvedValue([
+      win('0', '@0', '%0'),
+      win('1', '@1', '%1', true),
+      win('2', '@2', '%2'),
+    ])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    expect(result.current.activeSession.id).toBe('1')
+    // renumber-windows: the window after the closed one takes its index
+    mockFetchTabs.mockResolvedValue([
+      win('0', '@0', '%0'),
+      win('1', '@2', '%2', true),
+    ])
+    await act(async () => {
+      await result.current.removeSession('1')
+    })
+    expect(mockCloseTab).toHaveBeenCalledWith('1', '@1')
+    expect(mockSelectTab).toHaveBeenCalledWith('%2')
+    expect(result.current.activeSession.key).toBe('@2')
+    expect(result.current.activeSession.id).toBe('1')
+  })
+
+  it('tmux: a refused close selects nothing', async () => {
+    mockSnapshot.extra = {}
+    mockFetchTabs.mockResolvedValue([
+      { ...WIN_SHELL, active: false },
+      { ...WIN_VIM, active: true },
+    ])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    mockCloseTab.mockResolvedValueOnce(false)
+    await act(async () => {
+      await result.current.removeSession('1')
+    })
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    expect(result.current.activeSession.id).toBe('1')
+  })
+})
+
+describe('closeNeighbour', () => {
+  const s = (id: string, name: string, groupId = 'g') => ({
+    id,
+    name,
+    icon: '',
+    description: '',
+    groupId,
+  })
+
+  it('follows the tab bar, tab groups gathered', () => {
+    // The bar shows a/x, a/y, b: the group where its first tab is
+    const tabs = [s('1', 'a/x'), s('2', 'b'), s('3', 'a/y'), s('4', 'c', 'h')]
+    expect(closeNeighbour(tabs, tabs[0])?.id).toBe('3')
+    expect(closeNeighbour(tabs, tabs[2])?.id).toBe('2')
+    expect(closeNeighbour(tabs, tabs[1])?.id).toBe('3')
+    expect(closeNeighbour(tabs, tabs[3])).toBeUndefined()
   })
 })

@@ -36,7 +36,7 @@ import {
 import { setSelectionServer } from '../utils/pane-selection'
 import { adoptReviewDrafts, remapReviewDrafts } from '../utils/review-draft'
 import { uniqueNames } from '../utils/running-commands'
-import { newTabName } from '../utils/tab-group'
+import { newTabName, stripItems } from '../utils/tab-group'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
 import { hydrateDrafts } from './use-files'
@@ -230,6 +230,22 @@ const sameSelection = (a: Selection | null, b: Selection) =>
 function shiftSelection(sel: Selection, shift: PaneShift): Selection {
   const follow = (id?: string) => (id && shift.moved.get(id)) || id
   return { ...sel, tabId: follow(sel.tabId) ?? '', paneId: follow(sel.paneId) }
+}
+
+// The tab shown once the tab on screen is closed, as a browser does: the
+// one after it in its group's tab bar (tab groups gathered, none collapsed),
+// else the one before it. None when it is its group's only tab.
+export function closeNeighbour(
+  sessions: readonly Session[],
+  closing: Session,
+): Session | undefined {
+  const tabs = stripItems(
+    sessions.filter((s) => s.groupId === closing.groupId),
+    () => false,
+    closing.id,
+  ).flatMap((it) => (it.kind === 'tab' ? [it.session] : []))
+  const at = tabs.indexOf(closing)
+  return tabs[at + 1] ?? tabs[at - 1]
 }
 
 // Point a tab at one of its panes.
@@ -755,15 +771,39 @@ export function useLocalSessions(pollInterval = 5) {
       const session = sessions.find((s) => s.id === sessionId)
       if (!session) return
 
+      // Closing the tab on screen shows its neighbour, once it is closed
+      const neighbour =
+        session.id === activeSession?.id
+          ? closeNeighbour(sessions, session)
+          : undefined
+
       // Close mux tab, only while the id still names it: a tab whose id a
       // move shifted is refused (RequestError 'changed') for the caller to
       // tell. Other failures show on the next snapshot.
+      let closed = false
       try {
-        await closeTab(sessionId, session.key)
+        closed = await closeTab(sessionId, session.key)
       } catch (err) {
         if (err instanceof RequestError && err.code === 'changed') {
           await refreshSessions()
           throw err
+        }
+      }
+
+      if (closed && neighbour) {
+        if (muxRef.current.caps.clientSideSelect) {
+          // A shift of its id (Zellij) is followed by key on the refresh
+          select(neighbour, neighbour.paneId)
+        } else {
+          // tmux: the close may have renumbered the windows, so the window
+          // is picked by its pane (%N), which keeps its id. Shown right
+          // away, as switchSession does.
+          selectionVersionRef.current++
+          storeSelection({ tabId: neighbour.id, groupId: neighbour.groupId })
+          setActiveSession(neighbour)
+          /* v8 ignore next */
+          await selectTab(neighbour.paneId ?? neighbour.id).catch(() => {})
+          selectionVersionRef.current++
         }
       }
 
@@ -782,7 +822,7 @@ export function useLocalSessions(pollInterval = 5) {
       // Refresh to update list
       await refreshSessions()
     },
-    [sessions, refreshSessions],
+    [sessions, activeSession?.id, refreshSessions, select, storeSelection],
   )
 
   // Close a pane of the current tab, never its last one (that is closing the
