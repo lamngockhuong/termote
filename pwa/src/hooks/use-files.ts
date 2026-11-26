@@ -10,6 +10,7 @@ import { isAbsolutePath, underRoot } from '../utils/chat-file-links'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import { isFileEncoding } from '../utils/file-encoding'
+import type { LineMark } from '../utils/file-position'
 import {
   closeTab,
   moveTab,
@@ -102,9 +103,11 @@ export interface FileTab extends TabBase {
   scrollTop?: number
   // A search result's line (1-based) and column (UTF-16 units) the file
   // opens at, dropped like anchor; jump is bumped at each pick, so picking
-  // the same line again moves there again
+  // the same line again moves there again. marks: the lines marked with
+  // it, a range ("repo.ts:391-398") or a list ("repo.ts:176,183")
   line?: number
   col?: number
+  marks?: LineMark[]
   jump?: number
   // A CSV/TSV table's column widths and wrapped columns, with the scroll
   // offset they were left at; another path starts over
@@ -178,9 +181,11 @@ export interface FileOpenOptions {
   pin?: boolean
   // Where the file starts: a heading
   anchor?: string
-  // Where the file starts: a search result's line and column
+  // Where the file starts: a search result's line and column, and the
+  // lines marked from there
   line?: number
   col?: number
+  marks?: LineMark[]
 }
 
 export interface FollowOptions {
@@ -188,8 +193,10 @@ export interface FollowOptions {
   newTab?: boolean
   // Followed from another view: opened like a file picked in the tree
   fresh?: boolean
-  // The line to show (a path the agent wrote in the Chat view)
+  // The line to show (a path the agent wrote in the Chat view), and the
+  // lines it marks
   line?: number
+  marks?: LineMark[]
 }
 
 export const joinPath = (dir: string, name: string) =>
@@ -281,8 +288,13 @@ interface Store {
   // moves to that root first when it is not on it, then opens the file
   openFromFind: (root: string, path: string, opts?: FileOpenOptions) => void
   // A search result chosen: the tree opened down to it and, for a file, the
-  // file opened (a new trail of links); a directory shows in the tree
-  reveal: (path: string, kind?: 'file' | 'dir') => Promise<void>
+  // file opened (a new trail of links), at opts' line when given; a
+  // directory shows in the tree
+  reveal: (
+    path: string,
+    kind?: 'file' | 'dir',
+    opts?: FileOpenOptions,
+  ) => Promise<void>
   // The directory read again: what it holds now
   list: (path: string) => Promise<DirState>
   // path was deleted: its tab closed (every one under it, for a directory),
@@ -463,6 +475,7 @@ function createStore(id: string): Store {
       ? {
           line: opts.line,
           col: opts.col,
+          marks: opts.marks,
           jump: now,
           anchor: undefined,
           scrollTop: undefined,
@@ -644,6 +657,7 @@ function createStore(id: string): Store {
         pin: opts.newTab,
         anchor: target.anchor,
         line: opts.line,
+        marks: opts.marks,
       })
       return 'opened'
     }
@@ -654,6 +668,7 @@ function createStore(id: string): Store {
       scrollTop: undefined,
       line: undefined,
       col: undefined,
+      marks: undefined,
       table: undefined,
       reveal: false,
       intent: undefined,
@@ -682,7 +697,11 @@ function createStore(id: string): Store {
     return Promise.all(chain.map((p) => read(p)))
   }
 
-  async function reveal(path: string, kind: 'file' | 'dir' = 'file') {
+  async function reveal(
+    path: string,
+    kind: 'file' | 'dir' = 'file',
+    opts?: FileOpenOptions,
+  ) {
     const gen = generation
     const at = path.lastIndexOf('/')
     const parent = at < 0 ? '' : path.slice(0, at)
@@ -694,7 +713,7 @@ function createStore(id: string): Store {
       set({ activeId: null })
       return
     }
-    openByUser(path)
+    openByUser(path, opts)
   }
 
   async function list(path: string) {
@@ -894,6 +913,7 @@ function createStore(id: string): Store {
         scrollTop: prev.scrollTop,
         line: undefined,
         col: undefined,
+        marks: undefined,
         table: undefined,
         reveal: false,
         intent: undefined,
@@ -1075,7 +1095,8 @@ export function useFiles(paneId: string) {
       [store],
     ),
     reveal: useCallback(
-      (p: string, kind?: 'file' | 'dir') => store.reveal(p, kind),
+      (p: string, kind?: 'file' | 'dir', opts?: FileOpenOptions) =>
+        store.reveal(p, kind, opts),
       [store],
     ),
     list: useCallback((p: string) => store.list(p), [store]),
@@ -1188,7 +1209,8 @@ export async function paneDirNow(
   }
 }
 
-// Opens a path the agent wrote in paneId's Files view, at line when given:
+// Opens a path the agent wrote in paneId's Files view, at line when given
+// (with the lines marks names marked):
 // an absolute one under the pane's root, or a relative one from the pane's
 // directory (where the agent runs), else from the root (a path the agent
 // wrote from the top of the repo). The root and directory are read now,
@@ -1198,6 +1220,7 @@ export async function followPathInFiles(
   paneId: string,
   path: string,
   line?: number,
+  marks?: LineMark[],
 ): Promise<FollowResult | 'outside'> {
   const store = storeFor(paneId)
   let here: { root: string; dir?: string }
@@ -1209,7 +1232,7 @@ export async function followPathInFiles(
   // A path of the pane: a Place shown gives way to the pane's folder
   store.switchTo(undefined, here.root)
   const open = (rel: string) =>
-    store.follow({ path: rel }, 0, { fresh: true, line })
+    store.follow({ path: rel }, 0, { fresh: true, line, marks })
   if (isAbsolutePath(path) || !here.dir) {
     const rel = underRoot(path, here.root)
     return rel === null ? 'outside' : open(rel)

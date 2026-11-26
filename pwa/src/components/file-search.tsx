@@ -16,6 +16,7 @@ import {
 import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import { type LineMark, parseFindQuery } from '../utils/file-position'
 import { splitPath } from '../utils/files-format'
 import { FOCUS_RING } from './ui/button'
 import { Switch } from './ui/switch'
@@ -49,7 +50,12 @@ interface Props {
   onQuery: (q: string) => void
   // Bumped when the user refreshes: the next search reads the files again
   refreshTick: number
-  onPick: (path: string) => void
+  // at: the line (and column, or the lines marked) the query named after
+  // the name, "repo.ts:519:7", "repo.ts:391-398" or "repo.ts:176,183"
+  onPick: (
+    path: string,
+    at?: { line: number; col?: number; marks?: LineMark[] },
+  ) => void
   onRootChanged: (root: string) => void
   // The server never lists ignored files to this client (view-only): no
   // switch for them
@@ -85,7 +91,16 @@ export function FileSearch({
   const switchLabel = useId()
   // The refresh the last search sent was asked after
   const sentTick = useRef(refreshTick)
-  const q = query.trim()
+  // The name is searched; a ":line[:col]" after it is where the file opens
+  const target = parseFindQuery(query)
+  const q = target.name
+  const at = target.line
+    ? {
+        line: target.line,
+        ...(target.col && { col: target.col }),
+        ...(target.marks && { marks: target.marks }),
+      }
+    : undefined
 
   useEffect(() => {
     if (!q) {
@@ -173,7 +188,7 @@ export function FileSearch({
                       rows.current[i] = el
                     }}
                     type="button"
-                    onClick={() => onPick(r.path)}
+                    onClick={() => onPick(r.path, at)}
                     onKeyDown={(e) => onRowKey(e, i)}
                     className={`flex min-h-11 w-full items-center gap-2 px-3 text-left text-[13px] hover:bg-surface ${FOCUS_RING} focus-visible:-outline-offset-2 ${r.ignored ? 'opacity-60' : ''}`}
                   >

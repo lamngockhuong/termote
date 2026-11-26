@@ -20,6 +20,7 @@ import {
 import {
   Annotation,
   Compartment,
+  EditorSelection,
   EditorState,
   type Extension,
   Prec,
@@ -44,6 +45,7 @@ import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
+import type { LineMark } from '../utils/file-position'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
 import { languageFor } from '../utils/highlight-langs'
 import { selectedLines, type TextLines } from '../utils/line-range'
@@ -51,10 +53,12 @@ import type { PasteEdit } from '../utils/markdown-image-paste'
 import { imageFromClipboard } from '../utils/upload-image'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
-// (UTF-16, 0-based), again each time jump changes
+// (UTF-16, 0-based), again each time jump changes; marks: the lines
+// selected with it (a range, a list of lines), the first from line:col
 export interface EditorAt {
   line: number
   col?: number
+  marks?: LineMark[]
   jump: number
 }
 
@@ -168,6 +172,25 @@ function positionOf(state: EditorState, at: EditorAt): number {
   const n = Math.min(Math.max(at.line, 1), state.doc.lines)
   const line = state.doc.line(n)
   return line.from + Math.min(Math.max(at.col ?? 0, 0), line.length)
+}
+
+// The selection at asks for: each line it marks selected whole (the first
+// from its column), the main one first; lines past the text's last one are
+// left out, and the cursor at line:col without any
+function selectionOf(state: EditorState, at: EditorAt): EditorSelection {
+  const pos = positionOf(state, at)
+  const doc = state.doc
+  const ranges = (at.marks ?? [])
+    .filter((m) => m.from <= doc.lines)
+    .map((m) =>
+      EditorSelection.range(
+        m.from === at.line ? pos : doc.line(m.from).from,
+        doc.line(Math.min(Math.max(m.to, m.from), doc.lines)).to,
+      ),
+    )
+  return ranges.length
+    ? EditorSelection.create(ranges, 0)
+    : EditorSelection.single(pos)
 }
 
 // The editing a pasted image gets, while live() says the editor is there:
@@ -471,7 +494,7 @@ export default function CodeEditor({
     if (!at) return
     const pos = positionOf(v.state, at)
     v.dispatch({
-      selection: { anchor: pos },
+      selection: selectionOf(v.state, at),
       effects: EditorView.scrollIntoView(pos, { y: 'center' }),
     })
     v.focus()
@@ -524,7 +547,8 @@ export default function CodeEditor({
     pending.current = undefined
     if (start?.at) {
       v.dispatch({
-        effects: EditorView.scrollIntoView(v.state.selection.main.head, {
+        // A range's first line, where it opens
+        effects: EditorView.scrollIntoView(v.state.selection.main.from, {
           y: 'center',
         }),
       })

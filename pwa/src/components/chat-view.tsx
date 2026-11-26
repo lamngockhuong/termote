@@ -27,6 +27,7 @@ import { toAgentStatus } from '../types/session'
 import { canResumeHere, canStartAgent } from '../utils/agent-start'
 import { selectionText } from '../utils/chat-quote'
 import { setChatSelection } from '../utils/chat-selection'
+import type { LineMark } from '../utils/file-position'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -261,8 +262,8 @@ function AgentChat({
   const openFile = useMemo(
     () =>
       mux.caps.files && paneId
-        ? async (path: string, line?: number) => {
-            const result = await followPathInFiles(paneId, path, line)
+        ? async (path: string, line?: number, marks?: LineMark[]) => {
+            const result = await followPathInFiles(paneId, path, line, marks)
             if (result === 'opened') showView(FILES_VIEW_ID)
             else if (result === 'outside') {
               const notice = await openOutsideInFiles(paneId, path, {

@@ -37,7 +37,12 @@ function MdLink({ href, children }: ComponentProps<'a'>) {
     const file = fileRefFromHref(href)
     if (!file) return <span>{children}</span>
     return (
-      <FileRef path={file.path} line={file.line} className="inline">
+      <FileRef
+        path={file.path}
+        line={file.line}
+        marks={file.marks}
+        className="inline"
+      >
         <InLink.Provider value>{children}</InLink.Provider>
       </FileRef>
     )
@@ -110,7 +115,12 @@ function MdCode({ children }: ComponentProps<'code'>) {
     !inLink && typeof children === 'string' ? parseFileRef(children) : null
   if (!file) return <code>{children}</code>
   return (
-    <FileRef path={file.path} line={file.line} className="inline">
+    <FileRef
+      path={file.path}
+      line={file.line}
+      marks={file.marks}
+      className="inline"
+    >
       <code>{children}</code>
     </FileRef>
   )

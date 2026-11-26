@@ -1194,6 +1194,7 @@ function PaneFiles({
             scrollTop={tab.scrollTop}
             line={tab.line}
             col={tab.col}
+            marks={tab.marks}
             jump={tab.jump}
             refresh={fileRefresh}
             tableLayout={tab.table}
@@ -1312,7 +1313,7 @@ function PaneFiles({
                 query={query}
                 onQuery={setQuery}
                 refreshTick={refreshTick}
-                onPick={(p) => f.reveal(p)}
+                onPick={(p, at) => f.reveal(p, 'file', at)}
                 onRootChanged={f.rootChanged}
                 hideIgnored={readOnly}
               >
