@@ -30,6 +30,7 @@ import type { Session, SessionGroup } from '../types/session'
 import { paneCommand } from '../utils/agent-start'
 import type { AppCommand, PaletteMode } from '../utils/app-commands'
 import { requestDraftInsert } from '../utils/chat-draft'
+import { parseFindQuery } from '../utils/file-position'
 import { splitPath } from '../utils/files-format'
 import {
   parseLine,
@@ -203,6 +204,9 @@ export function CommandPalette({
   const canFind = filesAvailable && !!paneId
   const ignored = f.isRepo && !readOnly && settings.findIncludeIgnored
   const excludes = settings.findExcludes
+  // "repo.ts:519:7": the name is searched, the file chosen opens there
+  const target = parseFindQuery(query)
+  const findName = target.name
   const [found, setFound] = useState<Found | null>(null)
   // Bumped when the root moved under a search: it is sent again
   const [retry, setRetry] = useState(0)
@@ -217,17 +221,17 @@ export function CommandPalette({
   const { load, rootChanged } = f
   // biome-ignore lint/correctness/useExhaustiveDependencies: a moved root (retry) and an early Enter (searchNow) send it again
   useEffect(() => {
-    if (current !== 'files' || !query || !canFind) return
+    if (current !== 'files' || !findName || !canFind) return
     const abort = new AbortController()
     const timer = setTimeout(
       async () => {
         try {
           const res = await findFiles(
             { paneId, place: f.place },
-            { q: query, root: rootRef.current, ignored, exclude: excludes },
+            { q: findName, root: rootRef.current, ignored, exclude: excludes },
             abort.signal,
           )
-          setFound({ paneId, q: query, res })
+          setFound({ paneId, q: findName, res })
         } catch (err) {
           // A newer search replaced this one
           if (abort.signal.aborted) return
@@ -236,7 +240,7 @@ export function CommandPalette({
             setRetry((n) => n + 1)
             return
           }
-          setFound({ paneId, q: query, error: filesError(err) })
+          setFound({ paneId, q: findName, error: filesError(err) })
         }
       },
       pendingRef.current?.q === query ? 0 : FIND_DEBOUNCE_MS,
@@ -247,7 +251,7 @@ export function CommandPalette({
     }
   }, [
     current,
-    query,
+    findName,
     canFind,
     paneId,
     ignored,
@@ -257,7 +261,7 @@ export function CommandPalette({
     rootChanged,
   ])
   const fresh =
-    found && found.paneId === paneId && found.q === query ? found : null
+    found && found.paneId === paneId && found.q === findName ? found : null
 
   // "Searching…" only once a search is slow to answer
   const [slow, setSlow] = useState(false)
@@ -270,7 +274,10 @@ export function CommandPalette({
 
   const openFile = (root: string, path: string, pin: boolean) =>
     run(() => {
-      f.openFromFind(root, path, { pin })
+      f.openFromFind(root, path, {
+        pin,
+        ...(target.line && { line: target.line, col: target.col }),
+      })
       showFilesPanel()
       requestFilesFocus(paneId, 'file')
     })

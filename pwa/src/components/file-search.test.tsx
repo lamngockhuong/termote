@@ -36,7 +36,7 @@ function Harness({
   isRepo?: boolean
   initial?: string
   tick?: number
-  onPick?: (p: string) => void
+  onPick?: (p: string, at?: { line: number; col?: number }) => void
   onRootChanged?: (r: string) => void
 }) {
   const [q, setQ] = useState(initial)
@@ -57,6 +57,8 @@ function Harness({
   )
 }
 
+const stableRootChanged = vi.fn()
+
 const box = () => screen.getByRole('searchbox', { name: 'Find a file' })
 
 async function type(value: string) {
@@ -75,6 +77,31 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('FileSearch', () => {
+  it('searches the name before a :line[:col] and picks the file there', async () => {
+    const onPick = vi.fn()
+    render(<Harness onPick={onPick} onRootChanged={stableRootChanged} />)
+    await type('main.go:519:7')
+    expect(mockFind).toHaveBeenCalledTimes(1)
+    expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'main.go' })
+    const list = screen.getByRole('list', { name: 'Matching files' })
+    fireEvent.click(within(list).getAllByRole('button')[0])
+    expect(onPick).toHaveBeenLastCalledWith('src/main.go', {
+      line: 519,
+      col: 7,
+    })
+    // Another line of the same name opens there, without a search
+    await type('main.go:12')
+    expect(mockFind).toHaveBeenCalledTimes(1)
+    fireEvent.click(within(list).getAllByRole('button')[0])
+    expect(onPick).toHaveBeenLastCalledWith('src/main.go', { line: 12 })
+  })
+
+  it('searches the whole query when its end is not a line', async () => {
+    render(<Harness />)
+    await type('main.go:0')
+    expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'main.go:0' })
+  })
+
   it('shows the tree without a query, and the switch only in a repo', () => {
     const { unmount } = render(<Harness />)
     expect(screen.getByText('the tree')).toBeInTheDocument()
@@ -117,7 +144,7 @@ describe('FileSearch', () => {
     expect(rows[1]).toHaveClass('opacity-60')
     expect(rows[2]).toHaveTextContent('Sensitive')
     fireEvent.click(rows[0])
-    expect(onPick).toHaveBeenCalledWith('src/main.go')
+    expect(onPick).toHaveBeenCalledWith('src/main.go', undefined)
   })
 
   it('cancels a search the next key replaces', async () => {

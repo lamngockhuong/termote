@@ -3,6 +3,8 @@
 // path under the pane's root a path the agent wrote is. No React: plain
 // functions.
 
+import { splitLineSuffix } from './file-position'
+
 export interface FileRef {
   path: string
   // The first line named: ":12", ":12:5", ":12-20", "#L12"
@@ -42,10 +44,10 @@ export function parseFileRef(text: string, link = false): FileRef | null {
     line = lineOf(s.slice(hash + 1).match(/^L(\d+)(?:-L?\d+)?$/)?.[1])
     s = s.slice(0, hash)
   }
-  const at = s.match(/:(\d+)(?::\d+)?(?:-\d+)?$/)
+  const at = splitLineSuffix(s)
   if (at) {
-    line ??= lineOf(at[1])
-    s = s.slice(0, at.index)
+    line ??= at.line > 0 ? at.line : undefined
+    s = at.rest
   }
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it refuses
   if (!s || /[\0-\x1f]/.test(s)) return null

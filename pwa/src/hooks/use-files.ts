@@ -281,8 +281,13 @@ interface Store {
   // moves to that root first when it is not on it, then opens the file
   openFromFind: (root: string, path: string, opts?: FileOpenOptions) => void
   // A search result chosen: the tree opened down to it and, for a file, the
-  // file opened (a new trail of links); a directory shows in the tree
-  reveal: (path: string, kind?: 'file' | 'dir') => Promise<void>
+  // file opened (a new trail of links), at opts' line when given; a
+  // directory shows in the tree
+  reveal: (
+    path: string,
+    kind?: 'file' | 'dir',
+    opts?: FileOpenOptions,
+  ) => Promise<void>
   // The directory read again: what it holds now
   list: (path: string) => Promise<DirState>
   // path was deleted: its tab closed (every one under it, for a directory),
@@ -682,7 +687,11 @@ function createStore(id: string): Store {
     return Promise.all(chain.map((p) => read(p)))
   }
 
-  async function reveal(path: string, kind: 'file' | 'dir' = 'file') {
+  async function reveal(
+    path: string,
+    kind: 'file' | 'dir' = 'file',
+    opts?: FileOpenOptions,
+  ) {
     const gen = generation
     const at = path.lastIndexOf('/')
     const parent = at < 0 ? '' : path.slice(0, at)
@@ -694,7 +703,7 @@ function createStore(id: string): Store {
       set({ activeId: null })
       return
     }
-    openByUser(path)
+    openByUser(path, opts)
   }
 
   async function list(path: string) {
@@ -1075,7 +1084,8 @@ export function useFiles(paneId: string) {
       [store],
     ),
     reveal: useCallback(
-      (p: string, kind?: 'file' | 'dir') => store.reveal(p, kind),
+      (p: string, kind?: 'file' | 'dir', opts?: FileOpenOptions) =>
+        store.reveal(p, kind, opts),
       [store],
     ),
     list: useCallback((p: string) => store.list(p), [store]),

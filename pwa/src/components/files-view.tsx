@@ -1312,7 +1312,7 @@ function PaneFiles({
                 query={query}
                 onQuery={setQuery}
                 refreshTick={refreshTick}
-                onPick={(p) => f.reveal(p)}
+                onPick={(p, at) => f.reveal(p, 'file', at)}
                 onRootChanged={f.rootChanged}
                 hideIgnored={readOnly}
               >

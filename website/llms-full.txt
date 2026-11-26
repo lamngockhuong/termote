@@ -2314,6 +2314,7 @@ Opening a file keeps the ones already open: each has a tab, and going back to a 
 The **Find a file…** box at the top of Files (above the keyboard on a phone) searches the names of the files under the root. Results replace the tree after a moment’s pause in typing; each row shows the path.
 
 * Tap a result, or press Enter on it, to open the file; the tree opens down to it, and Back returns to the results. The arrow keys move between the box and the results, and Escape clears the box.
+* A line, and a column, after the name (`repo.ts:519` or `repo.ts:519:7`) is not searched: the file you pick opens at that line.
 * A file that git ignores is not searched unless **Include ignored** (the switch next to the box, shown only in a git repository) is on. Those results are dimmed and tagged `ignored`. The choice is remembered on this device.
 * A name that usually holds secrets shows a lock, as in the tree. Only names are searched here; the contents of files are searched in the **Search** tab (see [Searching File Contents](#searching-file-contents)).
 * Only the first 200 matches are shown (`More than 200 matches — type more to narrow`). In a very large repository or folder the search can stop early, and the list says `Search stopped early in a large tree`.
@@ -2889,6 +2890,7 @@ What the palette lists depends on the first character typed in its box; delete i
 
 * With nothing typed, the list holds the files you opened lately in this pane, latest first (the one on screen left out), then the other open tabs. **Ctrl+P, Enter** goes back to the file before.
 * Type part of a name: the pane’s files are found as in the Files search, the ones you opened lately first. Enter opens the file in the Files panel; Ctrl+Enter (Cmd+Enter) opens it in a tab that stays. Enter pressed before the list arrives opens the first file found.
+* Add a line, and a column, after the name, as compilers and agents print them: `repo.ts:519` or `repo.ts:519:7` finds `repo.ts` and opens it at line 519 (column 7). Only numbers of 1 or more after the last `:` count, so a Windows drive (`C:\src\repo.ts`) or a name holding a `:` is searched as typed.
 * The files opened lately are kept on this device for each pane: at most 20, for 14 days, removed when you log out. A sensitive file you chose to show is not kept in the list.
 
 ## Commands

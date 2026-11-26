@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import { parseFindQuery, splitLineSuffix } from './file-position'
+
+describe('splitLineSuffix', () => {
+  it('splits a line, a column and a range off the end', () => {
+    expect(splitLineSuffix('a.ts:12')).toEqual({ rest: 'a.ts', line: 12 })
+    expect(splitLineSuffix('a.ts:12:5')).toEqual({
+      rest: 'a.ts',
+      line: 12,
+      col: 5,
+    })
+    expect(splitLineSuffix('a.ts:12-20')).toEqual({ rest: 'a.ts', line: 12 })
+    expect(splitLineSuffix('a.ts:12:5-20')).toEqual({
+      rest: 'a.ts',
+      line: 12,
+      col: 5,
+    })
+    expect(splitLineSuffix('a.ts:0')).toEqual({ rest: 'a.ts', line: 0 })
+  })
+
+  it('finds none without digits at the end', () => {
+    expect(splitLineSuffix('a.ts')).toBeNull()
+    expect(splitLineSuffix('C:\\src\\a.ts')).toBeNull()
+    expect(splitLineSuffix('a:b.ts')).toBeNull()
+    expect(splitLineSuffix('a.ts:')).toBeNull()
+    expect(splitLineSuffix('a.ts:12a')).toBeNull()
+  })
+})
+
+describe('parseFindQuery', () => {
+  it('takes a line and column after the name', () => {
+    expect(parseFindQuery('beneficiary-application.repository.ts:519')).toEqual(
+      { name: 'beneficiary-application.repository.ts', line: 519 },
+    )
+    expect(parseFindQuery(' repo.ts:519:7 ')).toEqual({
+      name: 'repo.ts',
+      line: 519,
+      col: 7,
+    })
+    expect(parseFindQuery('src/repo.ts:3-9')).toEqual({
+      name: 'src/repo.ts',
+      line: 3,
+    })
+  })
+
+  it('keeps a Windows path, its drive and the colons in a name', () => {
+    expect(parseFindQuery('C:\\src\\a.ts:12')).toEqual({
+      name: 'C:\\src\\a.ts',
+      line: 12,
+    })
+    expect(parseFindQuery('C:\\src\\a.ts')).toEqual({ name: 'C:\\src\\a.ts' })
+    expect(parseFindQuery('a:b.ts:4')).toEqual({ name: 'a:b.ts', line: 4 })
+    expect(parseFindQuery('12:30.log')).toEqual({ name: '12:30.log' })
+  })
+
+  it('is the whole query without a name or a number of 1 or more', () => {
+    expect(parseFindQuery('main')).toEqual({ name: 'main' })
+    expect(parseFindQuery('')).toEqual({ name: '' })
+    expect(parseFindQuery(':12')).toEqual({ name: ':12' })
+    expect(parseFindQuery('  :12')).toEqual({ name: ':12' })
+    expect(parseFindQuery('a.ts:0')).toEqual({ name: 'a.ts:0' })
+    expect(parseFindQuery('a.ts:12:0')).toEqual({ name: 'a.ts:12:0' })
+    expect(parseFindQuery('a.ts:')).toEqual({ name: 'a.ts:' })
+  })
+})

@@ -333,6 +333,41 @@ describe('CommandPalette', () => {
       })
     })
 
+    it('finds the name before a :line[:col] and opens the file there', async () => {
+      const { result } = await filesStore()
+      mockFind.mockResolvedValue(found(['src/repo.ts']))
+      const p = renderPalette()
+      type('repo.ts:519:7')
+      await waitFor(() => expect(options()).toHaveLength(1))
+      expect(mockFind).toHaveBeenCalledOnce()
+      expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'repo.ts' })
+      key('Enter')
+      expect(p.onRun).toHaveBeenCalledOnce()
+      expect(result.current.active).toMatchObject({
+        path: 'src/repo.ts',
+        line: 519,
+        col: 7,
+      })
+    })
+
+    it('opens at the line when Enter comes before the results', async () => {
+      const { result } = await filesStore()
+      let answer: (r: FindResponse) => void = () => {}
+      mockFind.mockImplementation(
+        () => new Promise<FindResponse>((r) => (answer = r)),
+      )
+      renderPalette()
+      type('repo.ts:42')
+      key('Enter')
+      await waitFor(() => expect(mockFind).toHaveBeenCalledOnce())
+      expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'repo.ts' })
+      await act(async () => answer(found(['src/repo.ts'])))
+      expect(result.current.active).toMatchObject({
+        path: 'src/repo.ts',
+        line: 42,
+      })
+    })
+
     it('opens the first result of what was typed when Enter comes first', async () => {
       const { result } = await filesStore()
       let answer: (r: FindResponse) => void = () => {}
