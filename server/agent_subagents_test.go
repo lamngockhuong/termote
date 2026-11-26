@@ -761,6 +761,65 @@ func TestSubagentStoppedByUser(t *testing.T) {
 	}
 }
 
+// finishMeta rewrites id's meta file as Claude Code (2.1.332) does when a
+// subagent ends, foreground ones included, at finished, and its subagent
+// file last written at changed.
+func finishMeta(t *testing.T, subs, id string, finished, changed time.Time) {
+	t.Helper()
+	meta := filepath.Join(subs, "agent-"+id+".meta.json")
+	b := `{"agentType":"web-fetch","description":"Read the docs","spawnDepth":1,"requestShape":"foreground","finished":true}`
+	if err := os.WriteFile(meta, []byte(b), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(meta, finished, finished); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(subs, "agent-"+id+".jsonl"), changed, changed); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubagentFinishedMeta(t *testing.T) {
+	dir, subs := subagentsFixture(t)
+	mux, a := subagentsServer(t, claudeSession(dir))
+	key := testSessionID + "\x00" + dir
+	fin := time.Now().Add(-2 * time.Minute).Truncate(time.Millisecond)
+	// No task-notification for aaa2 or aaa4 (run in the foreground): the
+	// meta file says they finished, the subagent file written just before.
+	finishMeta(t, subs, "aaa2", fin, fin.Add(-5*time.Millisecond))
+	finishMeta(t, subs, "aaa4", fin, fin)
+	res, _ := getSubagents(t, mux)
+	ts := fin.UTC().Format(activityTimeFormat)
+	for _, id := range []string{"aaa2", "aaa4"} {
+		if n := nodeByID(res.Nodes, id); n.Status != "done" || n.EndTS != ts || n.StatusGuessed {
+			t.Errorf("%s = %+v", id, n)
+		}
+	}
+	// A task-notification still wins: aaa3 failed.
+	finishMeta(t, subs, "aaa3", fin, fin)
+	res, _ = getSubagents(t, mux)
+	if n := nodeByID(res.Nodes, "aaa3"); n.Status != "error" {
+		t.Errorf("aaa3 = %+v", n)
+	}
+	if last, err := a.subagentState.lastWrite(key, claudeSession(dir)); err != nil || !last.IsZero() {
+		t.Errorf("lastWrite with every subagent finished = %v, %v", last, err)
+	}
+
+	// aaa4 continued since (written well after its meta file): running again.
+	later := fin.Add(time.Minute)
+	os.Chtimes(filepath.Join(subs, "agent-aaa4.jsonl"), later, later)
+	res, _ = getSubagents(t, mux)
+	if n := nodeByID(res.Nodes, "aaa4"); n.Status != "running" || n.EndTS != "" {
+		t.Errorf("continued aaa4 = %+v", n)
+	}
+	if last, err := a.subagentState.lastWrite(key, claudeSession(dir)); err != nil || !last.Equal(later) {
+		t.Errorf("lastWrite = %v, %v", last, err)
+	}
+	if metaFinished(subagentMeta{Finished: true}, time.Time{}, fin) {
+		t.Error("a finish without a time counted")
+	}
+}
+
 func appendTranscript(t *testing.T, subs, text string) {
 	t.Helper()
 	f, err := os.OpenFile(filepath.Join(filepath.Dir(filepath.Dir(subs)), testSessionID+".jsonl"), os.O_APPEND|os.O_WRONLY, 0)
