@@ -431,6 +431,30 @@ describe('CodeEditor', () => {
     expect(view.state.selection.main.head).toBe(0)
   })
 
+  it('selects a range from its line to the end of its last line, kept inside the text', () => {
+    const { view, rerender } = setup({ at: { line: 1, endLine: 2, jump: 1 } })
+    expect(view.state.selection.main.from).toBe(0)
+    expect(view.state.selection.main.to).toBe(7)
+    expect(view.state.sliceDoc(0, 7)).toBe('one\ntwo')
+    rerender({ at: { line: 2, endLine: 99, jump: 2 } })
+    expect(view.state.selection.main.from).toBe(4)
+    expect(view.state.selection.main.to).toBe(14)
+    // Backwards: the cursor at the line alone
+    rerender({ at: { line: 2, endLine: 1, jump: 3 } })
+    expect(view.state.selection.main.empty).toBe(true)
+    expect(view.state.selection.main.head).toBe(4)
+  })
+
+  it('opened hidden at a range, brings its first line into view once it shows', () => {
+    const at = { line: 1, endLine: 3, jump: 1 }
+    const { view, rerender } = setup({ hidden: true, at })
+    const dispatch = vi.spyOn(view, 'dispatch')
+    rerender({ hidden: false, at })
+    expect(dispatch).toHaveBeenCalledWith({ effects: expect.anything() })
+    expect(view.state.selection.main.from).toBe(0)
+    expect(view.state.selection.main.to).toBe(13)
+  })
+
   it('opening at a line wins over the offset it was left at', async () => {
     const { view } = setup({ scrollTop: 33, at: { line: 1, jump: 1 } })
     await frame()

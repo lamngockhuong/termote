@@ -51,10 +51,12 @@ import type { PasteEdit } from '../utils/markdown-image-paste'
 import { imageFromClipboard } from '../utils/upload-image'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
-// (UTF-16, 0-based), again each time jump changes
+// (UTF-16, 0-based), again each time jump changes; endLine: the last line
+// of a range selected from there
 export interface EditorAt {
   line: number
   col?: number
+  endLine?: number
   jump: number
 }
 
@@ -168,6 +170,13 @@ function positionOf(state: EditorState, at: EditorAt): number {
   const n = Math.min(Math.max(at.line, 1), state.doc.lines)
   const line = state.doc.line(n)
   return line.from + Math.min(Math.max(at.col ?? 0, 0), line.length)
+}
+
+// The end of a range's last line, kept inside the text; undefined without
+// a range, or for one that ends before it starts
+function rangeEndOf(state: EditorState, at: EditorAt): number | undefined {
+  if (!at.endLine || at.endLine <= at.line) return
+  return state.doc.line(Math.min(at.endLine, state.doc.lines)).to
 }
 
 // The editing a pasted image gets, while live() says the editor is there:
@@ -470,12 +479,17 @@ export default function CodeEditor({
     const v = view.current as EditorView
     if (!at) return
     const pos = positionOf(v.state, at)
+    // A range: selected from line to the end of its last line
+    const end = rangeEndOf(v.state, at)
     v.dispatch({
-      selection: { anchor: pos },
+      selection:
+        end !== undefined && end > pos
+          ? { anchor: pos, head: end }
+          : { anchor: pos },
       effects: EditorView.scrollIntoView(pos, { y: 'center' }),
     })
     v.focus()
-  }, [at?.jump, at?.line, at?.col])
+  }, [at?.jump, at?.line, at?.col, at?.endLine])
 
   // Lines by their height in the document, which starts below the scroll
   // box's padding
@@ -524,7 +538,8 @@ export default function CodeEditor({
     pending.current = undefined
     if (start?.at) {
       v.dispatch({
-        effects: EditorView.scrollIntoView(v.state.selection.main.head, {
+        // A range's first line, where it opens
+        effects: EditorView.scrollIntoView(v.state.selection.main.from, {
           y: 'center',
         }),
       })

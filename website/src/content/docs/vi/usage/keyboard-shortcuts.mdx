@@ -45,9 +45,11 @@ xuống một dòng. Trong danh sách `@`, Ctrl+Enter (Cmd+Enter) mở tab hoặ
   Enter mở file trong panel Files; Ctrl+Enter (Cmd+Enter) mở file trong một tab được giữ lại. Nếu
   bạn nhấn Enter khi danh sách chưa hiện, file đầu tiên tìm được sẽ mở ra.
 - Thêm số dòng, và số cột, sau tên như trình biên dịch hay agent vẫn in ra: `repo.ts:519` hoặc
-  `repo.ts:519:7` tìm `repo.ts` rồi mở nó ở dòng 519 (cột 7). Chỉ số từ 1 trở lên đứng sau dấu `:`
-  cuối cùng mới được tính, nên ổ đĩa Windows (`C:\src\repo.ts`) hay tên file có dấu `:` vẫn được
-  tìm đúng như đã gõ.
+  `repo.ts:519:7` tìm `repo.ts` rồi mở nó ở dòng 519 (cột 7). Với một khoảng dòng như
+  `repo.ts:391-398`, file mở ở dòng 391, các dòng từ 391 tới 398 được tô sáng trong trình xem và
+  được chọn trong trình sửa; dòng cuối nhỏ hơn dòng đầu thì bị bỏ qua, còn dòng cuối vượt quá số
+  dòng của file thì dừng ở dòng cuối cùng. Chỉ số từ 1 trở lên đứng sau dấu `:` cuối cùng mới được
+  tính, nên ổ đĩa Windows (`C:\src\repo.ts`) hay tên file có dấu `:` vẫn được tìm đúng như đã gõ.
 - Danh sách file mở gần đây lưu trên thiết bị này cho từng pane: tối đa 20 file, giữ 14 ngày, bị xoá
   khi bạn đăng xuất. File nhạy cảm mà bạn đã chọn hiện ra không được giữ trong danh sách.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFindQuery, splitLineSuffix } from './file-position'
+import { parseFindQuery, rangeEnd, splitLineSuffix } from './file-position'
 
 describe('splitLineSuffix', () => {
   it('splits a line, a column and a range off the end', () => {
@@ -9,11 +9,16 @@ describe('splitLineSuffix', () => {
       line: 12,
       col: 5,
     })
-    expect(splitLineSuffix('a.ts:12-20')).toEqual({ rest: 'a.ts', line: 12 })
+    expect(splitLineSuffix('a.ts:12-20')).toEqual({
+      rest: 'a.ts',
+      line: 12,
+      end: 20,
+    })
     expect(splitLineSuffix('a.ts:12:5-20')).toEqual({
       rest: 'a.ts',
       line: 12,
       col: 5,
+      end: 20,
     })
     expect(splitLineSuffix('a.ts:0')).toEqual({ rest: 'a.ts', line: 0 })
   })
@@ -24,6 +29,16 @@ describe('splitLineSuffix', () => {
     expect(splitLineSuffix('a:b.ts')).toBeNull()
     expect(splitLineSuffix('a.ts:')).toBeNull()
     expect(splitLineSuffix('a.ts:12a')).toBeNull()
+    expect(splitLineSuffix('a.ts:12-')).toBeNull()
+  })
+})
+
+describe('rangeEnd', () => {
+  it('keeps an end only after the start', () => {
+    expect(rangeEnd(391, 398)).toBe(398)
+    expect(rangeEnd(398, 391)).toBeUndefined()
+    expect(rangeEnd(12, 12)).toBeUndefined()
+    expect(rangeEnd(12, undefined)).toBeUndefined()
   })
 })
 
@@ -40,6 +55,33 @@ describe('parseFindQuery', () => {
     expect(parseFindQuery('src/repo.ts:3-9')).toEqual({
       name: 'src/repo.ts',
       line: 3,
+      endLine: 9,
+    })
+  })
+
+  it('takes a range of lines, its end only when it comes after the start', () => {
+    expect(parseFindQuery('repository.ts:391-398')).toEqual({
+      name: 'repository.ts',
+      line: 391,
+      endLine: 398,
+    })
+    expect(parseFindQuery('repository.ts:391:4-398')).toEqual({
+      name: 'repository.ts',
+      line: 391,
+      col: 4,
+      endLine: 398,
+    })
+    // Backwards or one line: the start alone
+    expect(parseFindQuery('repository.ts:398-391')).toEqual({
+      name: 'repository.ts',
+      line: 398,
+    })
+    expect(parseFindQuery('repository.ts:7-7')).toEqual({
+      name: 'repository.ts',
+      line: 7,
+    })
+    expect(parseFindQuery('repository.ts:0-9')).toEqual({
+      name: 'repository.ts:0-9',
     })
   })
 

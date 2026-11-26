@@ -350,6 +350,21 @@ describe('CommandPalette', () => {
       })
     })
 
+    it('finds the name before a :start-end range and opens the file with it marked', async () => {
+      const { result } = await filesStore()
+      mockFind.mockResolvedValue(found(['src/repository.ts']))
+      renderPalette()
+      type('repository.ts:391-398')
+      await waitFor(() => expect(options()).toHaveLength(1))
+      expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'repository.ts' })
+      key('Enter')
+      expect(result.current.active).toMatchObject({
+        path: 'src/repository.ts',
+        line: 391,
+        endLine: 398,
+      })
+    })
+
     it('opens at the line when Enter comes before the results', async () => {
       const { result } = await filesStore()
       let answer: (r: FindResponse) => void = () => {}

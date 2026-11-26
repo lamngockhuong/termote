@@ -544,6 +544,14 @@ describe('following links', () => {
       path: 'docs/guide.md',
       line: 7,
     })
+    expect(result.current.active?.endLine).toBeUndefined()
+    // A range the agent wrote: kept on the tab
+    await act(() => followPathInFiles('%1', 'README.md', 3, 9))
+    expect(result.current.active).toMatchObject({
+      path: 'README.md',
+      line: 3,
+      endLine: 9,
+    })
   })
 
   it('followPathInFiles reads the root for an absolute path', async () => {
@@ -1135,6 +1143,15 @@ describe('useFiles search, delete and restore', () => {
       path: 'x/y/w.md',
       line: 9,
       col: 2,
+    })
+    // "name:start-end": the range kept on the tab
+    await act(() =>
+      result.current.reveal('x/y/v.md', 'file', { line: 3, endLine: 8 }),
+    )
+    expect(result.current.active).toMatchObject({
+      path: 'x/y/v.md',
+      line: 3,
+      endLine: 8,
     })
     // A directory shows in the tree, opened
     await act(() => result.current.reveal('x/y', 'dir'))

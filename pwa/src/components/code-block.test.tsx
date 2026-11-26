@@ -121,6 +121,7 @@ describe('CodeBlock at a line', () => {
     line: number | undefined,
     jump: number | undefined,
     scrollTop?: number,
+    endLine?: number,
   ) => (
     <ThemeProvider>
       <CodeBlock
@@ -128,6 +129,7 @@ describe('CodeBlock at a line', () => {
         path="a.ts"
         wrap={false}
         line={line}
+        endLine={endLine}
         jump={jump}
         scrollTop={scrollTop}
       />
@@ -157,6 +159,27 @@ describe('CodeBlock at a line', () => {
     view.rerender(at(3, 3))
     expect(row(3)).toHaveClass('bg-accent/15')
     expect(row(2)).toHaveClass('bg-bg')
+  })
+
+  it('highlights a range from its line, up to the last line of the file', () => {
+    mockHighlight.mockResolvedValue(null)
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const view = render(at(1, 1, undefined, 2))
+    expect(scroll.mock.contexts[0]).toBe(row(1))
+    expect(row(1)).toHaveClass('bg-accent/15')
+    expect(row(2)).toHaveClass('bg-accent/15')
+    expect(row(3)).toHaveClass('bg-bg')
+    // Past the end: up to the last line, nothing fails
+    view.rerender(at(2, 2, undefined, 99))
+    expect(row(1)).toHaveClass('bg-bg')
+    expect(row(2)).toHaveClass('bg-accent/15')
+    expect(row(3)).toHaveClass('bg-accent/15')
+    // Backwards: the line alone
+    view.rerender(at(3, 3, undefined, 1))
+    expect(row(1)).toHaveClass('bg-bg')
+    expect(row(2)).toHaveClass('bg-bg')
+    expect(row(3)).toHaveClass('bg-accent/15')
   })
 
   it('without a line, starts at the offset kept', () => {

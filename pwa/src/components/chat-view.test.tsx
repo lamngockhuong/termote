@@ -540,11 +540,36 @@ describe('ChatView file paths', () => {
     })
     expect(link).toHaveAttribute('title', 'Open pwa/src/a.ts:12 in Files')
     await act(async () => fireEvent.click(link))
-    expect(mockFollowPath).toHaveBeenCalledWith('0', 'pwa/src/a.ts', 12)
+    expect(mockFollowPath).toHaveBeenCalledWith(
+      '0',
+      'pwa/src/a.ts',
+      12,
+      undefined,
+    )
     expect(showView).toHaveBeenCalledWith('files')
     expect(
       screen.queryByRole('button', { name: 'window.location' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('opens a range of lines in Files, marked from its first line', async () => {
+    mockFollowPath.mockResolvedValue('opened')
+    set({ entries: [say('See `pwa/src/repository.ts:391-398`.')] })
+    render(<ChatView {...withFiles} />)
+    const link = screen.getByRole('button', {
+      name: 'pwa/src/repository.ts:391-398',
+    })
+    expect(link).toHaveAttribute(
+      'title',
+      'Open pwa/src/repository.ts:391-398 in Files',
+    )
+    await act(async () => fireEvent.click(link))
+    expect(mockFollowPath).toHaveBeenCalledWith(
+      '0',
+      'pwa/src/repository.ts',
+      391,
+      398,
+    )
   })
 
   it('opens a relative Markdown link; an http one stays a link', async () => {
@@ -558,7 +583,12 @@ describe('ChatView file paths', () => {
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'the guide' })),
     )
-    expect(mockFollowPath).toHaveBeenCalledWith('0', 'docs/guide.md', 4)
+    expect(mockFollowPath).toHaveBeenCalledWith(
+      '0',
+      'docs/guide.md',
+      4,
+      undefined,
+    )
     // Inline code inside a link is not a second link
     expect(screen.getByRole('link', { name: 'a/b.ts' })).toBeInTheDocument()
     expect(
@@ -579,7 +609,7 @@ describe('ChatView file paths', () => {
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: label })),
     )
-    expect(mockFollowPath).toHaveBeenCalledWith('0', path, undefined)
+    expect(mockFollowPath).toHaveBeenCalledWith('0', path, undefined, undefined)
   })
 
   it('a path the server shortened is not a link', () => {

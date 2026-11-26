@@ -72,8 +72,10 @@ interface Props {
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
   // A line (1-based) to show in the middle and highlight instead, each
-  // time jump changes (a search result picked, the same one again too)
+  // time jump changes (a search result picked, the same one again too);
+  // endLine: the last line of a range highlighted from line
   line?: number
+  endLine?: number
   jump?: number
   // Lines may be picked by their numbers for a review comment
   onLineComment?: (lines: TextLines) => void
@@ -100,6 +102,7 @@ export function CodeBlock({
   wrap,
   scrollTop,
   line,
+  endLine,
   jump,
   onLineComment,
   commentedLines,
@@ -122,8 +125,8 @@ export function CodeBlock({
   )
   // A line asked for, scrolled to once its rows are in the page
   const pending = useRef<number>(undefined)
-  // The line picked last, highlighted until the next pick
-  const [marked, setMarked] = useState<number>()
+  // The line (or range) picked last, highlighted until the next pick
+  const [marked, setMarked] = useState<{ from: number; to: number }>()
   const { pick, press, clear } = useLinePick()
   // Lines picked in a file read again may hold something else now. Dropped
   // while rendering the new text, not in an effect: a mount effect still
@@ -145,7 +148,8 @@ export function CodeBlock({
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per pick
   useLayoutEffect(() => {
     if (!line) return
-    setMarked(line)
+    // A range's end past the file's last line marks up to it
+    setMarked({ from: line, to: Math.max(endLine ?? line, line) })
     pending.current = line
     win?.reveal(line)
   }, [jump])
@@ -231,7 +235,7 @@ export function CodeBlock({
       <div
         key={i}
         data-line={i + 1}
-        className={`flex ${marked === i + 1 || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
+        className={`flex ${(marked && i + 1 >= marked.from && i + 1 <= marked.to) || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
       >
         {owners ? (
           // One sticky box: the blame and the number stay put together

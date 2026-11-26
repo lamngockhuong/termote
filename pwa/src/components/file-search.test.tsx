@@ -96,6 +96,19 @@ describe('FileSearch', () => {
     expect(onPick).toHaveBeenLastCalledWith('src/main.go', { line: 12 })
   })
 
+  it('picks a file with the :start-end range the query named', async () => {
+    const onPick = vi.fn()
+    render(<Harness onPick={onPick} onRootChanged={stableRootChanged} />)
+    await type('main.go:391-398')
+    expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'main.go' })
+    const list = screen.getByRole('list', { name: 'Matching files' })
+    fireEvent.click(within(list).getAllByRole('button')[0])
+    expect(onPick).toHaveBeenLastCalledWith('src/main.go', {
+      line: 391,
+      endLine: 398,
+    })
+  })
+
   it('searches the whole query when its end is not a line', async () => {
     render(<Harness />)
     await type('main.go:0')

@@ -102,9 +102,11 @@ export interface FileTab extends TabBase {
   scrollTop?: number
   // A search result's line (1-based) and column (UTF-16 units) the file
   // opens at, dropped like anchor; jump is bumped at each pick, so picking
-  // the same line again moves there again
+  // the same line again moves there again. endLine: the last line of a
+  // range marked from line ("repo.ts:391-398")
   line?: number
   col?: number
+  endLine?: number
   jump?: number
   // A CSV/TSV table's column widths and wrapped columns, with the scroll
   // offset they were left at; another path starts over
@@ -178,9 +180,11 @@ export interface FileOpenOptions {
   pin?: boolean
   // Where the file starts: a heading
   anchor?: string
-  // Where the file starts: a search result's line and column
+  // Where the file starts: a search result's line and column, and the
+  // last line of a range marked from there
   line?: number
   col?: number
+  endLine?: number
 }
 
 export interface FollowOptions {
@@ -188,8 +192,10 @@ export interface FollowOptions {
   newTab?: boolean
   // Followed from another view: opened like a file picked in the tree
   fresh?: boolean
-  // The line to show (a path the agent wrote in the Chat view)
+  // The line to show (a path the agent wrote in the Chat view), and the
+  // last line of a range it marks
   line?: number
+  endLine?: number
 }
 
 export const joinPath = (dir: string, name: string) =>
@@ -468,6 +474,7 @@ function createStore(id: string): Store {
       ? {
           line: opts.line,
           col: opts.col,
+          endLine: opts.endLine,
           jump: now,
           anchor: undefined,
           scrollTop: undefined,
@@ -649,6 +656,7 @@ function createStore(id: string): Store {
         pin: opts.newTab,
         anchor: target.anchor,
         line: opts.line,
+        endLine: opts.endLine,
       })
       return 'opened'
     }
@@ -659,6 +667,7 @@ function createStore(id: string): Store {
       scrollTop: undefined,
       line: undefined,
       col: undefined,
+      endLine: undefined,
       table: undefined,
       reveal: false,
       intent: undefined,
@@ -903,6 +912,7 @@ function createStore(id: string): Store {
         scrollTop: prev.scrollTop,
         line: undefined,
         col: undefined,
+        endLine: undefined,
         table: undefined,
         reveal: false,
         intent: undefined,
@@ -1198,7 +1208,8 @@ export async function paneDirNow(
   }
 }
 
-// Opens a path the agent wrote in paneId's Files view, at line when given:
+// Opens a path the agent wrote in paneId's Files view, at line when given
+// (the range to endLine marked):
 // an absolute one under the pane's root, or a relative one from the pane's
 // directory (where the agent runs), else from the root (a path the agent
 // wrote from the top of the repo). The root and directory are read now,
@@ -1208,6 +1219,7 @@ export async function followPathInFiles(
   paneId: string,
   path: string,
   line?: number,
+  endLine?: number,
 ): Promise<FollowResult | 'outside'> {
   const store = storeFor(paneId)
   let here: { root: string; dir?: string }
@@ -1219,7 +1231,7 @@ export async function followPathInFiles(
   // A path of the pane: a Place shown gives way to the pane's folder
   store.switchTo(undefined, here.root)
   const open = (rel: string) =>
-    store.follow({ path: rel }, 0, { fresh: true, line })
+    store.follow({ path: rel }, 0, { fresh: true, line, endLine })
   if (isAbsolutePath(path) || !here.dir) {
     const rel = underRoot(path, here.root)
     return rel === null ? 'outside' : open(rel)

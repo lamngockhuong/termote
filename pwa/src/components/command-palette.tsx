@@ -276,7 +276,11 @@ export function CommandPalette({
     run(() => {
       f.openFromFind(root, path, {
         pin,
-        ...(target.line && { line: target.line, col: target.col }),
+        ...(target.line && {
+          line: target.line,
+          col: target.col,
+          endLine: target.endLine,
+        }),
       })
       showFilesPanel()
       requestFilesFocus(paneId, 'file')

@@ -261,8 +261,8 @@ function AgentChat({
   const openFile = useMemo(
     () =>
       mux.caps.files && paneId
-        ? async (path: string, line?: number) => {
-            const result = await followPathInFiles(paneId, path, line)
+        ? async (path: string, line?: number, endLine?: number) => {
+            const result = await followPathInFiles(paneId, path, line, endLine)
             if (result === 'opened') showView(FILES_VIEW_ID)
             else if (result === 'outside') {
               const notice = await openOutsideInFiles(paneId, path, {

@@ -50,8 +50,12 @@ interface Props {
   onQuery: (q: string) => void
   // Bumped when the user refreshes: the next search reads the files again
   refreshTick: number
-  // at: the line (and column) the query named after the name, "repo.ts:519:7"
-  onPick: (path: string, at?: { line: number; col?: number }) => void
+  // at: the line (and column, or a range's last line) the query named after
+  // the name, "repo.ts:519:7" or "repo.ts:391-398"
+  onPick: (
+    path: string,
+    at?: { line: number; col?: number; endLine?: number },
+  ) => void
   onRootChanged: (root: string) => void
   // The server never lists ignored files to this client (view-only): no
   // switch for them
@@ -91,7 +95,11 @@ export function FileSearch({
   const target = parseFindQuery(query)
   const q = target.name
   const at = target.line
-    ? { line: target.line, ...(target.col && { col: target.col }) }
+    ? {
+        line: target.line,
+        ...(target.col && { col: target.col }),
+        ...(target.endLine && { endLine: target.endLine }),
+      }
     : undefined
 
   useEffect(() => {

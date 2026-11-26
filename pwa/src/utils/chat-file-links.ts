@@ -3,12 +3,14 @@
 // path under the pane's root a path the agent wrote is. No React: plain
 // functions.
 
-import { splitLineSuffix } from './file-position'
+import { rangeEnd, splitLineSuffix } from './file-position'
 
 export interface FileRef {
   path: string
   // The first line named: ":12", ":12:5", ":12-20", "#L12"
   line?: number
+  // A range's last line, after line: ":12-20", "#L12-L20"
+  endLine?: number
 }
 
 // A drive ("C:/", "C:\") or a "/" at the start
@@ -39,14 +41,20 @@ export function parseFileRef(text: string, link = false): FileRef | null {
     return null
   if (s.startsWith('//') || s.startsWith('~')) return null
   let line: number | undefined
+  let end: number | undefined
   const hash = s.indexOf('#')
   if (hash >= 0) {
-    line = lineOf(s.slice(hash + 1).match(/^L(\d+)(?:-L?\d+)?$/)?.[1])
+    const m = s.slice(hash + 1).match(/^L(\d+)(?:-L?(\d+))?$/)
+    line = lineOf(m?.[1])
+    if (line) end = lineOf(m?.[2])
     s = s.slice(0, hash)
   }
   const at = splitLineSuffix(s)
   if (at) {
-    line ??= at.line > 0 ? at.line : undefined
+    if (!line && at.line > 0) {
+      line = at.line
+      end = at.end
+    }
     s = at.rest
   }
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it refuses
@@ -64,7 +72,8 @@ export function parseFileRef(text: string, link = false): FileRef | null {
     const deep = ABSOLUTE.test(s) && parts.length > 1
     if (!named && !deep && !/^\.\.?[\\/]/.test(s) && !line) return null
   }
-  return { path: s, ...(line && { line }) }
+  const endLine = line && rangeEnd(line, end)
+  return { path: s, ...(line && { line }), ...(endLine && { endLine }) }
 }
 
 // A Markdown link's href as a file, or null for a URL, another host or an

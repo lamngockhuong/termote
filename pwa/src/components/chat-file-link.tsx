@@ -6,12 +6,13 @@ import { useT } from '../i18n/i18n-context'
 // no Files view) the path is plain text. A tool card and a message both
 // read it, hence a file of its own (they import each other's parts).
 export const ChatFileLinkContext = createContext<
-  ((path: string, line?: number) => Promise<void>) | undefined
+  ((path: string, line?: number, endLine?: number) => Promise<void>) | undefined
 >(undefined)
 
 export function FileRef({
   path,
   line,
+  endLine,
   className = '',
   plainClassName = '',
   title = path,
@@ -20,6 +21,8 @@ export function FileRef({
   // None: plain text (a path the server shortened)
   path?: string
   line?: number
+  // A range's last line, marked from line
+  endLine?: number
   className?: string
   // Only on the plain text: a colour the link's would clash with
   plainClassName?: string
@@ -36,13 +39,13 @@ export function FileRef({
       </span>
     )
   }
-  const where = line ? `${path}:${line}` : path
+  const where = line ? `${path}:${line}${endLine ? `-${endLine}` : ''}` : path
   return (
     <button
       type="button"
       data-file-ref={where}
       title={t('chat.fileLink.open', { where })}
-      onClick={() => void open(path, line)}
+      onClick={() => void open(path, line, endLine)}
       className={`${className} cursor-pointer text-left text-accent underline decoration-dotted underline-offset-2 hover:decoration-solid`}
     >
       {children}
