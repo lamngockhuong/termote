@@ -44,9 +44,10 @@ describe('rangeEnd', () => {
 
 describe('parseFindQuery', () => {
   it('takes a line and column after the name', () => {
-    expect(parseFindQuery('beneficiary-application.repository.ts:519')).toEqual(
-      { name: 'beneficiary-application.repository.ts', line: 519 },
-    )
+    expect(parseFindQuery('order-service.repository.ts:519')).toEqual({
+      name: 'order-service.repository.ts',
+      line: 519,
+    })
     expect(parseFindQuery(' repo.ts:519:7 ')).toEqual({
       name: 'repo.ts',
       line: 519,
