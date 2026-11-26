@@ -113,6 +113,9 @@ interface Props {
   isMobile?: boolean
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  // Desktop: hidden while a side panel takes the whole window, still
+  // mounted so it comes back as it was
+  hidden?: boolean
   // Desktop, expanded: the saved width (shown within the row's limits), set
   // by dragging the right edge; without onWidthChange there is no handle.
   // onResizingChange is true while the edge is dragged.
@@ -301,6 +304,7 @@ export function SessionSidebar({
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
+  hidden,
   width,
   onWidthChange,
   onResizingChange,
@@ -1592,7 +1596,7 @@ export function SessionSidebar({
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     return (
-      <aside className={`w-14 ${SIDEBAR_BASE_CLASSES}`}>
+      <aside hidden={hidden} className={`w-14 ${SIDEBAR_BASE_CLASSES}`}>
         <div
           className={`w-14 items-center gap-1 py-2 ${SIDEBAR_CONTENT_CLASSES}`}
         >
@@ -1654,6 +1658,7 @@ export function SessionSidebar({
   return (
     <aside
       ref={resize.asideRef}
+      hidden={hidden}
       data-tour="sidebar"
       // No width animation while dragging: the edge follows the pointer
       style={{

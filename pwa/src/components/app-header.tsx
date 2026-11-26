@@ -24,6 +24,8 @@ type MenuProps = Omit<ComponentProps<typeof SettingsMenu>, 'fontSize'>
 
 interface Props {
   isMobile: boolean
+  // Desktop: hidden while a side panel takes the whole window
+  hidden?: boolean
   session: Session
   // Tabs of the session's group, and that group's name
   groupSessions: Session[]
@@ -193,7 +195,10 @@ function DesktopHeader(p: Props) {
     // buttons drop their labels too, so the session tabs keep room (an iPad
     // beside the sidebar). Its bottom line is drawn over the row, not as a
     // border, so the active tab covers it and joins the terminal below
-    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 bg-surface px-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
+    <header
+      hidden={p.hidden}
+      className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 bg-surface px-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border pt-[env(safe-area-inset-top)] ui-terminal:bg-bg"
+    >
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (

@@ -1024,6 +1024,7 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr.
 - [ ] The focused handle steps with arrow keys, Home/End go to the limits
 - [ ] The terminal always keeps at least 360px next to the panel
 - [ ] "Maximize panel" covers the terminal; "Restore panel" or Escape brings it back
+- [ ] "Hide sidebar and tabs" also hides the sidebar, the header and the pane strip; pressed again they come back with the panel still maximized; Escape restores everything and the sidebar still resizes
 - [ ] Narrowing the window to phone width moves the open view to the main area
 
 ---

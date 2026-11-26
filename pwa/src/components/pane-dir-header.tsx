@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useT } from '../i18n/i18n-context'
 import { keepOrder, shortRoot, TRUNCATE_START } from '../utils/files-format'
 import { visibleUnsafe } from '../utils/unsafe-chars'
-import { PanelMaximizeButton } from './side-panel'
+import { PanelFullWindowButton, PanelMaximizeButton } from './side-panel'
 import { IconButton } from './ui/button'
 
 interface Props {
@@ -59,6 +59,7 @@ export function PaneDirHeader({
         />
       </IconButton>
       <PanelMaximizeButton />
+      <PanelFullWindowButton />
     </div>
   )
 }

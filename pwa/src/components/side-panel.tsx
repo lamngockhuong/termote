@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Expand, Maximize2, Minimize2, Shrink } from 'lucide-react'
 import {
   createContext,
   type KeyboardEvent,
@@ -23,6 +23,8 @@ import { IconButton } from './ui/button'
 interface PanelState {
   maximized: boolean
   toggleMaximized: () => void
+  fullWindow: boolean
+  toggleFullWindow: () => void
 }
 
 // Set only inside the desktop side panel: the same views in the main area
@@ -36,6 +38,11 @@ interface Props {
   onWidthChange: (width: number) => void
   maximized: boolean
   onMaximizedChange: (maximized: boolean) => void
+  // Maximized with the sidebar and the header's tabs hidden too: the panel
+  // takes the whole window but the right bar. Turning it on maximizes the
+  // panel; restoring the panel (button or Escape) turns it off.
+  fullWindow: boolean
+  onFullWindowChange: (fullWindow: boolean) => void
   // True while the handle is dragged: the terminal next to the panel keeps
   // its size until the drag ends, so the tmux pane is resized once.
   onResizingChange: (resizing: boolean) => void
@@ -53,6 +60,8 @@ export function SidePanel({
   onWidthChange,
   maximized,
   onMaximizedChange,
+  fullWindow,
+  onFullWindowChange,
   onResizingChange,
   inert,
   children,
@@ -146,6 +155,8 @@ export function SidePanel({
   const state: PanelState = {
     maximized,
     toggleMaximized: () => onMaximizedChange(!maximized),
+    fullWindow,
+    toggleFullWindow: () => onFullWindowChange(!fullWindow),
   }
   return (
     <aside
@@ -206,6 +217,30 @@ export function PanelMaximizeButton() {
       onClick={panel.toggleMaximized}
       aria-label={label}
       title={panel.maximized ? `${label} (Esc)` : label}
+    >
+      <Icon size={15} aria-hidden="true" />
+    </IconButton>
+  )
+}
+
+// Hides or shows the sidebar and the header's tabs around the side panel,
+// which then takes the whole window; nothing outside the side panel.
+export function PanelFullWindowButton() {
+  const panel = useContext(SidePanelContext)
+  const { t } = useT()
+  if (!panel) return null
+  const label = panel.fullWindow
+    ? t('shell.panel.leaveFullWindow')
+    : t('shell.panel.fullWindow')
+  const Icon = panel.fullWindow ? Shrink : Expand
+  return (
+    <IconButton
+      size="sm"
+      variant="ghost"
+      onClick={panel.toggleFullWindow}
+      aria-label={label}
+      aria-pressed={panel.fullWindow}
+      title={label}
     >
       <Icon size={15} aria-hidden="true" />
     </IconButton>

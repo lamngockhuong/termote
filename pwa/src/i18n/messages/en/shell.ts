@@ -137,6 +137,8 @@ export default {
   'shell.panel.resizeHint': 'Drag to resize, double-click to reset',
   'shell.panel.restore': 'Restore panel',
   'shell.panel.maximize': 'Maximize panel',
+  'shell.panel.fullWindow': 'Hide sidebar and tabs',
+  'shell.panel.leaveFullWindow': 'Show sidebar and tabs',
   // A session's icon (components/icon-picker.tsx)
   'shell.icon.change': 'Change icon',
   'shell.icon.choose': 'Choose Icon',
