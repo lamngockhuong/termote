@@ -49,6 +49,7 @@ import {
   type FileContent,
   type FileEncoding,
   fetchFileContent,
+  fetchFileImage,
   RequestError,
   saveFileContent,
 } from '../hooks/use-mux-api'
@@ -69,6 +70,7 @@ import {
 } from '../utils/csv-parse'
 import { CsvClient } from '../utils/csv-parse-client'
 import { isDocumentPath } from '../utils/document-path'
+import { drawingKindOf } from '../utils/drawing-path'
 import type { LineMark } from '../utils/file-position'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
@@ -96,6 +98,7 @@ import {
 } from '../utils/upload-image'
 import { CodeBlock } from './code-block'
 import type { EditorAt } from './code-editor'
+import type { DrawingControl, DrawingPreviewProps } from './drawing-preview'
 import {
   FileEditor,
   SaveBanner,
@@ -259,6 +262,25 @@ function LazyDocumentPreview(props: ComponentProps<typeof DocumentPreview>) {
     <PreviewBoundary retry={DocumentPreview.retry}>
       <Suspense fallback={<Loading />}>
         <DocumentPreview {...props} />
+      </Suspense>
+    </PreviewBoundary>
+  )
+}
+
+// An Excalidraw file's drawing: the editor loads the first time one is
+// opened. Where its fonts are is set first: Excalidraw's modules, which run
+// before the editor's own, read it as they start.
+const DrawingPreview = lazyRetry<DrawingPreviewProps>(
+  () =>
+    import('../utils/drawing-assets').then(() => import('./drawing-preview')),
+  'DrawingPreview',
+)
+
+function LazyDrawingPreview(props: ComponentProps<typeof DrawingPreview>) {
+  return (
+    <PreviewBoundary retry={DrawingPreview.retry}>
+      <Suspense fallback={<Loading />}>
+        <DrawingPreview {...props} />
       </Suspense>
     </PreviewBoundary>
   )
@@ -703,6 +725,11 @@ export function FileViewer({
   // Table edits a reload could not apply again
   const [skipped, setSkipped] = useState<Skipped[]>([])
   const [reload, setReload] = useState(0)
+  // Bumped when the drawing shown must be read again (it reads its text
+  // once): see drawnText below
+  const [drawEpoch, setDrawEpoch] = useState(0)
+  // Writes the drawing's last change, before a save
+  const drawControl = useRef<DrawingControl | null>(null)
   // The next read is a Refresh's (below)
   const quietRead = useRef(false)
   const [wrap, setWrap] = useState(wrapByDefault)
@@ -726,7 +753,13 @@ export function FileViewer({
   const forceSource = !!pick
   // Markdown that can be previewed: the choice (remembered on this device)
   // says how it shows
-  const markdown = isMarkdownPath(path)
+  // An Excalidraw file shows as its drawing, as chosen on this device. An
+  // Obsidian drawing is Markdown too: its preview is the drawing.
+  const drawKind = drawingKindOf(path)
+  const drawingView = !!drawKind && settings.drawingPreview && !forceSource
+  // A PNG's drawing is read from its bytes, never as text
+  const pngDrawing = drawingView && drawKind === 'png'
+  const markdown = isMarkdownPath(path) && !drawKind
   const tooLarge = state.kind === 'text' && state.size > PREVIEW_MAX_BYTES
   const canPreview = markdown && state.kind === 'text' && !tooLarge
   const preview = canPreview && settings.markdownPreview && !forceSource
@@ -742,7 +775,19 @@ export function FileViewer({
       setPick(undefined)
       scrolled.current = undefined
       // The setting shows the preview: back to it, the setting unchanged
-      if (canTable ? settings.tablePreview : settings.markdownPreview) return
+      if (
+        drawKind
+          ? settings.drawingPreview
+          : canTable
+            ? settings.tablePreview
+            : settings.markdownPreview
+      )
+        return
+    }
+    if (drawKind) {
+      scrolled.current = undefined
+      updateSetting('drawingPreview', !drawingView)
+      return
     }
     if (canTable) {
       scrolled.current = undefined
@@ -754,11 +799,19 @@ export function FileViewer({
     scrolled.current = undefined
     updateSetting('markdownPreview', !preview)
   }
-  const previewOn = preview || tableView
-  // An image (or an SVG the user wants as one) is read through files/raw
+  // The drawing of a file read as text (a PNG's is read on its own)
+  const textDrawing = drawingView && !pngDrawing && state.kind === 'text'
+  const previewOn = preview || tableView || textDrawing || pngDrawing
+  // A draft made in the drawing shows there, whatever the view chosen: its
+  // text is the drawing's, never shown as source to type in
+  const drawingShown =
+    !!drawKind && (pngDrawing || (mine ? !!mine.drawing : textDrawing))
+  // An image (or an SVG the user wants as one) is read through files/raw;
+  // not an Excalidraw SVG or PNG shown as its drawing
   const svg = isSvgPath(path)
   const asImage =
-    isImagePath(path) || (svg && settings.svgPreview && !forceSource)
+    (isImagePath(path) && !pngDrawing) ||
+    (svg && settings.svgPreview && !forceSource && !drawingView)
   const [retry, setRetry] = useState(0)
   const image = useImageBlob(
     paneId,
@@ -769,8 +822,8 @@ export function FileViewer({
   // A PDF, .xlsx or .docx is read through files/document, for its viewer
   const docKind = isDocumentPath(path)
   const asDocument = docKind !== undefined
-  // Neither is read as text: no Wrap, no Edit, no files/content
-  const binaryView = asImage || asDocument
+  // None is read as text: no Wrap, no Edit, no files/content
+  const binaryView = asImage || asDocument || pngDrawing
   const doc = useDocumentBytes(
     paneId,
     asDocument ? { path, root, reveal, place } : null,
@@ -1034,6 +1087,8 @@ export function FileViewer({
   })
 
   const discard = () => {
+    // A change the drawing has not given yet is never given after this
+    drawControl.current?.drop()
     setDraft(undefined)
     setSaveError(undefined)
     setSkipped([])
@@ -1197,6 +1252,68 @@ export function FileViewer({
     }
   }
 
+  // The text a drawing is read from: its draft, else the file
+  const drawSource = mine?.drawing
+    ? mine.text
+    : state.kind === 'text'
+      ? state.text.replace(/\r\n/g, '\n')
+      : undefined
+  // The text the drawing shown holds: what it was read from, or wrote last.
+  // Another text means the draft changed elsewhere (another view of the
+  // pane), was discarded, or the file was read again: it is drawn again,
+  // never written back over the change.
+  const drawnText = useRef<string>(undefined)
+  useEffect(() => {
+    if (drawSource === undefined) return
+    if (drawnText.current !== undefined && drawSource !== drawnText.current)
+      setDrawEpoch((n) => n + 1)
+    drawnText.current = drawSource
+  }, [drawSource])
+  // The drawing changed: text is the file it now writes. The first change
+  // makes the draft (and keeps the tab); one back to the file drops none.
+  // A text draft another view made of the file stays as it is.
+  const drawChanged = (text: string) => {
+    // Given to the drawing only while the file may be saved
+    const file = editable as TextLoaded
+    const fresh = { ...draftOf(file, path, reveal), drawing: true as const }
+    let made = false
+    setDraft((now) => {
+      if (now && !now.drawing) return now
+      if (!now) {
+        if (text === fresh.base) return now
+        made = true
+        return { ...fresh, text }
+      }
+      return now.text === text ? now : { ...now, text }
+    })
+    drawnText.current = text
+    if (made) onPin?.()
+  }
+  // Save in the drawing or its header: its last change first, then the
+  // draft as that left it (this render's may be older)
+  const saveDrawing = async () => {
+    // The last change could not be written: the draft is not what is shown
+    if ((await drawControl.current?.flush()) === false) return
+    let d: FileDraft | undefined
+    setDraft((now) => {
+      d = now
+      return now
+    })
+    const edit = d as FileDraft | undefined
+    if (edit?.drawing && edit.text !== edit.base && !saving && !rootMoved)
+      await save(edit)
+  }
+  const readPng = async () => {
+    try {
+      return await fetchFileImage(target, path, { root, reveal })
+    } catch (err) {
+      // The root prop follows and the drawing is read again from it
+      if (err instanceof RequestError && err.status === 409 && err.root)
+        onRootChanged(err.root)
+      throw err
+    }
+  }
+
   // Images pasted into the Markdown file, saved one after another next to
   // it. Each one's placeholder goes in at the cursor at once, and is swapped
   // for the link in the editor while it is there (an undoable change), else
@@ -1350,7 +1467,12 @@ export function FileViewer({
       icon: <AppWindow size={15} />,
       onClick: onOpenWindow,
     })
-  if (!mine && (canPreview || canTable))
+  if (
+    !mine &&
+    (canPreview ||
+      canTable ||
+      (drawKind && (pngDrawing || drawKind === 'png' || state.kind === 'text')))
+  )
     extras.push({
       label: t('files.viewer.preview'),
       title: previewOn
@@ -1360,7 +1482,7 @@ export function FileViewer({
       pressed: previewOn,
       onClick: togglePreview,
     })
-  if (!mine && svg)
+  if (!mine && svg && !drawingView)
     extras.push({
       label: t('files.viewer.image'),
       title: asImage
@@ -1376,7 +1498,7 @@ export function FileViewer({
         updateSetting('svgPreview', !asImage)
       },
     })
-  if (mine && !cells && onLineComment)
+  if (mine && !cells && !mine.drawing && onLineComment)
     extras.push({
       label: t('files.viewer.comment'),
       title: t('files.viewer.commentTitle'),
@@ -1394,7 +1516,7 @@ export function FileViewer({
       pressed: blameOn,
       onClick: () => onBlameChange?.(!blameOn),
     })
-  if (!binaryView)
+  if (!binaryView && !drawingShown)
     extras.push({
       label: t('files.viewer.wrap'),
       icon: <WrapText size={15} />,
@@ -1459,7 +1581,7 @@ export function FileViewer({
             </IconButton>
             <IconButton
               size="sm"
-              onClick={() => save(mine)}
+              onClick={() => (mine.drawing ? saveDrawing() : save(mine))}
               disabled={!dirty || saving || rootMoved || stuck}
               aria-label={t('files.viewer.save')}
               title={t('files.viewer.saveTitle')}
@@ -1469,7 +1591,7 @@ export function FileViewer({
             </IconButton>
           </>
         )}
-        {!mine && editable && (
+        {!mine && editable && !textDrawing && (
           <IconButton
             size="sm"
             onClick={() =>
@@ -1567,6 +1689,7 @@ export function FileViewer({
         )}
       {mine &&
         !cells &&
+        !mine.drawing &&
         // One tree for every layout of a Markdown file, so a change of
         // layout (or the draft growing past the preview's limit) never
         // mounts the editor again
@@ -1620,6 +1743,22 @@ export function FileViewer({
             />
           )
         })()}
+      {/* One element for viewing and changing, so the first change keeps
+          the view (its zoom, the tool picked) */}
+      {drawKind && drawingShown && (
+        <LazyDrawingPreview
+          key={`${drawEpoch}:${retry}`}
+          kind={drawKind}
+          text={drawSource}
+          readBlob={pngDrawing ? readPng : undefined}
+          onChange={
+            editable && !pngDrawing && !rootMoved ? drawChanged : undefined
+          }
+          onSave={() => void saveDrawing()}
+          controlRef={drawControl}
+          notify={notify}
+        />
+      )}
       {!mine && asImage && !sensitive && (
         <div className="min-h-0 flex-1 overflow-auto">
           <ImagePreview

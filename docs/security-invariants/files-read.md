@@ -708,3 +708,27 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   `data:image/(png|jpeg|gif|webp)`, spans 1–1000; limits of 5 Mi UTF-16 units of text, 50 000 nodes, depth
   64, 20 MiB of images); the page gets a JSON tree, checks each tag and attribute again and builds
   React elements. No `innerHTML` or `dangerouslySetInnerHTML` in `pwa/src` outside tests
+- **Excalidraw drawings** (`pwa/src/components/drawing-preview.tsx`, `pwa/src/utils/drawing-*.ts`,
+  `pwa/src/utils/obsidian-drawing.ts`): no route of their own. `.excalidraw`, `.excalidrawlib`,
+  `.excalidraw.svg` and `.excalidraw.md` are read through `files/content` and written only through
+  the same save as the text editor (a draft marked `drawing`, the base hash, the write role); a
+  client that may not save gets Excalidraw's view mode and no change is taken. `.excalidraw.png` is
+  read through `files/raw` and never written. The page's CSP is not loosened: Excalidraw's fonts,
+  every one of them, are served from `/assets/drawing/excalidraw-<version>/fonts/`;
+  `drawing-assets.ts` sets `window.EXCALIDRAW_ASSET_PATH` before the editor's chunk loads (its
+  modules read it as they start) and wraps `window.FontFace` so a face made from a `src` string
+  keeps only this origin's and `data:` sources (Excalidraw names its CDN, `esm.sh`, after each of
+  its fonts, and Chrome reports a violation for every such source of a face made). Excalidraw's
+  own open, save to a file, export and save as image are off (export subsets fonts with
+  WebAssembly, which the policy does not run), `aiEnabled` is off, and `validateEmbeddable`
+  refuses every link (an embedded page would be a frame of any site); an `.excalidraw.svg` is
+  written by `exportToSvg` with `exportEmbedScene` and `skipInliningFonts`. A file saved never
+  names the page's origin (a host of the user's): `EXCALIDRAW_EXPORT_SOURCE` is set to
+  `https://excalidraw.com` with the asset path, and a file's own `source` is written back. Only a
+  library file's library is ever written: Excalidraw reports the library of any file. A file is parsed by
+  Excalidraw's own `loadFromBlob`/`loadLibraryFromBlob`; an Obsidian file's scene is the fenced
+  block under its Drawing heading (LZ-string or plain JSON), and a save rewrites only that block
+  and the Text Elements section. The editor, the packages only it imports and its fonts are built
+  under `assets/drawing/` (`drawingModules` in `pwa/vite.config.ts`), never precached by the
+  service worker. `pwa/e2e/files-drawing.spec.ts` fails on any violation and on any request that
+  leaves this origin

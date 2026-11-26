@@ -1315,6 +1315,8 @@ export interface FileDraft {
   // Edited in the table view: the delimiter its edits are written with,
   // and the edits that turn base into text, in order (undone ones in redo)
   cells?: { delimiter: Delimiter; ops: TableOp[]; redo: TableOp[] }
+  // Changed in an Excalidraw file's drawing: text is the file it writes
+  drawing?: true
 }
 
 type DraftUpdate =
@@ -1394,6 +1396,7 @@ function isStoredDraft(d: unknown): d is Omit<FileDraft, 'reveal'> {
     isString(o.text) &&
     typeof o.crlf === 'boolean' &&
     (o.encoding === undefined || isFileEncoding(o.encoding)) &&
+    (o.drawing === undefined || o.drawing === true) &&
     (o.cells === undefined ||
       (typeof o.cells === 'object' &&
         o.cells !== null &&

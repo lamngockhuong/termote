@@ -25,6 +25,7 @@ import {
 } from '../hooks/use-files'
 import { RequestError } from '../hooks/use-mux-api'
 import type { SyncSide } from '../hooks/use-scroll-sync'
+import { useSettings } from '../hooks/use-settings'
 import type { TableOp } from '../utils/csv-edits'
 import type { PasteEdit } from '../utils/markdown-image-paste'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
@@ -85,6 +86,68 @@ vi.mock('./code-editor', async () => {
     )
   }
 })
+
+// Excalidraw draws on a canvas jsdom has not: its own tests stand it in.
+// This one shows the text it was mounted with (read once, as Excalidraw),
+// and makes the changes the editor would report.
+const drawings = vi.hoisted(() => ({
+  mounts: 0,
+  props: undefined as
+    | {
+        kind: string
+        text?: string
+        readBlob?: () => Promise<Blob>
+        onChange?: (text: string) => void
+      }
+    | undefined,
+  flush: async () => true,
+  drop: () => {},
+}))
+vi.mock('./drawing-preview', async () => {
+  const { useEffect, useRef } = await import('react')
+  return { default: MockDrawing }
+  function MockDrawing(p: {
+    kind: string
+    text?: string
+    readBlob?: () => Promise<Blob>
+    onChange?: (text: string) => void
+    onSave?: () => void
+    controlRef?: { current: unknown }
+  }) {
+    drawings.props = p
+    const read = useRef(p.text)
+    useEffect(() => {
+      drawings.mounts++
+      if (p.controlRef)
+        p.controlRef.current = {
+          flush: () => drawings.flush(),
+          drop: () => drawings.drop(),
+        }
+    }, [])
+    return (
+      <div
+        data-testid="drawing"
+        data-kind={p.kind}
+        data-editable={String(!!p.onChange)}
+      >
+        {read.current}
+        <button
+          type="button"
+          onClick={() => p.onChange?.(`${read.current} drawn`)}
+        >
+          Draw
+        </button>
+        <button type="button" onClick={() => p.onChange?.(read.current ?? '')}>
+          Undo all
+        </button>
+        <button type="button" onClick={() => p.onSave?.()}>
+          Save here
+        </button>
+      </div>
+    )
+  }
+})
+vi.mock('../utils/drawing-assets', () => ({}))
 
 // The PDF viewer (pdf.js) does not run in jsdom: its own tests stand it in
 vi.mock('./pdf-preview', () => ({
@@ -3820,5 +3883,296 @@ describe('FileViewer: blame', () => {
     expect(
       screen.getByRole('menuitemcheckbox', { name: 'Blame' }),
     ).toHaveAttribute('aria-checked', 'true')
+  })
+})
+
+describe('FileViewer: Excalidraw files', () => {
+  const SCENE = '{"type":"excalidraw"}'
+  const file = (text: string, path: string) => editable(text, { path })
+  const drawing = () => screen.findByTestId('drawing')
+  const click = (name: string) =>
+    fireEvent.click(screen.getByRole('button', { name }))
+
+  beforeEach(() => {
+    drawings.mounts = 0
+    drawings.props = undefined
+    drawings.flush = async () => true
+    drawings.drop = () => {}
+    mockImage.mockReset()
+  })
+
+  it('shows a scene as its drawing, changed there and saved as the file', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'a.excalidraw',
+      size: 30,
+      hash: 'h2',
+    })
+    const onPin = vi.fn()
+    const p = show({
+      path: 'a.excalidraw',
+      canEdit: true,
+      pinned: false,
+      onPin,
+      onLineComment: vi.fn(),
+    })
+    const d = await drawing()
+    expect(d).toHaveAttribute('data-kind', 'scene')
+    expect(d).toHaveAttribute('data-editable', 'true')
+    expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    // Changed in the drawing: no Edit of its source, nothing to wrap
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+
+    // The drawing as read makes no draft
+    click('Undo all')
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(onPin).not.toHaveBeenCalled()
+    click('Draw')
+    expect(onPin).toHaveBeenCalledTimes(1)
+    expect(saveButton()).toBeEnabled()
+    // No lines to comment on in a drawing
+    expect(
+      screen.queryByRole('button', { name: 'Comment on lines' }),
+    ).toBeNull()
+    click('Draw')
+    // Back to the file: nothing to save, the draft kept
+    click('Undo all')
+    expect(saveButton()).toBeDisabled()
+    click('Draw')
+
+    const flush = vi.fn(async () => true)
+    drawings.flush = flush
+    await act(async () => fireEvent.click(saveButton()))
+    expect(flush).toHaveBeenCalled()
+    expect(mockSave).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'a.excalidraw',
+        baseHash: `h:${SCENE}`,
+        text: `${SCENE} drawn`,
+        reveal: false,
+      },
+    )
+    expect(p.notify).toHaveBeenCalledWith('Saved')
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    // The same drawing all along
+    expect(drawings.mounts).toBe(1)
+  })
+
+  it("saves with the drawing's own Ctrl+S, a change only", async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'a.excalidraw',
+      size: 1,
+      hash: 'h2',
+    })
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    await act(async () => click('Save here'))
+    expect(mockSave).not.toHaveBeenCalled()
+    click('Draw')
+    await act(async () => click('Save here'))
+    expect(mockSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('discards a change: the drawing read again from the file', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    const drop = vi.fn()
+    drawings.drop = drop
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    click('Draw')
+    click('Cancel editing')
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(drawings.mounts).toBe(2))
+    // What it had not given yet never comes after
+    expect(drop).toHaveBeenCalled()
+    expect(drawings.props?.text).toBe(SCENE)
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(mockSave).not.toHaveBeenCalled()
+  })
+
+  it('never saves when its last change could not be written', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    click('Draw')
+    drawings.flush = async () => false
+    await act(async () => fireEvent.click(saveButton()))
+    expect(mockSave).not.toHaveBeenCalled()
+  })
+
+  it('draws again a draft another view changed, never writing over it', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    click('Draw')
+    expect(drawings.mounts).toBe(1)
+    const { result } = renderHook(() =>
+      useFileDraft('%1', '/r', 'a.excalidraw'),
+    )
+    act(() =>
+      result.current[1](
+        (now) => now && { ...now, text: 'from the other view' },
+      ),
+    )
+    await waitFor(() => expect(drawings.mounts).toBe(2))
+    expect(drawings.props?.text).toBe('from the other view')
+  })
+
+  it('shows a draft made in the drawing whatever the view chosen', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    click('Draw')
+    // The setting changed elsewhere (Settings, a proposal)
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('drawingPreview', false))
+    expect(await drawing()).toBeInTheDocument()
+    expect(screen.queryByTestId('code-block')).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('shows the source with Preview off, as chosen on this device', async () => {
+    mockContent.mockResolvedValue(file('a\r\nb', 'a.excalidraw'))
+    const p = show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    // Line breaks as a draft has them
+    expect(drawings.props?.text).toBe('a\nb')
+    click('Preview')
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(screen.queryByTestId('drawing')).toBeNull()
+    // The source may be edited as text
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}'),
+    ).toEqual(expect.objectContaining({ drawingPreview: false }))
+    p.unmount()
+    show({ path: 'a.excalidraw' })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    click('Preview')
+    expect(await drawing()).toBeInTheDocument()
+  })
+
+  it('opens at a search result in the source, Preview back to the drawing', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', line: 1, jump: 1 })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    click('Preview')
+    expect(await drawing()).toBeInTheDocument()
+    // The setting was the drawing all along
+    expect(localStorage.getItem('termote-settings')).toBeNull()
+  })
+
+  it('shows the drawing only on a view-only device', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', canEdit: false })
+    expect(await drawing()).toHaveAttribute('data-editable', 'false')
+  })
+
+  it('draws again a file Refresh found changed', async () => {
+    mockContent.mockResolvedValueOnce(file(SCENE, 'a.excalidraw'))
+    mockContent.mockResolvedValueOnce(file('changed', 'a.excalidraw'))
+    const p = show({ path: 'a.excalidraw', refresh: 0 })
+    await drawing()
+    const { rerender, container: _, baseElement: __, ...props } = p
+    rerender(
+      <ThemeProvider>
+        <FileViewer
+          {...(props as Parameters<typeof FileViewer>[0])}
+          refresh={1}
+        />
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(drawings.mounts).toBe(2))
+    expect(drawings.props?.text).toBe('changed')
+    expect(mockContent).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves a text draft another view made of the file as it is', async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    show({ path: 'a.excalidraw', canEdit: true })
+    await drawing()
+    const changed = drawings.props?.onChange as (text: string) => void
+    const { result } = renderHook(() =>
+      useFileDraft('%1', '/r', 'a.excalidraw'),
+    )
+    const typed: FileDraft = {
+      root: '/r',
+      path: 'a.excalidraw',
+      baseHash: `h:${SCENE}`,
+      base: SCENE,
+      crlf: false,
+      text: 'typed',
+      reveal: false,
+    }
+    act(() => result.current[1](typed))
+    // The text editor, not the drawing, shows it
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of a.excalidraw' }),
+    ).toHaveValue('typed')
+    act(() => changed('drawn'))
+    expect(result.current[0]).toBe(typed)
+  })
+
+  it('shows an SVG drawing, its Image only with Preview off', async () => {
+    mockContent.mockResolvedValue(file('<svg/>', 'f.excalidraw.svg'))
+    show({ path: 'f.excalidraw.svg' })
+    expect(await drawing()).toHaveAttribute('data-kind', 'svg')
+    expect(screen.queryByRole('button', { name: 'Image' })).toBeNull()
+    expect(mockImage).not.toHaveBeenCalled()
+    click('Preview')
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Image' })).toBeInTheDocument()
+  })
+
+  it("shows an Obsidian drawing as its preview, never the Markdown's", async () => {
+    mockContent.mockResolvedValue(file('# Excalidraw Data', 'n.excalidraw.md'))
+    show({ path: 'n.excalidraw.md' })
+    expect(await drawing()).toHaveAttribute('data-kind', 'obsidian')
+    click('Preview')
+    // Its source, not a Markdown preview
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+  })
+
+  it("reads a PNG drawing's bytes, never its text, and shows it only", async () => {
+    const blob = new Blob(['png'])
+    mockImage.mockResolvedValue(blob)
+    URL.createObjectURL = vi.fn(() => 'blob:u')
+    URL.revokeObjectURL = vi.fn()
+    show({ path: 'f.excalidraw.png', canEdit: true })
+    const d = await drawing()
+    expect(d).toHaveAttribute('data-kind', 'png')
+    expect(d).toHaveAttribute('data-editable', 'false')
+    expect(mockContent).not.toHaveBeenCalled()
+    expect(mockImage).not.toHaveBeenCalled()
+    expect(await drawings.props?.readBlob?.()).toBe(blob)
+    expect(mockImage).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      'f.excalidraw.png',
+      { root: '/r', reveal: false },
+    )
+    click('Preview')
+    expect(await screen.findByRole('img')).toBeInTheDocument()
+  })
+
+  it("hands a PNG drawing's moved root to the caller", async () => {
+    mockImage.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/new' }),
+    )
+    const p = show({ path: 'f.excalidraw.png' })
+    await drawing()
+    await expect(drawings.props?.readBlob?.()).rejects.toThrow()
+    expect(p.onRootChanged).toHaveBeenCalledWith('/new')
+    mockImage.mockRejectedValueOnce(new RequestError(429, 'busy', 'busy'))
+    await expect(drawings.props?.readBlob?.()).rejects.toThrow()
+    expect(p.onRootChanged).toHaveBeenCalledTimes(1)
   })
 })

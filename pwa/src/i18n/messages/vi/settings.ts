@@ -472,6 +472,7 @@ export default {
   'settings.key.markdownEditLayout': 'Bố cục Markdown khi sửa',
   'settings.key.tablePreview': 'Hiện CSV và TSV dạng bảng',
   'settings.key.svgPreview': 'Hiện SVG dạng ảnh',
+  'settings.key.drawingPreview': 'Hiện file Excalidraw dạng bản vẽ',
   'settings.key.findIncludeIgnored': 'Tìm file: gồm cả file bị bỏ qua',
   'settings.key.searchCase': 'Tìm nội dung: phân biệt hoa thường',
   'settings.key.searchWord': 'Tìm nội dung: khớp cả từ',

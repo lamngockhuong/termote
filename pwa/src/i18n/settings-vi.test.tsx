@@ -68,6 +68,7 @@ const SETTINGS: Settings = {
   markdownPreview: true,
   tablePreview: true,
   svgPreview: false,
+  drawingPreview: true,
   sidePanelWidth: 440,
   sidebarWidth: 256,
   findIncludeIgnored: false,

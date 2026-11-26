@@ -229,6 +229,7 @@ export interface Settings {
   markdownEditLayout: MarkdownEditLayout // Files: Markdown being edited (above)
   tablePreview: boolean // Files: CSV/TSV shown as a table (else its source)
   svgPreview: boolean // Files/Changes: an SVG shown as an image (else as text)
+  drawingPreview: boolean // Files: an Excalidraw file shown as its drawing (else its source)
   sidePanelWidth: number // desktop Files/Changes panel, in px
   sidebarWidth: number // desktop sidebar, expanded, in px
   findIncludeIgnored: boolean // Files search: a repo's ignored files too
@@ -276,6 +277,7 @@ export const DEFAULTS: Settings = {
   markdownEditLayout: 'split',
   tablePreview: true,
   svgPreview: false,
+  drawingPreview: true,
   sidePanelWidth: SIDE_PANEL_DEFAULT,
   sidebarWidth: SIDEBAR_DEFAULT,
   findIncludeIgnored: false,
@@ -350,6 +352,7 @@ export const SETTING_RESOLVERS: {
   markdownEditLayout: resolveMarkdownEditLayout,
   tablePreview: (v) => resolveBoolean('tablePreview', v),
   svgPreview: (v) => resolveBoolean('svgPreview', v),
+  drawingPreview: (v) => resolveBoolean('drawingPreview', v),
   sidePanelWidth: resolveSidePanelWidth,
   sidebarWidth: resolveSidebarWidth,
   findIncludeIgnored: (v) => resolveBoolean('findIncludeIgnored', v),

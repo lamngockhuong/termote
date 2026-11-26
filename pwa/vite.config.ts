@@ -25,6 +25,35 @@ const DOC_EXTRA =
 // The lazy chunk FileViewer imports for a document
 const DOC_ENTRY = /\/src\/components\/document-preview\.tsx$/
 
+// The lazy module FileViewer imports for an Excalidraw file's drawing
+const DRAW_ENTRY = /\/src\/components\/drawing-preview\.tsx$/
+
+// The modules the app reaches without going through DRAW_ENTRY (statically
+// or by import()), known once the build has read them all: any other is
+// the Excalidraw editor's alone (its packages, Mermaid for its text to
+// diagram, its languages), set apart like the document viewers'
+let appModules: Set<string> | undefined
+
+function drawingModules(): Plugin {
+  return {
+    name: 'termote-drawing-modules',
+    apply: 'build',
+    buildEnd() {
+      const seen = new Set<string>()
+      const todo = [...this.getModuleIds()].filter(
+        (id) => this.getModuleInfo(id)?.isEntry,
+      )
+      for (let id = todo.pop(); id !== undefined; id = todo.pop()) {
+        if (seen.has(id) || DRAW_ENTRY.test(id)) continue
+        seen.add(id)
+        const info = this.getModuleInfo(id)
+        if (info) todo.push(...info.importedIds, ...info.dynamicallyImportedIds)
+      }
+      appModules = seen
+    },
+  }
+}
+
 // Where a chunk goes: one made only of the editor's packages under
 // assets/cm/, of the document viewers' under assets/doc/, neither installed
 // upfront by the service worker; any other where Vite puts it
@@ -35,14 +64,30 @@ function chunkFileName({ moduleIds }: { moduleIds: string[] }) {
   // The viewers' own chunk carries what only they import with it
   if (only(DOC_EXTRA) || moduleIds.some((id) => DOC_ENTRY.test(id)))
     return 'assets/doc/[name]-[hash].js'
+  // The Excalidraw editor's chunks: nothing the app needs without it
+  const app = appModules
+  if (app && moduleIds.length > 0 && moduleIds.every((id) => !app.has(id)))
+    return 'assets/drawing/[name]-[hash].js'
   return 'assets/[name]-[hash].js'
 }
 
-// pdf.js's own stylesheet goes with the viewer
-function assetFileName({ originalFileNames }: { originalFileNames: string[] }) {
-  return originalFileNames.some((f) => f.includes('pdfjs-dist/'))
-    ? 'assets/doc/[name]-[hash][extname]'
-    : 'assets/[name]-[hash][extname]'
+// pdf.js's own stylesheet goes with the viewer, Excalidraw's with the editor
+function assetFileName({
+  names,
+  originalFileNames,
+}: {
+  names: string[]
+  originalFileNames: string[]
+}) {
+  if (originalFileNames.some((f) => f.includes('pdfjs-dist/')))
+    return 'assets/doc/[name]-[hash][extname]'
+  // The editor's stylesheet is named after its chunk
+  if (
+    names.some((n) => n.startsWith('drawing-preview.')) ||
+    originalFileNames.some((f) => f.includes('@excalidraw/'))
+  )
+    return 'assets/drawing/[name]-[hash][extname]'
+  return 'assets/[name]-[hash][extname]'
 }
 
 // What pdf.js fetches by URL at run time: character maps (CJK text), the
@@ -93,6 +138,49 @@ function pdfjsAssets(base: string): Plugin {
         cpSync(join(PDFJS_DIR, f), join(outDir, PDFJS_ASSETS, f), {
           recursive: true,
         })
+    },
+  }
+}
+
+// Excalidraw's fonts, which it fetches from window.EXCALIDRAW_ASSET_PATH
+// (src/utils/drawing-assets.ts), served from a directory named by its
+// version, like pdf.js's. Every one of them, Xiaolai (its Chinese, Japanese
+// and Korean faces, 13 MB) too: a face missing here is asked of its CDN
+// next, which the page's policy refuses. Each face is fetched only when
+// text needs it.
+// The package exports no package.json: found from its entry (dist/prod/index.js)
+const EXCALIDRAW_DIR = dirname(require.resolve('@excalidraw/excalidraw'))
+const EXCALIDRAW_VERSION: string = JSON.parse(
+  readFileSync(join(EXCALIDRAW_DIR, '..', '..', 'package.json'), 'utf8'),
+).version
+const EXCALIDRAW_ASSETS = `assets/drawing/excalidraw-${EXCALIDRAW_VERSION}`
+
+function excalidrawAssets(base: string): Plugin {
+  let outDir = 'dist'
+  const fonts = join(EXCALIDRAW_DIR, 'fonts')
+  return {
+    name: 'termote-excalidraw-assets',
+    configResolved(c) {
+      outDir = c.build.outDir
+    },
+    // Dev: served from the package, at the paths of the build
+    configureServer(server) {
+      server.middlewares.use(`${base}${EXCALIDRAW_ASSETS}/fonts/`, (req, res, next) => {
+        let rel: string
+        try {
+          rel = normalize(decodeURIComponent((req.url ?? '').split('?')[0]))
+        } catch {
+          return next()
+        }
+        const file = join(fonts, rel)
+        if (!file.startsWith(fonts + sep)) return next()
+        if (!existsSync(file) || !statSync(file).isFile()) return next()
+        res.setHeader('Content-Type', 'font/woff2')
+        createReadStream(file).pipe(res)
+      })
+    },
+    writeBundle() {
+      cpSync(fonts, join(outDir, EXCALIDRAW_ASSETS, 'fonts'), { recursive: true })
     },
   }
 }
@@ -250,10 +338,13 @@ export default defineConfig(({ mode }) => {
       __APP_NAME__: JSON.stringify(pkg.name),
       __APP_VERSION__: JSON.stringify(pkg.version),
       __PDFJS_ASSETS__: JSON.stringify(`${base}${PDFJS_ASSETS}/`),
+      __EXCALIDRAW_ASSETS__: JSON.stringify(`${base}${EXCALIDRAW_ASSETS}/`),
     },
     plugins: [
       react(),
       pdfjsAssets(base),
+      excalidrawAssets(base),
+      drawingModules(),
       mermaidSandbox(base, demo ? DEMO_CSP.sandbox : undefined),
       ...(demo ? [demoHead()] : []),
       VitePWA({
@@ -305,13 +396,15 @@ export default defineConfig(({ mode }) => {
           // installed upfront.
           // Likewise the editor's languages and Vim mode (assets/cm/), and the
           // document viewers with pdf.js's maps, fonts and decoders
-          // (assets/doc/).
+          // (assets/doc/), and the Excalidraw editor with its fonts
+          // (assets/drawing/).
           // The Mermaid sandbox page (Pele inline) likewise.
           globIgnores: [
             '**/assets/mermaid-sandbox-*.html',
             '**/assets/shiki/**',
             '**/assets/cm/**',
             '**/assets/doc/**',
+            '**/assets/drawing/**',
           ],
           // Notification click (and push) handlers: public/notify-sw.js
           importScripts: ['notify-sw.js'],
@@ -343,6 +436,15 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'cm',
                 // About 50 language chunks and Vim mode
                 expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 3600 },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/drawing/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'drawing',
+                // The editor's chunks, its languages and its fonts
+                expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
               },
             },
             {

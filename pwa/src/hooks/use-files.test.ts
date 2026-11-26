@@ -2169,10 +2169,14 @@ describe('drafts kept on the device', () => {
     // An encoding the server does not know: never sent with a save
     put('g', { ...draft('g'), encoding: 'latin1' })
     put('h', { ...draft('h'), encoding: 'shift_jis' })
+    // Changed in an Excalidraw drawing
+    put('i', { ...draft('i'), drawing: true })
+    put('j', { ...draft('j'), drawing: 'yes' })
     act(() => hydrateDrafts(['%1']))
     expect(isDraftDirty('%1', '/r', 'f')).toBe(true)
     expect(isDraftDirty('%1', '/r', 'h')).toBe(true)
-    for (const p of ['a', 'b', 'c', 'd', 'e', 'g'])
+    expect(isDraftDirty('%1', '/r', 'i')).toBe(true)
+    for (const p of ['a', 'b', 'c', 'd', 'e', 'g', 'j'])
       expect(isDraftDirty('%1', '/r', p)).toBe(false)
   })
 

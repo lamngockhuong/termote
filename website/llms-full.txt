@@ -2010,9 +2010,9 @@ A view-only session has no Rename.
 
 # File Previews
 
-> Preview a pane's files in Termote: Markdown with diagrams, CSV and TSV as a table you can search and edit, images, and PDF, Excel and Word documents.
+> Preview a pane's files in Termote: Markdown with diagrams, CSV and TSV as a table you can search and edit, images, PDF, Excel and Word documents, and Excalidraw drawings you can edit.
 
-Besides text, [Files](/usage/files/) shows some kinds of file as what they are: Markdown as a page, CSV and TSV as a table, an image as the picture, and PDF, Excel and Word documents as a read-only preview.
+Besides text, [Files](/usage/files/) shows some kinds of file as what they are: Markdown as a page, CSV and TSV as a table, an image as the picture, PDF, Excel and Word documents as a read-only preview, and Excalidraw files as a drawing you can change.
 
 ## Markdown Preview
 
@@ -2185,6 +2185,26 @@ On a phone the same views show, with buttons to zoom a PDF (no pinch).
 | `The download was cut off`                               | The connection dropped while the file was read; **Retry** reads it again            |
 
 Older formats (`.xls`, `.doc`, `.ppt`, `.pptx`) are not previewed: they show as binary files, with Download. Changes shows documents as binary too. A document with a name that usually holds secrets asks first, as for text. A view-only session sees the preview, without Download; each read of a document is written to the server’s log.
+
+## Excalidraw Drawings
+
+[Section titled “Excalidraw Drawings”](#excalidraw-drawings)
+
+An Excalidraw file opens as its drawing, in Excalidraw itself, inside Files:
+
+| File              | What opens                                            | What Save writes                                             |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| `.excalidraw`     | The drawing                                           | The drawing, as the file’s JSON                              |
+| `.excalidrawlib`  | An empty canvas with the library’s shapes beside it   | The library only: what you draw on the canvas is not kept    |
+| `.excalidraw.svg` | The drawing kept inside the SVG                       | An SVG of the drawing, with the drawing inside it again      |
+| `.excalidraw.png` | The drawing kept inside the PNG                       | Nothing: a PNG drawing is shown only                         |
+| `.excalidraw.md`  | The drawing of a file of Obsidian’s Excalidraw plugin | The drawing block and its Text Elements list; the rest stays |
+
+You draw straight away. The first change keeps the tab open and puts Cancel and Save in the bar, as for a file being edited. **Save**, or Ctrl+S (Cmd+S on a Mac) in the drawing, writes the file; a file changed on the host since it was read is never overwritten, as for text. Undoing every change leaves nothing to save. **Cancel** asks before throwing the changes away, and the drawing is read again from the file. A view-only session, or a file the server would not save, shows the drawing without the tools to change it.
+
+The **Preview** button switches between the drawing and the file’s source; the choice is remembered on this device. Shown as its source, an `.excalidraw.svg` has the **Image** button of any SVG, and an `.excalidraw.png` shows as the picture.
+
+Excalidraw’s own Open, Save to file, Export and Save as image are not offered (**Download** in the file’s menu saves the file), nor its AI features. An embedded web page shows as its link. Excalidraw’s fonts come from termote itself, so nothing is fetched from another site, and the editor is downloaded the first time a drawing is opened. An `.excalidraw.svg` saved here keeps its background (or none) and dark mode, but names Excalidraw’s fonts without carrying them: in another app its text shows in that app’s fallback font. Images of an Obsidian drawing that are files of the vault are not shown. A file that holds no drawing says so, with **Try again**.
 
 # The Files View
 
