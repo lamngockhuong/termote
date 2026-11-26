@@ -112,6 +112,7 @@ vi.mock('./drawing-preview', async () => {
     readBlob?: () => Promise<Blob>
     onChange?: (text: string) => void
     onSave?: () => void
+    onFollow: (t: { path: string }, o: { newTab: boolean }) => void
     controlRef?: { current: unknown }
   }) {
     drawings.props = p
@@ -142,6 +143,12 @@ vi.mock('./drawing-preview', async () => {
         </button>
         <button type="button" onClick={() => p.onSave?.()}>
           Save here
+        </button>
+        <button
+          type="button"
+          onClick={() => p.onFollow({ path: 'Note A.md' }, { newTab: true })}
+        >
+          Follow link
         </button>
       </div>
     )
@@ -4069,6 +4076,16 @@ describe('FileViewer: Excalidraw files', () => {
     expect(await drawing()).toBeInTheDocument()
     // The setting was the drawing all along
     expect(localStorage.getItem('termote-settings')).toBeNull()
+  })
+
+  it("opens an element's link to a file in Files", async () => {
+    mockContent.mockResolvedValue(file(SCENE, 'a.excalidraw'))
+    const p = show({ path: 'a.excalidraw' })
+    await drawing()
+    click('Follow link')
+    expect(p.onFollow).toHaveBeenCalledWith({ path: 'Note A.md' }, 0, {
+      newTab: true,
+    })
   })
 
   it('shows the drawing only on a view-only device', async () => {

@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import { createRef } from 'react'
+import { createRef, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { I18nContext } from '../i18n/i18n-context'
@@ -22,9 +22,11 @@ type Props = Record<string, unknown> & {
   onChange: (els: unknown[], appState: unknown, files: unknown) => void
   onLibraryChange: (items: unknown[]) => void
   validateEmbeddable: (link: string) => boolean
+  onLinkOpen: (element: { link: string | null }, e: CustomEvent) => void
 }
 const made = vi.hoisted(() => ({ props: undefined as Props | undefined }))
 vi.mock('@excalidraw/excalidraw', () => ({
+  isElementLink: (url: string) => url.includes('?element='),
   Excalidraw: (p: Props) => {
     made.props = p
     return (
@@ -33,11 +35,29 @@ vi.mock('@excalidraw/excalidraw', () => ({
         data-view={String(p.viewModeEnabled)}
         data-theme={String(p.theme)}
         data-lang={String(p.langCode)}
-      />
+      >
+        {p.children as ReactNode}
+      </div>
     )
   },
+  // Each item named as Excalidraw shows it
+  MainMenu: Object.assign(
+    ({ children }: { children: ReactNode }) => (
+      <div data-testid="main-menu">{children}</div>
+    ),
+    {
+      Separator: () => <hr />,
+      DefaultItems: {
+        SearchMenu: () => <span>Find on canvas</span>,
+        Help: () => <span>Help</span>,
+        ClearCanvas: () => <span>Reset the canvas</span>,
+        ChangeCanvasBackground: () => <span>Canvas background</span>,
+      },
+    },
+  ),
 }))
 vi.mock('@excalidraw/excalidraw/index.css', () => ({}))
+vi.mock('./drawing-preview.css', () => ({}))
 
 // The scene's own work stands in too: a scene's hash is its elements'
 // names, the drawing read is ['a']
@@ -61,6 +81,8 @@ function show(over: Partial<DrawingPreviewProps> = {}) {
     kind: 'scene',
     text: 'file',
     notify: vi.fn(),
+    path: 'notes/a.excalidraw',
+    onFollow: vi.fn(),
     ...over,
   }
   const view = render(
@@ -104,6 +126,10 @@ describe('DrawingPreview', () => {
     expect(ex).toHaveAttribute('data-view', 'true')
     expect(ex).toHaveAttribute('data-lang', 'en')
     expect(made.props?.initialData).toBe(READ.initial)
+    // Its menu without the links to Excalidraw's sites
+    expect(screen.getByTestId('main-menu')).toHaveTextContent(
+      'Find on canvasHelpReset the canvasCanvas background',
+    )
     // No embedded page, no AI, nothing saved or exported by Excalidraw
     expect(made.props?.validateEmbeddable('https://example.com')).toBe(false)
     expect(made.props?.aiEnabled).toBe(false)
@@ -159,6 +185,8 @@ describe('DrawingPreview', () => {
           <DrawingPreview
             kind="scene"
             text=""
+            path="a.excalidraw"
+            onFollow={vi.fn()}
             notify={vi.fn()}
             onChange={vi.fn()}
           />
@@ -346,6 +374,55 @@ describe('DrawingPreview', () => {
       await screen.findByTestId('excalidraw')
       act(() => made.props?.onLibraryChange(['a', 'b']))
       expect(onChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("an element's link", () => {
+    // Opens link as Excalidraw would, with Ctrl or not; true when it was
+    // left to Excalidraw
+    const open = (link: string | null, ctrlKey = false) => {
+      const e = new CustomEvent('excalidraw-link', {
+        cancelable: true,
+        detail: { nativeEvent: { ctrlKey, metaKey: false } },
+      })
+      act(() => made.props?.onLinkOpen({ link }, e))
+      return !e.defaultPrevented
+    }
+
+    it('opens a wiki link or a file in Files, a web page in a tab', async () => {
+      const p = show()
+      await screen.findByTestId('excalidraw')
+      const opened = vi.spyOn(window, 'open').mockReturnValue(null)
+      expect(open('[[Note A#Part]]')).toBe(false)
+      expect(p.onFollow).toHaveBeenLastCalledWith(
+        { path: 'notes/Note A.md', anchor: 'Part' },
+        { newTab: false },
+      )
+      expect(open('plan.excalidraw', true)).toBe(false)
+      expect(p.onFollow).toHaveBeenLastCalledWith(
+        { path: 'notes/plan.excalidraw', anchor: undefined },
+        { newTab: true },
+      )
+      expect(open('https://example.com/x')).toBe(false)
+      expect(opened).toHaveBeenCalledWith(
+        'https://example.com/x',
+        '_blank',
+        'noopener,noreferrer',
+      )
+      // Never this site's pages, nor another scheme
+      expect(open('javascript:alert(1)')).toBe(false)
+      expect(open('../../out')).toBe(false)
+      expect(p.onFollow).toHaveBeenCalledTimes(2)
+      expect(opened).toHaveBeenCalledTimes(1)
+      opened.mockRestore()
+    })
+
+    it('leaves a link to another element, or none, to Excalidraw', async () => {
+      const p = show()
+      await screen.findByTestId('excalidraw')
+      expect(open('https://excalidraw.com/?element=abc')).toBe(true)
+      expect(open(null)).toBe(true)
+      expect(p.onFollow).not.toHaveBeenCalled()
     })
   })
 })

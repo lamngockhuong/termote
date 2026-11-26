@@ -2204,7 +2204,7 @@ You draw straight away. The first change keeps the tab open and puts Cancel and 
 
 The **Preview** button switches between the drawing and the file’s source; the choice is remembered on this device. Shown as its source, an `.excalidraw.svg` has the **Image** button of any SVG, and an `.excalidraw.png` shows as the picture.
 
-Excalidraw’s own Open, Save to file, Export and Save as image are not offered (**Download** in the file’s menu saves the file), nor its AI features. An embedded web page shows as its link. Excalidraw’s fonts come from termote itself, so nothing is fetched from another site, and the editor is downloaded the first time a drawing is opened. An `.excalidraw.svg` saved here keeps its background (or none) and dark mode, but names Excalidraw’s fonts without carrying them: in another app its text shows in that app’s fallback font. Images of an Obsidian drawing that are files of the vault are not shown. A file that holds no drawing says so, with **Try again**.
+Excalidraw’s own Open, Save to file, Export and Save as image are not offered (**Download** in the file’s menu saves the file), nor its AI features, nor its links to Excalidraw’s own sites (its menu’s, the top of Help, browsing and publishing libraries). An embedded web page shows as its link. Excalidraw’s fonts come from termote itself, so nothing is fetched from another site, and the editor is downloaded the first time a drawing is opened. An `.excalidraw.svg` saved here keeps its background (or none) and dark mode, but names Excalidraw’s fonts without carrying them: in another app its text shows in that app’s fallback font. Images of an Obsidian drawing that are files of the vault are not shown. A file that holds no drawing says so, with **Try again**.
 
 # The Files View
 

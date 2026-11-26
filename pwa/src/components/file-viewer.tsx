@@ -1757,6 +1757,8 @@ export function FileViewer({
           onSave={() => void saveDrawing()}
           controlRef={drawControl}
           notify={notify}
+          path={path}
+          onFollow={(target, opts) => onFollow(target, 0, opts)}
         />
       )}
       {!mine && asImage && !sensitive && (

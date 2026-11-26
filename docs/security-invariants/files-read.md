@@ -719,7 +719,8 @@ Part of the [security invariants](README.md): Files/Changes, Places, previews, t
   modules read it as they start) and wraps `window.FontFace` so a face made from a `src` string
   keeps only this origin's and `data:` sources (Excalidraw names its CDN, `esm.sh`, after each of
   its fonts, and Chrome reports a violation for every such source of a face made). Excalidraw's
-  own open, save to a file, export and save as image are off (export subsets fonts with
+  own open, save to a file, export, save as image, browsing and publishing libraries and its
+  links to its own sites are off (`drawing-preview.css`, its main menu given without them) (export subsets fonts with
   WebAssembly, which the policy does not run), `aiEnabled` is off, and `validateEmbeddable`
   refuses every link (an embedded page would be a frame of any site); an `.excalidraw.svg` is
   written by `exportToSvg` with `exportEmbedScene` and `skipInliningFonts`. A file saved never

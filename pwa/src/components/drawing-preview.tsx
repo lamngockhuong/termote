@@ -1,6 +1,10 @@
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { Excalidraw, isElementLink, MainMenu } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
-import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import './drawing-preview.css'
+import type {
+  ExcalidrawElement,
+  NonDeletedExcalidrawElement,
+} from '@excalidraw/excalidraw/element/types'
 import type {
   AppState,
   BinaryFiles,
@@ -16,6 +20,7 @@ import {
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { useT } from '../i18n/i18n-context'
+import { drawingLink } from '../utils/drawing-link'
 import type { DrawingKind } from '../utils/drawing-path'
 import {
   type LoadedDrawing,
@@ -26,6 +31,7 @@ import {
   serializeDrawing,
   serializeLibrary,
 } from '../utils/drawing-scene'
+import type { LinkPath } from '../utils/markdown-links'
 import { LoadFailed } from './lazy-boundary'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
@@ -40,6 +46,10 @@ export interface DrawingControl {
 
 export interface DrawingPreviewProps {
   kind: DrawingKind
+  // The drawing's file, which an element's link is read from
+  path: string
+  // An element's link to a file under the root; newTab with Ctrl/Cmd
+  onFollow: (target: LinkPath, opts: { newTab: boolean }) => void
   // The text the drawing is read from (every kind but a PNG), once: the
   // caller mounts it again for another
   text?: string
@@ -91,6 +101,8 @@ export default function DrawingPreview({
   onSave,
   controlRef,
   notify,
+  path,
+  onFollow,
 }: DrawingPreviewProps) {
   const { t, locale } = useT()
   const { resolvedTheme } = useTheme()
@@ -227,6 +239,28 @@ export default function DrawingPreview({
     )
   }
 
+  // An element's link: Excalidraw would open one that is not a web page's
+  // address as a page of this site. A file's (an Obsidian wiki link
+  // included) opens in Files, a web page in a tab of its own; one to
+  // another element of the drawing is Excalidraw's.
+  const onLinkOpen = (
+    element: NonDeletedExcalidrawElement,
+    e: CustomEvent<{ nativeEvent: { ctrlKey: boolean; metaKey: boolean } }>,
+  ) => {
+    const link = element.link
+    if (!link || isElementLink(link)) return
+    e.preventDefault()
+    const target = drawingLink(link, path)
+    const { ctrlKey, metaKey } = e.detail.nativeEvent
+    if (target.kind === 'external')
+      window.open(target.url.href, '_blank', 'noopener,noreferrer')
+    else if (target.kind === 'path')
+      onFollow(
+        { path: target.path, anchor: target.anchor },
+        { newTab: ctrlKey || metaKey },
+      )
+  }
+
   // Ctrl/Cmd+S saves the file here: Excalidraw's own would download it
   const onKey = (e: KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return
@@ -263,8 +297,19 @@ export default function DrawingPreview({
           onChange={onSceneChange}
           onLibraryChange={onLibraryChange}
           validateEmbeddable={noEmbeds}
+          onLinkOpen={onLinkOpen}
           aiEnabled={false}
-        />
+        >
+          {/* Excalidraw's own, less what UI turns off and its links to
+              its sites (GitHub, X, Discord) */}
+          <MainMenu>
+            <MainMenu.DefaultItems.SearchMenu />
+            <MainMenu.DefaultItems.Help />
+            <MainMenu.DefaultItems.ClearCanvas />
+            <MainMenu.Separator />
+            <MainMenu.DefaultItems.ChangeCanvasBackground />
+          </MainMenu>
+        </Excalidraw>
       </div>
     </div>
   )

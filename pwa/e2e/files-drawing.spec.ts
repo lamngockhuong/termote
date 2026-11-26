@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, type Locator, type Page, test } from './fixtures'
-import { libraryJson, obsidianMarkdown, pngWithScene, sceneJson, svgWithScene } from './fixtures/drawings'
+import { libraryJson, obsidianMarkdown, pngWithScene, RECT, sceneJson, svgWithScene, TEXT } from './fixtures/drawings'
 
 // Excalidraw files in Files, shown and changed in Excalidraw itself, against
 // a pane whose directory is a throwaway folder in a window of the server's
@@ -42,6 +42,9 @@ test.describe('Excalidraw files', () => {
     writeFileSync(file('flow.excalidraw.png'), pngWithScene())
     writeFileSync(file('Drawing.excalidraw.md'), obsidianMarkdown())
     writeFileSync(file('broken.excalidraw'), '{ not a drawing')
+    // A text linked to a note as Obsidian links them
+    writeFileSync(file('links.excalidraw'), sceneJson([RECT, { ...TEXT, link: '[[Note A]]' }]))
+    writeFileSync(file('Note A.md'), '# Note A\n\nThe drawing links here.\n')
 
     const name = `drawing-${Date.now()}`
     windowId = tmux(
@@ -167,6 +170,8 @@ test.describe('Excalidraw files', () => {
     await canvasOf(panel)
     await expect(panel.getByText('Only the library is saved')).toBeVisible()
     await expect(panel.locator('.library-unit')).toHaveCount(1)
+    // Nothing that leads to Excalidraw's library site
+    await expect(panel.locator('.library-menu-browse-button')).toBeHidden()
     expect(foreign).toEqual([])
   })
 
@@ -218,6 +223,37 @@ test.describe('Excalidraw files', () => {
     await panel.getByRole('button', { name: 'Preview' }).click()
     await canvasOf(panel)
     await expect(panel.getByText('This file holds no drawing')).toHaveCount(0)
+  })
+
+  test("an element's wiki link opens the note in Files, never a page of this site", async ({ page }) => {
+    const { panel } = await openFile(page, 'links.excalidraw')
+    const drawing = await canvasOf(panel)
+    const before = new URL(page.url()).pathname
+    // The linked text (at 120, 260 of the scene, which opens unscrolled):
+    // selected, its link shows in a popup
+    const box = (await drawing.boundingBox())!
+    await page.mouse.click(box.x + 150, box.y + 272)
+    const link = panel.locator('.excalidraw-hyperlinkContainer-link')
+    await expect(link).toBeVisible()
+    await link.click()
+    await expect(panel.getByText('The drawing links here.')).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe(before)
+  })
+
+  test("the menu and Help keep no link to Excalidraw's sites", async ({ page }) => {
+    const { panel } = await openFile(page, 'plan.excalidraw')
+    await canvasOf(panel)
+    await panel.getByTestId('main-menu-trigger').click()
+    const help = panel.getByRole('button', { name: 'Help' })
+    await expect(help).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'Reset the canvas' })).toBeVisible()
+    for (const name of ['GitHub', 'Follow us', 'Discord chat', 'Excalidraw links'])
+      await expect(panel.getByText(name)).toHaveCount(0)
+    await help.click()
+    // Its shortcuts, outside the drawing's element, without the links atop
+    await expect(page.locator('.HelpDialog')).toBeVisible()
+    await expect(page.getByText('Keep selected tool active after drawing')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Documentation|blog|Found an issue|YouTube/ })).toHaveCount(0)
   })
 
   test('a file that holds no drawing says so', async ({ page }) => {
