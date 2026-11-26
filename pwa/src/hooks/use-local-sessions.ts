@@ -683,7 +683,8 @@ export function useLocalSessions(pollInterval = 5) {
 
   // A refusal the user can act on (RequestError 'no_client': Zellij needs a
   // client attached to the session) reaches the caller, after the refresh;
-  // other failures show on the next snapshot.
+  // other failures show on the next snapshot. Resolves to whether the tab
+  // was made.
   const addSession = useCallback(
     async (asked: string, icon?: string, description = '') => {
       const meta = newMeta(icon, description)
@@ -742,6 +743,7 @@ export function useLocalSessions(pollInterval = 5) {
         setSessions((prev) => prev.map(withMeta))
         setActiveSession((prev) => prev && withMeta(prev))
       }
+      return !!id
     },
     [refreshSessions, sessions, activeSession?.groupId, storeSelection],
   )

@@ -1875,9 +1875,11 @@ describe('useLocalSessions with herdr', () => {
       panes: [pane('w2:p9', true)],
     })
     mockSnapshot.extra = withNew
+    let made: boolean | undefined
     await act(async () => {
-      await result.current.addSession('new', '🚀', 'Fresh')
+      made = await result.current.addSession('new', '🚀', 'Fresh')
     })
+    expect(made).toBe(true)
     expect(mockCreateTab).toHaveBeenCalledWith('new', 'w2')
     expect(result.current.activeSession.id).toBe('w2:t9')
     expect(result.current.activeSession.icon).toBe('🚀')
@@ -1902,9 +1904,11 @@ describe('useLocalSessions with herdr', () => {
   it('addSession keeps the current tab when the server refuses', async () => {
     mockCreateTab.mockResolvedValue(null)
     const { result } = await render()
+    let made: boolean | undefined
     await act(async () => {
-      await result.current.addSession('bad name')
+      made = await result.current.addSession('bad name')
     })
+    expect(made).toBe(false)
     expect(result.current.activeSession.id).toBe('w1:t1')
     expect(localStorage.getItem('termote-sessions')).toBeNull()
   })
@@ -1912,9 +1916,11 @@ describe('useLocalSessions with herdr', () => {
   it('addSession survives a failed request', async () => {
     mockCreateTab.mockRejectedValue(new Error('down'))
     const { result } = await render()
+    let made: boolean | undefined
     await act(async () => {
-      await result.current.addSession('new')
+      made = await result.current.addSession('new')
     })
+    expect(made).toBe(false)
     expect(result.current.activeSession.id).toBe('w1:t1')
   })
 
