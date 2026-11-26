@@ -1194,7 +1194,7 @@ function PaneFiles({
             scrollTop={tab.scrollTop}
             line={tab.line}
             col={tab.col}
-            endLine={tab.endLine}
+            marks={tab.marks}
             jump={tab.jump}
             refresh={fileRefresh}
             tableLayout={tab.table}

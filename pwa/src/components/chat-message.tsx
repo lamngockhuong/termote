@@ -40,7 +40,7 @@ function MdLink({ href, children }: ComponentProps<'a'>) {
       <FileRef
         path={file.path}
         line={file.line}
-        endLine={file.endLine}
+        marks={file.marks}
         className="inline"
       >
         <InLink.Provider value>{children}</InLink.Provider>
@@ -118,7 +118,7 @@ function MdCode({ children }: ComponentProps<'code'>) {
     <FileRef
       path={file.path}
       line={file.line}
-      endLine={file.endLine}
+      marks={file.marks}
       className="inline"
     >
       <code>{children}</code>

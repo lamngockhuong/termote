@@ -13,6 +13,7 @@ import { BLOCK_LINES, useLineWindow } from '../hooks/use-line-window'
 import type { FileBlame } from '../hooks/use-mux-api'
 import { formatNumber } from '../i18n/format'
 import { useT } from '../i18n/i18n-context'
+import type { LineMark } from '../utils/file-position'
 import { highlight, type Token } from '../utils/highlight'
 import { inPick, pickSpan, type TextLines } from '../utils/line-range'
 import { lineText } from '../utils/review-message'
@@ -73,9 +74,9 @@ interface Props {
   scrollTop?: number
   // A line (1-based) to show in the middle and highlight instead, each
   // time jump changes (a search result picked, the same one again too);
-  // endLine: the last line of a range highlighted from line
+  // marks: the lines highlighted with it (a range, a list of lines)
   line?: number
-  endLine?: number
+  marks?: LineMark[]
   jump?: number
   // Lines may be picked by their numbers for a review comment
   onLineComment?: (lines: TextLines) => void
@@ -102,7 +103,7 @@ export function CodeBlock({
   wrap,
   scrollTop,
   line,
-  endLine,
+  marks,
   jump,
   onLineComment,
   commentedLines,
@@ -125,8 +126,9 @@ export function CodeBlock({
   )
   // A line asked for, scrolled to once its rows are in the page
   const pending = useRef<number>(undefined)
-  // The line (or range) picked last, highlighted until the next pick
-  const [marked, setMarked] = useState<{ from: number; to: number }>()
+  // The line (or the lines marked with it) picked last, highlighted until
+  // the next pick
+  const [marked, setMarked] = useState<LineMark[]>()
   const { pick, press, clear } = useLinePick()
   // Lines picked in a file read again may hold something else now. Dropped
   // while rendering the new text, not in an effect: a mount effect still
@@ -148,8 +150,8 @@ export function CodeBlock({
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per pick
   useLayoutEffect(() => {
     if (!line) return
-    // A range's end past the file's last line marks up to it
-    setMarked({ from: line, to: Math.max(endLine ?? line, line) })
+    // Lines past the file's last one have no row: nothing shows for them
+    setMarked(marks?.length ? marks : [{ from: line, to: line }])
     pending.current = line
     win?.reveal(line)
   }, [jump])
@@ -235,7 +237,7 @@ export function CodeBlock({
       <div
         key={i}
         data-line={i + 1}
-        className={`flex ${(marked && i + 1 >= marked.from && i + 1 <= marked.to) || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
+        className={`flex ${marked?.some((m) => i + 1 >= m.from && i + 1 <= m.to) || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
       >
         {owners ? (
           // One sticky box: the blame and the number stay put together

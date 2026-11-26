@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import type { FileBlame } from '../hooks/use-mux-api'
+import type { LineMark } from '../utils/file-position'
 import {
   CodeBlock,
   MAX_LINES,
@@ -121,7 +122,7 @@ describe('CodeBlock at a line', () => {
     line: number | undefined,
     jump: number | undefined,
     scrollTop?: number,
-    endLine?: number,
+    marks?: LineMark[],
   ) => (
     <ThemeProvider>
       <CodeBlock
@@ -129,7 +130,7 @@ describe('CodeBlock at a line', () => {
         path="a.ts"
         wrap={false}
         line={line}
-        endLine={endLine}
+        marks={marks}
         jump={jump}
         scrollTop={scrollTop}
       />
@@ -165,19 +166,34 @@ describe('CodeBlock at a line', () => {
     mockHighlight.mockResolvedValue(null)
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
-    const view = render(at(1, 1, undefined, 2))
+    const view = render(at(1, 1, undefined, [{ from: 1, to: 2 }]))
     expect(scroll.mock.contexts[0]).toBe(row(1))
     expect(row(1)).toHaveClass('bg-accent/15')
     expect(row(2)).toHaveClass('bg-accent/15')
     expect(row(3)).toHaveClass('bg-bg')
     // Past the end: up to the last line, nothing fails
-    view.rerender(at(2, 2, undefined, 99))
+    view.rerender(at(2, 2, undefined, [{ from: 2, to: 99 }]))
     expect(row(1)).toHaveClass('bg-bg')
     expect(row(2)).toHaveClass('bg-accent/15')
     expect(row(3)).toHaveClass('bg-accent/15')
-    // Backwards: the line alone
-    view.rerender(at(3, 3, undefined, 1))
+    // No marks: the line alone
+    view.rerender(at(3, 3, undefined, []))
     expect(row(1)).toHaveClass('bg-bg')
+    expect(row(2)).toHaveClass('bg-bg')
+    expect(row(3)).toHaveClass('bg-accent/15')
+  })
+
+  it('highlights each line of a list, not the lines between', () => {
+    mockHighlight.mockResolvedValue(null)
+    Element.prototype.scrollIntoView = vi.fn()
+    render(
+      at(1, 1, undefined, [
+        { from: 1, to: 1 },
+        { from: 3, to: 3 },
+        { from: 50, to: 50 },
+      ]),
+    )
+    expect(row(1)).toHaveClass('bg-accent/15')
     expect(row(2)).toHaveClass('bg-bg')
     expect(row(3)).toHaveClass('bg-accent/15')
   })

@@ -568,8 +568,21 @@ describe('ChatView file paths', () => {
       '0',
       'pwa/src/repository.ts',
       391,
-      398,
+      [{ from: 391, to: 398 }],
     )
+  })
+
+  it('opens a list of lines in Files, each marked', async () => {
+    mockFollowPath.mockResolvedValue('opened')
+    set({ entries: [say('See `src/a.dto.ts:176,183`.')] })
+    render(<ChatView {...withFiles} />)
+    const link = screen.getByRole('button', { name: 'src/a.dto.ts:176,183' })
+    expect(link).toHaveAttribute('title', 'Open src/a.dto.ts:176,183 in Files')
+    await act(async () => fireEvent.click(link))
+    expect(mockFollowPath).toHaveBeenCalledWith('0', 'src/a.dto.ts', 176, [
+      { from: 176, to: 176 },
+      { from: 183, to: 183 },
+    ])
   })
 
   it('opens a relative Markdown link; an http one stays a link', async () => {

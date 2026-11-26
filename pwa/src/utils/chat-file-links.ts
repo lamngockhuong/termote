@@ -3,14 +3,20 @@
 // path under the pane's root a path the agent wrote is. No React: plain
 // functions.
 
-import { rangeEnd, splitLineSuffix } from './file-position'
+import {
+  type LineMark,
+  rangeEnd,
+  splitLineSuffix,
+  suffixPlace,
+} from './file-position'
 
 export interface FileRef {
   path: string
-  // The first line named: ":12", ":12:5", ":12-20", "#L12"
+  // The first line named: ":12", ":12:5", ":12-20", ":12,40", "#L12"
   line?: number
-  // A range's last line, after line: ":12-20", "#L12-L20"
-  endLine?: number
+  // The lines marked from there: a range (":12-20", "#L12-L20") or a list
+  // (":176,183"); none for one line
+  marks?: LineMark[]
 }
 
 // A drive ("C:/", "C:\") or a "/" at the start
@@ -35,25 +41,29 @@ export function parseFileRef(text: string, link = false): FileRef | null {
   // A scheme (a URL), except a Windows drive or a line ("Makefile:3");
   // another host without one
   if (
-    /^[a-z][a-z\d+.-]*:(?!\d+(?::\d+)?(?:-\d+)?$)/i.test(s) &&
+    /^[a-z][a-z\d+.-]*:(?!\d+(?:(?::\d+)?(?:-\d+)?|(?:-\d+)?(?:,\d+(?:-\d+)?)+)$)/i.test(
+      s,
+    ) &&
     !/^[A-Za-z]:[\\/]/.test(s)
   )
     return null
   if (s.startsWith('//') || s.startsWith('~')) return null
   let line: number | undefined
-  let end: number | undefined
+  let marks: LineMark[] | undefined
   const hash = s.indexOf('#')
   if (hash >= 0) {
     const m = s.slice(hash + 1).match(/^L(\d+)(?:-L?(\d+))?$/)
     line = lineOf(m?.[1])
-    if (line) end = lineOf(m?.[2])
+    const to = line && rangeEnd(line, lineOf(m?.[2]))
+    if (line && to) marks = [{ from: line, to }]
     s = s.slice(0, hash)
   }
   const at = splitLineSuffix(s)
   if (at) {
-    if (!line && at.line > 0) {
-      line = at.line
-      end = at.end
+    const place = suffixPlace(at)
+    if (!line && place) {
+      line = place.line
+      marks = place.marks
     }
     s = at.rest
   }
@@ -72,8 +82,7 @@ export function parseFileRef(text: string, link = false): FileRef | null {
     const deep = ABSOLUTE.test(s) && parts.length > 1
     if (!named && !deep && !/^\.\.?[\\/]/.test(s) && !line) return null
   }
-  const endLine = line && rangeEnd(line, end)
-  return { path: s, ...(line && { line }), ...(endLine && { endLine }) }
+  return { path: s, ...(line && { line }), ...(marks && { marks }) }
 }
 
 // A Markdown link's href as a file, or null for a URL, another host or an

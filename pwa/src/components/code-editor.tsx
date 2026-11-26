@@ -20,6 +20,7 @@ import {
 import {
   Annotation,
   Compartment,
+  EditorSelection,
   EditorState,
   type Extension,
   Prec,
@@ -44,6 +45,7 @@ import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
+import type { LineMark } from '../utils/file-position'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
 import { languageFor } from '../utils/highlight-langs'
 import { selectedLines, type TextLines } from '../utils/line-range'
@@ -51,12 +53,12 @@ import type { PasteEdit } from '../utils/markdown-image-paste'
 import { imageFromClipboard } from '../utils/upload-image'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
-// (UTF-16, 0-based), again each time jump changes; endLine: the last line
-// of a range selected from there
+// (UTF-16, 0-based), again each time jump changes; marks: the lines
+// selected with it (a range, a list of lines), the first from line:col
 export interface EditorAt {
   line: number
   col?: number
-  endLine?: number
+  marks?: LineMark[]
   jump: number
 }
 
@@ -172,11 +174,23 @@ function positionOf(state: EditorState, at: EditorAt): number {
   return line.from + Math.min(Math.max(at.col ?? 0, 0), line.length)
 }
 
-// The end of a range's last line, kept inside the text; undefined without
-// a range, or for one that ends before it starts
-function rangeEndOf(state: EditorState, at: EditorAt): number | undefined {
-  if (!at.endLine || at.endLine <= at.line) return
-  return state.doc.line(Math.min(at.endLine, state.doc.lines)).to
+// The selection at asks for: each line it marks selected whole (the first
+// from its column), the main one first; lines past the text's last one are
+// left out, and the cursor at line:col without any
+function selectionOf(state: EditorState, at: EditorAt): EditorSelection {
+  const pos = positionOf(state, at)
+  const doc = state.doc
+  const ranges = (at.marks ?? [])
+    .filter((m) => m.from <= doc.lines)
+    .map((m) =>
+      EditorSelection.range(
+        m.from === at.line ? pos : doc.line(m.from).from,
+        doc.line(Math.min(Math.max(m.to, m.from), doc.lines)).to,
+      ),
+    )
+  return ranges.length
+    ? EditorSelection.create(ranges, 0)
+    : EditorSelection.single(pos)
 }
 
 // The editing a pasted image gets, while live() says the editor is there:
@@ -479,17 +493,12 @@ export default function CodeEditor({
     const v = view.current as EditorView
     if (!at) return
     const pos = positionOf(v.state, at)
-    // A range: selected from line to the end of its last line
-    const end = rangeEndOf(v.state, at)
     v.dispatch({
-      selection:
-        end !== undefined && end > pos
-          ? { anchor: pos, head: end }
-          : { anchor: pos },
+      selection: selectionOf(v.state, at),
       effects: EditorView.scrollIntoView(pos, { y: 'center' }),
     })
     v.focus()
-  }, [at?.jump, at?.line, at?.col, at?.endLine])
+  }, [at?.jump, at?.line, at?.col])
 
   // Lines by their height in the document, which starts below the scroll
   // box's padding

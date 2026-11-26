@@ -69,6 +69,7 @@ import {
 } from '../utils/csv-parse'
 import { CsvClient } from '../utils/csv-parse-client'
 import { isDocumentPath } from '../utils/document-path'
+import type { LineMark } from '../utils/file-position'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
@@ -452,10 +453,10 @@ interface Props {
   // A search result's line to open at, each time jump changes: this tab
   // shows the source (not the Markdown, table or SVG image preview) there.
   // col: where on the line (UTF-16), for the desktop editor's cursor;
-  // endLine: the last line of a range highlighted (selected in the editor)
+  // marks: the lines highlighted with it (selected in the editor)
   line?: number
   col?: number
-  endLine?: number
+  marks?: LineMark[]
   jump?: number
   // The tree's Refresh, each time it changes: the file is read again as it
   // is on the host now, never while it is being edited
@@ -635,7 +636,7 @@ export function FileViewer({
   scrollTop,
   line,
   col,
-  endLine,
+  marks,
   jump,
   refresh,
   editAt,
@@ -710,7 +711,7 @@ export function FileViewer({
   // source whatever the preview settings say (they are left as they are),
   // until the user turns a preview on here
   const asked =
-    line && jump !== undefined ? { line, col, endLine, jump } : undefined
+    line && jump !== undefined ? { line, col, marks, jump } : undefined
   const [pick, setPick] = useState(asked)
   const [seenJump, setSeenJump] = useState(jump)
   // The pick was made while the file was being edited: the editor moves
@@ -1720,7 +1721,7 @@ export function FileViewer({
             wrap={wrap}
             scrollTop={scrolled.current}
             line={pick?.line}
-            endLine={pick?.endLine}
+            marks={pick?.marks}
             jump={pick?.jump}
             onLineComment={
               onLineComment &&

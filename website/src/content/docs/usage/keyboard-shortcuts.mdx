@@ -48,7 +48,8 @@ again moves down the list. In the `@` list, Ctrl+Enter (Cmd+Enter) opens the tab
   `repo.ts:519` or `repo.ts:519:7` finds `repo.ts` and opens it at line 519 (column 7). A range,
   `repo.ts:391-398`, opens at line 391 with lines 391 to 398 highlighted in the viewer and
   selected in the editor; an end before the start is left out, and one past the last line stops
-  there. Only numbers of 1 or more after the last `:` count, so a Windows drive
+  there. A list, `repo.ts:176,183` (ranges too: `repo.ts:12-20,40`), opens at its first line with
+  each line or range in it highlighted, and not the lines between. Only numbers of 1 or more after the last `:` count, so a Windows drive
   (`C:\src\repo.ts`) or a name holding a `:` is searched as typed.
 - The files opened lately are kept on this device for each pane: at most 20, for 14 days, removed
   when you log out. A sensitive file you chose to show is not kept in the list.

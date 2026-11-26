@@ -361,7 +361,25 @@ describe('CommandPalette', () => {
       expect(result.current.active).toMatchObject({
         path: 'src/repository.ts',
         line: 391,
-        endLine: 398,
+        marks: [{ from: 391, to: 398 }],
+      })
+    })
+
+    it('finds the name before a list of lines and opens the file with each marked', async () => {
+      const { result } = await filesStore()
+      mockFind.mockResolvedValue(found(['src/a.dto.ts']))
+      renderPalette()
+      type('a.dto.ts:176,183')
+      await waitFor(() => expect(options()).toHaveLength(1))
+      expect(mockFind.mock.calls[0][1]).toMatchObject({ q: 'a.dto.ts' })
+      key('Enter')
+      expect(result.current.active).toMatchObject({
+        path: 'src/a.dto.ts',
+        line: 176,
+        marks: [
+          { from: 176, to: 176 },
+          { from: 183, to: 183 },
+        ],
       })
     })
 

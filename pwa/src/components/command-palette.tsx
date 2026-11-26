@@ -279,7 +279,7 @@ export function CommandPalette({
         ...(target.line && {
           line: target.line,
           col: target.col,
-          endLine: target.endLine,
+          marks: target.marks,
         }),
       })
       showFilesPanel()

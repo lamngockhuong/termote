@@ -16,7 +16,7 @@ import {
 import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
-import { parseFindQuery } from '../utils/file-position'
+import { type LineMark, parseFindQuery } from '../utils/file-position'
 import { splitPath } from '../utils/files-format'
 import { FOCUS_RING } from './ui/button'
 import { Switch } from './ui/switch'
@@ -50,11 +50,11 @@ interface Props {
   onQuery: (q: string) => void
   // Bumped when the user refreshes: the next search reads the files again
   refreshTick: number
-  // at: the line (and column, or a range's last line) the query named after
-  // the name, "repo.ts:519:7" or "repo.ts:391-398"
+  // at: the line (and column, or the lines marked) the query named after
+  // the name, "repo.ts:519:7", "repo.ts:391-398" or "repo.ts:176,183"
   onPick: (
     path: string,
-    at?: { line: number; col?: number; endLine?: number },
+    at?: { line: number; col?: number; marks?: LineMark[] },
   ) => void
   onRootChanged: (root: string) => void
   // The server never lists ignored files to this client (view-only): no
@@ -98,7 +98,7 @@ export function FileSearch({
     ? {
         line: target.line,
         ...(target.col && { col: target.col }),
-        ...(target.endLine && { endLine: target.endLine }),
+        ...(target.marks && { marks: target.marks }),
       }
     : undefined
 

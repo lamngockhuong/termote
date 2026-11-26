@@ -94,7 +94,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |
 | `pwa/src/components/chat-image-viewer.tsx`        | A transcript image, shown from its chip in the Chat view       |
 | `pwa/src/utils/chat-file-links.ts`                | Which inline code is a path, its line, the path under the root |
-| `pwa/src/utils/file-position.ts`                  | A `:line[:col]` or `:start-end` after a name; a find query     |
+| `pwa/src/utils/file-position.ts`                  | `:line[:col]`, `:start-end` or `:a,b` after a name; find query |
 | `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary           |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
 | `pwa/src/utils/chat-image-tokens.ts`              | `[Image #n]` tokens that place a message's images in its text  |

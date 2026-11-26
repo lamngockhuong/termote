@@ -11,12 +11,35 @@ describe('parseFileRef', () => {
     ['pwa/src/a.ts', { path: 'pwa/src/a.ts' }],
     ['pwa/src/a.ts:12', { path: 'pwa/src/a.ts', line: 12 }],
     ['pwa/src/a.ts:12:5', { path: 'pwa/src/a.ts', line: 12 }],
-    ['pwa/src/a.ts:12-20', { path: 'pwa/src/a.ts', line: 12, endLine: 20 }],
-    ['pwa/src/a.ts:12:5-20', { path: 'pwa/src/a.ts', line: 12, endLine: 20 }],
+    [
+      'pwa/src/a.ts:12-20',
+      { path: 'pwa/src/a.ts', line: 12, marks: [{ from: 12, to: 20 }] },
+    ],
+    [
+      'pwa/src/a.ts:12:5-20',
+      { path: 'pwa/src/a.ts', line: 12, marks: [{ from: 12, to: 20 }] },
+    ],
     ['pwa/src/a.ts:20-12', { path: 'pwa/src/a.ts', line: 20 }],
+    [
+      'src/a.dto.ts:176,183',
+      {
+        path: 'src/a.dto.ts',
+        line: 176,
+        marks: [
+          { from: 176, to: 176 },
+          { from: 183, to: 183 },
+        ],
+      },
+    ],
     ['docs/a.md#L3', { path: 'docs/a.md', line: 3 }],
-    ['docs/a.md#L3-L9', { path: 'docs/a.md', line: 3, endLine: 9 }],
-    ['docs/a.md#L3-9', { path: 'docs/a.md', line: 3, endLine: 9 }],
+    [
+      'docs/a.md#L3-L9',
+      { path: 'docs/a.md', line: 3, marks: [{ from: 3, to: 9 }] },
+    ],
+    [
+      'docs/a.md#L3-9',
+      { path: 'docs/a.md', line: 3, marks: [{ from: 3, to: 9 }] },
+    ],
     ['docs/a.md#L9-L3', { path: 'docs/a.md', line: 9 }],
     ['docs/a.md#L0-L3', { path: 'docs/a.md' }],
     ['docs/a.md:5-8#L3', { path: 'docs/a.md', line: 3 }],
@@ -68,6 +91,19 @@ describe('parseFileRef', () => {
   it('takes any path from a link', () => {
     expect(parseFileRef('README.md', true)).toEqual({ path: 'README.md' })
     expect(parseFileRef('Makefile:3', true)).toEqual({
+      path: 'Makefile',
+      line: 3,
+    })
+    // A list of lines is not taken for a scheme either
+    expect(parseFileRef('Makefile:3,9', true)).toEqual({
+      path: 'Makefile',
+      line: 3,
+      marks: [
+        { from: 3, to: 3 },
+        { from: 9, to: 9 },
+      ],
+    })
+    expect(parseFileRef('Makefile:3-5,9', true)).toMatchObject({
       path: 'Makefile',
       line: 3,
     })
