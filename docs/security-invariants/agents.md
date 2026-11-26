@@ -125,7 +125,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the meta files of subagents with no end (the same checks and cache). A meta file's
   `stoppedByUser: true` (Claude Code's stop of background agents, which writes no end row) ends the
   subagent at the meta file's mtime unless an end row comes later or its file is written more than
-  30 s after it.
+  30 s after it. Its `finished: true` (Claude Code's end of any subagent, a foreground one included,
+  which writes no end row) marks it done at that mtime unless an end row says otherwise or its file
+  is written more than 30 s after it.
   OpenCode (`server/agent_opencode_subagents.go`): only through the service (see OpenCode service
   client), never a file: the children of the pane's own session (`GET /api/session?parentID=<id>`,
   the id checked as the pane's session is, at most 200 in all) and their children, no deeper; a

@@ -35,7 +35,10 @@ import (
 // which match no file here and are dropped. Stopping background agents
 // from the prompt (ctrl+x ctrl+k) writes no task-notification for them (one
 // row quotes their descriptions); Claude Code (2.1.323) rewrites each one's
-// meta file with "stoppedByUser": true instead.
+// meta file with "stoppedByUser": true instead. A subagent run in the
+// foreground (requestShape "foreground") writes no task-notification
+// either: Claude Code (2.1.332) rewrites its meta file with "finished": true
+// when it ends, as it does a background one's.
 
 const (
 	// subagentsTTL: every client polling a tree shares one read.
@@ -78,7 +81,7 @@ var (
 // subagentNode is one subagent. Status is running until the transcript
 // reports its end: done when that status is completed, stopped when it is
 // killed or stopped (or the user stopped it, see userStopped), error
-// otherwise.
+// otherwise; or until its meta file says it finished (metaFinished): done.
 // StatusGuessed: done is a guess from the file's age (subagentGuessIdle).
 // Tokens is the size of its last request: the prompt and the reply, as
 // Claude Code counts a subagent's tokens. Depth is 1 for a subagent of the
@@ -293,7 +296,7 @@ func claudeSessionDir(s AgentSession) (root, proj, path string, err error) {
 
 // runningWrite is the newest mtime, as listed, of the subagent files whose
 // subagent has not ended (and is not guessed to have, nor stopped by the
-// user).
+// user, nor marked finished in its meta file).
 func (ss *subagentSession) runningWrite(dir *os.Root, now time.Time) time.Time {
 	var last time.Time
 	listed := map[string]bool{}
@@ -320,7 +323,8 @@ func (ss *subagentSession) runningWrite(dir *os.Root, now time.Time) time.Time {
 			continue
 		}
 		if me := metas[id]; me != nil {
-			if m, at, ok := ss.readMeta(dir, id, me); ok && userStopped(m, at, subagentEnd{}, false, fi.ModTime()) {
+			if m, at, ok := ss.readMeta(dir, id, me); ok &&
+				(userStopped(m, at, subagentEnd{}, false, fi.ModTime()) || metaFinished(m, at, fi.ModTime())) {
 				continue
 			}
 		}
@@ -361,6 +365,13 @@ func userStopped(m subagentMeta, stoppedAt time.Time, end subagentEnd, ended boo
 		return false
 	}
 	return changed.Sub(stoppedAt) <= subagentStopSettle
+}
+
+// metaFinished: the meta file, last written at finishedAt, says the
+// subagent finished, and its file (at changed) was not written more than
+// subagentStopSettle after that: a subagent continued since is running again.
+func metaFinished(m subagentMeta, finishedAt, changed time.Time) bool {
+	return m.Finished && !finishedAt.IsZero() && changed.Sub(finishedAt) <= subagentStopSettle
 }
 
 // listSubagentDir is dir's entries, none when it cannot be read.
@@ -517,6 +528,7 @@ type subagentMeta struct {
 	Description   string `json:"description"`
 	ParentAgentID string `json:"parentAgentId"`
 	StoppedByUser bool   `json:"stoppedByUser"`
+	Finished      bool   `json:"finished"`
 }
 
 // tree lists dir and builds the tree from the meta files, the subagent
@@ -613,6 +625,8 @@ func (ss *subagentSession) tree(dir *os.Root, now time.Time) subagentsResponse {
 			n.Status, n.EndTS = "stopped", f.metaTime.UTC().Format(activityTimeFormat)
 		case ok:
 			n.Status, n.EndTS = endStatus(end.status), end.ts
+		case f.metaOK && metaFinished(f.m, f.metaTime, changed):
+			n.Status, n.EndTS = "done", f.metaTime.UTC().Format(activityTimeFormat)
 		case ss.guessDone(changed, now):
 			n.Status, n.StatusGuessed = "done", true
 		}
