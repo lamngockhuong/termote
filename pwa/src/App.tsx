@@ -253,6 +253,9 @@ const ACTION_TOAST_MS = 10000
 // An upload slower than this shows that it is running.
 const SLOW_UPLOAD_MS = 300
 
+// How many frames a new tab's terminal is waited for to take the keys
+const NEW_TAB_FOCUS_FRAMES = 60
+
 interface AppProps {
   // Views of the pane; tests register extra ones
   views?: AppView[]
@@ -1637,10 +1640,23 @@ export default function App({
 
   // A refusal the user can act on (Zellij: no client attached to the
   // session) is told in a toast; resolves to whether the tab was asked for.
+  // On a desktop the new tab's terminal takes the keys, from the + or the
+  // form left with the focus: its xterm may come frames after the add, and
+  // a focus moved elsewhere meanwhile stays there.
   const addTab = useCallback(
     async (...args: Parameters<typeof addSession>) => {
       try {
-        await addSession(...args)
+        if (!(await addSession(...args)) || isMobile) return true
+        const from = document.activeElement
+        let frames = NEW_TAB_FOCUS_FRAMES
+        const focusNew = () => {
+          const now = document.activeElement
+          if (now !== from && now !== document.body) return
+          const handle = getTerminal()
+          if (handle?.term) focusTerminal(handle)
+          else if (--frames > 0) requestAnimationFrame(focusNew)
+        }
+        requestAnimationFrame(focusNew)
         return true
       } catch (err) {
         showToast(
@@ -1654,7 +1670,7 @@ export default function App({
         return false
       }
     },
-    [addSession, showToast, t],
+    [addSession, isMobile, getTerminal, showToast, t],
   )
 
   const handleMobileAdd = async (

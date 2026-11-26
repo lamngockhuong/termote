@@ -2327,6 +2327,123 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'STRename' })).toBeNull()
   })
 
+  describe('a new tab', () => {
+    // The frames asked for, run by hand
+    let frames: FrameRequestCallback[]
+    const runFrames = () =>
+      act(() => {
+        for (const cb of frames.splice(0)) cb(0)
+      })
+    const tabBar = (addSession: (...args: any[]) => Promise<unknown>) => {
+      mockUseLocalSessions.mockReturnValue({
+        ...mockUseLocalSessions(),
+        addSession,
+      } as any)
+      mockUseSettings.mockReturnValue({
+        ...mockUseSettings(),
+        settings: { ...mockUseSettings().settings, showSessionTabs: true },
+      })
+    }
+    const add = async () => {
+      render(<App />)
+      await screen.findByTestId('session-tabs')
+      const plus = screen.getByRole('button', { name: 'STAdd' })
+      plus.focus()
+      frames.splice(0)
+      mockFocusTerminal.mockClear()
+      await act(async () => {
+        fireEvent.click(plus)
+      })
+      return plus
+    }
+    beforeEach(() => {
+      frames = []
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        frames.push(cb)
+        return frames.length
+      })
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      terminalHandle = null
+      mockIsMobile.mockReturnValue(false)
+    })
+
+    it('gives its terminal the keys on a desktop once its xterm is there', async () => {
+      const handle = { paste: vi.fn(), term: null as object | null }
+      terminalHandle = handle
+      tabBar(vi.fn(async () => true))
+      await add()
+      // The xterm comes frames after the add
+      runFrames()
+      runFrames()
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+      handle.term = {}
+      runFrames()
+      expect(mockFocusTerminal).toHaveBeenCalledTimes(1)
+      expect(mockFocusTerminal).toHaveBeenCalledWith(handle)
+      runFrames()
+      expect(mockFocusTerminal).toHaveBeenCalledTimes(1)
+    })
+
+    it('stops waiting for a terminal that never comes', async () => {
+      terminalHandle = { paste: vi.fn() } as any
+      tabBar(vi.fn(async () => true))
+      await add()
+      for (let i = 0; i < 70; i++) runFrames()
+      expect(frames).toHaveLength(0)
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+    })
+
+    it('leaves the focus moved elsewhere meanwhile where it is', async () => {
+      const handle = { paste: vi.fn(), term: null as object | null }
+      terminalHandle = handle
+      tabBar(vi.fn(async () => true))
+      await add()
+      screen.getByRole('button', { name: 'STAddNamed' }).focus()
+      handle.term = {}
+      runFrames()
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+    })
+
+    it('keeps the focus on + when the tab was not made', async () => {
+      terminalHandle = { paste: vi.fn(), term: {} } as any
+      tabBar(vi.fn(async () => false))
+      const plus = await add()
+      runFrames()
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+      expect(plus).toHaveFocus()
+      cleanup()
+      tabBar(
+        vi.fn(async () => {
+          throw new Error('down')
+        }),
+      )
+      await add()
+      runFrames()
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+    })
+
+    it('leaves the keyboard down on a phone', async () => {
+      terminalHandle = { paste: vi.fn(), term: {} } as any
+      mockIsMobile.mockReturnValue(true)
+      const addSession = vi.fn(async () => true)
+      tabBar(addSession)
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open sessions menu' }),
+      )
+      frames.splice(0)
+      mockFocusTerminal.mockClear()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'MobileAdd' }))
+      })
+      expect(addSession).toHaveBeenCalled()
+      runFrames()
+      expect(mockFocusTerminal).not.toHaveBeenCalled()
+    })
+  })
+
   it('keeps a phone on its own sheet and settings with a compact sidebar saved', async () => {
     mockIsMobile.mockReturnValue(true)
     // Not a literal: the mock's settings type has no sidebarLayout
