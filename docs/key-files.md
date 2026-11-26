@@ -254,6 +254,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/sheet-tsv.ts`                      | A sheet as TSV of at most 1 MiB and 200 columns                |
 | `pwa/src/components/docx-preview.tsx`             | A Word document from the worker's tree as React elements       |
 | `pwa/src/utils/docx-worker.ts`                    | mammoth and xmldom in a worker, the result sanitized           |
+| `pwa/src/components/drawing-preview.tsx`          | An Excalidraw file in Excalidraw; each change as its text      |
+| `pwa/src/utils/drawing-path.ts`                   | Names shown as a drawing (.excalidraw, lib, .svg, .png, .md)   |
+| `pwa/src/utils/drawing-scene.ts`                  | Reads a drawing of each kind, writes it as the file's text     |
+| `pwa/src/utils/obsidian-drawing.ts`               | The scene in an Obsidian file: read, written with its texts    |
+| `pwa/src/utils/drawing-assets.ts`                 | Excalidraw's fonts from this origin; FontFace keeps only those |
 | `pwa/src/utils/docx-sanitize.ts`                  | Allowlist of tags and attributes, limits, as a JSON tree       |
 | `pwa/src/components/panel-toggles.tsx`            | Side panel toggles (Files, Changes), header or right bar       |
 | `pwa/src/components/toolbar-rail.tsx`             | Desktop right bar: views, panels, Pane, fullscreen, palette    |

@@ -240,6 +240,13 @@
       "description": "Files and Changes: an SVG shown as an image, else as text"
     },
     {
+      "key": "drawingPreview",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Files: an Excalidraw file (.excalidraw, .excalidrawlib, .excalidraw.svg, .excalidraw.png, .excalidraw.md) shown as its drawing, else its source"
+    },
+    {
       "key": "findIncludeIgnored",
       "store": "settings",
       "type": "boolean",

@@ -37,6 +37,7 @@ export const SETTING_LABEL: Record<string, MessageKey> = {
   markdownEditLayout: 'settings.key.markdownEditLayout',
   tablePreview: 'settings.key.tablePreview',
   svgPreview: 'settings.key.svgPreview',
+  drawingPreview: 'settings.key.drawingPreview',
   findIncludeIgnored: 'settings.key.findIncludeIgnored',
   findExcludes: 'settings.excluded',
   searchCase: 'settings.key.searchCase',

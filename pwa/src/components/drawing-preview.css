@@ -1,0 +1,13 @@
+/* What would take the user to Excalidraw's own sites from a drawing in
+   Files: the links atop its Help (its keyboard shortcuts stay), browsing
+   libraries (it adds what it finds to excalidraw.com, not here) and
+   publishing a library (sent to Excalidraw's server, which the page's
+   policy refuses). Its main menu's links are left out in
+   drawing-preview.tsx. The classes are Excalidraw's own, and this sheet
+   loads with the editor: Help opens outside the drawing's element, and
+   Excalidraw's own rules (".excalidraw .x") outrank a class alone. */
+.HelpDialog__header,
+.library-menu-browse-button,
+.excalidraw [data-testid="lib-dropdown--remove"] {
+  display: none !important;
+}

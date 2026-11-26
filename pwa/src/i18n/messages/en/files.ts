@@ -418,6 +418,13 @@ export default {
   'files.viewer.reapply': 'Reload and reapply',
   'files.viewer.unpreviewable':
     'Not previewable (binary, special file or larger than 4 MiB)',
+  'files.drawing.unreadable': 'This file holds no drawing Excalidraw can read',
+  'files.drawing.libraryOnly':
+    'Only the library is saved: what you draw on the canvas is not',
+  'files.drawing.writeFailed':
+    'This change to the drawing could not be written: keep drawing to try again',
+  'files.drawing.pngReadOnly':
+    'A PNG drawing is shown only: open an .excalidraw or .excalidraw.svg file to change it',
   'files.viewer.closeTab': 'Close tab',
   'files.viewer.sensitive': 'This file may contain secrets',
   'files.viewer.sensitiveViewOnly': 'A view-only device cannot show it',

@@ -104,6 +104,7 @@ Covers Files/Changes, Places, previews, the editor, state kept on the device, do
 - Opening a file in Windows
 - Reading a document to preview
 - Office and PDF previews
+- Excalidraw drawings
 
 ## [Files: changes](files-write.md)
 

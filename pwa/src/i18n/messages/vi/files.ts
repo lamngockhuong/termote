@@ -438,6 +438,14 @@ export default {
   'files.viewer.reapply': 'Tải lại và áp dụng lại',
   'files.viewer.unpreviewable':
     'Không xem trước được (file nhị phân, file đặc biệt hoặc lớn hơn 4 MiB)',
+  'files.drawing.unreadable':
+    'File này không chứa bản vẽ nào Excalidraw đọc được',
+  'files.drawing.libraryOnly':
+    'Chỉ thư viện được lưu: những gì bạn vẽ trên canvas thì không',
+  'files.drawing.writeFailed':
+    'Chưa ghi được thay đổi này của bản vẽ: vẽ tiếp để thử lại',
+  'files.drawing.pngReadOnly':
+    'Bản vẽ PNG chỉ để xem: muốn sửa, hãy mở file .excalidraw hoặc .excalidraw.svg',
   'files.viewer.closeTab': 'Đóng tab',
   'files.viewer.sensitive': 'File này có thể chứa bí mật',
   'files.viewer.sensitiveViewOnly': 'Thiết bị chỉ xem không mở được file này',

@@ -1,6 +1,6 @@
 ---
 title: "Xem trước file"
-description: "Xem trước file của pane trong Termote: Markdown kèm sơ đồ, CSV và TSV dạng bảng tìm và sửa được, ảnh, cùng tài liệu PDF, Excel và Word."
+description: "Xem trước file của pane trong Termote: Markdown kèm sơ đồ, CSV và TSV dạng bảng tìm và sửa được, ảnh, tài liệu PDF, Excel và Word, cùng bản vẽ Excalidraw sửa được."
 head:
   - tag: title
     content: "Xem trước Markdown, CSV, ảnh và PDF | Termote"
@@ -8,7 +8,7 @@ head:
 
 import { Aside } from "@astrojs/starlight/components";
 
-Ngoài file text, [Files](/vi/usage/files/) hiện một số loại file đúng như bản chất của chúng: Markdown thành trang, CSV và TSV thành bảng, ảnh thành hình, còn tài liệu PDF, Excel và Word thành bản xem trước chỉ đọc.
+Ngoài file text, [Files](/vi/usage/files/) hiện một số loại file đúng như bản chất của chúng: Markdown thành trang, CSV và TSV thành bảng, ảnh thành hình, tài liệu PDF, Excel và Word thành bản xem trước chỉ đọc, còn file Excalidraw thành bản vẽ sửa được.
 
 ## Xem trước Markdown
 
@@ -375,3 +375,37 @@ Trên điện thoại vẫn là những view này; PDF zoom bằng nút, không 
 phân, có nút Download. Trong Changes, tài liệu cũng hiện như file nhị phân. Tên file thường chứa
 bí mật thì được hỏi trước, giống như với văn bản. Phiên chỉ xem vẫn xem trước được nhưng không
 có nút Download; mỗi lần đọc một tài liệu đều được ghi vào log của server.
+
+## Bản vẽ Excalidraw
+
+File Excalidraw mở ra thành bản vẽ, ngay trong Files, bằng chính Excalidraw:
+
+| File              | Mở ra                                                  | Save ghi gì                                                     |
+| ----------------- | ------------------------------------------------------ | --------------------------------------------------------------- |
+| `.excalidraw`     | Bản vẽ                                                 | Bản vẽ, dưới dạng JSON của file                                 |
+| `.excalidrawlib`  | Khung vẽ trống, bên cạnh là các hình của thư viện      | Chỉ thư viện; những gì vẽ trên khung vẽ không được giữ lại      |
+| `.excalidraw.svg` | Bản vẽ cất bên trong file SVG                          | File SVG của bản vẽ, bên trong vẫn chứa bản vẽ                  |
+| `.excalidraw.png` | Bản vẽ cất bên trong file PNG                          | Không ghi gì: bản vẽ PNG chỉ để xem                             |
+| `.excalidraw.md`  | Bản vẽ trong file của plugin Excalidraw cho Obsidian   | Khối bản vẽ và danh sách Text Elements; phần còn lại giữ nguyên |
+
+Mở ra là vẽ được ngay. Ở thay đổi đầu tiên, tab được giữ lại và thanh trên cùng có Cancel và
+Save, giống như khi sửa một file. Bấm **Save**, hoặc Ctrl+S (Cmd+S trên Mac) trong bản vẽ, để
+ghi file; giống như với văn bản, file đã đổi trên máy chủ kể từ lúc đọc thì không bao giờ bị ghi
+đè. Hoàn tác hết các thay đổi thì không còn gì để lưu. **Cancel** hỏi trước khi bỏ thay đổi, rồi
+đọc lại bản vẽ từ file. Với phiên chỉ xem, hoặc file mà server không cho lưu, bản vẽ hiện ra
+nhưng không có công cụ để sửa.
+
+Nút **Preview** chuyển qua lại giữa bản vẽ và nội dung gốc của file; lựa chọn được nhớ trên thiết
+bị này. Khi hiện nội dung gốc, file `.excalidraw.svg` có nút **Image** như mọi file SVG, còn file
+`.excalidraw.png` hiện thành hình.
+
+Termote không đưa ra các lệnh Open, Save to file, Export và Save as image của Excalidraw (muốn tải
+file về thì dùng **Download** trong menu của file), cũng không có các tính năng AI của nó hay các link dẫn sang trang của Excalidraw (trong
+menu, ở đầu Help, khi duyệt và đăng thư viện). Trang
+web nhúng trong bản vẽ chỉ hiện thành đường link. Font của Excalidraw do chính termote phục vụ nên
+không có gì được tải từ trang khác, và trình vẽ chỉ được tải về ở lần đầu mở một bản vẽ. File
+`.excalidraw.svg` lưu từ đây giữ nguyên nền (hoặc không nền) và chế độ tối, nhưng chỉ ghi tên font
+của Excalidraw chứ không mang font theo: mở bằng ứng dụng khác thì chữ hiện bằng font thay thế của
+ứng dụng đó. Ảnh
+trong bản vẽ Obsidian mà nằm ở file khác trong kho ghi chú thì không hiện. File không chứa bản vẽ nào
+sẽ báo như vậy, kèm nút **Try again**.

@@ -492,6 +492,7 @@ export default {
   'settings.key.markdownEditLayout': 'Markdown being edited',
   'settings.key.tablePreview': 'Show CSV and TSV as a table',
   'settings.key.svgPreview': 'Show SVG as an image',
+  'settings.key.drawingPreview': 'Show Excalidraw files as a drawing',
   'settings.key.findIncludeIgnored': 'File search: ignored files too',
   'settings.key.searchCase': 'Content search: match case',
   'settings.key.searchWord': 'Content search: whole word',
