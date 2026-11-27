@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.35.0](https://github.com/lamngockhuong/termote/compare/v2.34.0...v2.35.0) (2026-11-27)
+
+
+### Features
+
+* **pwa:** let a maximized side panel hide the sidebar and the tabs ([#1019](https://github.com/lamngockhuong/termote/issues/1019)) ([314c694](https://github.com/lamngockhuong/termote/commit/314c6949cbfbd9b9125359c17f6b36dca9945dac))
+* **pwa:** open a file searched as name:line[:col], name:start-end or name:a,b there ([#1015](https://github.com/lamngockhuong/termote/issues/1015)) ([7b9a2a5](https://github.com/lamngockhuong/termote/commit/7b9a2a519216a0344701702303b51583e69c6594))
+* **pwa:** open, change and save Excalidraw files in Files ([#1018](https://github.com/lamngockhuong/termote/issues/1018)) ([aa5ff87](https://github.com/lamngockhuong/termote/commit/aa5ff87c309bc871d27ef9c4cbc268acbb63fe7f))
+
+
+### Bug Fixes
+
+* **pwa:** give a new tab's terminal the keys on a desktop ([#1016](https://github.com/lamngockhuong/termote/issues/1016)) ([5930109](https://github.com/lamngockhuong/termote/commit/59301099c54959c44a6efdc263697dcca6af21b6))
+* **pwa:** show the neighbouring tab when the tab on screen is closed ([#1017](https://github.com/lamngockhuong/termote/issues/1017)) ([95f6742](https://github.com/lamngockhuong/termote/commit/95f67427adf586d6173710232ca403ad17550b72))
+* **server:** end a subagent when its meta file says it finished ([#1013](https://github.com/lamngockhuong/termote/issues/1013)) ([4db8630](https://github.com/lamngockhuong/termote/commit/4db86308fcbbce25e772a69a5451bf35893d3d6d))
+
 ## [2.34.0](https://github.com/lamngockhuong/termote/compare/v2.33.0...v2.34.0) (2026-11-25)
 
 
