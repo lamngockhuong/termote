@@ -17,6 +17,7 @@ import {
   type FileWindowTarget,
   type NotifyOptions,
   startOffered,
+  TASKS_VIEW_ID,
   TERMINAL_VIEW_ID,
   type ViewContext,
   type ViewProps,
@@ -861,14 +862,18 @@ export default function App({
     () => ({ mux, session: activeSession, readOnly, agentStart }),
     [mux, activeSession, readOnly, agentStart],
   )
+  // Tasks turned off in Settings: its button, command and welcome line go
+  const tasksHidden = settings.showTasksView === false
   // Each named in the app's language
   const offeredViews = useMemo(
     () =>
-      availableViews(views, viewContext).map((v) => ({
-        ...v,
-        label: viewLabel(v, t),
-      })),
-    [views, viewContext, t],
+      availableViews(views, viewContext)
+        .filter((v) => !(tasksHidden && v.id === TASKS_VIEW_ID))
+        .map((v) => ({
+          ...v,
+          label: viewLabel(v, t),
+        })),
+    [views, viewContext, t, tasksHidden],
   )
   // Desktop shows the panel views next to the terminal, from a header
   // toggle; mobile has no room for that and keeps them in the switcher.
@@ -2146,6 +2151,7 @@ export default function App({
         readOnly,
         focus,
         viewIds: switcherViews.map((v) => v.id),
+        tasksHidden: tasksHidden && !!mux.caps.tasks,
         panelIds: searchPaneId ? panelViews.map((v) => v.id) : [],
         sidePanelId: sidePanelView ? sidePanelId : null,
         startOffered: startOffered(viewContext),
@@ -2206,6 +2212,8 @@ export default function App({
       readOnly,
       focus,
       switcherViews,
+      tasksHidden,
+      mux.caps.tasks,
       panelViews,
       searchPaneId,
       sidePanelView,
@@ -3168,7 +3176,7 @@ export default function App({
         areas={{
           chat: !!mux.caps.agentChat,
           files: !!mux.caps.files,
-          tasks: !!mux.caps.tasks,
+          tasks: !!mux.caps.tasks && !tasksHidden,
           panes: !!mux.caps.paneLayout,
         }}
         version={appUpdate.server?.version ?? APP_INFO.version}

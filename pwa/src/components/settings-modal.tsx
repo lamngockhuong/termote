@@ -1293,6 +1293,18 @@ export function SettingsModal({
         <>
           {tasks && (
             <SettingsRow
+              title={t('settings.tasksView')}
+              desc={t('settings.tasksViewDesc')}
+            >
+              <Switch
+                label={t('settings.tasksView')}
+                checked={settings.showTasksView}
+                onChange={(v) => onUpdateSetting('showTasksView', v)}
+              />
+            </SettingsRow>
+          )}
+          {tasks && (
+            <SettingsRow
               title={t('settings.taskHistory')}
               desc={t('settings.taskHistoryDesc')}
             >

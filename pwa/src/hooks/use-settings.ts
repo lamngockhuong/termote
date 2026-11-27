@@ -248,6 +248,7 @@ export interface Settings {
   editorWrap: boolean // Files/Changes on desktop: lines wrapped by default
   editorVim: boolean // desktop editor: Vim key bindings
   taskHistoryLines: number // Tasks: lines read for Send to agent (above)
+  showTasksView: boolean // the Tasks view in the switcher, palette and welcome
 }
 
 export const DEFAULTS: Settings = {
@@ -296,6 +297,7 @@ export const DEFAULTS: Settings = {
   editorWrap: false,
   editorVim: false,
   taskHistoryLines: TASK_HISTORY_LINES_DEFAULT,
+  showTasksView: true,
 }
 
 // Settings of this device alone: never proposed by an agent nor carried by
@@ -371,6 +373,7 @@ export const SETTING_RESOLVERS: {
   editorWrap: (v) => resolveBoolean('editorWrap', v),
   editorVim: (v) => resolveBoolean('editorVim', v),
   taskHistoryLines: resolveTaskHistoryLines,
+  showTasksView: (v) => resolveBoolean('showTasksView', v),
 }
 
 // Listeners for useSyncExternalStore

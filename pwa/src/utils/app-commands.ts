@@ -46,6 +46,8 @@ export interface AppCommandContext {
   readOnly: boolean
   // Views of the switcher, and of the desktop side panel, offered now
   viewIds: string[]
+  // The Tasks view is turned off in Settings (a pane that has tasks)
+  tasksHidden?: boolean
   panelIds: string[]
   sidePanelId: string | null
   // The pane's agent can be started from its Chat view
@@ -237,7 +239,9 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
         ? undefined
         : ctx.readOnly
           ? VIEW_ONLY
-          : 'tasks.commandOff.noTasks',
+          : ctx.tasksHidden
+            ? 'tasks.commandOff.tasksHidden'
+            : 'tasks.commandOff.noTasks',
       run: () => ctx.changeView(TASKS_VIEW_ID),
     },
     panel(FILES_VIEW_ID, 'tasks.command.filesPanel'),

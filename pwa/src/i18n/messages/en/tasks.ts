@@ -288,6 +288,7 @@ export default {
   'tasks.commandOff.cannotStart': 'This pane cannot start an agent',
   'tasks.commandOff.noChat': 'No agent chat in this pane',
   'tasks.commandOff.noTasks': 'No tasks for this pane',
+  'tasks.commandOff.tasksHidden': 'Tasks is hidden in Settings',
   'tasks.commandOff.noPrevious': 'No tab before this one',
   'tasks.commandOff.noNext': 'No tab after this one',
   'tasks.commandOff.noPreviousPane': 'No pane before this one',

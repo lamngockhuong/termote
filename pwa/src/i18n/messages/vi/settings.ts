@@ -146,6 +146,9 @@ export default {
   'settings.vim': 'Chế độ Vim',
   'settings.vimDesc': 'Trình soạn thảo trên máy tính: phím Vim; :w để lưu',
 
+  'settings.tasksView': 'Hiện Tác vụ',
+  'settings.tasksViewDesc':
+    'Nút Tác vụ cạnh các view khác của pane, lệnh mở nó và dòng giới thiệu trong màn hình chào; tắt thì ẩn hết',
   'settings.taskHistory': 'Số dòng đọc lại khi gửi cho agent',
   'settings.taskHistoryDesc':
     'Số dòng cuối trong tab tác vụ dùng để tìm output của lần chạy; chỉ gửi output của chính lần chạy đó',

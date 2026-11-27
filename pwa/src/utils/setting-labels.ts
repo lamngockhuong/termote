@@ -48,6 +48,7 @@ export const SETTING_LABEL: Record<string, MessageKey> = {
   editorWrap: 'settings.wrap',
   editorVim: 'settings.vim',
   taskHistoryLines: 'settings.taskHistory',
+  showTasksView: 'settings.tasksView',
   shortcuts: 'settings.group.shortcuts',
 }
 

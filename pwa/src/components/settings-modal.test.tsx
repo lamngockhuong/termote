@@ -106,6 +106,7 @@ const DEFAULT_SETTINGS: Settings = {
   editorWrap: false,
   editorVim: false,
   taskHistoryLines: 400,
+  showTasksView: true,
 }
 
 describe('SettingsModal', () => {
@@ -1254,10 +1255,21 @@ describe('SettingsModal for a view-only device or with devices', () => {
     expect(screen.queryByTestId('user-tasks-section')).toBeNull()
   })
 
+  it('the Tasks group turns the Tasks view off and on with tasks', () => {
+    const onUpdateSetting = vi.fn()
+    renderWith({ tasks: true, onUpdateSetting })
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
+    const toggle = screen.getByRole('switch', { name: 'Show Tasks' })
+    expect(toggle).toBeChecked()
+    fireEvent.click(toggle)
+    expect(onUpdateSetting).toHaveBeenCalledWith('showTasksView', false)
+  })
+
   it('the Tasks group lists the user tasks, without the history select, with userTasks only', () => {
     renderWith({ userTasks: true })
     fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
     expect(screen.getByTestId('user-tasks-section')).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Show Tasks' })).toBeNull()
     expect(
       screen.queryByRole('combobox', {
         name: 'History read for Send to agent',

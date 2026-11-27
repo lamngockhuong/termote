@@ -144,6 +144,9 @@ export default {
   'settings.vim': 'Vim mode',
   'settings.vimDesc': 'Desktop editor: Vim keys; :w saves',
   // Tasks
+  'settings.tasksView': 'Show Tasks',
+  'settings.tasksViewDesc':
+    "The Tasks button beside the pane's other views, its command and its line in the welcome; off hides them",
   'settings.taskHistory': 'History read for Send to agent',
   'settings.taskHistoryDesc':
     "Lines of a task's tab searched for its run's output; only the run's own output is sent",
