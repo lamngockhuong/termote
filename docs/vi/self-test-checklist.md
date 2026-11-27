@@ -982,6 +982,7 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr.
 - [ ] Khi tay nắm kéo có focus, phím mũi tên đổi từng bước, Home/End đưa tới giới hạn
 - [ ] Terminal luôn còn ít nhất 360px bên cạnh panel
 - [ ] "Maximize panel" phủ lên terminal; "Restore panel" hoặc Escape trả lại như cũ
+- [ ] "Ẩn sidebar và hàng tab" ẩn thêm sidebar, header và hàng pane; bấm lại thì chúng hiện ra mà panel vẫn phóng to; Escape trả mọi thứ về như cũ và sidebar vẫn kéo rộng được
 - [ ] Thu hẹp cửa sổ xuống cỡ điện thoại thì view đang mở chuyển sang vùng chính
 
 ---

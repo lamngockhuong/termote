@@ -1142,11 +1142,24 @@ export default function App({
   // Neither is kept once the panel goes: it opens again at its saved width.
   const [panelMaximized, setPanelMaximized] = useState(false)
   const [panelResizing, setPanelResizing] = useState(false)
+  // Maximized with the sidebar, the header and the pane strip hidden: the
+  // panel takes the whole window but the right bar. It implies maximized.
+  const [panelFullWindowOn, setPanelFullWindowOn] = useState(false)
   useEffect(() => {
     if (hasSidePanel) return
     setPanelMaximized(false)
     setPanelResizing(false)
+    setPanelFullWindowOn(false)
   }, [hasSidePanel])
+  const changePanelMaximized = useCallback((maximized: boolean) => {
+    setPanelMaximized(maximized)
+    if (!maximized) setPanelFullWindowOn(false)
+  }, [])
+  const changePanelFullWindow = useCallback((fullWindow: boolean) => {
+    setPanelFullWindowOn(fullWindow)
+    if (fullWindow) setPanelMaximized(true)
+  }, [])
+  const panelFullWindow = hasSidePanel && panelFullWindowOn
   // The maximized panel covers the input area: the history dropdown over it
   // would float above the panel, out of reach
   useEffect(() => {
@@ -2387,6 +2400,7 @@ export default function App({
             renameTab={mux.caps.renameTab !== false}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
+            hidden={panelFullWindow}
             width={settings.sidebarWidth}
             onWidthChange={setSidebarWidth}
             onResizingChange={setSidebarResizing}
@@ -2433,6 +2447,7 @@ export default function App({
         <main className="flex-1 flex flex-col min-w-0">
           <AppHeader
             isMobile={isMobile}
+            hidden={panelFullWindow}
             session={activeSession}
             groupSessions={groupSessions}
             groupName={groupName}
@@ -2599,16 +2614,19 @@ export default function App({
             ))}
           {/* Split tab: pick the pane to stream (Herdr, Zellij) or to focus
               (tmux, where picking is a write: a view-only device watches) */}
-          {activeSession.panes && !overviewOpen && !focus && (
-            <PaneStrip
-              panes={activeSession.panes}
-              activePaneId={activeSession.paneId}
-              onSelect={
-                mux.caps.clientSideSelect || !readOnly ? pickPane : undefined
-              }
-              onClose={readOnly ? undefined : setPendingPaneId}
-            />
-          )}
+          {activeSession.panes &&
+            !overviewOpen &&
+            !focus &&
+            !panelFullWindow && (
+              <PaneStrip
+                panes={activeSession.panes}
+                activePaneId={activeSession.paneId}
+                onSelect={
+                  mux.caps.clientSideSelect || !readOnly ? pickPane : undefined
+                }
+                onClose={readOnly ? undefined : setPendingPaneId}
+              />
+            )}
           {/* The views and side panel, with the right bar beside them (not
               inside the isolate: a maximized panel leaves the bar in reach,
               and the bar's Pane menu is not cut off) */}
@@ -2819,7 +2837,9 @@ export default function App({
                   width={settings.sidePanelWidth}
                   onWidthChange={setSidePanelWidth}
                   maximized={panelMaximized}
-                  onMaximizedChange={setPanelMaximized}
+                  onMaximizedChange={changePanelMaximized}
+                  fullWindow={panelFullWindowOn}
+                  onFullWindowChange={changePanelFullWindow}
                   onResizingChange={setPanelResizing}
                 >
                   {/* Its own boundary: a lazy panel that suspends must not

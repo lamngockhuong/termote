@@ -23,7 +23,10 @@ import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import type { QuickActionHandlers } from './components/quick-actions-menu'
-import { PanelMaximizeButton } from './components/side-panel'
+import {
+  PanelFullWindowButton,
+  PanelMaximizeButton,
+} from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
 import { useHistoryClose } from './hooks/use-history-close'
 import { type MuxSnapshot, RequestError } from './hooks/use-mux-api'
@@ -573,6 +576,7 @@ vi.mock('./components/session-sidebar', () => ({
     reorder,
     onOpenOverview,
     layout,
+    hidden,
     onSelectGroup,
     onOpenAgent,
     sessions,
@@ -625,9 +629,11 @@ vi.mock('./components/session-sidebar', () => ({
     isOpen?: boolean
     onFilterChange?: (filter: string) => void
     onRemove?: (id: string) => void
+    hidden?: boolean
   }) => (
     <div
       data-testid="session-sidebar"
+      hidden={hidden}
       data-open={String(!!isOpen)}
       data-layout={layout}
       data-width={width === undefined ? undefined : String(width)}
@@ -5045,6 +5051,7 @@ describe('App views, view-only and deep links', () => {
       Panel: () => (
         <div data-testid="files-panel">
           <PanelMaximizeButton />
+          <PanelFullWindowButton />
         </div>
       ),
     }
@@ -5101,6 +5108,11 @@ describe('App views, view-only and deep links', () => {
       expect(coveredNow()).toBe(true)
       // Nobody sees the pane under the maximized panel
       expect(watchedNow()).toBe(false)
+      // Only the main area: the sidebar and the header stay
+      expect(screen.getByTestId('session-sidebar')).not.toHaveAttribute(
+        'hidden',
+      )
+      expect(document.querySelector('header')).not.toHaveAttribute('hidden')
       fireEvent.keyDown(screen.getByRole('button', { name: 'Restore panel' }), {
         key: 'Escape',
       })
@@ -5109,6 +5121,77 @@ describe('App views, view-only and deep links', () => {
       expect(toolbar().closest('[inert]')).toBeNull()
       expect(coveredNow()).toBe(false)
       expect(watchedNow()).toBe(true)
+    })
+
+    it('the full window button hides the sidebar, the header and the pane strip', async () => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        activeSession: {
+          ...base.sessions[0],
+          paneId: 'w1:t1:p1',
+          panes: [
+            { id: 'w1:t1:p1', label: 'one', hasAgent: true },
+            { id: 'w1:t1:p2', label: 'two', hasAgent: true },
+          ],
+        },
+      } as any)
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      const sidebar = screen.getByTestId('session-sidebar')
+      const header = document.querySelector('header')!
+      const strip = () => screen.queryByRole('group', { name: 'Panes' })
+      expect(strip()).toBeInTheDocument()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Hide sidebar and tabs' }),
+      )
+      const panel = screen.getByRole('complementary', { name: 'Files' })
+      // Maximized too, the sidebar and header kept mounted
+      expect(panel).toHaveClass('absolute', 'inset-0')
+      expect(sidebar).toHaveAttribute('hidden')
+      expect(header).toHaveAttribute('hidden')
+      expect(strip()).toBeNull()
+      // Shown again, the panel stays maximized
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Show sidebar and tabs' }),
+      )
+      expect(sidebar).not.toHaveAttribute('hidden')
+      expect(header).not.toHaveAttribute('hidden')
+      expect(strip()).toBeInTheDocument()
+      expect(panel).toHaveClass('absolute')
+      // Escape restores the panel and leaves the full window with it
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Hide sidebar and tabs' }),
+      )
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(panel).not.toHaveClass('absolute')
+      expect(sidebar).not.toHaveAttribute('hidden')
+      expect(header).not.toHaveAttribute('hidden')
+      fireEvent.click(screen.getByRole('button', { name: 'Maximize panel' }))
+      expect(sidebar).not.toHaveAttribute('hidden')
+    })
+
+    it('closing the panel in full window shows the sidebar again', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Hide sidebar and tabs' }),
+      )
+      expect(screen.getByTestId('session-sidebar')).toHaveAttribute('hidden')
+      // The header's Files button is hidden with it, as the right bar's is not
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Files', hidden: true }),
+      )
+      expect(screen.getByTestId('session-sidebar')).not.toHaveAttribute(
+        'hidden',
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(
+        screen.getByRole('button', { name: 'Hide sidebar and tabs' }),
+      ).toHaveAttribute('aria-pressed', 'false')
+      expect(
+        screen.getByRole('complementary', { name: 'Files' }),
+      ).not.toHaveClass('absolute')
     })
 
     it('maximizing the panel closes the command history', async () => {

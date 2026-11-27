@@ -109,6 +109,8 @@ export default {
   'shell.panel.resizeHint': 'Kéo để đổi cỡ, nhấp đúp để về mặc định',
   'shell.panel.restore': 'Khôi phục cỡ panel',
   'shell.panel.maximize': 'Phóng to panel',
+  'shell.panel.fullWindow': 'Ẩn sidebar và hàng tab',
+  'shell.panel.leaveFullWindow': 'Hiện sidebar và hàng tab',
   'shell.icon.change': 'Đổi biểu tượng',
   'shell.icon.choose': 'Chọn biểu tượng',
   'shell.icon.auto': 'Tự động',

@@ -153,7 +153,8 @@ There is no bottom navigation: the terminal takes that height.
   side panel toggles and the Pane menu (top), fullscreen and the palette (foot) to a 40px bar
   (`ToolbarRail`, `<nav>` "Toolbar") down the right edge; the header keeps the tabs, the chips, font
   size, the connection and More. The bar sits beside the views' isolated row, not in it: a maximized
-  side panel leaves it in reach, the overview covers the views only, and the Pane menu opens to its
+  side panel leaves it in reach (its "Hide sidebar and tabs" button also sets `hidden` on the sidebar
+  and the header and drops the pane strip, kept mounted so they come back as they were), the overview covers the views only, and the Pane menu opens to its
   left (`Menu side="left"`). Its views move with Up and Down (`aria-orientation="vertical"`).
 - The input area (key toolbar, Chat composer, view-only bar) sits under the view's column only, so
   the sidebar and the side panel run the full height; a maximized side panel covers it too.

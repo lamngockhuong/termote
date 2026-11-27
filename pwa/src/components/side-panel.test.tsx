@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PanelMaximizeButton, SidePanel } from './side-panel'
+import {
+  PanelFullWindowButton,
+  PanelMaximizeButton,
+  SidePanel,
+} from './side-panel'
 
 // Reports the row width the panel measures, on demand.
 let reportRow: (() => void) | null = null
@@ -17,25 +21,31 @@ class FakeResizeObserver {
 function setup({
   width = 440 as unknown,
   maximized = false,
+  fullWindow = false,
   rowWidth,
 }: {
   width?: unknown
   maximized?: boolean
+  fullWindow?: boolean
   rowWidth?: number
 } = {}) {
   const onWidthChange = vi.fn()
   const onMaximizedChange = vi.fn()
+  const onFullWindowChange = vi.fn()
   const onResizingChange = vi.fn()
   const props = {
     label: 'Files',
     onWidthChange,
     onMaximizedChange,
+    onFullWindowChange,
     onResizingChange,
+    fullWindow,
   }
   const ui = (w: unknown, m: boolean) => (
     <div data-testid="row">
       <SidePanel {...props} width={w} maximized={m}>
         <PanelMaximizeButton />
+        <PanelFullWindowButton />
         <input aria-label="inside" />
       </SidePanel>
     </div>
@@ -52,6 +62,7 @@ function setup({
     ...view,
     onWidthChange,
     onMaximizedChange,
+    onFullWindowChange,
     onResizingChange,
     rerender: (w: unknown, m = maximized) => view.rerender(ui(w, m)),
   }
@@ -230,6 +241,8 @@ describe('SidePanel', () => {
         maximized
         onWidthChange={vi.fn()}
         onMaximizedChange={onMaximizedChange}
+        fullWindow={false}
+        onFullWindowChange={vi.fn()}
         onResizingChange={vi.fn()}
       >
         <dialog open>
@@ -261,6 +274,27 @@ describe('SidePanel', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('the full window button is drawn only inside the panel', () => {
+    render(<PanelFullWindowButton />)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('the full window button hides or shows the sidebar and tabs', () => {
+    const { onFullWindowChange } = setup()
+    const hide = screen.getByRole('button', { name: 'Hide sidebar and tabs' })
+    expect(hide).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(hide)
+    expect(onFullWindowChange).toHaveBeenCalledWith(true)
+  })
+
+  it('in full window, the button shows them again', () => {
+    const { onFullWindowChange } = setup({ maximized: true, fullWindow: true })
+    const show = screen.getByRole('button', { name: 'Show sidebar and tabs' })
+    expect(show).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(show)
+    expect(onFullWindowChange).toHaveBeenCalledWith(false)
+  })
+
   it('takes no focus while covered', () => {
     render(
       <SidePanel
@@ -269,6 +303,8 @@ describe('SidePanel', () => {
         maximized={false}
         onWidthChange={vi.fn()}
         onMaximizedChange={vi.fn()}
+        fullWindow={false}
+        onFullWindowChange={vi.fn()}
         onResizingChange={vi.fn()}
         inert
       >
