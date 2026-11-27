@@ -19,15 +19,20 @@ import (
 // also caps one dir's listing, the links followed and the whole reply, and
 // gives the whole listing a deadline, returning what was read by then.
 const (
-	codexSkillMaxDepth      = 6 // MAX_SCAN_DEPTH: dirs below a root
+	codexSkillMaxDepth     = 6   // MAX_SCAN_DEPTH: dirs below a root
+	codexSkillMaxLinks     = 64  // symlinked dirs followed in one walk
+	codexSkillNameMax      = 64  // MAX_NAME_LEN
+	codexSkillQualifiedMax = 129 // MAX_QUALIFIED_NAME_LEN
+)
+
+// The caps tests lower, to reach them with a few files, and the deadline
+// they lengthen, so that a slow disk cannot cut their listing short.
+var (
 	codexSkillMaxDirs       = 2000
 	codexSkillMaxEntries    = 20000
 	codexSkillMaxDirEntries = 4096 // a dir with more is skipped whole
-	codexSkillMaxLinks      = 64   // symlinked dirs followed in one walk
 	codexSkillMaxTotal      = 2000 // skills in one reply
 	codexSkillDeadline      = 2 * time.Second
-	codexSkillNameMax       = 64  // MAX_NAME_LEN
-	codexSkillQualifiedMax  = 129 // MAX_QUALIFIED_NAME_LEN
 )
 
 // codexNow is replaced by tests.

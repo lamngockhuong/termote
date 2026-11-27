@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // useAdminSkills points codexAdminSkills at dir for one test.
@@ -16,6 +17,22 @@ func useAdminSkills(t *testing.T, dir string) {
 	old := codexAdminSkills
 	codexAdminSkills = dir
 	t.Cleanup(func() { codexAdminSkills = old })
+}
+
+// smallCodexLimits lowers the skill walk's caps for the rest of t, so that a
+// test reaches each with tens of files (creating thousands is slow on NTFS),
+// and gives a listing a deadline no disk misses. As with the real caps, a
+// dir's listing holds more entries than a root's dirs, and a root more dirs
+// than a reply skills.
+func smallCodexLimits(t *testing.T) {
+	t.Helper()
+	dirs, entries, dirEntries, total, deadline := codexSkillMaxDirs, codexSkillMaxEntries, codexSkillMaxDirEntries, codexSkillMaxTotal, codexSkillDeadline
+	codexSkillMaxDirs, codexSkillMaxEntries, codexSkillMaxDirEntries, codexSkillMaxTotal = 50, 500, 80, 30
+	codexSkillDeadline = time.Minute
+	t.Cleanup(func() {
+		codexSkillMaxDirs, codexSkillMaxEntries, codexSkillMaxDirEntries, codexSkillMaxTotal = dirs, entries, dirEntries, total
+		codexSkillDeadline = deadline
+	})
 }
 
 func skill(name, desc string) string {

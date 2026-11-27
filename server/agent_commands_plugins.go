@@ -10,10 +10,11 @@ import (
 	"strings"
 )
 
+// commandsMaxPlugins caps the plugin dirs read (a var tests lower).
+var commandsMaxPlugins = 50
+
 // Limits of the plugin listing, on top of the per-dir ones.
 const (
-	// commandsMaxPlugins caps the plugin dirs read.
-	commandsMaxPlugins = 50
 	// pluginJSONMax caps installed_plugins.json and the settings files read.
 	pluginJSONMax = 1 << 20
 )

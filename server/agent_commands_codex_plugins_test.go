@@ -400,6 +400,8 @@ func TestReadCodexPluginSkillsNames(t *testing.T) {
 }
 
 func TestReadCodexPluginSkillsLimits(t *testing.T) {
+	smallCommandLimits(t)
+	smallCodexLimits(t)
 	home := t.TempDir()
 	var cfg strings.Builder
 	for i := range commandsMaxPlugins + 5 {
@@ -512,6 +514,7 @@ func TestValidCodexNames(t *testing.T) {
 }
 
 func TestReadCodexPluginSkillsMaxTotal(t *testing.T) {
+	smallCodexLimits(t)
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n[plugins.\"b@m\"]\n")
 	for _, p := range []struct {

@@ -37,9 +37,10 @@ const (
 	opencodeMaxCardText = 4 * 1024
 	// opencodeMaxLabel bounds a title, label or description on the card.
 	opencodeMaxLabel = 1024
-	// opencodeImageMax bounds an image read from the uploads.
-	opencodeImageMax = 10 << 20
 )
+
+// opencodeImageMax bounds an image read from the uploads (a var tests lower).
+var opencodeImageMax = 10 << 20
 
 var (
 	// errOpencodeRefused: the service answered 400 (an answer it found
@@ -295,7 +296,7 @@ func opencodeImage(path string) (opencodeAttachment, error) {
 		return opencodeAttachment{}, err
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, opencodeImageMax+1))
+	data, err := io.ReadAll(io.LimitReader(f, int64(opencodeImageMax)+1))
 	if err != nil {
 		return opencodeAttachment{}, err
 	}

@@ -61,6 +61,7 @@ func TestWalkCodexSkillsDepth(t *testing.T) {
 }
 
 func TestWalkCodexSkillsLimits(t *testing.T) {
+	smallCodexLimits(t)
 	dir := t.TempDir()
 	// Breadth first: the shallow skills are kept when the budget runs out.
 	writeFile(t, filepath.Join(dir, "a-shallow/SKILL.md"), skill("shallow", "x"))

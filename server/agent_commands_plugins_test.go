@@ -202,6 +202,7 @@ func TestListAgentCommandsPluginFiles(t *testing.T) {
 }
 
 func TestListAgentCommandsPluginLimits(t *testing.T) {
+	smallCommandLimits(t)
 	claude := t.TempDir()
 	plugins := map[string][]pluginInstall{}
 	enabled := map[string]any{}

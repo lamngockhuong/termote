@@ -45,13 +45,17 @@ const (
 	// opencodeSmallMax bounds a reply that holds no message (info, the
 	// active sessions, a session, its permissions and forms).
 	opencodeSmallMax = 1 << 20
+)
+
+// The bounds of a read of messages, vars tests lower with opencodeImageMax.
+var (
 	// opencodeMessagesMax bounds a page of messages: a user message carries
 	// the base64 of every image pasted with it.
-	opencodeMessagesMax = 24 << 20
+	opencodeMessagesMax int64 = 24 << 20
 	// opencodeOneMessageMax bounds one message read alone (an image's, or
 	// the Chat view's page of one message, oneMessage): the base64 of five
 	// images of opencodeImageMax, and its other fields.
-	opencodeOneMessageMax = 72 << 20
+	opencodeOneMessageMax int64 = 72 << 20
 )
 
 var (

@@ -129,6 +129,7 @@ func TestListAgentCommandsSkillBundleNotInRoot(t *testing.T) {
 }
 
 func TestListAgentCommandsSkillBundleLimits(t *testing.T) {
+	smallCommandLimits(t)
 	claude := t.TempDir()
 	for i := range commandsMaxPlugins + 1 {
 		b := filepath.Join(claude, "skills", fmt.Sprintf("b%02d", i))

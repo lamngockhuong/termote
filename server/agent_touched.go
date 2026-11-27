@@ -23,8 +23,8 @@ import (
 // to read is not seen.
 
 // touchedMax is how many files of the pane root a session's list holds, the
-// latest first.
-const touchedMax = 2000
+// latest first (a var tests lower).
+var touchedMax = 2000
 
 // touchedPendingMax bounds the calls of one journal waiting for a result; past
 // it the oldest is dropped.

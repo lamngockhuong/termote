@@ -142,6 +142,7 @@ func TestListAgentCommandsStaysInRoot(t *testing.T) {
 }
 
 func TestListAgentCommandsLimits(t *testing.T) {
+	smallCommandLimits(t)
 	claude := t.TempDir()
 	for i := 0; i < commandsMaxPerSource+5; i++ {
 		writeFile(t, filepath.Join(claude, "commands", fmt.Sprintf("c%03d.md", i)), "x")
@@ -289,7 +290,17 @@ func TestListAgentCommandsSkip(t *testing.T) {
 	}
 }
 
+// smallCommandLimits lowers the listing's caps for the rest of t, so that a
+// test reaches each with tens of files: creating thousands is slow on NTFS.
+func smallCommandLimits(t *testing.T) {
+	t.Helper()
+	perSource, visited, plugins := commandsMaxPerSource, commandsMaxVisited, commandsMaxPlugins
+	commandsMaxPerSource, commandsMaxVisited, commandsMaxPlugins = 20, 100, 5
+	t.Cleanup(func() { commandsMaxPerSource, commandsMaxVisited, commandsMaxPlugins = perSource, visited, plugins })
+}
+
 func TestListAgentCommandsVisitBudget(t *testing.T) {
+	smallCommandLimits(t)
 	claude := t.TempDir()
 	// The first dir uses the whole budget: the one after it is not read.
 	for i := 0; i < commandsMaxVisited-1; i++ {
@@ -304,6 +315,7 @@ func TestListAgentCommandsVisitBudget(t *testing.T) {
 }
 
 func TestListAgentCommandsOddEntries(t *testing.T) {
+	smallCommandLimits(t)
 	claude := t.TempDir()
 	// SKILL.md that is a directory, not a file.
 	if err := os.MkdirAll(filepath.Join(claude, "skills/odd/SKILL.md"), 0o755); err != nil {

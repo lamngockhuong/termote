@@ -280,6 +280,10 @@ func TestTouchedResolved(t *testing.T) {
 }
 
 func TestTouchedPlaceLimitAndRunning(t *testing.T) {
+	// Each file placed resolves its symlinks, slow on Windows: a short list.
+	prevMax := touchedMax
+	touchedMax = 20
+	t.Cleanup(func() { touchedMax = prevMax })
 	root := realTemp(t)
 	other := realTemp(t)
 	a := &agentAPI{files: &filesAPI{}}

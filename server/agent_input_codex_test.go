@@ -137,7 +137,7 @@ func TestCodexCommandWhileWorking(t *testing.T) {
 // A command with an image is still a command: it waits too. Its images
 // first make it text, which is queued.
 func TestCodexCommandWithImageWhileWorking(t *testing.T) {
-	shortConfirm(t)
+	shortImageWait(t)
 	working := codexSession
 	working.Status = "working"
 	f := newCodexWriter()

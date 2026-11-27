@@ -22,18 +22,22 @@ import (
 const (
 	// commandsCacheTTL lets the composer reopen its list without a new walk.
 	commandsCacheTTL = 5 * time.Second
-	// commandsMaxPerSource caps the commands (or skills) read from one dir.
-	commandsMaxPerSource = 500
 	// commandsMaxDepth caps how deep commands/ is walked (a:b:c:d).
 	commandsMaxDepth = 4
-	// commandsMaxVisited caps the entries a walk looks at, matching or not.
-	commandsMaxVisited = 5000
 	// commandHeadSize is how much of a file is read for its front matter.
 	commandHeadSize = 8 << 10
 	// commandDescMax is the longest description returned, in runes.
 	commandDescMax = 200
 	// commandNameMax is the longest command name accepted, in runes.
 	commandNameMax = 100
+)
+
+// Caps of the listing that tests lower, to reach them with a few files.
+var (
+	// commandsMaxPerSource caps the commands (or skills) read from one dir.
+	commandsMaxPerSource = 500
+	// commandsMaxVisited caps the entries a walk looks at, matching or not.
+	commandsMaxVisited = 5000
 )
 
 // agentCommand is a custom slash command or skill as the Chat view lists it.
