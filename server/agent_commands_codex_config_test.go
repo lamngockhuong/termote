@@ -285,15 +285,17 @@ func TestListCodexSkillsLinkedChainDir(t *testing.T) {
 // from.
 func TestListCodexSkillsMaxTotal(t *testing.T) {
 	useAdminSkills(t, "")
+	smallCodexLimits(t)
 	codexHome, home := t.TempDir(), t.TempDir()
-	for i := range 1500 {
+	// Each dir under the cap, both over it: the second is cut.
+	for i := range codexSkillMaxTotal - 8 {
 		writeFile(t, filepath.Join(codexHome, fmt.Sprintf("skills/c%04d/SKILL.md", i)), skill(fmt.Sprintf("c%04d", i), "x"))
 	}
-	for i := range 600 {
+	for i := range 12 {
 		writeFile(t, filepath.Join(home, fmt.Sprintf(".agents/skills/h%04d/SKILL.md", i)), skill(fmt.Sprintf("h%04d", i), "x"))
 	}
 	cmds := listCodexSkills(filesRoot{}, codexHome, home, nil).Commands
-	if len(cmds) != codexSkillMaxTotal || cmds[len(cmds)-1].Name != "h0499" {
+	if len(cmds) != codexSkillMaxTotal || cmds[len(cmds)-1].Name != "h0007" {
 		t.Errorf("%d skills, last %v", len(cmds), cmds[len(cmds)-1])
 	}
 }
@@ -316,6 +318,7 @@ func TestListCodexSkillsRulesLinkedHome(t *testing.T) {
 // The reply cap never drops a plugin skill whose name kept another out.
 func TestListCodexSkillsMaxTotalKeepsPlugins(t *testing.T) {
 	useAdminSkills(t, "")
+	smallCodexLimits(t)
 	codexHome, home := t.TempDir(), t.TempDir()
 	for i := range codexSkillMaxTotal {
 		writeFile(t, filepath.Join(home, fmt.Sprintf(".agents/skills/h%04d/SKILL.md", i)), skill(fmt.Sprintf("h%04d", i), "x"))

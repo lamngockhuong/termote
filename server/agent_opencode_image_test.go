@@ -131,6 +131,7 @@ func TestOpencodeImage(t *testing.T) {
 // with its own, larger limit.
 func TestOpencodeImageLargeMessage(t *testing.T) {
 	slowOpencodeReads(t)
+	smallOpencodeReads(t)
 	oc, mux, first := opencodeImagePane(t)
 	images := make([][]byte, 2)
 	files := make([]map[string]any, 2)
@@ -140,7 +141,7 @@ func TestOpencodeImageLargeMessage(t *testing.T) {
 		files[i] = opencodeInline("image/png", images[i])
 	}
 	msg := opencodeImageMessage("msg_big", files...)
-	if len(msg) <= opencodeMessagesMax {
+	if int64(len(msg)) <= opencodeMessagesMax {
 		t.Fatalf("message of %d bytes is not over a page's limit", len(msg))
 	}
 	oc.set(func() { oc.messages["sesPane"] = append(oc.messages["sesPane"], msg) })
@@ -194,6 +195,15 @@ func slowOpencodeReads(t *testing.T) {
 	prev := opencodeReadTimeout
 	opencodeReadTimeout = time.Minute
 	t.Cleanup(func() { opencodeReadTimeout = prev })
+}
+
+// smallOpencodeReads divides the bounds of an image and of a read of
+// messages by 8 for the rest of t, so that a test goes over them with a few
+// MB, not tens. Each stays over opencodeSmallMax, as the real ones are.
+func smallOpencodeReads(t *testing.T) {
+	image, page, one := opencodeImageMax, opencodeMessagesMax, opencodeOneMessageMax
+	opencodeImageMax, opencodeMessagesMax, opencodeOneMessageMax = image/8, page/8, one/8
+	t.Cleanup(func() { opencodeImageMax, opencodeMessagesMax, opencodeOneMessageMax = image, page, one })
 }
 
 // A session of the history (an old one read in the history sheet) has its

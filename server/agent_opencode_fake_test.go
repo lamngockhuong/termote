@@ -283,7 +283,7 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 			if limit == 1 {
 				size = opencodeOneMessageMax
 			}
-			w.Write([]byte(strings.Repeat("x", size)))
+			w.Write([]byte(strings.Repeat("x", int(size))))
 			w.Write([]byte(`"}]}`))
 			return
 		}
