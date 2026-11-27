@@ -248,6 +248,7 @@ export default {
   'tasks.commandOff.cannotStart': 'Pane này không khởi động được agent',
   'tasks.commandOff.noChat': 'Pane này không có chat với agent',
   'tasks.commandOff.noTasks': 'Pane này không có tác vụ',
+  'tasks.commandOff.tasksHidden': 'Tác vụ đang bị ẩn trong Cài đặt',
   'tasks.commandOff.noPrevious': 'Không có tab nào trước tab này',
   'tasks.commandOff.noNext': 'Không có tab nào sau tab này',
   'tasks.commandOff.noPreviousPane': 'Không có pane nào trước pane này',

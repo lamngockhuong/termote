@@ -165,6 +165,9 @@ describe('buildAppCommands', () => {
     expect(en(command(context(), 'view.tasks').disabledReason)).toBe(
       'No tasks for this pane',
     )
+    expect(
+      en(command(context({ tasksHidden: true }), 'view.tasks').disabledReason),
+    ).toBe('Tasks is hidden in Settings')
   })
 
   it('says why a view or panel is not offered', () => {

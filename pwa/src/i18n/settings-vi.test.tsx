@@ -88,6 +88,7 @@ const SETTINGS: Settings = {
   editorWrap: false,
   editorVim: false,
   taskHistoryLines: 400,
+  showTasksView: true,
 }
 
 const device = (over: Partial<PairedDevice> = {}): PairedDevice => ({

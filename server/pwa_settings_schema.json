@@ -337,6 +337,13 @@
       "description": "Tasks: lines read for Send to agent"
     },
     {
+      "key": "showTasksView",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "The Tasks view: its button, its command and its line in the welcome"
+    },
+    {
       "key": "shortcuts",
       "store": "shortcuts",
       "type": "shortcuts",

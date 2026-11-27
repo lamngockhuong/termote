@@ -4724,6 +4724,29 @@ describe('App views, view-only and deep links', () => {
     ).toBe(false)
   })
 
+  it('Tasks turned off in Settings: no Tasks tab, a pane that was on it shows the terminal', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: { ...base.mux, caps: { ...base.mux.caps, tasks: true } },
+    } as any)
+    const settings = mockUseSettings()
+    const { rerender } = render(<App />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tasks' }))
+    expect(screen.getByRole('tab', { name: 'Tasks' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    mockUseSettings.mockReturnValue({
+      ...settings,
+      settings: { ...settings.settings, showTasksView: false } as any,
+    })
+    rerender(<App />)
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).toBeNull()
+    expect(terminalPanel()).not.toHaveClass('invisible')
+    mockUseSettings.mockReturnValue(settings)
+  })
+
   it('back on the terminal, the view fades out over it, inert, then goes', async () => {
     const { rerender } = render(<App views={VIEWS} />)
     await screen.findByRole('tablist', { name: 'View' })

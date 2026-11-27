@@ -4365,7 +4365,7 @@ Settings → Prompt templates lists the templates this server keeps for every de
 
 [Section titled “Tasks”](#tasks)
 
-Settings → Tasks keeps the commands you run from a pane’s Tasks view: make, edit and delete them. It also sets **History read for Send to agent**, how many lines of a task’s tab are searched for its run’s output (400 by default); only the run’s own output is sent. A view-only device has no Tasks group. See [Tasks](/usage/tasks/).
+Settings → Tasks keeps the commands you run from a pane’s Tasks view: make, edit and delete them. It also sets **History read for Send to agent**, how many lines of a task’s tab are searched for its run’s output (400 by default); only the run’s own output is sent. **Show Tasks**, on by default, turned off hides the Tasks view: its button among the pane’s views, its command in the palette and its line in the welcome; the group stays, to turn it back on. A view-only device has no Tasks group. See [Tasks](/usage/tasks/).
 
 ## Updates
 
@@ -4532,7 +4532,7 @@ The same group sets how many lines of a task’s tab are read to find its output
 
 [Section titled “Who Can Use Tasks”](#who-can-use-tasks)
 
-Tasks run commands, so only a device with full access has the Tasks view and the Tasks group in Settings. A [view-only device](/usage/devices/) sees neither. Tasks need a backend that reports a pane’s folder: tmux, Herdr or Zellij, not psmux on Windows.
+Tasks run commands, so only a device with full access has the Tasks view and the Tasks group in Settings. A [view-only device](/usage/devices/) sees neither. Tasks need a backend that reports a pane’s folder: tmux, Herdr or Zellij, not psmux on Windows. Not using Tasks? Turn off **Show Tasks** in Settings > Tasks to hide the view on this device.
 
 The tasks you saved are kept in the server’s state folder, next to the [prompt templates](/usage/prompt-templates/): `~/.local/state/termote/tasks/tasks.json` on Linux and macOS (under `$XDG_STATE_HOME` when it is set), `%LOCALAPPDATA%\termote\state\tasks` on Windows, and the `termote-state-<uid>` volume in a container. `termote uninstall --purge` deletes them with the rest of the state folder.
 
