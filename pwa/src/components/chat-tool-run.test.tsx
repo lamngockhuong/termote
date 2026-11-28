@@ -199,9 +199,12 @@ function Run({
     <div
       data-testid="list"
       onFocusCapture={(e) => keepRunAt(e, runs)}
-      onPointerDownCapture={(e) => keepRunAt(e, runs)}
+      onClickCapture={(e) => keepRunAt(e, runs)}
     >
-      {toolRunRows(entries, layoutOf(entries.length), live, runs, en, at)}
+      {toolRunRows(entries, layoutOf(entries.length), live, runs, en, {
+        settled: true,
+        ...at,
+      })}
     </div>
   )
 }
@@ -284,7 +287,7 @@ describe('toolRunRows', () => {
         entries={run}
         live
         clockOffset={5000}
-        at={{ start: '2026-01-01T00:00:00Z', working: true }}
+        at={{ start: '2026-01-01T00:00:00Z', settled: false }}
       />,
     )
     expect(header()).toHaveAccessibleName(
@@ -329,17 +332,33 @@ describe('toolRunRows', () => {
     expect(screen.queryByText('Ran ls')).toBeNull()
   })
 
-  it('a run behind the newest waits while the agent still works', () => {
+  it('a run behind the newest waits until the agent says the turn is done', () => {
     const { rerender } = render(<Run entries={run} live />)
-    rerender(<Run entries={run} live={false} at={{ working: true }} />)
+    rerender(<Run entries={run} live={false} at={{ settled: false }} />)
     expect(screen.getByText('Ran ls')).toBeInTheDocument()
-    rerender(<Run entries={run} live={false} at={{ working: false }} />)
+    rerender(<Run entries={run} live={false} at={{ settled: true }} />)
     expect(screen.queryByText('Ran ls')).toBeNull()
   })
 
-  it('a run pressed or focused inside stays open once done', () => {
+  it('folded, the part of a run the window cut stays folded once shown', () => {
+    const { rerender } = render(<Run entries={run.slice(1)} live />)
+    // The run's first entry was held when shown before
+    rerender(<Run entries={run} live />)
+    rerender(
+      <Run
+        entries={run.slice(1)}
+        live={false}
+        at={{ key: '1', ids: ['1', '2', '3'] }}
+      />,
+    )
+    expect(screen.queryByText('Ran false')).toBeNull()
+    rerender(<Run entries={run} live={false} follow={false} />)
+    expect(screen.queryByText('Ran ls')).toBeNull()
+  })
+
+  it('a run clicked or focused inside stays open once done', () => {
     const { rerender, unmount } = render(<Run entries={run} live />)
-    fireEvent.pointerDown(screen.getByText('Ran ls'))
+    fireEvent.click(screen.getByText('Ran ls'))
     rerender(<Run entries={run} live={false} />)
     expect(screen.getByText('Ran ls')).toBeInTheDocument()
     // The header's own toggle still folds it
@@ -353,10 +372,13 @@ describe('toolRunRows', () => {
     expect(screen.getByText('Ran ls')).toBeInTheDocument()
   })
 
-  it('a press on the header or outside a run keeps nothing', () => {
+  it('a finger scrolling, or a press on the header or outside a run, keeps nothing', () => {
     const { rerender } = render(<Run entries={run} live />)
+    // A scroll by touch starts with a pointer down, and no click follows
+    fireEvent.pointerDown(screen.getByText('Ran ls'))
+    fireEvent.pointerCancel(screen.getByText('Ran ls'))
     fireEvent.pointerDown(header())
-    fireEvent.pointerDown(screen.getByTestId('list'))
+    fireEvent.click(screen.getByTestId('list'))
     rerender(<Run entries={run} live={false} />)
     expect(screen.queryByText('Ran ls')).toBeNull()
   })
@@ -364,7 +386,7 @@ describe('toolRunRows', () => {
   it('a press inside a run opened by the reader changes nothing', () => {
     render(<Run entries={run} live={false} />)
     fireEvent.click(header())
-    fireEvent.pointerDown(screen.getByText('Ran ls'))
+    fireEvent.click(screen.getByText('Ran ls'))
     expect(screen.getByText('Ran ls')).toBeInTheDocument()
   })
 

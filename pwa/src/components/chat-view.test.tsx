@@ -756,8 +756,6 @@ describe('ChatView runs of steps', () => {
       status: 'working',
     })
     const { rerender } = render(<ChatView {...props} />)
-    // A click as a pointer makes it: pressed, then clicked
-    fireEvent.pointerDown(screen.getByText('Output · 1 line'))
     fireEvent.click(screen.getByText('Output · 1 line'))
     expect(screen.getByText('r1')).toBeInTheDocument()
     set({
@@ -807,6 +805,70 @@ describe('ChatView runs of steps', () => {
     ).toHaveAttribute('aria-expanded', 'false')
   })
 
+  it('a run of a turn waiting on the reader, or of no status, stays open', () => {
+    const turn = (status?: 'working' | 'blocked') =>
+      set({
+        entries: [
+          entry(0),
+          bash('c1', 'r1'),
+          bash('c2', 'r2'),
+          bash('c3', 'r3'),
+          {
+            id: 'a',
+            role: 'assistant',
+            parts: [{ kind: 'text', text: 'Now editing' }],
+          },
+          bash('e1'),
+        ],
+        status,
+      })
+    // Seen live first
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
+      status: 'working',
+    })
+    const { rerender } = render(<ChatView {...props} />)
+    turn('working')
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+    turn('blocked')
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+    turn(undefined)
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+  })
+
+  it("a run is timed up to the agent's next entry, never the reader's", () => {
+    const timed = (e: TranscriptEntry, ts: string) => ({ ...e, ts })
+    set({
+      entries: [
+        timed(entry(0), '2026-01-01T00:00:00Z'),
+        timed(bash('c1', 'r1'), '2026-01-01T00:00:00Z'),
+        timed(bash('c2', 'r2'), '2026-01-01T00:00:05Z'),
+        timed(bash('c3', 'r3'), '2026-01-01T00:00:09Z'),
+        {
+          id: 'a',
+          role: 'assistant',
+          ts: '2026-01-01T00:00:12Z',
+          parts: [{ kind: 'text', text: 'Done' }],
+        },
+        timed(bash('d1', 'r'), '2026-01-01T00:01:00Z'),
+        timed(bash('d2', 'r'), '2026-01-01T00:01:01Z'),
+        timed(bash('d3', 'r'), '2026-01-01T00:01:02Z'),
+        { ...entry(2), ts: '2026-01-01T05:00:00Z' },
+      ],
+      status: 'idle',
+    })
+    render(<ChatView {...props} />)
+    expect(
+      screen.getByRole('button', { name: /^Worked for 12s · 3 commands/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^Worked · 3 commands/ }),
+    ).toBeInTheDocument()
+  })
+
   it('read above when the agent is done, a run stays open until the bottom', () => {
     set({
       entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
@@ -834,8 +896,8 @@ describe('ChatView runs of steps', () => {
     })
     const { rerender } = render(<ChatView {...props} />)
     fireEvent.focus(screen.getByRole('button', { name: 'Ran c2' }))
-    // Kept once: another press changes nothing
-    fireEvent.pointerDown(screen.getByText('Ran c2'))
+    // Kept once: another click changes nothing
+    fireEvent.click(screen.getByText('Ran c2'))
     set({
       entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3', 'r3')],
       status: 'idle',

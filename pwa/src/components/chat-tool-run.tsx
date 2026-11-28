@@ -144,7 +144,8 @@ export function keepRun(modes: Record<string, RunMode>, id: string) {
 }
 
 // The run an event inside the list happened in, kept open: for the list's
-// focus and pointer-down capture
+// focus and click capture. A click, not a pointer down: a finger that
+// scrolls the list starts with one too, and reading is no choice to keep.
 export function keepRunAt(e: SyntheticEvent, runs: RunState) {
   const at = (e.target as Element).closest?.('[data-run-entry]')
   const id = at?.getAttribute('data-run-entry')
@@ -153,13 +154,15 @@ export function keepRunAt(e: SyntheticEvent, runs: RunState) {
 
 // Where a run sits in its conversation. key: the id of the run's first
 // entry in the whole list, which holds while the list's window cuts the
-// run's top. start: the time of that entry; end: the time of the entry
-// after the run, when there is one. working: the agent is working.
+// run's top. ids: the ids of the whole run, the window's cut included.
+// start: the time of that entry; end: the time of the agent's entry after
+// the run, when there is one. settled: the agent says the turn is done.
 export interface RunAt {
   key?: string
+  ids?: string[]
   start?: string
   end?: string
-  working?: boolean
+  settled?: boolean
 }
 
 const HEADER =
@@ -248,15 +251,16 @@ export function toolRunRows(
   const ids = entries.map((e) => e.id)
   if (live) for (const id of ids) state.held.add(id)
   const chosen = ids.map((id) => state.modes[id]).find(Boolean)
-  // Done, and the reader at the bottom: the run folds, and stays so
+  // The turn done, and the reader at the bottom: the run folds, and stays
+  // so (the part the window cuts too, or it would open again shown)
   if (
     !live &&
-    !at.working &&
+    at.settled &&
     !chosen &&
     state.follow &&
     ids.some((id) => state.held.has(id))
   ) {
-    for (const id of ids) state.held.delete(id)
+    for (const id of at.ids ?? ids) state.held.delete(id)
     state.tails.delete(runKey)
   }
   const failed = tools.filter((p) => p.isError).length

@@ -531,9 +531,9 @@ function AgentChat({
       <section
         ref={listRef}
         onScroll={onScroll}
-        // A run pressed or focused inside stays open once the agent is done
+        // A run clicked or focused inside stays open once the agent is done
         onFocusCapture={(e) => keepRunAt(e, runs)}
-        onPointerDownCapture={(e) => keepRunAt(e, runs)}
+        onClickCapture={(e) => keepRunAt(e, runs)}
         // A click or tap that leaves nothing selected: the selection kept is
         // not quoted (a right click, a tap on the selected text keep it; a
         // new selection replaces it)

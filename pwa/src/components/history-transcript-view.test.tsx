@@ -121,7 +121,7 @@ describe('HistoryTranscriptView', () => {
       ).getAttribute('aria-expanded'),
     ).not.toBe(was)
     // A press inside a run the reader opened keeps that choice
-    fireEvent.pointerDown(screen.getAllByRole('button', { name: /echo/ })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /echo/ })[0])
     fireEvent.focus(screen.getAllByRole('button', { name: /echo/ })[0])
     expect(screen.getAllByRole('button', { name: /echo/ })).toHaveLength(4)
 

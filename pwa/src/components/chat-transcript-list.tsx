@@ -53,10 +53,10 @@ interface Props {
   // Entries at the start not drawn (shown on scrolling up)
   hidden: number
   runs: RunState
-  // The agent is working: its last run is open on its newest steps, and
-  // no run folds yet
+  // The agent is working: its last run is open on its newest steps
   working: boolean
-  // The agent is done: a call left without a result keeps nothing open
+  // The agent is done: a call left without a result keeps nothing open, and
+  // the runs seen live fold
   settled: boolean
   // An entry that came in after the conversation showed fades in
   enters?: (id: string, index: number) => boolean
@@ -94,6 +94,7 @@ export function ChatTranscriptList({
     if (item.end <= hidden) return []
     const start = Math.max(item.start, hidden)
     const run = entries.slice(start, item.end)
+    const next = entries[item.end]
     // The run the agent is in: open on its newest steps
     const live =
       k === items.length - 1 && (working || (!settled && hasPending(run)))
@@ -105,9 +106,12 @@ export function ChatTranscriptList({
       t,
       {
         key: entries[item.start].id,
+        ids: entries.slice(item.start, item.end).map((e) => e.id),
         start: entries[item.start].ts,
-        end: entries[item.end]?.ts,
-        working,
+        // The agent's next entry ends the run; the reader's own, maybe
+        // hours later, says nothing of how long it worked
+        end: next && chatSide(next) === 'agent' ? next.ts : undefined,
+        settled,
       },
     )
   })

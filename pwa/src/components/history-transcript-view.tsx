@@ -161,7 +161,7 @@ export function TranscriptReader({
       className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
       onScroll={onScroll}
       onFocusCapture={(e) => keepRunAt(e, runs)}
-      onPointerDownCapture={(e) => keepRunAt(e, runs)}
+      onClickCapture={(e) => keepRunAt(e, runs)}
       data-native-menu
     >
       <ChatFileLinkContext.Provider value={openFile}>
