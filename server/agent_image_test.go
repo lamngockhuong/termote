@@ -504,3 +504,26 @@ func TestRowReadsRefuseBadRanges(t *testing.T) {
 		t.Error("rowBefore of an empty first row on a failing read")
 	}
 }
+
+// An image pasted into a message sent while Claude Code worked is read
+// from the queued_command attachment the message is written as.
+func TestAgentImageOfQueuedPrompt(t *testing.T) {
+	red := testPNG(t, color.RGBA{255, 0, 0, 255})
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID,
+		`{"type":"attachment","uuid":"q1","timestamp":"2026-11-28T00:00:00Z","attachment":{"type":"queued_command","prompt":[{"type":"text","text":"[Image #1] look"},`+
+			imageBlock("image/png", red)+`],"commandMode":"prompt","origin":{"kind":"human"}}}`+"\n")
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	refs := imageRefs(getTranscriptRes(t, mux))
+	if len(refs) != 1 || refs[0] == "" {
+		t.Fatalf("refs = %q", refs)
+	}
+	if rec := getImage(mux, refs[0], nil); rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), red) {
+		t.Fatalf("image = %d (%d bytes)", rec.Code, rec.Body.Len())
+	}
+	// A queued prompt not the user's (a subagent's hand-back) has no image.
+	if _, _, ok := claudeImage([]byte(`{"type":"attachment","attachment":{"type":"queued_command","prompt":[`+imageBlock("image/png", red)+
+		`],"commandMode":"prompt","origin":{"kind":"peer"}}}`), 0); ok {
+		t.Error("peer image served")
+	}
+}

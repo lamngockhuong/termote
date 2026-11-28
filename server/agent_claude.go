@@ -25,7 +25,8 @@ import (
 //	{"type":"assistant","message":{"content":[text|thinking|tool_use...]}}
 //
 // plus bookkeeping rows (mode, permission-mode, ai-title, attachment,
-// file-history-*, ...) that are skipped. Rows marked isSidechain are a
+// file-history-*, ...) that are skipped, except the attachment a message the
+// user sent mid-turn is written as (claudeQueuedPrompt). Rows marked isSidechain are a
 // subagent's own conversation and isMeta rows are injected for the model, so
 // neither is shown. The filtering follows collie (MIT), which reads the same
 // files: github.com/AltanS/collie bridge/journal/claude.ts.
@@ -149,14 +150,41 @@ type claudeRow struct {
 	IsCompactSummary bool   `json:"isCompactSummary"`
 	// ToolUseResult: Claude Code's structured record of the row's tool
 	// result; read only for an Artifact publish (claudeArtifactRef)
-	ToolUseResult json.RawMessage `json:"toolUseResult"`
-	Message       *struct {
-		Content any `json:"content"`
-		// Model and Usage are on assistant rows; every row of one
-		// message repeats the same usage.
-		Model string       `json:"model"`
-		Usage *claudeUsage `json:"usage"`
-	} `json:"message"`
+	ToolUseResult json.RawMessage   `json:"toolUseResult"`
+	Message       *claudeMessage    `json:"message"`
+	Attachment    *claudeAttachment `json:"attachment"`
+}
+
+type claudeMessage struct {
+	Content any `json:"content"`
+	// Model and Usage are on assistant rows; every row of one
+	// message repeats the same usage.
+	Model string       `json:"model"`
+	Usage *claudeUsage `json:"usage"`
+}
+
+// claudeAttachment is the part of an attachment row read: a message the
+// user sent while Claude Code worked, absorbed into the running turn, is
+// written only as one of these (type queued_command), never as a user row.
+type claudeAttachment struct {
+	Type        string `json:"type"`
+	Prompt      any    `json:"prompt"`
+	CommandMode string `json:"commandMode"`
+	Origin      *struct {
+		Kind string `json:"kind"`
+	} `json:"origin"`
+}
+
+// claudeQueuedPrompt reports an attachment that is a prompt the user typed
+// into the queue (origin human, mode prompt), and its content. A queued
+// task notification or a subagent's hand-back (origin peer) is plumbing,
+// left out as every other attachment is.
+func claudeQueuedPrompt(rowType string, a *claudeAttachment) (any, bool) {
+	if rowType != "attachment" || a == nil || a.Type != "queued_command" ||
+		a.CommandMode != "prompt" || a.Origin == nil || a.Origin.Kind != "human" || a.Prompt == nil {
+		return nil, false
+	}
+	return a.Prompt, true
 }
 
 // claudeUsage is the token counts of an assistant row's request.
@@ -231,7 +259,8 @@ func parseClaudeLines(r io.Reader, start int64, sidechain bool) ([]TranscriptEnt
 		lineStart := off
 		off += int64(len(line))
 		// Most rows are bookkeeping; skip those without decoding them.
-		if !bytes.Contains(line, []byte(`"user"`)) && !bytes.Contains(line, []byte(`"assistant"`)) {
+		if !bytes.Contains(line, []byte(`"user"`)) && !bytes.Contains(line, []byte(`"assistant"`)) &&
+			!bytes.Contains(line, []byte(`"queued_command"`)) {
 			continue
 		}
 		if e, ok := parseClaudeRowAs(line, lineStart, sidechain); ok {
@@ -306,7 +335,14 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 // conversation (isSidechain), which every row of a subagent's own file is.
 func parseClaudeRowAs(line []byte, off int64, sidechain bool) (TranscriptEntry, bool) {
 	var row claudeRow
-	if json.Unmarshal(line, &row) != nil || row.Message == nil {
+	if json.Unmarshal(line, &row) != nil {
+		return TranscriptEntry{}, false
+	}
+	if prompt, ok := claudeQueuedPrompt(row.Type, row.Attachment); ok {
+		// What the terminal shows as the user's message mid-turn
+		row.Type, row.Message = "user", &claudeMessage{Content: prompt}
+	}
+	if row.Message == nil {
 		return TranscriptEntry{}, false
 	}
 	if (row.Type != "user" && row.Type != "assistant") || (row.IsSidechain && !sidechain) {
