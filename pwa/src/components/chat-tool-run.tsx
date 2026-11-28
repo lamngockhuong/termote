@@ -1,16 +1,21 @@
 import { ChevronRight } from 'lucide-react'
-import type { ReactElement } from 'react'
-import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
+import type { ReactElement, SyntheticEvent } from 'react'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
+import { formatElapsed } from './chat-activity-row'
 import { ChatMessage, chatSide, Step, Time } from './chat-message'
+import { useServerSeconds } from './chat-subagents'
+import { type StepKind, stepKind } from './chat-tool-card'
 
 // The agent's steps one after another (tool calls, thinking) fold into one
 // line saying what they were, so a turn of twenty commands does not push its
-// answer off screen. A tap opens them. A run still going at the end of the
-// list stays open on its newest steps, and stays so once done: folding it
-// then would pull the card out from under the eye.
+// answer off screen. A tap opens them, each step a line of its own that a
+// tap opens in turn. A run still going at the end of the list stays open on
+// its newest steps. Once the agent is done it folds, but only while the
+// reader follows the bottom: read above, folding would pull the lines out
+// from under the eye, so it waits until the reader is back. A run the reader
+// pressed or focused inside stays open.
 //
 // A run is drawn as rows of the list beside its entries, never around them:
 // an entry keeps its element (and what the reader opened in it) when the
@@ -68,17 +73,6 @@ export function chatItems(entries: TranscriptEntry[]): ChatItem[] {
   return out
 }
 
-type StepKind = 'command' | 'edit' | 'read' | 'search' | 'other'
-
-function stepKind(p: TranscriptPart): StepKind {
-  const tool = p.tool ?? ''
-  if (p.detail?.command || tool === 'Bash') return 'command'
-  if (EDIT_TOOLS.has(tool)) return 'edit'
-  if (tool === 'Read' || tool === 'ViewImage') return 'read'
-  if (/grep|glob|search|fetch/i.test(tool)) return 'search'
-  return 'other'
-}
-
 const NOUNS: [StepKind, MessageKey][] = [
   ['command', 'chat.run.command'],
   ['edit', 'chat.run.edit'],
@@ -97,14 +91,12 @@ export function runSummary(tools: TranscriptPart[], t: Translate<MessageKey>) {
     .join(', ')
 }
 
-// The newest step in a few words: what the model said it does, else the
-// command or the tool and what it acted on
-export function stepLine(p: TranscriptPart, t: Translate<MessageKey>) {
-  if (p.detail?.description) return p.detail.description
-  if (p.detail?.command) return `$ ${p.detail.command.split('\n')[0]}`
-  return [p.orphan ? t('chat.tool.result') : p.tool, p.input]
-    .filter(Boolean)
-    .join(' ')
+// Seconds from start to end, both entry times; undefined when either is
+// missing or they do not make a span
+export function runSeconds(start?: string, end?: string) {
+  if (!start || !end) return undefined
+  const ms = Date.parse(end) - Date.parse(start)
+  return Number.isFinite(ms) && ms >= 0 ? Math.round(ms / 1000) : undefined
 }
 
 // A call without its result yet
@@ -126,34 +118,121 @@ function runDot(tools: TranscriptPart[]) {
 
 type Layout = { showTime: boolean; joinsNext: boolean }
 
-export type RunMode = 'open' | 'closed'
+// kept: the reader pressed or focused inside the run, which then never
+// folds by itself
+export type RunMode = 'open' | 'closed' | 'kept'
 
 // What the list keeps for its runs, by entry id: the reader's choice, the
 // runs that were live on screen, and where a live run's tail starts. follow:
 // the list is at its bottom; read above it, the tail stays where it was,
-// or each new step would move the lines being read.
+// or each new step would move the lines being read. clockOffset: the
+// server's clock less this device's (ms), for the time a live run counts.
 export interface RunState {
   modes: Record<string, RunMode>
   held: Set<string>
   tails: Map<string, string>
   follow: boolean
+  clockOffset?: number
   setMode: (ids: string[], mode: RunMode) => void
+  // The reader pressed or focused inside the entry id of a run
+  keep: (id: string) => void
+}
+
+// The modes with the run of entry id kept, unless the reader chose already
+export function keepRun(modes: Record<string, RunMode>, id: string) {
+  return modes[id] ? modes : { ...modes, [id]: 'kept' as const }
+}
+
+// The run an event inside the list happened in, kept open: for the list's
+// focus and pointer-down capture
+export function keepRunAt(e: SyntheticEvent, runs: RunState) {
+  const at = (e.target as Element).closest?.('[data-run-entry]')
+  const id = at?.getAttribute('data-run-entry')
+  if (id) runs.keep(id)
+}
+
+// Where a run sits in its conversation. key: the id of the run's first
+// entry in the whole list, which holds while the list's window cuts the
+// run's top. start: the time of that entry; end: the time of the entry
+// after the run, when there is one. working: the agent is working.
+export interface RunAt {
+  key?: string
+  start?: string
+  end?: string
+  working?: boolean
 }
 
 const HEADER =
   'flex w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch'
 
-// The rows of a run: its header, then the entries it shows. live: the
-// agent is in this run now. runKey: the id of the run's first entry in the
-// whole list, which holds while the list's window cuts the run's top.
+// The line over a run: "Working… · 15s · 3 commands · 1 failed" while it
+// runs, a second at a time, then "Worked for 15s · …". The count of failed
+// steps is a span of its own the summary's cut never reaches. The button
+// is named by the whole line, so a screen reader says the parts as words.
+function RunHeader({
+  open,
+  live,
+  start,
+  end,
+  clockOffset,
+  label,
+  failed,
+  onClick,
+  t,
+}: {
+  open: boolean
+  live: boolean
+  start?: string
+  end?: string
+  clockOffset: number
+  label: string
+  failed: number
+  onClick: () => void
+  t: Translate<MessageKey>
+}) {
+  const now = useServerSeconds(live, clockOffset)
+  const seconds = live
+    ? runSeconds(start, new Date(now).toISOString())
+    : runSeconds(start, end)
+  const title = live
+    ? t('chat.run.working')
+    : seconds === undefined
+      ? t('chat.run.worked')
+      : t('chat.run.workedFor', { duration: formatElapsed(seconds) })
+  const elapsed = live && seconds !== undefined && formatElapsed(seconds)
+  const failures = failed > 0 && t('chat.run.failed', { count: failed })
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={[title, elapsed, label, failures].filter(Boolean).join(' · ')}
+      onClick={onClick}
+      className={HEADER}
+    >
+      <ChevronRight
+        size={14}
+        aria-hidden="true"
+        className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+      />
+      <span className="shrink-0 font-medium">{title}</span>
+      {elapsed && <span className="shrink-0 tabular-nums">· {elapsed}</span>}
+      <span className="min-w-0 truncate tabular-nums">· {label}</span>
+      {failures && <span className="shrink-0 text-danger">· {failures}</span>}
+    </button>
+  )
+}
+
+// The rows of a run: its header, then the entries it shows, each step a
+// line. live: the agent is in this run now.
 export function toolRunRows(
   entries: TranscriptEntry[],
   layout: Layout[],
   live: boolean,
   state: RunState,
   t: Translate<MessageKey>,
-  runKey = entries[0].id,
+  at: RunAt = {},
 ): ReactElement[] {
+  const runKey = at.key ?? entries[0].id
   const tools = toolsOf(entries)
   // Cut by the list's window down to thinking only: no run left to say
   if (!tools.length) {
@@ -169,98 +248,80 @@ export function toolRunRows(
   const ids = entries.map((e) => e.id)
   if (live) for (const id of ids) state.held.add(id)
   const chosen = ids.map((id) => state.modes[id]).find(Boolean)
+  // Done, and the reader at the bottom: the run folds, and stays so
+  if (
+    !live &&
+    !at.working &&
+    !chosen &&
+    state.follow &&
+    ids.some((id) => state.held.has(id))
+  ) {
+    for (const id of ids) state.held.delete(id)
+    state.tails.delete(runKey)
+  }
+  const failed = tools.filter((p) => p.isError).length
   const summary = runSummary(tools, t)
   const dot = runDot(tools)
   const setMode = (mode: RunMode) => state.setMode(ids, mode)
-  const tail = !chosen && ids.some((id) => state.held.has(id))
-  if (chosen === 'open' || tail) {
-    let start = 0
-    if (tail) {
-      const kept = state.tails.get(runKey)
-      // Read above the bottom, the tail starts where it did; once the window
-      // has moved past that entry, at the top of what is left
-      start =
-        state.follow || kept === undefined
-          ? Math.max(0, entries.length - LIVE_TAIL)
-          : Math.max(0, ids.indexOf(kept))
-      state.tails.set(runKey, ids[start])
-    }
-    const earlier = toolsOf(entries.slice(0, start)).length
-    const label =
-      start === 0
-        ? summary
-        : earlier
-          ? t('chat.run.earlier', { count: earlier, summary })
-          : t('chat.run.earlierSteps', { summary })
-    return [
-      <div
-        key={`run:${runKey}`}
-        data-run
-        data-role="assistant"
-        className="flex flex-col gap-3"
-      >
-        {layout[start].showTime && <Time ts={entries[start].ts} />}
-        <Step dot={dot} line>
-          <button
-            type="button"
-            aria-expanded={start === 0}
-            onClick={() => setMode(start === 0 ? 'closed' : 'open')}
-            className={HEADER}
-          >
-            <ChevronRight
-              size={14}
-              aria-hidden="true"
-              className={`shrink-0 transition-transform ${start === 0 ? 'rotate-90' : ''}`}
-            />
-            <span className="min-w-0 truncate tabular-nums">{label}</span>
-          </button>
-        </Step>
-      </div>,
-      ...entries
-        .slice(start)
-        .map((e, i) => (
-          <ChatMessage
-            key={e.id}
-            entry={e}
-            showTime={i > 0 && layout[start + i].showTime}
-            joinsNext={layout[start + i].joinsNext}
-          />
-        )),
-    ]
+  const tail =
+    (!chosen || chosen === 'kept') && ids.some((id) => state.held.has(id))
+  const open = chosen === 'open' || tail
+  let start = 0
+  if (tail) {
+    const kept = state.tails.get(runKey)
+    // Read above the bottom, the tail starts where it did; once the window
+    // has moved past that entry, at the top of what is left
+    start =
+      state.follow || kept === undefined
+        ? Math.max(0, entries.length - LIVE_TAIL)
+        : Math.max(0, ids.indexOf(kept))
+    state.tails.set(runKey, ids[start])
   }
-  const failed = tools.filter((p) => p.isError).length
-  const last = tools[tools.length - 1]
-  return [
+  const earlier = toolsOf(entries.slice(0, start)).length
+  const label =
+    start === 0
+      ? summary
+      : earlier
+        ? t('chat.run.earlier', { count: earlier, summary })
+        : t('chat.run.earlierSteps', { summary })
+  const header = (
     <div
       key={`run:${runKey}`}
       data-run
       data-role="assistant"
       className="flex flex-col gap-3"
     >
-      {layout[0].showTime && <Time ts={entries[0].ts} />}
-      <Step dot={dot} line={layout[layout.length - 1].joinsNext}>
-        <button
-          type="button"
-          aria-expanded={false}
-          onClick={() => setMode('open')}
-          className="flex w-full min-w-0 flex-col gap-0.5 rounded-control border border-border bg-surface px-2 py-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch"
-        >
-          <span className="flex min-w-0 items-center gap-1.5 font-medium">
-            <ChevronRight size={14} aria-hidden="true" className="shrink-0" />
-            <span className="min-w-0 truncate tabular-nums">{summary}</span>
-            {failed > 0 && (
-              <span className="shrink-0 text-danger">
-                {t('chat.run.failed', { count: failed })}
-              </span>
-            )}
-          </span>
-          <span
-            className={`min-w-0 truncate pl-5 ${last.detail?.description ? '' : 'font-mono text-[11px]'}`}
-          >
-            {stepLine(last, t)}
-          </span>
-        </button>
+      {layout[start].showTime && <Time ts={entries[start].ts} />}
+      <Step dot={dot} line={open || layout[layout.length - 1].joinsNext}>
+        <RunHeader
+          open={open && start === 0}
+          live={live}
+          start={at.start ?? entries[0].ts}
+          end={at.end}
+          clockOffset={state.clockOffset ?? 0}
+          label={label}
+          failed={failed}
+          onClick={() =>
+            setMode(!open ? 'open' : start === 0 ? 'closed' : 'open')
+          }
+          t={t}
+        />
       </Step>
-    </div>,
+    </div>
+  )
+  if (!open) return [header]
+  return [
+    header,
+    ...entries
+      .slice(start)
+      .map((e, i) => (
+        <ChatMessage
+          key={e.id}
+          entry={e}
+          steps
+          showTime={i > 0 && layout[start + i].showTime}
+          joinsNext={layout[start + i].joinsNext}
+        />
+      )),
   ]
 }

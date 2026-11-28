@@ -82,6 +82,11 @@ export default {
   'chat.run.earlier_other': '{count} bước trước · {summary}',
   'chat.run.earlierSteps': 'Các bước trước · {summary}',
   'chat.run.failed': '{count} lỗi',
+  'chat.run.working': 'Đang làm…',
+  'chat.run.workedFor': 'Đã làm trong {duration}',
+  'chat.run.worked': 'Đã làm',
+  'chat.step.ran': 'Đã chạy {command}',
+  'chat.step.failed': 'lỗi',
 
   'chat.subagent.running': 'đang chạy',
   'chat.subagent.done': 'xong',

@@ -744,10 +744,10 @@ describe('ChatView runs of steps', () => {
       status: 'idle',
     })
     render(<ChatView {...props} />)
-    expect(screen.getByText('3 commands')).toBeInTheDocument()
-    expect(screen.queryByText('c1')).toBeNull()
+    expect(screen.getByText('· 3 commands')).toBeInTheDocument()
+    expect(screen.queryByText('Ran c1')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /3 commands/ }))
-    expect(screen.getByText('c1')).toBeInTheDocument()
+    expect(screen.getByText('Ran c1')).toBeInTheDocument()
   })
 
   it('a live run keeps what the reader opened as it becomes a run', () => {
@@ -756,6 +756,8 @@ describe('ChatView runs of steps', () => {
       status: 'working',
     })
     const { rerender } = render(<ChatView {...props} />)
+    // A click as a pointer makes it: pressed, then clicked
+    fireEvent.pointerDown(screen.getByText('Output · 1 line'))
     fireEvent.click(screen.getByText('Output · 1 line'))
     expect(screen.getByText('r1')).toBeInTheDocument()
     set({
@@ -763,20 +765,83 @@ describe('ChatView runs of steps', () => {
       status: 'working',
     })
     rerender(<ChatView {...props} />)
-    expect(screen.getByRole('button', { name: '3 commands' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
+    const run = screen.getByRole('button', { name: /^Working… · 3 commands/ })
+    expect(run).toHaveAttribute('aria-expanded', 'true')
+    // The card the reader opened stays; the others are a line each
     expect(screen.getByText('r1')).toBeInTheDocument()
-    // Done, it stays open until folded
+    expect(screen.getByText('Ran c2')).toBeInTheDocument()
+    // Done, the run the reader was in stays open until folded
     set({
       entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3', 'r3')],
       status: 'idle',
     })
     rerender(<ChatView {...props} />)
-    expect(screen.getByText('c3')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '3 commands' }))
-    expect(screen.queryByText('c3')).toBeNull()
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Worked · 3 commands/ }),
+    )
+    expect(screen.queryByText('Ran c3')).toBeNull()
+  })
+
+  it('a live run folds once the agent is done, the reader at the bottom', () => {
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
+      status: 'working',
+    })
+    const { rerender } = render(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+    set({
+      entries: [
+        entry(0),
+        bash('c1', 'r1'),
+        bash('c2', 'r2'),
+        bash('c3', 'r3'),
+        { id: 'a', role: 'assistant', parts: [{ kind: 'text', text: 'Done' }] },
+      ],
+      status: 'idle',
+    })
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByText('Ran c3')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /^Worked · 3 commands/ }),
+    ).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('read above when the agent is done, a run stays open until the bottom', () => {
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
+      status: 'working',
+    })
+    const { rerender } = render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3', 'r3')],
+      status: 'idle',
+    })
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
+    layout(list, { scrollTop: 800 })
+    fireEvent.scroll(list)
+    expect(screen.queryByText('Ran c3')).toBeNull()
+  })
+
+  it('a run focused inside stays open once the agent is done', () => {
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
+      status: 'working',
+    })
+    const { rerender } = render(<ChatView {...props} />)
+    fireEvent.focus(screen.getByRole('button', { name: 'Ran c2' }))
+    // Kept once: another press changes nothing
+    fireEvent.pointerDown(screen.getByText('Ran c2'))
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3', 'r3')],
+      status: 'idle',
+    })
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('Ran c3')).toBeInTheDocument()
   })
 
   it('a call left without a result keeps nothing open once the agent is idle', () => {
@@ -797,8 +862,8 @@ describe('ChatView runs of steps', () => {
     })
     const { rerender } = render(<ChatView {...props} />)
     const last = RENDER_WINDOW + 9
-    expect(screen.getByText(`cmd${last - 5}`)).toBeInTheDocument()
-    expect(screen.queryByText(`cmd${last - 6}`)).toBeNull()
+    expect(screen.getByText(`Ran cmd${last - 5}`)).toBeInTheDocument()
+    expect(screen.queryByText(`Ran cmd${last - 6}`)).toBeNull()
     const list = screen.getByRole('region', { name: 'Conversation' })
     layout(list, { scrollTop: 100 })
     fireEvent.scroll(list)
@@ -808,8 +873,8 @@ describe('ChatView runs of steps', () => {
       status: 'working',
     })
     rerender(<ChatView {...props} />)
-    expect(screen.getByText(`cmd${last - 5}`)).toBeInTheDocument()
-    expect(screen.getByText(`cmd${last + 2}`)).toBeInTheDocument()
+    expect(screen.getByText(`Ran cmd${last - 5}`)).toBeInTheDocument()
+    expect(screen.getByText(`Ran cmd${last + 2}`)).toBeInTheDocument()
   })
 
   it('a run the window hides whole is not drawn', () => {
@@ -823,13 +888,13 @@ describe('ChatView runs of steps', () => {
       status: 'idle',
     })
     render(<ChatView {...props} />)
-    expect(screen.queryByText('3 commands')).toBeNull()
+    expect(screen.queryByText('· 3 commands')).toBeNull()
   })
 
   it('without a status, a call waiting for its result keeps the last run open', () => {
     set({ entries: [entry(0), bash('c1', 'r'), bash('c2', 'r'), bash('c3')] })
     render(<ChatView {...props} />)
-    expect(screen.getByText('c1')).toBeInTheDocument()
+    expect(screen.getByText('Ran c1')).toBeInTheDocument()
   })
 
   it('a run cut by the window down to its thinking shows that as it is', () => {
@@ -852,7 +917,7 @@ describe('ChatView runs of steps', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Show earlier messages' }),
     )
-    expect(screen.getByText('2 commands')).toBeInTheDocument()
+    expect(screen.getByText('· 2 commands')).toBeInTheDocument()
   })
 
   it('a run cut by the window shows its part, and grows as more is shown', () => {
@@ -867,11 +932,11 @@ describe('ChatView runs of steps', () => {
       status: 'idle',
     })
     render(<ChatView {...props} />)
-    expect(screen.getByText('3 commands')).toBeInTheDocument()
+    expect(screen.getByText('· 3 commands')).toBeInTheDocument()
     fireEvent.click(
       screen.getByRole('button', { name: 'Show earlier messages' }),
     )
-    expect(screen.getByText('4 commands')).toBeInTheDocument()
+    expect(screen.getByText('· 4 commands')).toBeInTheDocument()
   })
 })
 

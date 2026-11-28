@@ -37,8 +37,12 @@ Cài từ đầu? Làm theo bài [Điều khiển Claude Code từ điện tho�
 - Toàn bộ hội thoại của phiên hiện tại, đọc từ transcript mà Claude Code ghi ra đĩa: tin nhắn của
   bạn, câu trả lời hiển thị dạng markdown, và các lần gọi tool. Một lệnh hiện dạng `$ lệnh`, output
   ẩn sau hàng `Output · N lines` (mở ra thấy 10 dòng cuối; lệnh lỗi thì mở sẵn). Từ ba bước liên
-  tiếp trở lên gập thành một dòng như `3 commands, 2 reads`; các bước agent đang chạy thì mở sẵn ở
-  những bước mới nhất.
+  tiếp trở lên gập thành một dòng như `Đã làm trong 15s · 3 lệnh, 2 lần đọc · 1 lỗi`, số lỗi không
+  bao giờ bị cắt. Các bước agent đang chạy thì mở sẵn ở những bước mới nhất, dưới tiêu đề
+  `Đang làm… · 15s` đếm từng giây, và tự gập khi lượt kết thúc lúc bạn đang ở cuối hội thoại; nếu bạn
+  đang đọc phía trên, nhóm chờ đến khi bạn quay lại cuối, còn nhóm bạn đã bấm hoặc focus vào thì giữ
+  nguyên trạng thái mở. Khi mở, mỗi bước là một dòng, ví dụ `Đã chạy npm test`, chạm vào thì hiện
+  thẻ đầy đủ của bước đó.
 - Lượt mới hiện ra trong khoảng hai giây. Sau `/clear` hoặc khi resume, view chuyển sang phiên mới
   và không trộn hai phiên với nhau.
 - Trong lúc một lượt đang chạy, một dòng dưới cuộc hội thoại hiện đúng những gì dòng trạng thái

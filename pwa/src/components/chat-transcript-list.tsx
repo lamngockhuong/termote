@@ -53,7 +53,8 @@ interface Props {
   // Entries at the start not drawn (shown on scrolling up)
   hidden: number
   runs: RunState
-  // The agent is working: its last run is open on its newest steps
+  // The agent is working: its last run is open on its newest steps, and
+  // no run folds yet
   working: boolean
   // The agent is done: a call left without a result keeps nothing open
   settled: boolean
@@ -102,7 +103,12 @@ export function ChatTranscriptList({
       live,
       runs,
       t,
-      entries[item.start].id,
+      {
+        key: entries[item.start].id,
+        start: entries[item.start].ts,
+        end: entries[item.end]?.ts,
+        working,
+      },
     )
   })
 }

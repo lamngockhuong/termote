@@ -40,6 +40,9 @@
 #               write, 2000 output tokens,
 #               "questions" runs a five-line command (folded to three in the
 #               Chat), then asks two numbered questions and one more message,
+#               "work" runs four commands one after another under the
+#               recorded working line, FAKE_CLAUDE_WORK_STEP seconds apart
+#               (default 2), the third failing, then answers,
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -349,6 +352,22 @@ submit() {
         # Esc ends the turn, as Claude Code records it
         entry user '[{"type":"text","text":"[Request interrupted by user]"}]'
       fi
+      set_status idle
+      ;;
+    *work*)
+      printf '\e[H\e[2J\e[3J'
+      dialog 2.1.312-working-thinking.txt
+      local i w="${seq_n}_$$"
+      for i in 1 2 3 4; do
+        entry assistant "[{\"type\":\"tool_use\",\"id\":\"toolu_w${i}_$w\",\"name\":\"Bash\",\"input\":{\"command\":\"step-$i\"}}]"
+        sleep "${FAKE_CLAUDE_WORK_STEP:-2}"
+        if [ "$i" = 3 ]; then
+          entry user "[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_w${i}_$w\",\"content\":\"step-$i: not found\",\"is_error\":true}]"
+        else
+          entry user "[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_w${i}_$w\",\"content\":\"step-$i done\"}]"
+        fi
+      done
+      say 'Worked through four steps.'
       set_status idle
       ;;
     *touch\ files*)

@@ -37,7 +37,12 @@ import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext } from './chat-message'
 import { ChatSubagents } from './chat-subagents'
-import type { RunMode, RunState } from './chat-tool-run'
+import {
+  keepRun,
+  keepRunAt,
+  type RunMode,
+  type RunState,
+} from './chat-tool-run'
 import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
@@ -478,11 +483,13 @@ function AgentChat({
     held: heldRef.current,
     tails: tailsRef.current,
     follow: atBottom,
+    clockOffset: clockOffset ?? 0,
     setMode: (ids, mode) =>
       setRunModes((m) => ({
         ...m,
         ...Object.fromEntries(ids.map((id) => [id, mode])),
       })),
+    keep: (id) => setRunModes((m) => keepRun(m, id)),
   }
   // A call left without a result (an interrupted one) keeps nothing open
   // once the agent says it is done.
@@ -524,6 +531,9 @@ function AgentChat({
       <section
         ref={listRef}
         onScroll={onScroll}
+        // A run pressed or focused inside stays open once the agent is done
+        onFocusCapture={(e) => keepRunAt(e, runs)}
+        onPointerDownCapture={(e) => keepRunAt(e, runs)}
         // A click or tap that leaves nothing selected: the selection kept is
         // not quoted (a right click, a tap on the selected text keep it; a
         // new selection replaces it)

@@ -6,7 +6,12 @@ import { useT } from '../i18n/i18n-context'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext } from './chat-message'
-import type { RunMode, RunState } from './chat-tool-run'
+import {
+  keepRun,
+  keepRunAt,
+  type RunMode,
+  type RunState,
+} from './chat-tool-run'
 import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
 import { Button } from './ui/button'
 
@@ -133,6 +138,7 @@ export function TranscriptReader({
         ...m,
         ...Object.fromEntries(ids.map((id) => [id, mode])),
       })),
+    keep: (id) => setModes((m) => keepRun(m, id)),
   }
   const showEarlier = () => {
     before.current = (listRef.current as HTMLElement).scrollHeight
@@ -154,6 +160,8 @@ export function TranscriptReader({
       data-testid={testId}
       className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
       onScroll={onScroll}
+      onFocusCapture={(e) => keepRunAt(e, runs)}
+      onPointerDownCapture={(e) => keepRunAt(e, runs)}
       data-native-menu
     >
       <ChatFileLinkContext.Provider value={openFile}>
