@@ -4,7 +4,7 @@ import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { formatElapsed } from './chat-activity-row'
-import { ChatMessage, chatSide, Step, Time } from './chat-message'
+import { ChatMessage, chatSide, REVEAL, Step, Time } from './chat-message'
 import { useServerSeconds } from './chat-subagents'
 import { STEP_ROW, type StepKind, stepKind } from './chat-tool-card'
 
@@ -293,9 +293,11 @@ export function toolRunRows(
       data-run
       data-role="assistant"
       // Open, its lines follow it flush: one place on the timeline
-      className={`flex flex-col gap-3 ${open ? 'mb-0' : ''}`}
+      className={`group/msg flex flex-col gap-3 ${open ? 'mb-0' : ''}`}
     >
-      {layout[start].showTime && <Time ts={entries[start].ts} />}
+      {layout[start].showTime && (
+        <Time ts={entries[start].ts} className={REVEAL} />
+      )}
       <Step dot={dot} row line={open || layout[layout.length - 1].joinsNext}>
         <RunHeader
           open={open && start === 0}

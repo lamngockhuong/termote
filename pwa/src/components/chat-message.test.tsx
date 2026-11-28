@@ -305,7 +305,7 @@ describe('ChatMessage', () => {
     )
   })
 
-  it('shows no time without showTime or with a bad timestamp', () => {
+  it('shows the time on a touch screen only with showTime, none with a bad timestamp', () => {
     const { container, rerender } = render(
       <ChatMessage
         entry={{
@@ -316,7 +316,21 @@ describe('ChatMessage', () => {
         }}
       />,
     )
-    expect(container.querySelector('time')).toBeNull()
+    expect(container.querySelector('time')).toHaveClass('pointer-coarse:hidden')
+    rerender(
+      <ChatMessage
+        showTime
+        entry={{
+          id: 'u',
+          role: 'user',
+          ts: '2026-10-08T09:39:00Z',
+          parts: [{ kind: 'text', text: 'hi' }],
+        }}
+      />,
+    )
+    expect(container.querySelector('time')).not.toHaveClass(
+      'pointer-coarse:hidden',
+    )
     rerender(
       <ChatMessage
         showTime
@@ -799,12 +813,13 @@ describe('ChatMessage', () => {
     expect(screen.getByText('Result')).toBeInTheDocument()
   })
 
-  it('the end of a turn has a copy button; a step that goes on draws the line', async () => {
+  it('a message has a copy button and its time; a step that goes on draws the line', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
     const entry: TranscriptEntry = {
       id: 'a',
       role: 'assistant',
+      ts: '2026-10-08T09:39:00Z',
       parts: [
         { kind: 'text', text: 'one' },
         { kind: 'tool', tool: 'Read', toolId: '1', input: 'x', result: 'y' },
@@ -813,6 +828,21 @@ describe('ChatMessage', () => {
     }
     const { container, rerender } = render(<ChatMessage entry={entry} />)
     expect(container.querySelectorAll('span.w-px')).toHaveLength(2)
+    // With a mouse it waits for a hover or focus on the message; a touch
+    // screen always shows it
+    const row = screen.getByRole('button', { name: 'Copy answer' })
+      .parentElement as HTMLElement
+    expect(row).toHaveClass(
+      'opacity-0',
+      'group-hover/msg:opacity-100',
+      'group-focus-within/msg:opacity-100',
+      'pointer-coarse:opacity-100',
+    )
+    expect(row.parentElement?.parentElement).toHaveClass('group/msg')
+    // Its time beside the button: shown on hover, but on a touch screen only
+    // where a run starts
+    expect(row.querySelector('time')).toHaveClass('pointer-coarse:hidden')
+    expect(container.querySelectorAll('time')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }))
     expect(writeText).toHaveBeenCalledWith('one\n\ntwo')
     expect(
@@ -826,11 +856,44 @@ describe('ChatMessage', () => {
         { timeout: 3000 },
       ),
     ).toBeInTheDocument()
-    rerender(<ChatMessage entry={entry} joinsNext />)
-    expect(container.querySelectorAll('span.w-px')).toHaveLength(3)
+    // A message the agent's next entry follows has one too, the line going
+    // on past it
+    rerender(<ChatMessage entry={entry} joinsNext showTime />)
+    expect(container.querySelectorAll('span.w-px')).toHaveLength(4)
     expect(
-      screen.queryByRole('button', { name: /Copy answer|Copied/ }),
-    ).toBeNull()
+      screen.getByRole('button', { name: 'Copy answer' }),
+    ).toBeInTheDocument()
+    expect(container.querySelector('time')).not.toHaveClass(
+      'pointer-coarse:hidden',
+    )
+  })
+
+  it("the reader's own message has its time and a copy button beside it", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    const { container } = render(
+      <ChatMessage
+        entry={{
+          id: 'u',
+          role: 'user',
+          ts: '2026-10-08T09:39:00Z',
+          parts: [
+            { kind: 'text', text: 'one' },
+            { kind: 'text', text: 'two' },
+          ],
+        }}
+      />,
+    )
+    const copy = screen.getByRole('button', { name: 'Copy message' })
+    // Not on a touch screen, and both wait for a hover with a mouse
+    expect(copy).toHaveClass('pointer-coarse:hidden')
+    expect(copy.parentElement).toHaveClass(
+      'opacity-0',
+      'pointer-coarse:opacity-100',
+    )
+    expect(container.querySelector('time')).toHaveClass('pointer-coarse:hidden')
+    fireEvent.click(copy)
+    expect(writeText).toHaveBeenCalledWith('one\n\ntwo')
   })
 
   it('copies a code block; a refused clipboard says so', async () => {
