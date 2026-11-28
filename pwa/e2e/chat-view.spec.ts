@@ -385,12 +385,13 @@ test.describe('chat view quotes', () => {
     await page.goto(link)
     const conversation = page.getByRole('region', { name: 'Conversation' })
     await expect(conversation).toContainText('Should the logs be kept?', { timeout: 15000 })
-    // The run of the "questions" command, opened (a run seen working is
-    // open already)
+    // The run of the "questions" command, then its line, opened (a run seen
+    // working is open already)
     const command = conversation.locator('pre').filter({ hasText: 'echo hidden-five' })
-    if (!(await command.isVisible())) {
-      await conversation.getByRole('button', { name: /1 command/, expanded: false }).last().click()
-    }
+    const run = conversation.getByRole('button', { name: /^Worked.* · 1 command$/ }).last()
+    if ((await run.getAttribute('aria-expanded')) === 'false') await run.click()
+    const line = conversation.getByRole('button', { name: 'Print five lines' }).last()
+    if ((await line.getAttribute('aria-expanded')) === 'false') await line.click()
     await expect(command).toBeVisible()
     await expect(conversation.getByText('Show all 5 lines')).toBeVisible()
     // From the command to the end of the questions

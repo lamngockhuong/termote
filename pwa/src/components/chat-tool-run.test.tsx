@@ -43,7 +43,7 @@ const layoutOf = (n: number) =>
   }))
 
 describe('chatItems', () => {
-  it('folds three steps or more in a row; fewer stay single', () => {
+  it('folds steps in a row with a call among them, one call alone too', () => {
     const entries = [
       user('u'),
       bash('1', 'a'),
@@ -56,8 +56,7 @@ describe('chatItems', () => {
     ] as TranscriptEntry[]
     expect(chatItems(entries)).toEqual([
       { kind: 'entry', index: 0 },
-      { kind: 'entry', index: 1 },
-      { kind: 'entry', index: 2 },
+      { kind: 'run', start: 1, end: 3 },
       { kind: 'entry', index: 3 },
       { kind: 'run', start: 4, end: 7 },
       { kind: 'entry', index: 7 },
