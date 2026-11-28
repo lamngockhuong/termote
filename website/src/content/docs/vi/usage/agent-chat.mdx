@@ -180,7 +180,11 @@ Skill có thêm nhãn `skill`.
 
 Chạm vào một dòng, hoặc bấm Enter hay Tab, ô nhập sẽ thành `/name ` để bạn gõ tham số; tin chỉ
 được gửi khi bạn bấm gửi. Phím mũi tên di chuyển trong danh sách, Escape đóng danh sách, gõ dấu
-cách sau tên lệnh cũng vậy.
+cách sau tên lệnh cũng vậy; gõ thêm vào tên lệnh thì danh sách mở lại.
+
+Claude Code cũng chạy lệnh tuỳ chỉnh hay skill được gọi ở giữa tin nhắn, nên gõ `/` ở đầu một từ
+phía sau sẽ liệt kê các lệnh đó (không có lệnh built-in, vì chúng chỉ chạy ở đầu tin). Chọn một
+dòng sẽ thay cho từ đang gõ; một đường dẫn như `/usr/bin` không mở danh sách.
 
 Vài lệnh mở một màn hình mà Chat view không điều khiển được, như `/model`, `/config`,
 `/permissions`, `/resume` và `/mcp`. Các lệnh này có nhãn `opens in Terminal`: chọn là lệnh

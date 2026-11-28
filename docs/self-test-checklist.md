@@ -617,7 +617,10 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
       conversation changed
 - [ ] `/` at the start of the message lists the commands (`/exit` first, then built-ins, the
       project's and the user's commands and skills with their tags); typing filters; tap, Enter
-      or Tab fills `/name` without sending; arrows move, Escape or a space closes the list
+      or Tab fills `/name` without sending; arrows move, Escape or a space closes the list, and
+      typing more of the name opens it again
+- [ ] `/` at the start of a later word (`ship it /rev`) lists only the custom commands and skills;
+      a pick replaces that word; `see /usr/bin` opens no list
 - [ ] On a phone the list sits above the keyboard and scrolls; each row is easy to tap
 - [ ] `/model` (marked "opens in Terminal") is sent and the terminal shows its picker
 - [ ] `/exit` asks first; Cancel sends nothing, Exit ends Claude Code and the app returns to the

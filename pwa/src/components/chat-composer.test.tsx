@@ -1152,10 +1152,11 @@ describe('ChatComposer', () => {
       expect(mockSend).not.toHaveBeenCalled()
     })
 
-    it('not in the middle of a message; a space or a new line closes it', () => {
+    it('no built-in in the middle of a message; a space or a new line closes it', () => {
       render(<ChatComposer {...props()} />)
       type('hello /comp')
       expect(screen.queryByRole('listbox')).toBeNull()
+      expect(box()).not.toHaveAttribute('aria-controls')
       type('/compact ')
       expect(screen.queryByRole('listbox')).toBeNull()
       type('/compact\n')
@@ -1197,20 +1198,65 @@ describe('ChatComposer', () => {
       )
     })
 
-    it('Escape closes it until the "/" is gone', () => {
+    it('Escape closes it until the word changes', () => {
       render(<ChatComposer {...props()} />)
       type('/co')
       key('Escape')
       expect(screen.queryByRole('listbox')).toBeNull()
       expect(box()).not.toHaveAttribute('aria-activedescendant')
       type('/com')
-      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(names()[0]).toBe('/compact')
+      key('Escape')
+      type('/co')
+      expect(screen.getByRole('listbox')).toBeTruthy()
       type('')
       type('/')
       expect(screen.getByRole('listbox')).toBeTruthy()
       // Escape with the list closed does nothing special
       type('x')
       key('Escape')
+    })
+
+    it('offers the custom commands and skills after "/" anywhere in a message', () => {
+      commandsStore.list = [
+        {
+          name: 'deploy',
+          description: 'Ship it',
+          source: 'project',
+          kind: 'command',
+        },
+        { name: 'review-pr', source: 'user', kind: 'skill' },
+      ]
+      render(<ChatComposer {...props()} />)
+      type('ship it /')
+      expect(commandsStore.enabled).toBe(true)
+      expect(names()).toEqual(['/deploy', '/review-pr'])
+      type('ship it /rev')
+      expect(names()).toEqual(['/review-pr'])
+      key('Enter')
+      expect(box()).toHaveValue('ship it /review-pr ')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      // A path is no command; a built-in is offered at the start only
+      type('see /usr/bin')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      type('see /comp')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      commandsStore.list = []
+    })
+
+    it('editing the first word of "/name args" offers the built-ins again', () => {
+      render(<ChatComposer {...props()} />)
+      type('/co now')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      const el = box() as HTMLTextAreaElement
+      el.setSelectionRange(3, 3)
+      fireEvent.select(el)
+      expect(names()).toContain('/compact')
+      // A command that opens a screen is typed in, not sent with the rest
+      // dropped
+      fireEvent.click(options()[names().indexOf('/config')])
+      expect(mockSend).not.toHaveBeenCalled()
+      expect(box()).toHaveValue('/config now')
     })
 
     it('says when nothing matches, and the keys do nothing then', () => {
@@ -1539,7 +1585,8 @@ describe('ChatComposer', () => {
         key('Escape')
         expect(screen.queryByRole('listbox')).toBeNull()
         type('$ski')
-        expect(screen.queryByRole('listbox')).toBeNull()
+        expect(names()).toEqual(['$skill-a'])
+        key('Escape')
         type('$ski $')
         expect(screen.getByRole('listbox')).toBeTruthy()
       })
