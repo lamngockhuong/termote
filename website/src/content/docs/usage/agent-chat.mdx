@@ -177,7 +177,11 @@ Skills carry a `skill` tag as well.
 
 Tap a row, or press Enter or Tab, and the box becomes `/name ` so you can type arguments; it is
 not sent until you send it. The arrow keys move through the list and Escape closes it, as does a
-space after the name.
+space after the name; typing more of the name opens it again.
+
+Claude Code also runs a custom command or skill named further on in a message, so `/` at the start
+of a later word lists those (not the built-ins, which run only at the start). Picking one replaces
+that word; a path such as `/usr/bin` opens no list.
 
 A few commands open a screen the Chat view cannot drive, such as `/model`, `/config`,
 `/permissions`, `/resume` and `/mcp`. They are marked `opens in Terminal`: picking one sends it

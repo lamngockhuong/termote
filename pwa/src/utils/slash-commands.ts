@@ -201,6 +201,10 @@ export const SKILL_TRIGGER: Record<string, CommandTrigger> = {
   opencode: '@',
 }
 
+// The agents that run a "/" custom command or skill named anywhere in a
+// message, not only at its start: Claude Code.
+export const SLASH_WORDS: Record<string, boolean> = { claude: true }
+
 // The trigger of a custom command or skill the server listed for agent
 export function customTrigger(
   agent: string,
@@ -277,32 +281,46 @@ export interface CommandQuery {
 }
 
 // What is being typed: "/name" while the whole message is still only a
-// command name (a command is recognized only at the start, and a space ends
-// it); with a word trigger ("$" or "@"), also the "$name" or "@name" word the
-// caret ends, anywhere in the message. caret is null while text is selected,
-// which opens no word list. A word runs to the next space, so a pick in its
-// middle replaces it all.
+// command name; with slashWords (an agent that runs a "/" command or skill
+// named anywhere in a message), also the "/name" word the caret ends,
+// anywhere; with a word trigger ("$" or "@"), also the "$name" or "@name"
+// word the caret ends, anywhere in the message. A word starts the message or
+// follows a space, and holds its trigger only once, so a path is no word.
+// caret is null while text is selected, which opens no word list. A word
+// runs to the next space, so a pick in its middle replaces it all.
 export function commandQuery(
   text: string,
   caret: number | null,
   word: CommandTrigger | undefined,
+  slashWords = false,
 ): CommandQuery | null {
   const slash = /^\/(\S*)$/.exec(text)
   if (slash) {
     return { trigger: '/', query: slash[1], start: 0, end: text.length }
   }
-  if (!word || word === '/' || caret === null) return null
+  if (caret === null) return null
   const before = text.slice(0, caret)
   const start = before.search(/\S*$/)
   const head = before.slice(start)
+  const trigger = head[0]
   const name = head.slice(1)
-  if (head[0] !== word || name.includes(word)) return null
+  const allowed =
+    (trigger === '/' && slashWords) ||
+    (trigger === word && word !== '/' && word !== undefined)
+  if (!allowed || name.includes(trigger)) return null
   return {
-    trigger: word,
+    trigger: trigger as CommandTrigger,
     query: name,
     start,
     end: caret + text.slice(caret).search(/\s|$/),
   }
+}
+
+// A command typed where the agent reads one: the "/" word the message starts
+// with. Built-ins and templates are offered there only, as a "/" word further
+// on runs a custom command or skill and nothing else.
+export function atMessageStart(q: CommandQuery): boolean {
+  return q.trigger === '/' && q.start === 0
 }
 
 // The text after picking c for q: the typed word replaced by the trigger and

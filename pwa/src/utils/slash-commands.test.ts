@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { tFor } from '../i18n/i18n-context'
 import {
   applyPick,
+  atMessageStart,
   BUILTIN_COMMANDS,
   CLAUDE_BUILTIN_COMMANDS,
   CODEX_BUILTIN_COMMANDS,
@@ -295,5 +296,33 @@ describe('slash commands', () => {
     expect(commandQuery('use $sk', 7, '@')).toBeNull()
     // "/" is never a word trigger
     expect(commandQuery('use /sk', 7, '/')).toBeNull()
+  })
+
+  it('a "/" word anywhere with slashWords, never a path', () => {
+    expect(commandQuery('use /sk', 7, undefined, true)).toEqual({
+      trigger: '/',
+      query: 'sk',
+      start: 4,
+      end: 7,
+    })
+    expect(commandQuery('/rev now', 4, undefined, true)).toMatchObject({
+      start: 0,
+      end: 4,
+    })
+    expect(commandQuery('use /usr/bin', 12, undefined, true)).toBeNull()
+    expect(commandQuery('a/b', 3, undefined, true)).toBeNull()
+    expect(commandQuery('use /sk', 7, undefined)).toBeNull()
+    expect(commandQuery('use /sk', null, undefined, true)).toBeNull()
+    // The skill trigger still works beside it
+    expect(commandQuery('use $sk', 7, '$', true)?.trigger).toBe('$')
+  })
+
+  it('atMessageStart: a "/" word the message starts with', () => {
+    const q = (text: string, caret: number) =>
+      commandQuery(text, caret, '$', true) as CommandQuery
+    expect(atMessageStart(q('/rev', 4))).toBe(true)
+    expect(atMessageStart(q('/rev now', 2))).toBe(true)
+    expect(atMessageStart(q('hi /rev', 7))).toBe(false)
+    expect(atMessageStart(q('$sk', 3))).toBe(false)
   })
 })

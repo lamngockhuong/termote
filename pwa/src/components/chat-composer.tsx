@@ -63,6 +63,7 @@ import { isSendKey } from '../utils/send-key'
 import { serverErrorText } from '../utils/server-error'
 import {
   applyPick,
+  atMessageStart,
   BUILTIN_COMMANDS,
   COMMAND_ALIASES,
   CUSTOM_TRIGGER,
@@ -72,6 +73,7 @@ import {
   filterSlashCommands,
   mergeSlashCommands,
   SKILL_TRIGGER,
+  SLASH_WORDS,
   type SlashCommand,
   withTriggers,
 } from '../utils/slash-commands'
@@ -235,8 +237,9 @@ export function ChatComposer({
   latest.current = { paneId, images }
 
   // Command suggestions: open while the message is only "/name" or, for an
-  // agent whose skills follow "$" or "@", while the caret ends such a word;
-  // until Escape. The highlighted row resets as the list changes.
+  // agent whose skills follow "$" or "@" (or that runs a "/" skill anywhere),
+  // while the caret ends such a word; until Escape, and again as that word
+  // changes. The highlighted row resets as the list changes.
   const agentName = session.agentName ?? ''
   // The server's list is read for the agent's own triggers
   const trigger = CUSTOM_TRIGGER[agentName] ?? '/'
@@ -245,10 +248,13 @@ export function ChatComposer({
   // The caret, null while text is selected: followed for every agent, so it
   // is current when the pane's agent changes to one using "$"
   const [caret, setCaret] = useState<number | null>(() => text.length)
-  const q = commandQuery(text, caret, word)
+  const q = commandQuery(text, caret, word, !!SLASH_WORDS[agentName])
+  // Built-ins and templates only where the agent runs them
+  const atStart = q !== null && atMessageStart(q)
   const query = q?.query ?? null
-  // The word being typed: another one opens the list again after Escape
-  const typing = q ? `${q.trigger}${q.start}` : null
+  // The word being typed, as typed: another one, or more of it, opens the
+  // list again after Escape
+  const typing = q ? `${q.trigger}${q.start}\n${q.query}` : null
   const [dismissed, setDismissed] = useState(false)
   const listOpen = q !== null && !dismissed
   const custom = useAgentCommands(
@@ -256,9 +262,15 @@ export function ChatComposer({
     listOpen && (q?.trigger === trigger || q?.trigger === word),
   )
   const builtins = BUILTIN_COMMANDS[agentName] ?? NO_COMMANDS
+  // A "/" word further on runs a custom command or skill only: no built-in
+  const midSlash = q?.trigger === '/' && !atStart
   const commands = useMemo(
-    () => mergeSlashCommands(builtins, withTriggers(agentName, custom)),
-    [builtins, custom, agentName],
+    () =>
+      mergeSlashCommands(
+        midSlash ? NO_COMMANDS : builtins,
+        withTriggers(agentName, custom),
+      ),
+    [midSlash, builtins, custom, agentName],
   )
   const listTrigger = q?.trigger ?? '/'
   // Prompt templates, after the commands in the "/" list (never highlighted
@@ -277,7 +289,7 @@ export function ChatComposer({
     picked.current = null
     requestTemplateFill({ paneId, templateId: id, agent: session.agentName })
   }, [pickerOpen])
-  const slashTemplates = listOpen && listTrigger === '/' && templatesOn
+  const slashTemplates = listOpen && atStart && templatesOn
   const { refresh: refreshPrompts } = prompts
   useEffect(() => {
     if (slashTemplates) void refreshPrompts()
@@ -302,9 +314,9 @@ export function ChatComposer({
   )
   // Every row of the list: the commands, then the templates
   const listRows = matches.length + templateMatches.length
-  // "@" also names files and agents in OpenCode: no list (and Escape left
-  // alone) for a word no skill matches
-  const listShown = listOpen && (listTrigger !== '@' || listRows > 0)
+  // "@" also names files and agents in OpenCode, and a "/" word further on
+  // a path: no list (and Escape left alone) for a word nothing matches
+  const listShown = listOpen && (listTrigger === '$' || atStart || listRows > 0)
   // The highlighted row (-1: none): the one the arrows or the pointer chose
   // in this very list, else the first command. With no command nothing is,
   // so Enter does what it did; a new query or list starts again.
@@ -586,11 +598,11 @@ export function ChatComposer({
   // of the word being typed; a command that opens an interactive screen or
   // ends the agent is sent right away (after asking).
   const pick = (c: SlashCommand) => {
-    if (c.terminal || c.confirm) {
+    // Only called from the open list, which has a query
+    if ((c.terminal || c.confirm) && q?.end === text.length && atStart) {
       submit(`/${c.name}`)
       return
     }
-    // Only called from the open list, which has a query
     const next = applyPick(text, q as NonNullable<typeof q>, c)
     caretAfterPick.current = next
     update(next.text)
