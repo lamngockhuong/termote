@@ -126,6 +126,53 @@ test.describe('chat view runs of work', () => {
     await expect(conversationOf(page).locator('[data-tool="Bash"]').filter({ hasText: 'step-3' })).toBeVisible()
   })
 
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+    test('an open run is one place on the timeline, its lines compact and aligned', async ({ page }) => {
+      await page.goto(link)
+      const run = runOf(page)
+      await done(run)
+      await run.tap()
+      const rows = [1, 2, 3, 4].map((n) =>
+        conversationOf(page).getByRole('button', { name: new RegExp(`^Ran step-${n}`) }),
+      )
+      await expect(rows[3]).toBeVisible()
+      const box = async (l: Locator) => (await l.boundingBox()) as { x: number; y: number; width: number; height: number }
+      const head = await box(run)
+      const boxes = await Promise.all(rows.map(box))
+      // Lines about 28px tall, flush under the header and one another
+      for (const [i, b] of boxes.entries()) {
+        expect(b.height).toBeLessThanOrEqual(32)
+        const above = i ? boxes[i - 1] : head
+        expect(b.y - (above.y + above.height)).toBeLessThanOrEqual(1)
+      }
+      // The carets and the text in one column with the header's
+      const caretX = (l: Locator) => l.locator('svg').first().evaluate((el) => el.getBoundingClientRect().x)
+      const headCaret = await caretX(run)
+      for (const r of rows) expect(Math.abs((await caretX(r)) - headCaret)).toBeLessThanOrEqual(1)
+      // The header's dot only, centred on its text
+      const dot = await box(conversationOf(page).locator('[data-run]').last().locator('span.rounded-full'))
+      expect(Math.abs(dot.y + dot.height / 2 - (head.y + head.height / 2))).toBeLessThanOrEqual(1.5)
+      for (const r of rows) {
+        await expect(r.locator('xpath=ancestor::*[@data-run-entry][1]').locator('span.rounded-full')).toHaveCount(0)
+      }
+      // A finger still gets 44px, from an edge that takes no room
+      const reach = await rows[0].evaluate((el) => getComputedStyle(el, '::before').height)
+      expect(reach).toBe('44px')
+      // The card opens under its line, at the line's text
+      await rows[2].tap()
+      const card = conversationOf(page).locator('[data-tool="Bash"]').filter({ hasText: 'step-3' })
+      await expect(card).toBeVisible()
+      // Measured again: the list follows its bottom as the card opens
+      const row = await box(rows[2])
+      const text = await box(rows[2].locator('span').first())
+      const cardBox = await box(card)
+      expect(cardBox.y).toBeGreaterThanOrEqual(row.y + row.height - 1)
+      expect(Math.abs(cardBox.x - text.x)).toBeLessThanOrEqual(1)
+    })
+  })
+
   test('read above when the turn ends, the run stays open until the bottom', async ({ page }) => {
     await work(page)
     const list = conversationOf(page)

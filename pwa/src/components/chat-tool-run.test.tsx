@@ -254,6 +254,41 @@ describe('toolRunRows', () => {
     expect(screen.queryByText('Ran ls')).toBeNull()
   })
 
+  it('open, one place on the timeline: its lines flush, with no dot of their own', () => {
+    const think: TranscriptEntry = {
+      id: 'th',
+      role: 'assistant',
+      parts: [{ kind: 'thinking', text: 'mulling it over' }],
+    }
+    const { container } = render(<Run entries={[think, ...run]} live={false} />)
+    fireEvent.click(header())
+    // The header's dot only, centred on its 28px line
+    const dots = container.querySelectorAll('span.rounded-full')
+    expect(dots).toHaveLength(1)
+    expect(dots[0]).toHaveClass('top-[10.5px]')
+    expect(container.querySelector('[data-run]')).toHaveClass('mb-0')
+    const lines = [...container.querySelectorAll('[data-run-entry]')]
+    expect(lines.map((l) => l.classList.contains('mb-0'))).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ])
+    expect(lines[0]).not.toHaveClass('gap-3')
+    expect(screen.getByRole('button', { name: 'Ran ls' })).toHaveClass('h-7')
+    // Thinking is a line too, its text under it
+    const thinking = screen.getByRole('button', { name: 'Thinking' })
+    expect(thinking).toHaveClass('h-7')
+    expect(screen.queryByText('mulling it over')).toBeNull()
+    fireEvent.click(thinking)
+    expect(screen.getByText('mulling it over')).toBeInTheDocument()
+    fireEvent.click(thinking)
+    expect(screen.queryByText('mulling it over')).toBeNull()
+    // Folded, its header keeps its margin to what follows
+    fireEvent.click(header())
+    expect(container.querySelector('[data-run]')).not.toHaveClass('mb-0')
+  })
+
   it('done, it says how long it worked', () => {
     render(
       <Run

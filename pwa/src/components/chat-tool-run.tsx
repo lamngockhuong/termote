@@ -6,7 +6,7 @@ import type { Translate } from '../i18n/translate'
 import { formatElapsed } from './chat-activity-row'
 import { ChatMessage, chatSide, Step, Time } from './chat-message'
 import { useServerSeconds } from './chat-subagents'
-import { type StepKind, stepKind } from './chat-tool-card'
+import { STEP_ROW, type StepKind, stepKind } from './chat-tool-card'
 
 // The agent's steps one after another (tool calls, thinking) fold into one
 // line saying what they were, so a turn of twenty commands does not push its
@@ -167,9 +167,6 @@ export interface RunAt {
   waiting?: boolean
 }
 
-const HEADER =
-  'flex w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch'
-
 // The line over a run: "Working… · 15s · 3 commands · 1 failed" while it
 // runs, a second at a time, "Needs you · …" while the agent waits on the
 // reader (no time: the wait is not work), then "Worked for 15s · …". The count of failed
@@ -218,7 +215,7 @@ function RunHeader({
       aria-expanded={open}
       aria-label={[title, elapsed, label, failures].filter(Boolean).join(' · ')}
       onClick={onClick}
-      className={HEADER}
+      className={STEP_ROW}
     >
       <ChevronRight
         size={14}
@@ -301,10 +298,11 @@ export function toolRunRows(
       key={`run:${runKey}`}
       data-run
       data-role="assistant"
-      className="flex flex-col gap-3"
+      // Open, its lines follow it flush: one place on the timeline
+      className={`flex flex-col gap-3 ${open ? 'mb-0' : ''}`}
     >
       {layout[start].showTime && <Time ts={entries[start].ts} />}
-      <Step dot={dot} line={open || layout[layout.length - 1].joinsNext}>
+      <Step dot={dot} row line={open || layout[layout.length - 1].joinsNext}>
         <RunHeader
           open={open && start === 0}
           live={live}
@@ -327,11 +325,12 @@ export function toolRunRows(
     header,
     ...entries
       .slice(start)
-      .map((e, i) => (
+      .map((e, i, shown) => (
         <ChatMessage
           key={e.id}
           entry={e}
           steps
+          className={i < shown.length - 1 ? 'mb-0' : undefined}
           showTime={i > 0 && layout[start + i].showTime}
           joinsNext={layout[start + i].joinsNext}
         />

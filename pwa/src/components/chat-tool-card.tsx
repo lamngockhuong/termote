@@ -410,6 +410,12 @@ export function stepLine(p: TranscriptPart, t: Translate<MessageKey>) {
     .join(' ')
 }
 
+// A line of a run: as tall as its text, the rows of a run flush one under
+// the other; on a touch screen an invisible edge around it (::before) makes
+// the 44px a finger needs without spacing the lines out
+export const STEP_ROW =
+  "relative flex h-7 w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-['']"
+
 // A tool call: its card, or in a run (steps) one line whose tap shows the
 // card. The card keeps its place in the tree either way, so a card the
 // reader clicked or focused in (an output opened) stays open, and shown,
@@ -434,7 +440,7 @@ export function ToolStep({
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch"
+          className={STEP_ROW}
         >
           <ChevronRight
             size={14}
@@ -457,7 +463,8 @@ export function ToolStep({
         </button>
       ) : null}
       {(!steps || open) && (
-        <div className={steps ? 'mt-1.5' : undefined}>
+        // Under its line, at the line's text
+        <div className={steps ? 'pt-0.5 pb-2 pl-5' : undefined}>
           <ToolCard part={part} />
         </div>
       )}
