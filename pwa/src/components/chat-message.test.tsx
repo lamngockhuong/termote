@@ -788,6 +788,7 @@ describe('ChatMessage', () => {
       'absolute',
       'top-full',
       'right-0',
+      'z-10',
       'opacity-0',
       'pointer-events-none',
       'group-hover/msg:pointer-events-auto',

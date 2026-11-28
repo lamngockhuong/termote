@@ -510,10 +510,12 @@ export const ChatMessage = memo(function ChatMessage({
       {answer && joinsNext && (
         // The agent goes on: the row takes no room, at the right under the
         // message, over the start of the next entry (a run's short line).
+        // Above that entry (its row is positioned too, and comes later), or
+        // the pointer on the way to the button would leave the message.
         // Unseen it lets clicks through to that entry; a touch screen does
         // not have it, as the row would always show there
         <div
-          className={`pointer-events-none absolute top-full right-0 flex items-center gap-1 pt-2 group-focus-within/msg:pointer-events-auto group-hover/msg:pointer-events-auto pointer-coarse:hidden ${REVEAL}`}
+          className={`pointer-events-none absolute top-full right-0 z-10 flex items-center gap-1 pt-2 group-focus-within/msg:pointer-events-auto group-hover/msg:pointer-events-auto pointer-coarse:hidden ${REVEAL}`}
         >
           <Time ts={entry.ts} />
           <CopyButton
