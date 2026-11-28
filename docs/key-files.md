@@ -90,7 +90,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
 | `pwa/src/components/chat-activity-row.tsx`        | Chat view: working line; what a done turn left running         |
 | `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, output, diff, Artifact link  |
-| `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
+| `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row as one run, timed, folded when done  |
 | `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |
 | `pwa/src/components/chat-image-viewer.tsx`        | A transcript image, shown from its chip in the Chat view       |
 | `pwa/src/utils/chat-file-links.ts`                | Which inline code is a path, its line, the path under the root |

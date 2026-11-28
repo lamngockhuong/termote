@@ -120,6 +120,10 @@ describe('HistoryTranscriptView', () => {
         screen.getByText(/4 commands/).closest('button') as HTMLElement
       ).getAttribute('aria-expanded'),
     ).not.toBe(was)
+    // A press inside a run the reader opened keeps that choice
+    fireEvent.click(screen.getAllByRole('button', { name: /echo/ })[0])
+    fireEvent.focus(screen.getAllByRole('button', { name: /echo/ })[0])
+    expect(screen.getAllByRole('button', { name: /echo/ })).toHaveLength(4)
 
     let release!: (r: Response) => void
     replies.push(() => new Promise((r) => (release = r)))

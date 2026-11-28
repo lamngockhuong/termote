@@ -92,6 +92,12 @@ export default {
   'chat.run.earlier_other': '{count} earlier steps · {summary}',
   'chat.run.earlierSteps': 'Earlier steps · {summary}',
   'chat.run.failed': '{count} failed',
+  'chat.run.working': 'Working…',
+  'chat.run.workedFor': 'Worked for {duration}',
+  'chat.run.needsYou': 'Needs you',
+  'chat.run.worked': 'Worked',
+  'chat.step.ran': 'Ran {command}',
+  'chat.step.failed': 'failed',
 
   // A Claude session's subagents (components/subagent-tree.tsx)
   'chat.subagent.running': 'running',

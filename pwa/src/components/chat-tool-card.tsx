@@ -3,6 +3,8 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
 import type { TranscriptPart } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import {
   type DiffRow,
   diffLines,
@@ -383,4 +385,89 @@ export function toolDot(part: TranscriptPart) {
   if (part.result || part.orphan) return 'bg-success'
 
   return 'border border-fg-subtle bg-transparent'
+}
+
+export type StepKind = 'command' | 'edit' | 'read' | 'search' | 'other'
+
+export function stepKind(p: TranscriptPart): StepKind {
+  const tool = p.tool ?? ''
+  if (p.detail?.command || tool === 'Bash') return 'command'
+  if (EDIT_TOOLS.has(tool)) return 'edit'
+  if (tool === 'Read' || tool === 'ViewImage') return 'read'
+  if (/grep|glob|search|fetch/i.test(tool)) return 'search'
+  return 'other'
+}
+
+// A step in a few words: what the model said it does, else the command it
+// ran, else the tool and what it acted on
+export function stepLine(p: TranscriptPart, t: Translate<MessageKey>) {
+  if (p.detail?.description) return p.detail.description
+  if (p.detail?.command) {
+    return t('chat.step.ran', { command: p.detail.command.split('\n')[0] })
+  }
+  return [p.orphan ? t('chat.tool.result') : p.tool, p.input]
+    .filter(Boolean)
+    .join(' ')
+}
+
+// A line of a run: as tall as its text, the rows of a run flush one under
+// the other; on a touch screen an invisible edge around it (::before) makes
+// the 44px a finger needs without spacing the lines out
+export const STEP_ROW =
+  "relative flex h-7 w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-['']"
+
+// A tool call: its card, or in a run (steps) one line whose tap shows the
+// card. The card keeps its place in the tree either way, so a card the
+// reader clicked or focused in (an output opened) stays open, and shown,
+// when its entry becomes part of a run. "failed" sits after the line,
+// outside what a narrow screen cuts.
+export function ToolStep({
+  part,
+  steps,
+}: {
+  part: TranscriptPart
+  steps?: boolean
+}) {
+  const { t } = useT()
+  const [open, setOpen] = useState(false)
+  const hold = () => {
+    if (!steps && !open) setOpen(true)
+  }
+  return (
+    <div className="min-w-0" onClickCapture={hold} onFocusCapture={hold}>
+      {steps ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className={STEP_ROW}
+        >
+          <ChevronRight
+            size={14}
+            aria-hidden="true"
+            className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+          <span
+            className={`min-w-0 truncate ${part.detail?.description ? '' : 'font-mono text-[11px]'}`}
+          >
+            {stepLine(part, t)}
+          </span>
+          {part.isError && (
+            <>
+              {' '}
+              <span className="shrink-0 text-danger">
+                {t('chat.step.failed')}
+              </span>
+            </>
+          )}
+        </button>
+      ) : null}
+      {(!steps || open) && (
+        // Under its line, at the line's text
+        <div className={steps ? 'pt-0.5 pb-2 pl-5' : undefined}>
+          <ToolCard part={part} />
+        </div>
+      )}
+    </div>
+  )
 }

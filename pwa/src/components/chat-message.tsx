@@ -5,6 +5,7 @@ import {
   memo,
   type ReactNode,
   useContext,
+  useState,
 } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -18,7 +19,7 @@ import { exportName } from '../utils/mermaid-export'
 import { CopyButton } from './chat-copy-button'
 import { FileRef } from './chat-file-link'
 import { ChatImageContext } from './chat-image-viewer'
-import { ToolCard, toolDot } from './chat-tool-card'
+import { STEP_ROW, ToolCard, ToolStep, toolDot } from './chat-tool-card'
 import { CodeFence } from './fenced-code'
 
 // One entry of an agent's transcript. Agent text is untrusted (a prompt
@@ -222,14 +223,23 @@ function ImageChip({ src, n }: { src?: string; n?: number }) {
   )
 }
 
-function Part({ part, n }: { part: TranscriptPart; n?: number }) {
+function Part({
+  part,
+  n,
+  steps,
+}: {
+  part: TranscriptPart
+  n?: number
+  steps?: boolean
+}) {
   const { t } = useT()
   switch (part.kind) {
     case 'tool':
-      return <ToolCard part={part} />
+      return <ToolStep part={part} steps={steps} />
     case 'image':
       return <ImageChip src={part.image} n={n} />
     case 'thinking':
+      if (steps) return <StepThinking part={part} />
       return (
         <Disclosure summary={t('chat.message.thinking')}>
           <p className="whitespace-pre-wrap text-fg-muted">{part.text}</p>
@@ -246,28 +256,63 @@ function Part({ part, n }: { part: TranscriptPart; n?: number }) {
   }
 }
 
+// Thinking among the lines of a run: a line of its own, its text under it
+function StepThinking({ part }: { part: TranscriptPart }) {
+  const { t } = useT()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="min-w-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={STEP_ROW}
+      >
+        <ChevronRight
+          size={14}
+          aria-hidden="true"
+          className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+        <span className="min-w-0 truncate">{t('chat.message.thinking')}</span>
+      </button>
+      {open && (
+        <div className="pb-2 pl-5 text-[12px]">
+          <p className="whitespace-pre-wrap text-fg-muted">{part.text}</p>
+          <Clipped show={part.clipped} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // One step of the agent's side, on a line down the left: a dot coloured by
 // what the step is (a tool by how it ended), and the line on to the next
-// step when there is one.
+// step when there is one. A line of an open run has no dot of its own (the
+// run's header has it), its line drawn from its top. row: the dot centred
+// on a 28px line (a run's header).
 export function Step({
   dot,
   line,
+  row,
   children,
 }: {
-  dot: string
+  dot?: string
   line: boolean
+  row?: boolean
   children: ReactNode
 }) {
   return (
     <div className="relative min-w-0 pl-5">
-      <span
-        aria-hidden="true"
-        className={`absolute top-[7px] left-0 size-[7px] rounded-full ${dot}`}
-      />
+      {dot && (
+        <span
+          aria-hidden="true"
+          className={`absolute ${row ? 'top-[10.5px]' : 'top-[7px]'} left-0 size-[7px] rounded-full ${dot}`}
+        />
+      )}
       {line && (
         <span
           aria-hidden="true"
-          className="absolute top-[18px] -bottom-3 left-[3px] w-px bg-border"
+          className={`absolute ${!dot ? 'top-0' : row ? 'top-[21.5px]' : 'top-[18px]'} -bottom-3 left-[3px] w-px bg-border`}
         />
       )}
       {children}
@@ -304,16 +349,21 @@ export function chatSide(entry: TranscriptEntry): 'user' | 'agent' | 'other' {
 // parsed markdown) alone. showTime: the entry starts a run of its own;
 // joinsNext: the agent's next entry follows, so the line goes on; at the
 // end of a turn the answer gets a copy button instead. className: motion
-// on its root (a message that just came in).
+// on its root (a message that just came in). steps: the entry is in an open
+// run, each tool call a line. data-run-entry, on an entry of steps only: the
+// list keeps a run open once the reader pressed or focused inside one of
+// its entries, before the run formed too.
 export const ChatMessage = memo(function ChatMessage({
   entry,
   showTime,
   joinsNext,
+  steps,
   className = '',
 }: {
   entry: TranscriptEntry
   showTime?: boolean
   joinsNext?: boolean
+  steps?: boolean
   className?: string
 }) {
   const { t } = useT()
@@ -380,21 +430,35 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
   const last = entry.parts.length - 1
+  const onlySteps = entry.parts.every(
+    (p) => p.kind === 'tool' || p.kind === 'thinking',
+  )
   const answer = entry.parts
     .filter((p) => p.kind === 'text' && p.text)
     .map((p) => p.text)
     .join('\n\n')
   return (
-    <div data-role={entry.role} className={`flex flex-col gap-3 ${className}`}>
+    // In an open run its lines sit flush, with no dot of their own
+    <div
+      data-role={entry.role}
+      data-run-entry={onlySteps ? entry.id : undefined}
+      className={`flex flex-col ${steps ? '' : 'gap-3'} ${className}`}
+    >
       {time}
       {entry.parts.map((part, i) => (
         <Step
           // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
           key={i}
-          dot={part.kind === 'tool' ? toolDot(part) : 'bg-fg-subtle'}
+          dot={
+            steps
+              ? undefined
+              : part.kind === 'tool'
+                ? toolDot(part)
+                : 'bg-fg-subtle'
+          }
           line={i < last || !!joinsNext}
         >
-          <Part part={part} n={numbers[i]} />
+          <Part part={part} n={numbers[i]} steps={steps} />
         </Step>
       ))}
       {!joinsNext && answer && (

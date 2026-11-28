@@ -5,7 +5,8 @@ import { AgentPanePicker } from '../components/agent-pane-picker'
 import { ChatComposer } from '../components/chat-composer'
 import { ChatInput } from '../components/chat-input'
 import { ChatMessage } from '../components/chat-message'
-import { runSummary, stepLine } from '../components/chat-tool-run'
+import { stepLine } from '../components/chat-tool-card'
+import { runSummary } from '../components/chat-tool-run'
 import { NeedsMeQueue, type QueueCard } from '../components/needs-me-queue'
 import { PromptCard, WaitingCard } from '../components/prompt-card'
 import { StartAgentPanel } from '../components/start-agent-panel'
@@ -243,6 +244,16 @@ describe('the conversation in Vietnamese', () => {
       'Read x.ts',
     )
     expect(stepLine({ kind: 'tool', orphan: true }, tVi)).toBe('Kết quả')
+    expect(
+      stepLine({ kind: 'tool', tool: 'Bash', detail: { command: 'ls' } }, tVi),
+    ).toBe('Đã chạy ls')
+    expect(tVi('chat.run.working')).toBe('Đang làm…')
+    expect(tVi('chat.run.workedFor', { duration: '15s' })).toBe(
+      'Đã làm trong 15s',
+    )
+    expect(tVi('chat.run.worked')).toBe('Đã làm')
+    expect(tVi('chat.run.needsYou')).toBe('Cần bạn')
+    expect(tVi('chat.step.failed')).toBe('lỗi')
     expect(diffSummary(diffLines('a', 'a\nb'), tVi)).toBe('Thêm 1 dòng')
     expect(diffSummary(diffLines('a\nb\nc', 'a'), tVi)).toBe('Xóa 2 dòng')
   })
