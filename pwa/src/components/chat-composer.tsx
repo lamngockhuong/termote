@@ -1,4 +1,5 @@
 import {
+  ArrowRightToLine,
   FileText,
   ImagePlus,
   SendHorizontal,
@@ -207,6 +208,9 @@ export function ChatComposer({
   const waiting = status === 'blocked' && p.loaded && !p.prompt
   const [text, setText] = useState(() => loadDraft(paneId))
   const [sending, setSending] = useState(false)
+  // The agent's proposed next message: nothing to take while sending or for
+  // a view-only device
+  const suggestion = readOnly || sending ? '' : p.suggestion
   // Text selected in the conversation, kept for the Quote button
   const quotable = useSyncExternalStore(onChatSelection, () =>
     hasChatSelection(paneId),
@@ -611,6 +615,15 @@ export function ChatComposer({
     })
   }
 
+  // The suggestion is offered while the box is empty
+  const suggestionShown = !!suggestion && text === ''
+  const takeSuggestion = () => {
+    textRef.current = suggestion
+    update(suggestion)
+    setCaret(suggestion.length)
+    boxRef.current?.focus()
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (listOpen && listRows > 0 && !e.ctrlKey && !e.metaKey) {
       const n = listRows
@@ -631,6 +644,19 @@ export function ChatComposer({
           else pickTemplate(templateMatches[at - matches.length])
           return
       }
+    }
+    // Tab in an empty box takes the agent's suggestion, as in the terminal
+    if (
+      e.key === 'Tab' &&
+      suggestionShown &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      e.preventDefault()
+      takeSuggestion()
+      return
     }
     if (listShown && e.key === 'Escape') {
       e.preventDefault()
@@ -722,6 +748,19 @@ export function ChatComposer({
           <FileText size={18} aria-hidden="true" />
         </IconButton>
       )}
+      {/* The Tab key's twin, for a phone keyboard that has none */}
+      {suggestionShown && (
+        <IconButton
+          aria-label={translate('chat.composer.useSuggestion')}
+          title={translate('chat.composer.useSuggestion')}
+          // The keyboard stays open: the box keeps its focus
+          onPointerDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={takeSuggestion}
+        >
+          <ArrowRightToLine size={18} aria-hidden="true" />
+        </IconButton>
+      )}
       {quotable && (
         <IconButton
           aria-label={translate('chat.composer.quote')}
@@ -761,7 +800,7 @@ export function ChatComposer({
       }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
-      placeholder={translate('chat.composer.placeholder')}
+      placeholder={suggestion || translate('chat.composer.placeholder')}
       className="block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-hidden"
     />
   )
@@ -909,7 +948,11 @@ export function ChatComposer({
                 className="whitespace-nowrap text-[12px] text-fg-subtle"
               >
                 {translate(
-                  enterSends ? 'chat.composer.hintEnter' : 'chat.composer.hint',
+                  suggestionShown
+                    ? 'chat.composer.hintSuggestion'
+                    : enterSends
+                      ? 'chat.composer.hintEnter'
+                      : 'chat.composer.hint',
                 )}
               </span>
             )}

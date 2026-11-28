@@ -23,9 +23,12 @@ export function promptPollInterval(status: AgentStatus | undefined): number {
 export interface PromptState {
   prompt: AgentPrompt | null
   loaded: boolean
+  // The message the agent proposes in its empty input box ("" when none);
+  // Tab in the composer takes it, as in the terminal
+  suggestion: string
 }
 
-const INITIAL: PromptState = { prompt: null, loaded: false }
+const INITIAL: PromptState = { prompt: null, loaded: false, suggestion: '' }
 
 // The agent's working line, read with the dialog. Its own readers: the time
 // in it changes every read while the agent works, and only the row that
@@ -65,6 +68,7 @@ function createStore(paneId: string): Store {
     // Same dialog, same id: nothing to re-render.
     if (
       next.loaded === state.loaded &&
+      next.suggestion === state.suggestion &&
       JSON.stringify(next.prompt) === JSON.stringify(state.prompt)
     ) {
       return
@@ -98,11 +102,15 @@ function createStore(paneId: string): Store {
     inFlight = true
     try {
       const read = await fetchAgentPrompt(paneId)
-      set({ prompt: read.prompt, loaded: true })
+      set({
+        prompt: read.prompt,
+        loaded: true,
+        suggestion: read.prompt ? '' : read.suggestion,
+      })
       setLive(read.activity)
     } catch {
       // No session, network: no card. The transcript view reports why.
-      set({ prompt: null, loaded: true })
+      set({ prompt: null, loaded: true, suggestion: '' })
       setLive(null)
     } finally {
       inFlight = false
@@ -146,7 +154,7 @@ function createStore(paneId: string): Store {
       else schedule(0)
     },
     show(prompt) {
-      set({ prompt, loaded: true })
+      set({ prompt, loaded: true, suggestion: prompt ? '' : state.suggestion })
       setLive(live.activity)
     },
     setStatus(next) {

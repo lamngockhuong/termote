@@ -77,6 +77,13 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   stripped of control characters and cut to 80 runes): a status line, no file content or
   command output, and less than the transcript and dialog card title a view-only client already
   reads for every pane, so both roles get it.
+  `GET agent/prompt` also returns `suggestion`, the message Claude Code proposes in its empty input
+  box, read off the same capture (`readInputBox`: the box's text when every character of it is
+  faint, never a fresh session's `Try "…"` example, a known placeholder or text while a working
+  line shows). It adds no capture and no write and takes nothing from the client; the PWA only
+  shows it as the box's placeholder and puts it in the draft on Tab or its **Use the suggestion**
+  button, never sends it by itself.
+  View-only clients get it as they get the screen's other text; their composer ignores it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
   503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many
