@@ -14,7 +14,7 @@
   "devDependencies": {
     "@remotion/cli": "4.0.543",
     "@remotion/eslint-config-flat": "4.0.543",
-    "@remotion/google-fonts": "4.0.543",
+    "@remotion/google-fonts": "4.0.547",
     "@remotion/media": "4.0.543",
     "@remotion/transitions": "4.0.543",
     "@types/qrcode": "1.5.6",
