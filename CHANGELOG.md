@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.36.0](https://github.com/lamngockhuong/termote/compare/v2.35.0...v2.36.0) (2026-11-28)
+
+
+### Features
+
+* **pwa:** add a scroll-to-bottom button to the chat view ([#1026](https://github.com/lamngockhuong/termote/issues/1026)) ([927083d](https://github.com/lamngockhuong/termote/commit/927083d3c7ea8142d31663c5ecc5de6b412d4a02))
+* **pwa:** add a setting to hide the Tasks view ([#1020](https://github.com/lamngockhuong/termote/issues/1020)) ([aa25e25](https://github.com/lamngockhuong/termote/commit/aa25e25861a62aa7dcca21bf4fc5b7bfd3ec79ad))
+* **pwa:** fold a run of steps once the turn ends, timed, a line per step ([#1025](https://github.com/lamngockhuong/termote/issues/1025)) ([43e0f94](https://github.com/lamngockhuong/termote/commit/43e0f94fb217cb5283acf4a8785830fefa9ae315))
+* **pwa:** fold one or two steps into a run as well ([#1027](https://github.com/lamngockhuong/termote/issues/1027)) ([29b4271](https://github.com/lamngockhuong/termote/commit/29b42716d63c8dd569e1fe5ecd4d4c0bdc7cddd5))
+* **pwa:** link URLs and show known commands as chips in the user's chat messages ([#1030](https://github.com/lamngockhuong/termote/issues/1030)) ([fa14754](https://github.com/lamngockhuong/termote/commit/fa147541399eea7dd0aa4f4c89947ce67c4e77d8))
+* **pwa:** show a chat message's time and copy button on hover ([#1029](https://github.com/lamngockhuong/termote/issues/1029)) ([372a5a1](https://github.com/lamngockhuong/termote/commit/372a5a1bdab1b1003c88e691ea250af86a0a9f6e))
+* **pwa:** show Claude Code's suggested next message in the chat box ([#1024](https://github.com/lamngockhuong/termote/issues/1024)) ([d5e5d18](https://github.com/lamngockhuong/termote/commit/d5e5d18002febcbb2bfafa06bc41744adc477eed))
+
+
+### Bug Fixes
+
+* **pwa:** align a chat message's time and keep its row from adding room ([#1031](https://github.com/lamngockhuong/termote/issues/1031)) ([1b024df](https://github.com/lamngockhuong/termote/commit/1b024dfa0e9cf6035c7d1f41a15efe021820ecab))
+* **pwa:** reopen the chat command list as the word changes, and offer it mid-message ([#1028](https://github.com/lamngockhuong/termote/issues/1028)) ([446ca11](https://github.com/lamngockhuong/termote/commit/446ca11981332f3e0b4bf6e48e17717486ccd241))
+* **server:** show messages queued mid-turn in the Claude Code chat ([#1023](https://github.com/lamngockhuong/termote/issues/1023)) ([74a21df](https://github.com/lamngockhuong/termote/commit/74a21dfa79e381531f8ecd70894c44edf869fa02))
+
 ## [2.35.0](https://github.com/lamngockhuong/termote/compare/v2.34.0...v2.35.0) (2026-11-27)
 
 
