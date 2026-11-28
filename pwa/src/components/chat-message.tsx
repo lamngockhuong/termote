@@ -320,7 +320,18 @@ export function Step({
   )
 }
 
-export function Time({ ts }: { ts?: string }) {
+// With a mouse a message's time and copy button wait for a hover or focus
+// on it; a touch screen has no hover, so there they always show
+export const REVEAL =
+  'opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 pointer-coarse:opacity-100'
+
+export function Time({
+  ts,
+  className = '',
+}: {
+  ts?: string
+  className?: string
+}) {
   const { locale } = useT()
   if (!ts) return null
   const d = new Date(ts)
@@ -329,7 +340,7 @@ export function Time({ ts }: { ts?: string }) {
     <time
       dateTime={ts}
       title={formatDateTime(d, locale)}
-      className="self-end text-[11px] text-fg-subtle"
+      className={`self-end text-[11px] text-fg-subtle ${className}`}
     >
       {formatTime(d, locale)}
     </time>
@@ -347,8 +358,10 @@ export function chatSide(entry: TranscriptEntry): 'user' | 'agent' | 'other' {
 
 // Memoised: a poll that brings new entries leaves the others (and their
 // parsed markdown) alone. showTime: the entry starts a run of its own;
-// joinsNext: the agent's next entry follows, so the line goes on; at the
-// end of a turn the answer gets a copy button instead. className: motion
+// joinsNext: the agent's next entry follows, so the line goes on. A
+// message with text has its time and a copy button under it (beside it, the
+// reader's own), shown on hover with a mouse; a touch screen always shows
+// them, the time only where showTime asks for it. className: motion
 // on its root (a message that just came in). steps: the entry is in an open
 // run, each tool call a line. data-run-entry, on an entry of steps only: the
 // list keeps a run open once the reader pressed or focused inside one of
@@ -397,16 +410,32 @@ export const ChatMessage = memo(function ChatMessage({
   }
   const user = chatSide(entry) === 'user'
   const numbers = imageNumbers(entry.parts)
-  const time = showTime && <Time ts={entry.ts} />
+  // A touch screen shows the time only where a run starts
+  const timeTouch = showTime ? '' : 'pointer-coarse:hidden'
   if (user) {
+    const said = entry.parts
+      .filter((p) => p.kind === 'text' && p.text)
+      .map((p) => p.text)
+      .join('\n\n')
     return (
       // The reader's own messages sit on the right, as wide as their text up
-      // to 85% of the column
+      // to 85% of the column, the time and copy button on their left
       <div
         data-role="user"
-        className={`flex flex-col items-end gap-1 ${className}`}
+        className={`group/msg flex items-end justify-end gap-2 ${className}`}
       >
-        {time}
+        <div className={`flex shrink-0 items-center gap-1 ${REVEAL}`}>
+          <Time ts={entry.ts} className={timeTouch} />
+          {said && (
+            // Not on a touch screen: always shown there, beside every
+            // message of the reader's own
+            <CopyButton
+              text={() => said}
+              label={t('chat.message.copyMessage')}
+              className="pointer-coarse:hidden"
+            />
+          )}
+        </div>
         <div className="w-fit min-w-0 max-w-[85%] space-y-1.5 rounded-control border border-border bg-surface px-3 py-2">
           {entry.parts.map((part, i) =>
             part.kind === 'image' ? (
@@ -442,9 +471,9 @@ export const ChatMessage = memo(function ChatMessage({
     <div
       data-role={entry.role}
       data-run-entry={onlySteps ? entry.id : undefined}
-      className={`flex flex-col ${steps ? '' : 'gap-3'} ${className}`}
+      className={`group/msg flex flex-col ${steps ? '' : 'gap-3'} ${className}`}
     >
-      {time}
+      {!answer && showTime && <Time ts={entry.ts} className={REVEAL} />}
       {entry.parts.map((part, i) => (
         <Step
           // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
@@ -461,13 +490,17 @@ export const ChatMessage = memo(function ChatMessage({
           <Part part={part} n={numbers[i]} steps={steps} />
         </Step>
       ))}
-      {!joinsNext && answer && (
-        <div className="-mt-2 pl-4">
-          <CopyButton
-            text={() => answer}
-            label={t('chat.message.copyAnswer')}
-          />
-        </div>
+      {answer && (
+        // A step of its own, so the line goes on past it to the next entry
+        <Step line={!!joinsNext}>
+          <div className={`-mt-2 -ml-1 flex items-center gap-1 ${REVEAL}`}>
+            <CopyButton
+              text={() => answer}
+              label={t('chat.message.copyAnswer')}
+            />
+            <Time ts={entry.ts} className={timeTouch} />
+          </div>
+        </Step>
       )}
     </div>
   )

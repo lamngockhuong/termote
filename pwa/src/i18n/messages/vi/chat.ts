@@ -44,6 +44,7 @@ export default {
     'Không tải được ảnh: có thể nó không còn trong transcript, hoặc phiên agent đã đổi.',
   'chat.message.copyCode': 'Sao chép code',
   'chat.message.copyAnswer': 'Sao chép câu trả lời',
+  'chat.message.copyMessage': 'Sao chép tin nhắn',
   'chat.message.shortened': '(đã rút gọn)',
   'chat.message.thinking': 'Suy nghĩ',
   'chat.message.compacted': 'Đã tóm tắt cuộc trò chuyện',
