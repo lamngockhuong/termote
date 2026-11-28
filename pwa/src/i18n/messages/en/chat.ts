@@ -52,6 +52,7 @@ export default {
     'The image could not be loaded: it may be gone from the transcript, or the agent session changed.',
   'chat.message.copyCode': 'Copy code',
   'chat.message.copyAnswer': 'Copy answer',
+  'chat.message.copyMessage': 'Copy message',
   'chat.message.shortened': '(shortened)',
   'chat.message.thinking': 'Thinking',
   'chat.message.compacted': 'Conversation compacted',
