@@ -281,15 +281,27 @@ func (claudeJournal) Image(f io.ReaderAt, off, size int64, n int) (string, []byt
 // when given.
 func claudeImage(line []byte, n int) (string, []byte, bool) {
 	var row struct {
+		Type    string `json:"type"`
 		Message *struct {
 			Content json.RawMessage `json:"content"`
 		} `json:"message"`
+		Attachment *claudeAttachment `json:"attachment"`
 	}
-	if json.Unmarshal(line, &row) != nil || row.Message == nil {
+	if json.Unmarshal(line, &row) != nil {
+		return "", nil, false
+	}
+	var content json.RawMessage
+	switch prompt, ok := claudeQueuedPrompt(row.Type, row.Attachment); {
+	case ok:
+		// A queued prompt's images are in its attachment
+		content, _ = json.Marshal(prompt)
+	case row.Message != nil:
+		content = row.Message.Content
+	default:
 		return "", nil, false
 	}
 	var blocks []json.RawMessage
-	if json.Unmarshal(row.Message.Content, &blocks) != nil {
+	if json.Unmarshal(content, &blocks) != nil {
 		return "", nil, false // a string message carries no image
 	}
 	k := 0

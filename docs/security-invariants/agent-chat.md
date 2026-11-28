@@ -99,7 +99,11 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   URL source or a tool result's image), and only of a user row holding text the user typed (not a
   notice): the read lists no image of another row, so a tool's image set at the top of a row (beside
   its result, a notice or nothing) never gets a reference; an image pasted with no words at all is
-  not listed either. A slash command's images are in the `isMeta` row that
+  not listed either. A message the user sent while Claude Code worked is written only as an
+  `attachment` row (`queued_command`): the read shows it as the user's, and serves its images from
+  its `attachment.prompt`, only when its `commandMode` is `prompt` and its `origin.kind` is `human`
+  (`claudeQueuedPrompt`), so a queued task notification or a subagent's hand-back (`peer`) is never
+  shown as the user's words nor gets an image reference. A slash command's images are in the `isMeta` row that
   expands it: the read lists them on the command only from the row right after it whose
   `parentUuid` is the command's, and the reference names that row's offset. Codex: the row must be a `UserMessage` item, and the bytes
   come only from the row right before it, which must be the model's user input (`response_item`

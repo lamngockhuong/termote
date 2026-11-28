@@ -780,3 +780,30 @@ func TestClaudeToolDetailClamps(t *testing.T) {
 		t.Errorf("edits total %d over %d", total, claudeMaxEdits)
 	}
 }
+
+// A message the user sends while Claude Code works is absorbed into the
+// running turn and written only as a queued_command attachment: it shows
+// as the user's message, as the terminal shows it. A queued task
+// notification or a subagent's hand-back stays out.
+func TestClaudeParseQueuedPrompt(t *testing.T) {
+	rows := `{"type":"user","uuid":"u1","timestamp":"2026-11-28T04:29:00Z","message":{"role":"user","content":"first"}}` + "\n" +
+		`{"type":"queue-operation","operation":"enqueue","content":"while working"}` + "\n" +
+		`{"parentUuid":"u1","isSidechain":false,"attachment":{"type":"queued_command","prompt":"while working","commandMode":"prompt","origin":{"kind":"human"},"humanTurn":true},"type":"attachment","uuid":"q1","timestamp":"2026-11-28T04:29:52Z","rendered":[{"content":"<system-reminder>\nThe user sent a new message while you were working:\nwhile working\n</system-reminder>"}]}` + "\n" +
+		`{"attachment":{"type":"queued_command","prompt":"<task-notification><task-id>a1</task-id><summary>done</summary></task-notification>","commandMode":"task-notification","origin":{"kind":"task-notification"}},"type":"attachment","uuid":"q2"}` + "\n" +
+		`{"attachment":{"type":"queued_command","prompt":"[Subagent hand-back] report","commandMode":"prompt","origin":{"kind":"peer"}},"type":"attachment","uuid":"q3"}` + "\n" +
+		`{"attachment":{"type":"queued_command","prompt":"no origin"},"type":"attachment","uuid":"q4"}` + "\n" +
+		`{"attachment":{"type":"queued_command","prompt":"in a subagent","commandMode":"prompt","origin":{"kind":"human"}},"type":"attachment","uuid":"q5","isSidechain":true}` + "\n" +
+		`{"attachment":{"type":"queued_command","prompt":[{"type":"text","text":"[Image #2] see"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":""}}],"commandMode":"prompt","origin":{"kind":"human"}},"type":"attachment","uuid":"q6"}` + "\n"
+	entries, _ := claudeJournal{}.Parse(strings.NewReader(rows), 0)
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
+	}
+	q := entries[1]
+	if q.ID != "q1" || q.Role != "user" || q.TS != "2026-11-28T04:29:52Z" || len(q.Parts) != 1 || q.Parts[0].Text != "while working" {
+		t.Errorf("queued = %+v", q)
+	}
+	img := entries[2]
+	if img.ID != "q6" || len(img.Parts) != 2 || img.Parts[0].Text != "[Image #2] see" || img.Parts[1].Kind != "image" {
+		t.Errorf("queued with image = %+v", img)
+	}
+}
