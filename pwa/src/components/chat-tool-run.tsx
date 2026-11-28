@@ -296,7 +296,7 @@ export function toolRunRows(
       className={`group/msg flex flex-col gap-3 ${open ? 'mb-0' : ''}`}
     >
       {layout[start].showTime && (
-        <Time ts={entries[start].ts} className={REVEAL} />
+        <Time ts={entries[start].ts} className={`self-end ${REVEAL}`} />
       )}
       <Step dot={dot} row line={open || layout[layout.length - 1].joinsNext}>
         <RunHeader
