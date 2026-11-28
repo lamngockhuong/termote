@@ -12,6 +12,7 @@ import type { TranscriptEntry } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 import type { MermaidResult } from '../utils/mermaid-render'
 import {
+  ChatCommandsContext,
   ChatMarkdownContext,
   ChatMessage,
   chatSide,
@@ -46,6 +47,87 @@ const assistant = (text: string): TranscriptEntry => ({
 })
 
 describe('ChatMessage', () => {
+  it("links a user message's URLs and shows its known commands as chips", () => {
+    const text =
+      'look at http://127.0.0.1:7317/?ws=w&pane=p%3A4\n/ak-brainstorm and /tmp'
+    const { container } = render(
+      <ChatCommandsContext.Provider
+        value={[
+          {
+            name: 'ak-brainstorm',
+            description: 'Compare approaches',
+            source: 'user',
+            kind: 'skill',
+            trigger: '/',
+          },
+        ]}
+      >
+        <ChatMessage
+          entry={{
+            id: 'u',
+            role: 'user',
+            // A text part without text shows as an empty line
+            parts: [{ kind: 'text', text }, { kind: 'text' }],
+          }}
+        />
+      </ChatCommandsContext.Provider>,
+    )
+    const link = screen.getByRole('link', {
+      name: 'http://127.0.0.1:7317/?ws=w&pane=p%3A4',
+    })
+    expect(link).toHaveAttribute(
+      'href',
+      'http://127.0.0.1:7317/?ws=w&pane=p%3A4',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link).toHaveAttribute('title', '127.0.0.1:7317')
+    const chip = container.querySelector('[data-command]')
+    expect(chip).toHaveTextContent('/ak-brainstorm')
+    expect(chip).toHaveAttribute('title', 'Compare approaches')
+    expect(container.querySelectorAll('[data-command]')).toHaveLength(1)
+    // Written as typed: no markdown, line breaks kept
+    expect(container.querySelector('p')?.textContent).toBe(text)
+  })
+
+  it('shows no chip outside the Chat view, and a built-in by its description', () => {
+    const { container, rerender } = render(
+      <ChatMessage
+        entry={{
+          id: 'u',
+          role: 'user',
+          parts: [{ kind: 'text', text: '/model **opus**' }],
+        }}
+      />,
+    )
+    expect(container.querySelector('[data-command]')).toBeNull()
+    expect(screen.getByText('/model **opus**')).toBeInTheDocument()
+    rerender(
+      <ChatCommandsContext.Provider
+        value={[
+          {
+            name: 'model',
+            source: 'builtin',
+            descriptionKey: 'chat.slash.claude.model',
+          },
+        ]}
+      >
+        <ChatMessage
+          entry={{
+            id: 'u',
+            role: 'user',
+            parts: [{ kind: 'text', text: '/model **opus**' }],
+          }}
+        />
+      </ChatCommandsContext.Provider>,
+    )
+    const chip = container.querySelector('[data-command]')
+    expect(chip).toHaveTextContent('/model')
+    expect(chip?.getAttribute('title')).toBe(
+      tFor('en')('chat.slash.claude.model'),
+    )
+  })
+
   it('renders assistant markdown, tables included', () => {
     render(
       <ChatMessage

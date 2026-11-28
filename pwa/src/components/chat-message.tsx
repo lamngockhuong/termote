@@ -1,4 +1,4 @@
-import { ChevronRight, ImageIcon } from 'lucide-react'
+import { BookOpen, ChevronRight, ImageIcon, SquareSlash } from 'lucide-react'
 import {
   type ComponentProps,
   createContext,
@@ -16,6 +16,8 @@ import { fileRefFromHref, parseFileRef } from '../utils/chat-file-links'
 import { rehypeMermaidIndex } from '../utils/markdown-links'
 import { htmlAsText, safeUrl } from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
+import { commandDescription, type SlashCommand } from '../utils/slash-commands'
+import { userMessageTokens } from '../utils/user-message-tokens'
 import { CopyButton } from './chat-copy-button'
 import { FileRef } from './chat-file-link'
 import { ChatImageContext } from './chat-image-viewer'
@@ -223,6 +225,55 @@ function ImageChip({ src, n }: { src?: string; n?: number }) {
   )
 }
 
+// The commands and skills the pane's agent knows, each after its trigger:
+// a user message names one as a chip. None outside the Chat view.
+export const ChatCommandsContext = createContext<SlashCommand[]>([])
+
+// What the user typed, as typed (never markdown), its links opening in a new
+// tab and the commands and skills it names shown as chips
+export function UserText({ text }: { text: string }) {
+  const commands = useContext(ChatCommandsContext)
+  const { t } = useT()
+  return (
+    <p className="whitespace-pre-wrap break-words">
+      {userMessageTokens(text, commands).map((tok, i) => {
+        if (tok.kind === 'link') {
+          return (
+            <a
+              // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one text
+              key={i}
+              href={tok.href}
+              // The text of a link can name another host than it goes to.
+              title={new URL(tok.href).host}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline underline-offset-2 [overflow-wrap:anywhere]"
+            >
+              {tok.text}
+            </a>
+          )
+        }
+        if (tok.kind === 'command') {
+          const Icon = tok.command.kind === 'skill' ? BookOpen : SquareSlash
+          return (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one text
+              key={i}
+              data-command={tok.text}
+              title={commandDescription(tok.command, t)}
+              className="inline-flex items-center gap-1 rounded border border-border bg-surface-raised px-1.5 align-baseline font-mono text-[0.9em]"
+            >
+              <Icon size={12} aria-hidden="true" className="shrink-0" />
+              {tok.text}
+            </span>
+          )
+        }
+        return tok.text
+      })}
+    </p>
+  )
+}
+
 function Part({
   part,
   n,
@@ -416,13 +467,8 @@ export const ChatMessage = memo(function ChatMessage({
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
               <ToolCard key={i} part={part} />
             ) : (
-              <p
-                // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
-                key={i}
-                className="whitespace-pre-wrap break-words"
-              >
-                {part.text}
-              </p>
+              // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
+              <UserText key={i} text={part.text ?? ''} />
             ),
           )}
         </div>
