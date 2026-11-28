@@ -1594,6 +1594,8 @@ export interface AgentActivity {
 export interface AgentScreenRead {
   prompt: AgentPrompt | null
   activity: AgentActivity | null
+  // The message Claude Code proposes in its empty input box, "" when none
+  suggestion: string
 }
 
 export async function fetchAgentPrompt(
@@ -1603,7 +1605,11 @@ export async function fetchAgentPrompt(
   if (!res.ok) throw await requestError(res)
   const body = await res.json()
   // A server before the working line sends no activity
-  return { prompt: body.prompt ?? null, activity: body.activity ?? null }
+  return {
+    prompt: body.prompt ?? null,
+    activity: body.activity ?? null,
+    suggestion: typeof body.suggestion === 'string' ? body.suggestion : '',
+  }
 }
 
 // A custom command or skill of the pane's project, its user or an enabled

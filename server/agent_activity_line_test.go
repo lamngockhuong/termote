@@ -368,3 +368,37 @@ func TestPromptRouteActivity(t *testing.T) {
 		t.Errorf("idle activity = %v, want null", a)
 	}
 }
+
+func TestPromptRouteSuggestion(t *testing.T) {
+	f := newFakeWriter()
+	f.screen = fixtureScreen(t, "2.1.332-idle-suggestion")
+	mux := agentMux(f)
+	read := func(r *http.Request) map[string]any {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		var body map[string]any
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil {
+			t.Fatalf("GET prompt = %d %s", rec.Code, rec.Body)
+		}
+		return body
+	}
+	get := func() *http.Request {
+		return httptest.NewRequest(http.MethodGet, "/api/mux/panes/0/agent/prompt", nil)
+	}
+	if b := read(get()); b["suggestion"] != "Run the tests again" || b["prompt"] != nil {
+		t.Errorf("body = %v", b)
+	}
+	// A view-only client reads it too.
+	r := get()
+	r = r.WithContext(withAuth(r.Context(), authInfo{Kind: authDevice, Role: roleView, DeviceID: "d"}))
+	if b := read(r); b["suggestion"] != "Run the tests again" {
+		t.Errorf("view-only body = %v", b)
+	}
+	// No suggestion: the field is left out.
+	f.setScreen(boxScreen(""))
+	time.Sleep(agentCacheTTL)
+	if b := read(get()); func() bool { _, ok := b["suggestion"]; return ok }() {
+		t.Errorf("idle body = %v, want no suggestion", b)
+	}
+}

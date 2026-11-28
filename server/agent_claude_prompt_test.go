@@ -45,6 +45,8 @@ func TestReadClaudeScreenInput(t *testing.T) {
 		{"2.1.310-working", inputEmpty, ""},
 		{"2.1.310-working-draft", inputDraft, "second message while working"},
 		{"2.1.310-working-queued", inputEmpty, ""},
+		{"2.1.332-idle-suggestion", inputEmpty, ""},
+		{"2.1.332-working-faint", inputEmpty, ""},
 		{"collie-2.1.278-mode-bash--w82", inputDraft, "!ls -1 src | head -3"},
 		// The popup is taller than the statusline allowance: not ready either way.
 		{"collie-2.1.278-popup-slash-all--w82", inputNone, ""},
@@ -66,6 +68,37 @@ func TestReadClaudeScreenInput(t *testing.T) {
 			sc := readScreen(t, tt.screen)
 			if sc.input != tt.input || sc.draft != tt.draft {
 				t.Errorf("input=%q draft=%q, want %q %q", sc.input, sc.draft, tt.input, tt.draft)
+			}
+		})
+	}
+}
+
+// TestReadClaudeScreenSuggestion: the message Claude Code proposes once a
+// turn ends is faint text in the empty box. "2.1.332-*" are the 2.1.286
+// after-turn, 2.1.330 working and done-background screens with the box row as 2.1.332 draws a
+// suggestion (read through herdr pane.read ansi).
+func TestReadClaudeScreenSuggestion(t *testing.T) {
+	tests := []struct{ screen, want string }{
+		{"2.1.332-idle-suggestion", "Run the tests again"},
+		// Faint text while the turn works is a hint, not a suggestion.
+		{"2.1.332-working-faint", ""},
+		// A fresh session's example is a tip.
+		{"2.1.286-idle-fresh", ""},
+		{"collie-2.1.278-idle-ghost-suggestion--w82", ""},
+		{"2.1.286-idle-after-turn", ""},
+		{"2.1.286-draft-short", ""},
+		{"2.1.310-working-queued", ""},
+		// The turn is done with a shell left running: the suggestion shows.
+		{"2.1.332-done-background-suggestion", "Check the server log"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.screen, func(t *testing.T) {
+			sc := readScreen(t, tt.screen)
+			if sc.input != inputEmpty && tt.want != "" {
+				t.Fatalf("input=%q, want empty", sc.input)
+			}
+			if sc.suggestion != tt.want {
+				t.Errorf("suggestion=%q, want %q", sc.suggestion, tt.want)
 			}
 		})
 	}

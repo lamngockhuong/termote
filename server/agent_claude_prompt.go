@@ -201,6 +201,9 @@ type agentScreen struct {
 	working bool
 	// activity: the working line read, nil when there is none
 	activity *AgentActivity
+	// suggestion: the next message Claude Code proposes, painted faint in
+	// the empty box (Tab takes it there); "" when it shows none
+	suggestion string
 }
 
 // AgentPrompt is a dialog the PWA shows as a card.
@@ -344,6 +347,11 @@ func findInputBox(lines []screenLine) (agentScreen, bool) {
 					sc.activity = &AgentActivity{Background: bg}
 				}
 			}
+			if sc.activity != nil && sc.activity.Background == "" {
+				// A turn still working: whatever is faint in the box is a
+				// hint, a suggestion comes once the turn ends.
+				sc.suggestion = ""
+			}
 			return sc, true
 		}
 	}
@@ -376,8 +384,17 @@ func readInputBox(rows []screenLine) agentScreen {
 		return agentScreen{input: inputDraft, draft: "!" + draft}
 	}
 	ghost := strings.TrimSpace(strings.Join(solid, "")) == ""
-	if draft == "" || ghost || claudeInputPlaceholders[draft] {
+	if draft == "" || claudeInputPlaceholders[draft] {
 		return agentScreen{input: inputEmpty}
+	}
+	if ghost {
+		sc := agentScreen{input: inputEmpty}
+		// A fresh session's example ("Try \"how do I log an error?\"") is
+		// faint too, but it is a tip, not a message to send.
+		if !claudeTryHintRe.MatchString(draft) {
+			sc.suggestion = draft
+		}
+		return sc
 	}
 	// "/name " shows the command's argument hint after it, which is not
 	// typed: the command is drawn in its colour and the hint in grey, so
@@ -399,8 +416,10 @@ func nonEmpty(ss []string) []string {
 }
 
 var (
-	optionRowRe   = regexp.MustCompile(`^(?:❯\s*)?(\d+)\.\s+(.+)$`)
-	pastedTokenRe = regexp.MustCompile(`^\[Pasted text #\d+(?: \+(\d+) lines?)?\]$`)
+	// claudeTryHintRe: the example a fresh session paints in its empty box.
+	claudeTryHintRe = regexp.MustCompile(`^Try ".*"$`)
+	optionRowRe     = regexp.MustCompile(`^(?:❯\s*)?(\d+)\.\s+(.+)$`)
+	pastedTokenRe   = regexp.MustCompile(`^\[Pasted text #\d+(?: \+(\d+) lines?)?\]$`)
 	// codexPastedTokenRe: what Codex 0.160.0 shows for a paste of more than
 	// 1000 characters.
 	codexPastedTokenRe = regexp.MustCompile(`^\[Pasted Content (\d+) chars\]$`)

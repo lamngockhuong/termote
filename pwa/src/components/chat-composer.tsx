@@ -207,6 +207,9 @@ export function ChatComposer({
   const waiting = status === 'blocked' && p.loaded && !p.prompt
   const [text, setText] = useState(() => loadDraft(paneId))
   const [sending, setSending] = useState(false)
+  // The agent's proposed next message: nothing to take while sending or for
+  // a view-only device
+  const suggestion = readOnly || sending ? '' : p.suggestion
   // Text selected in the conversation, kept for the Quote button
   const quotable = useSyncExternalStore(onChatSelection, () =>
     hasChatSelection(paneId),
@@ -632,6 +635,22 @@ export function ChatComposer({
           return
       }
     }
+    // Tab in an empty box takes the agent's suggestion, as in the terminal
+    if (
+      e.key === 'Tab' &&
+      suggestion &&
+      text === '' &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      e.preventDefault()
+      textRef.current = suggestion
+      update(suggestion)
+      setCaret(suggestion.length)
+      return
+    }
     if (listShown && e.key === 'Escape') {
       e.preventDefault()
       setDismissed(true)
@@ -761,7 +780,7 @@ export function ChatComposer({
       }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
-      placeholder={translate('chat.composer.placeholder')}
+      placeholder={suggestion || translate('chat.composer.placeholder')}
       className="block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-hidden"
     />
   )
@@ -909,7 +928,11 @@ export function ChatComposer({
                 className="whitespace-nowrap text-[12px] text-fg-subtle"
               >
                 {translate(
-                  enterSends ? 'chat.composer.hintEnter' : 'chat.composer.hint',
+                  suggestion && text === ''
+                    ? 'chat.composer.hintSuggestion'
+                    : enterSends
+                      ? 'chat.composer.hintEnter'
+                      : 'chat.composer.hint',
                 )}
               </span>
             )}

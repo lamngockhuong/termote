@@ -14,11 +14,13 @@ import type { AgentPrompt } from './use-mux-api'
 
 const mockFetchPrompt = vi.fn()
 const mockActivity = vi.fn()
+const mockSuggestion = vi.fn()
 vi.mock('./use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./use-mux-api')>()),
   fetchAgentPrompt: async (...a: unknown[]) => ({
     prompt: await mockFetchPrompt(...a),
     activity: mockActivity() ?? null,
+    suggestion: mockSuggestion() ?? '',
   }),
 }))
 
@@ -37,6 +39,7 @@ beforeEach(() => {
   mockFetchPrompt.mockReset()
   mockFetchPrompt.mockResolvedValue(null)
   mockActivity.mockReset()
+  mockSuggestion.mockReset()
   visibility = 'visible'
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -299,5 +302,28 @@ describe('useAgentPrompt and shifted ids', () => {
     const b = renderHook(() => useAgentPrompt('%1', 'blocked'))
     expect(b.result.current.loaded).toBe(false)
     b.unmount()
+  })
+})
+
+describe('useAgentPrompt suggestion', () => {
+  it('carries the suggestion, dropped while a dialog is open or after a failed read', async () => {
+    mockSuggestion.mockReturnValue('Run it')
+    const { result } = renderHook(() => useAgentPrompt('%1', 'idle'))
+    await tick()
+    expect(result.current.suggestion).toBe('Run it')
+    // A dialog shown by the client hides it; closing the dialog keeps none
+    act(() => result.current.show(dialog))
+    expect(result.current.suggestion).toBe('')
+    act(() => result.current.show(null))
+    expect(result.current.suggestion).toBe('')
+    mockFetchPrompt.mockResolvedValueOnce(dialog)
+    await tick(SLOW_POLL)
+    expect(result.current.suggestion).toBe('')
+    await tick(FAST_POLL)
+    await tick(SLOW_POLL)
+    expect(result.current.suggestion).toBe('Run it')
+    mockFetchPrompt.mockRejectedValueOnce(new Error('gone'))
+    await tick(SLOW_POLL)
+    expect(result.current.suggestion).toBe('')
   })
 })

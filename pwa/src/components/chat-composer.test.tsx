@@ -34,6 +34,7 @@ const promptStore = {
   show: vi.fn(),
   status: undefined as unknown,
   background: undefined as string | undefined,
+  suggestion: '',
 }
 vi.mock('../hooks/use-agent-prompt', () => ({
   useAgentActivity: () => ({
@@ -47,6 +48,7 @@ vi.mock('../hooks/use-agent-prompt', () => ({
     return {
       prompt: promptStore.prompt,
       loaded: promptStore.loaded,
+      suggestion: promptStore.suggestion,
       refresh: promptStore.refresh,
       show: promptStore.show,
     }
@@ -156,6 +158,7 @@ beforeEach(() => {
   promptStore.prompt = null
   promptStore.loaded = true
   promptStore.background = undefined
+  promptStore.suggestion = ''
   mockAnswerPrompt.mockResolvedValue(undefined)
   mockSend.mockResolvedValue({ queued: false })
   mockInterrupt.mockResolvedValue(undefined)
@@ -2137,5 +2140,39 @@ describe('ChatComposer Stop', () => {
     )
     expect(transcript.refresh).toHaveBeenCalled()
     expect(mockInterrupt).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ChatComposer suggestion', () => {
+  it('shows the suggestion and Tab takes it into an empty box', () => {
+    promptStore.suggestion = 'Run the tests again'
+    render(<ChatComposer {...props()} />)
+    expect(box()).toHaveAttribute('placeholder', 'Run the tests again')
+    expect(screen.getByText('Tab to use the suggestion')).toBeInTheDocument()
+    fireEvent.keyDown(box(), { key: 'Tab' })
+    expect(box()).toHaveValue('Run the tests again')
+    expect(screen.getByText('Ctrl+Enter to send')).toBeInTheDocument()
+  })
+
+  it('leaves a typed draft and Shift+Tab alone', () => {
+    promptStore.suggestion = 'Run the tests again'
+    render(<ChatComposer {...props()} />)
+    const shift = fireEvent.keyDown(box(), { key: 'Tab', shiftKey: true })
+    expect(shift).toBe(true)
+    expect(box()).toHaveValue('')
+    type('mine')
+    expect(fireEvent.keyDown(box(), { key: 'Tab' })).toBe(true)
+    expect(box()).toHaveValue('mine')
+  })
+
+  it('keeps the usual placeholder without one or for a view-only device', () => {
+    const { unmount } = render(<ChatComposer {...props()} />)
+    expect(box()).toHaveAttribute('placeholder', 'Message')
+    unmount()
+    promptStore.suggestion = 'Run the tests again'
+    render(<ChatComposer {...props({ readOnly: true })} />)
+    expect(box()).toHaveAttribute('placeholder', 'Message')
+    expect(fireEvent.keyDown(box(), { key: 'Tab' })).toBe(true)
+    expect(box()).toHaveValue('')
   })
 })

@@ -305,6 +305,7 @@ export default {
     'Agent trong pane này sẽ dừng; màn hình chuyển về terminal.',
   'chat.composer.size': '{used} KB / {max} KB: hãy rút ngắn tin nhắn để gửi.',
   'chat.composer.hint': 'Ctrl+Enter để gửi',
+  'chat.composer.hintSuggestion': 'Tab để dùng gợi ý',
   'chat.composer.hintEnter': 'Enter để gửi, Shift+Enter để xuống dòng',
   'chat.attach.list': 'Ảnh đính kèm',
   'chat.attach.item': 'Ảnh đính kèm {n}, {state}',

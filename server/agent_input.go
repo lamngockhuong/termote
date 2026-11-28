@@ -1075,6 +1075,8 @@ type promptResponse struct {
 	Prompt *AgentPrompt `json:"prompt"`
 	// Activity: the agent's working line, null when it shows none
 	Activity *AgentActivity `json:"activity"`
+	// Suggestion: the message Claude Code proposes in its empty input box
+	Suggestion string `json:"suggestion,omitempty"`
 }
 
 func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
@@ -1122,10 +1124,10 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	sc := readAgentScreen(s.Agent, screen)
 	if isViewOnly(r) {
-		jsonOK(w, promptResponse{Prompt: viewPrompt(sc), Activity: sc.activity})
+		jsonOK(w, promptResponse{Prompt: viewPrompt(sc), Activity: sc.activity, Suggestion: sc.suggestion})
 		return
 	}
-	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc), Activity: sc.activity})
+	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc), Activity: sc.activity, Suggestion: sc.suggestion})
 }
 
 // errShellFromCLI refuses a message from the CLI that the agent would run as

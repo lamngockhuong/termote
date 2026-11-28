@@ -1146,15 +1146,24 @@ describe('agent API client', () => {
     const activity = { label: 'Working', elapsed: 3 }
     const { calls } = mockFetch(
       { body: { prompt, activity: null } },
-      { body: { prompt: null, activity } },
+      { body: { prompt: null, activity, suggestion: 'Run it' } },
       { body: {} },
     )
-    expect(await fetchAgentPrompt('%3')).toEqual({ prompt, activity: null })
-    expect(await fetchAgentPrompt('%3')).toEqual({ prompt: null, activity })
-    // An older server sends neither
+    expect(await fetchAgentPrompt('%3')).toEqual({
+      prompt,
+      activity: null,
+      suggestion: '',
+    })
+    expect(await fetchAgentPrompt('%3')).toEqual({
+      prompt: null,
+      activity,
+      suggestion: 'Run it',
+    })
+    // An older server sends none of them
     expect(await fetchAgentPrompt('%3')).toEqual({
       prompt: null,
       activity: null,
+      suggestion: '',
     })
     expect(calls[0].url).toBe('/api/mux/panes/%253/agent/prompt')
   })
