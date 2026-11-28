@@ -8,9 +8,9 @@ import { ChatMessage, chatSide, Step, Time } from './chat-message'
 import { useServerSeconds } from './chat-subagents'
 import { STEP_ROW, type StepKind, stepKind } from './chat-tool-card'
 
-// The agent's steps one after another (tool calls, thinking) fold into one
-// line saying what they were, so a turn of twenty commands does not push its
-// answer off screen. A tap opens them, each step a line of its own that a
+// The agent's steps one after another (tool calls, thinking), one call
+// alone too, fold into one line saying what they were, so a turn of twenty
+// commands does not push its answer off screen. A tap opens them, each step a line of its own that a
 // tap opens in turn. A run still going at the end of the list stays open on
 // its newest steps. Once the agent is done it folds, but only while the
 // reader follows the bottom: read above, folding would pull the lines out
@@ -23,9 +23,6 @@ import { STEP_ROW, type StepKind, stepKind } from './chat-tool-card'
 // hold the reading position by. What the reader chose for a run is kept by
 // the list per entry, so it holds when the run grows at either end.
 
-// Steps a run needs before it folds: two read as two things that happened,
-// and folding them buys a line and costs a tap.
-export const MIN_RUN = 3
 // Entries an open live run shows; the rest wait behind one tap.
 export const LIVE_TAIL = 6
 
@@ -43,10 +40,6 @@ function isSteps(entry: TranscriptEntry) {
   )
 }
 
-function stepCount(entries: TranscriptEntry[]) {
-  return entries.reduce((n, e) => n + e.parts.length, 0)
-}
-
 function toolsOf(entries: TranscriptEntry[]) {
   return entries.flatMap((e) => e.parts.filter((p) => p.kind === 'tool'))
 }
@@ -57,7 +50,8 @@ export function chatItems(entries: TranscriptEntry[]): ChatItem[] {
   let start = 0
   const flush = (end: number) => {
     const run = entries.slice(start, end)
-    if (stepCount(run) >= MIN_RUN && toolsOf(run).length > 0) {
+    // One call is a run too: folded, it is a line like any other run
+    if (toolsOf(run).length > 0) {
       out.push({ kind: 'run', start, end })
     } else {
       for (let i = start; i < end; i++) out.push({ kind: 'entry', index: i })

@@ -515,6 +515,19 @@ describe('ChatView', () => {
   })
 })
 
+// A call alone is a run, folded once done: its run opened, and each of
+// its lines, the cards show
+function showCards() {
+  for (const run of screen.queryAllByRole('button', { name: /^Worked/ })) {
+    fireEvent.click(run)
+  }
+  for (const line of document.querySelectorAll<HTMLButtonElement>(
+    '[data-run-entry] button[aria-expanded="false"]',
+  )) {
+    fireEvent.click(line)
+  }
+}
+
 describe('ChatView file paths', () => {
   const withFiles: ViewProps = {
     ...props,
@@ -619,6 +632,7 @@ describe('ChatView file paths', () => {
     mockFollowPath.mockResolvedValue('opened')
     set({ entries: [tool(name, input)] })
     render(<ChatView {...withFiles} />)
+    showCards()
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: label })),
     )
@@ -629,6 +643,7 @@ describe('ChatView file paths', () => {
     const cut = `src/${'a'.repeat(190)}…`
     set({ entries: [tool('Edit', cut)] })
     render(<ChatView {...withFiles} />)
+    showCards()
     const name = screen.getByTitle(cut)
     expect(name.tagName).toBe('SPAN')
     expect(name).toHaveClass('text-accent')
@@ -715,9 +730,11 @@ describe('ChatView file paths', () => {
   it('without a Files view, paths are plain text', () => {
     set({ entries: [say('`src/a.ts` [g](docs/g.md)'), tool('Read', 'a/b.ts')] })
     render(<ChatView {...props} />)
-    expect(screen.queryAllByRole('button', { name: /a\.ts|g|b\.ts/ })).toEqual(
-      [],
-    )
+    showCards()
+    // No path is a link (the step's own line names its file, as its words)
+    for (const name of ['src/a.ts', 'g', 'a/b.ts']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
     expect(screen.getByText('src/a.ts')).toBeInTheDocument()
     expect(screen.getByText('a/b.ts')).toHaveAttribute('title', 'a/b.ts')
   })
@@ -750,12 +767,17 @@ describe('ChatView runs of steps', () => {
     expect(screen.getByText('Ran c1')).toBeInTheDocument()
   })
 
-  it('a live run keeps what the reader opened as it becomes a run', () => {
+  it('a live run keeps what the reader opened in it as it grows', () => {
     set({
       entries: [entry(0), bash('c1', 'r1'), bash('c2')],
       status: 'working',
     })
     const { rerender } = render(<ChatView {...props} />)
+    // A call alone is a run already, one line a step
+    expect(
+      screen.getByRole('button', { name: /^Working… · 2 commands/ }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ran c1' }))
     fireEvent.click(screen.getByText('Output · 1 line'))
     expect(screen.getByText('r1')).toBeInTheDocument()
     set({
@@ -765,7 +787,7 @@ describe('ChatView runs of steps', () => {
     rerender(<ChatView {...props} />)
     const run = screen.getByRole('button', { name: /^Working… · 3 commands/ })
     expect(run).toHaveAttribute('aria-expanded', 'true')
-    // The card the reader opened stays; the others are a line each
+    // The card the reader opened stays open; the others are a line each
     expect(screen.getByText('r1')).toBeInTheDocument()
     expect(screen.getByText('Ran c2')).toBeInTheDocument()
     // Done, the run the reader was in stays open until folded
