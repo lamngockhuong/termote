@@ -148,7 +148,15 @@ test.describe('chat view runs of work', () => {
         expect(b.y - (above.y + above.height)).toBeLessThanOrEqual(1)
       }
       // The carets and the text in one column with the header's
-      const caretX = (l: Locator) => l.locator('svg').first().evaluate((el) => el.getBoundingClientRect().x)
+      // Once the header's caret has turned: mid-turn its box is wider
+      const caretX = (l: Locator) =>
+        l
+          .locator('svg')
+          .first()
+          .evaluate(async (el) => {
+            await Promise.all(el.getAnimations().map((a) => a.finished))
+            return el.getBoundingClientRect().x
+          })
       const headCaret = await caretX(run)
       for (const r of rows) expect(Math.abs((await caretX(r)) - headCaret)).toBeLessThanOrEqual(1)
       // The header's dot only, centred on its text
