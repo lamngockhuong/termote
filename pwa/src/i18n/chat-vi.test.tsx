@@ -252,6 +252,7 @@ describe('the conversation in Vietnamese', () => {
       'Đã làm trong 15s',
     )
     expect(tVi('chat.run.worked')).toBe('Đã làm')
+    expect(tVi('chat.run.needsYou')).toBe('Cần bạn')
     expect(tVi('chat.step.failed')).toBe('lỗi')
     expect(diffSummary(diffLines('a', 'a\nb'), tVi)).toBe('Thêm 1 dòng')
     expect(diffSummary(diffLines('a\nb\nc', 'a'), tVi)).toBe('Xóa 2 dòng')

@@ -839,6 +839,17 @@ describe('ChatView runs of steps', () => {
     expect(screen.getByText('Ran c3')).toBeInTheDocument()
   })
 
+  it('a live run waiting on the reader says so', () => {
+    set({
+      entries: [entry(0), bash('c1', 'r1'), bash('c2', 'r2'), bash('c3')],
+      status: 'blocked',
+    })
+    render(<ChatView {...props} />)
+    expect(
+      screen.getByRole('button', { name: /^Needs you · 3 commands/ }),
+    ).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it("a run is timed up to the agent's next entry, never the reader's", () => {
     const timed = (e: TranscriptEntry, ts: string) => ({ ...e, ts })
     set({

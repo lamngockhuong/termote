@@ -209,7 +209,8 @@ function Run({
   )
 }
 
-const header = () => screen.getByRole('button', { name: /^(Working|Worked)/ })
+const header = () =>
+  screen.getByRole('button', { name: /^(Working|Worked|Needs you)/ })
 
 describe('toolRunRows', () => {
   afterEach(() => vi.useRealTimers())
@@ -297,6 +298,35 @@ describe('toolRunRows', () => {
     act(() => vi.advanceTimersByTime(2000))
     expect(header()).toHaveAccessibleName(
       'Working… · 17s · 2 commands, 1 read · 1 failed',
+    )
+  })
+
+  it('waiting on the reader: says it needs them, the time stopped', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:10Z'))
+    const at = { start: '2026-01-01T00:00:00Z', settled: false }
+    const { rerender } = render(
+      <Run entries={run} live at={{ ...at, waiting: true }} />,
+    )
+    expect(header()).toHaveAccessibleName(
+      'Needs you · 2 commands, 1 read · 1 failed',
+    )
+    expect(screen.queryByText(/· \d+s/)).toBeNull()
+    act(() => vi.advanceTimersByTime(3000))
+    expect(header()).toHaveAccessibleName(
+      'Needs you · 2 commands, 1 read · 1 failed',
+    )
+    // Answered, it works again, counting from the run's start
+    rerender(<Run entries={run} live at={at} />)
+    expect(header()).toHaveAccessibleName(
+      'Working… · 13s · 2 commands, 1 read · 1 failed',
+    )
+  })
+
+  it('a run no longer live never says it needs the reader', () => {
+    render(<Run entries={run} live={false} at={{ waiting: true }} />)
+    expect(header()).toHaveAccessibleName(
+      'Worked · 2 commands, 1 read · 1 failed',
     )
   })
 

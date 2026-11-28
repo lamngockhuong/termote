@@ -574,6 +574,7 @@ function AgentChat({
                   hidden={hidden}
                   runs={runs}
                   working={status === 'working'}
+                  waiting={status === 'blocked'}
                   settled={settled}
                   enters={(id, index) => isNew(id) && index > firstKnown}
                 />

@@ -7,7 +7,8 @@ import { expect, test } from './fixtures'
 
 // A run of steps in the Chat view while the agent works and once it is done,
 // against the stand-in Claude Code (tests/fixtures/fake-claude.sh): "work"
-// runs four commands two seconds apart, the third failing. It needs the
+// runs four commands two seconds apart, the third failing; "steps then
+// permission" runs two commands, then waits on the Bash permission dialog. It needs the
 // socket and session of the server under test (TMUX_SOCKET, TMUX_SESSION);
 // Linux only, like the stand-in.
 const socket = process.env.TMUX_SOCKET
@@ -71,7 +72,7 @@ test.describe('chat view runs of work', () => {
   const conversationOf = (page: Page) => page.getByRole('region', { name: 'Conversation' })
   // The header of the newest run
   const runOf = (page: Page) =>
-    conversationOf(page).getByRole('button', { name: /^(Working|Worked)/ }).last()
+    conversationOf(page).getByRole('button', { name: /^(Working|Worked|Needs you)/ }).last()
 
   // Sends "work" and waits for the run it makes to be working
   async function work(page: Page) {
@@ -143,6 +144,24 @@ test.describe('chat view runs of work', () => {
       el.scrollTop = el.scrollHeight
     })
     await expect(list.getByRole('button', { name: 'Ran step-4' })).toHaveCount(0)
+    await expect(run).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('a run waiting on a permission says it needs the reader, its time stopped', async ({ page }) => {
+    await page.goto(link)
+    const conversation = conversationOf(page)
+    await expect(conversation).toContainText('Fix the build please', { timeout: 15000 })
+    await page.getByRole('textbox', { name: 'Message to Claude Code' }).fill('steps then permission')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    const card = page.getByRole('alertdialog', { name: 'Bash command' })
+    await expect(card).toBeVisible({ timeout: 15000 })
+    const run = runOf(page)
+    await expect(run).toHaveAccessibleName(/^Needs you · 3 commands$/)
+    await expect(run.getByText(/· \d+s/)).toHaveCount(0)
+    // Answered, the turn ends and the run folds
+    await card.getByRole('button', { name: /^1\.\s*Yes$/ }).click()
+    await expect(conversation).toContainText('Created scratch-one.txt.')
+    await expect(run).toHaveAccessibleName(/^Worked for \d+s · 3 commands$/)
     await expect(run).toHaveAttribute('aria-expanded', 'false')
   })
 

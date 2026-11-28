@@ -84,6 +84,7 @@ export default {
   'chat.run.failed': '{count} lỗi',
   'chat.run.working': 'Đang làm…',
   'chat.run.workedFor': 'Đã làm trong {duration}',
+  'chat.run.needsYou': 'Cần bạn',
   'chat.run.worked': 'Đã làm',
   'chat.step.ran': 'Đã chạy {command}',
   'chat.step.failed': 'lỗi',

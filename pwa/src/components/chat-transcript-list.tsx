@@ -55,6 +55,9 @@ interface Props {
   runs: RunState
   // The agent is working: its last run is open on its newest steps
   working: boolean
+  // The agent waits on the reader (a permission, a question): its live run
+  // says so, and its time stops
+  waiting?: boolean
   // The agent is done: a call left without a result keeps nothing open, and
   // the runs seen live fold
   settled: boolean
@@ -70,6 +73,7 @@ export function ChatTranscriptList({
   hidden,
   runs,
   working,
+  waiting = false,
   settled,
   enters,
 }: Props) {
@@ -112,6 +116,7 @@ export function ChatTranscriptList({
         // hours later, says nothing of how long it worked
         end: next && chatSide(next) === 'agent' ? next.ts : undefined,
         settled,
+        waiting,
       },
     )
   })

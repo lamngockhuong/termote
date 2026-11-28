@@ -94,6 +94,7 @@ export default {
   'chat.run.failed': '{count} failed',
   'chat.run.working': 'Working…',
   'chat.run.workedFor': 'Worked for {duration}',
+  'chat.run.needsYou': 'Needs you',
   'chat.run.worked': 'Worked',
   'chat.step.ran': 'Ran {command}',
   'chat.step.failed': 'failed',

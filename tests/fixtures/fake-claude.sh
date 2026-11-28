@@ -14,7 +14,9 @@
 #               as an image part
 #   Ctrl+C      clears the input box
 #   Enter       records the draft as a user turn, then answers it:
-#               "permission" in it opens the Bash permission dialog,
+#               "permission" in it opens the Bash permission dialog (with
+#               "steps" in it too, after two commands that ran, so the call
+#               waiting on the dialog is the third step of a run),
 #               "toppings" the multiSelect question (answerable only here),
 #               "order" a wizard of two single-choice questions and Submit,
 #               "extras" a wizard with a multiSelect tab (Milk toggles; the
@@ -317,6 +319,13 @@ submit() {
   sleep 0.3
   case $text in
     *permission*)
+      if [[ $text == *steps* ]]; then
+        local k p="${seq_n}_$$"
+        for k in 1 2; do
+          entry assistant "[{\"type\":\"tool_use\",\"id\":\"toolu_p${k}_$p\",\"name\":\"Bash\",\"input\":{\"command\":\"check-$k\"}}]"
+          entry user "[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_p${k}_$p\",\"content\":\"check-$k done\"}]"
+        done
+      fi
       entry assistant '[{"type":"tool_use","id":"toolu_touch","name":"Bash","input":{"command":"touch scratch-one.txt","description":"Create a file named scratch-one.txt"}}]'
       state=permission
       set_status waiting

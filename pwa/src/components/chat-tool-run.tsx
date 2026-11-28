@@ -157,24 +157,28 @@ export function keepRunAt(e: SyntheticEvent, runs: RunState) {
 // run's top. ids: the ids of the whole run, the window's cut included.
 // start: the time of that entry; end: the time of the agent's entry after
 // the run, when there is one. settled: the agent says the turn is done.
+// waiting: the agent waits on the reader.
 export interface RunAt {
   key?: string
   ids?: string[]
   start?: string
   end?: string
   settled?: boolean
+  waiting?: boolean
 }
 
 const HEADER =
   'flex w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch'
 
 // The line over a run: "Working… · 15s · 3 commands · 1 failed" while it
-// runs, a second at a time, then "Worked for 15s · …". The count of failed
+// runs, a second at a time, "Needs you · …" while the agent waits on the
+// reader (no time: the wait is not work), then "Worked for 15s · …". The count of failed
 // steps is a span of its own the summary's cut never reaches. The button
 // is named by the whole line, so a screen reader says the parts as words.
 function RunHeader({
   open,
   live,
+  waiting,
   start,
   end,
   clockOffset,
@@ -185,6 +189,7 @@ function RunHeader({
 }: {
   open: boolean
   live: boolean
+  waiting: boolean
   start?: string
   end?: string
   clockOffset: number
@@ -193,16 +198,19 @@ function RunHeader({
   onClick: () => void
   t: Translate<MessageKey>
 }) {
-  const now = useServerSeconds(live, clockOffset)
-  const seconds = live
+  const ticking = live && !waiting
+  const now = useServerSeconds(ticking, clockOffset)
+  const seconds = ticking
     ? runSeconds(start, new Date(now).toISOString())
     : runSeconds(start, end)
-  const title = live
-    ? t('chat.run.working')
-    : seconds === undefined
-      ? t('chat.run.worked')
-      : t('chat.run.workedFor', { duration: formatElapsed(seconds) })
-  const elapsed = live && seconds !== undefined && formatElapsed(seconds)
+  const title = waiting
+    ? t('chat.run.needsYou')
+    : live
+      ? t('chat.run.working')
+      : seconds === undefined
+        ? t('chat.run.worked')
+        : t('chat.run.workedFor', { duration: formatElapsed(seconds) })
+  const elapsed = ticking && seconds !== undefined && formatElapsed(seconds)
   const failures = failed > 0 && t('chat.run.failed', { count: failed })
   return (
     <button
@@ -300,6 +308,7 @@ export function toolRunRows(
         <RunHeader
           open={open && start === 0}
           live={live}
+          waiting={live && !!at.waiting}
           start={at.start ?? entries[0].ts}
           end={at.end}
           clockOffset={state.clockOffset ?? 0}
