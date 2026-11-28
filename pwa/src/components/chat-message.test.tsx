@@ -838,10 +838,13 @@ describe('ChatMessage', () => {
       'group-focus-within/msg:opacity-100',
       'pointer-coarse:opacity-100',
     )
-    expect(row.parentElement?.parentElement).toHaveClass('group/msg')
+    expect(row.parentElement).toHaveClass('group/msg')
     // Its time beside the button: shown on hover, but on a touch screen only
     // where a run starts
-    expect(row.querySelector('time')).toHaveClass('pointer-coarse:hidden')
+    const time = row.querySelector('time')
+    expect(time).toHaveClass('pointer-coarse:hidden')
+    // Centred with the button, not dropped to the row's bottom
+    expect(time).not.toHaveClass('self-end')
     expect(container.querySelectorAll('time')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }))
     expect(writeText).toHaveBeenCalledWith('one\n\ntwo')
@@ -857,15 +860,33 @@ describe('ChatMessage', () => {
       ),
     ).toBeInTheDocument()
     // A message the agent's next entry follows has one too, the line going
-    // on past it
+    // on: at the right, taking no room, and letting clicks through while
+    // unseen; a touch screen has the time over the message instead
     rerender(<ChatMessage entry={entry} joinsNext showTime />)
-    expect(container.querySelectorAll('span.w-px')).toHaveLength(4)
-    expect(
-      screen.getByRole('button', { name: 'Copy answer' }),
-    ).toBeInTheDocument()
-    expect(container.querySelector('time')).not.toHaveClass(
+    expect(container.querySelectorAll('span.w-px')).toHaveLength(3)
+    const over = screen.getByRole('button', { name: 'Copy answer' })
+      .parentElement as HTMLElement
+    expect(over).toHaveClass(
+      'absolute',
+      'top-full',
+      'right-0',
+      'z-10',
+      'opacity-0',
+      'pointer-events-none',
+      'group-hover/msg:pointer-events-auto',
       'pointer-coarse:hidden',
     )
+    expect(over.parentElement).toHaveClass('group/msg', 'relative')
+    const times = container.querySelectorAll('time')
+    expect(times).toHaveLength(2)
+    expect(times[0]).toHaveClass('hidden', 'pointer-coarse:inline')
+    expect(over).toContainElement(times[1] as HTMLElement)
+    writeText.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }))
+    expect(writeText).toHaveBeenCalledWith('one\n\ntwo')
+    // Without showTime a touch screen shows no time for it
+    rerender(<ChatMessage entry={entry} joinsNext />)
+    expect(container.querySelectorAll('time')).toHaveLength(1)
   })
 
   it("the reader's own message has its time and a copy button beside it", () => {

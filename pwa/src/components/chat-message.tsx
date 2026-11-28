@@ -391,7 +391,7 @@ export function Time({
     <time
       dateTime={ts}
       title={formatDateTime(d, locale)}
-      className={`self-end text-[11px] text-fg-subtle ${className}`}
+      className={`text-[11px] text-fg-subtle ${className}`}
     >
       {formatTime(d, locale)}
     </time>
@@ -411,8 +411,9 @@ export function chatSide(entry: TranscriptEntry): 'user' | 'agent' | 'other' {
 // parsed markdown) alone. showTime: the entry starts a run of its own;
 // joinsNext: the agent's next entry follows, so the line goes on. A
 // message with text has its time and a copy button under it (beside it, the
-// reader's own), shown on hover with a mouse; a touch screen always shows
-// them, the time only where showTime asks for it. className: motion
+// reader's own; at the right, taking no room, when the agent goes on), shown
+// on hover with a mouse; a touch screen shows them at the end of a turn, the
+// time only where showTime asks for it. className: motion
 // on its root (a message that just came in). steps: the entry is in an open
 // run, each tool call a line. data-run-entry, on an entry of steps only: the
 // list keeps a run open once the reader pressed or focused inside one of
@@ -517,9 +518,16 @@ export const ChatMessage = memo(function ChatMessage({
     <div
       data-role={entry.role}
       data-run-entry={onlySteps ? entry.id : undefined}
-      className={`group/msg flex flex-col ${steps ? '' : 'gap-3'} ${className}`}
+      className={`group/msg relative flex flex-col ${steps ? '' : 'gap-3'} ${className}`}
     >
-      {!answer && showTime && <Time ts={entry.ts} className={REVEAL} />}
+      {!answer && showTime && (
+        <Time ts={entry.ts} className={`self-end ${REVEAL}`} />
+      )}
+      {answer && joinsNext && showTime && (
+        // Where a touch screen shows the time of a message the agent goes
+        // on from: it has no row of its own there
+        <Time ts={entry.ts} className="hidden self-end pointer-coarse:inline" />
+      )}
       {entry.parts.map((part, i) => (
         <Step
           // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
@@ -536,17 +544,31 @@ export const ChatMessage = memo(function ChatMessage({
           <Part part={part} n={numbers[i]} steps={steps} />
         </Step>
       ))}
-      {answer && (
-        // A step of its own, so the line goes on past it to the next entry
-        <Step line={!!joinsNext}>
-          <div className={`-mt-2 -ml-1 flex items-center gap-1 ${REVEAL}`}>
-            <CopyButton
-              text={() => answer}
-              label={t('chat.message.copyAnswer')}
-            />
-            <Time ts={entry.ts} className={timeTouch} />
-          </div>
-        </Step>
+      {answer && !joinsNext && (
+        <div className={`-mt-2 flex items-center gap-1 pl-4 ${REVEAL}`}>
+          <CopyButton
+            text={() => answer}
+            label={t('chat.message.copyAnswer')}
+          />
+          <Time ts={entry.ts} className={timeTouch} />
+        </div>
+      )}
+      {answer && joinsNext && (
+        // The agent goes on: the row takes no room, at the right under the
+        // message, over the start of the next entry (a run's short line).
+        // Above that entry (its row is positioned too, and comes later), or
+        // the pointer on the way to the button would leave the message.
+        // Unseen it lets clicks through to that entry; a touch screen does
+        // not have it, as the row would always show there
+        <div
+          className={`pointer-events-none absolute top-full right-0 z-10 flex items-center gap-1 pt-2 group-focus-within/msg:pointer-events-auto group-hover/msg:pointer-events-auto pointer-coarse:hidden ${REVEAL}`}
+        >
+          <Time ts={entry.ts} />
+          <CopyButton
+            text={() => answer}
+            label={t('chat.message.copyAnswer')}
+          />
+        </div>
       )}
     </div>
   )
