@@ -81,7 +81,8 @@ Part of the [security invariants](README.md): the Chat view of Claude Code, Code
   box, read off the same capture (`readInputBox`: the box's text when every character of it is
   faint, never a fresh session's `Try "…"` example, a known placeholder or text while a working
   line shows). It adds no capture and no write and takes nothing from the client; the PWA only
-  shows it as the box's placeholder and puts it in the draft on Tab, never sends it by itself.
+  shows it as the box's placeholder and puts it in the draft on Tab or its **Use the suggestion**
+  button, never sends it by itself.
   View-only clients get it as they get the screen's other text; their composer ignores it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →

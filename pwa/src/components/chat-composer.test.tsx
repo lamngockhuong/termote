@@ -2165,6 +2165,21 @@ describe('ChatComposer suggestion', () => {
     expect(box()).toHaveValue('mine')
   })
 
+  it('the Use the suggestion button takes it, shown only while the box is empty', () => {
+    promptStore.suggestion = 'Run the tests again'
+    render(<ChatComposer {...props({ isMobile: true })} />)
+    const use = screen.getByRole('button', { name: 'Use the suggestion' })
+    // Pressing it keeps the box focused (the phone keyboard stays open)
+    expect(fireEvent.pointerDown(use)).toBe(false)
+    expect(fireEvent.mouseDown(use)).toBe(false)
+    fireEvent.click(use)
+    expect(box()).toHaveValue('Run the tests again')
+    expect(box()).toHaveFocus()
+    expect(
+      screen.queryByRole('button', { name: 'Use the suggestion' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('keeps the usual placeholder without one or for a view-only device', () => {
     const { unmount } = render(<ChatComposer {...props()} />)
     expect(box()).toHaveAttribute('placeholder', 'Message')
@@ -2172,6 +2187,9 @@ describe('ChatComposer suggestion', () => {
     promptStore.suggestion = 'Run the tests again'
     render(<ChatComposer {...props({ readOnly: true })} />)
     expect(box()).toHaveAttribute('placeholder', 'Message')
+    expect(
+      screen.queryByRole('button', { name: 'Use the suggestion' }),
+    ).not.toBeInTheDocument()
     expect(fireEvent.keyDown(box(), { key: 'Tab' })).toBe(true)
     expect(box()).toHaveValue('')
   })
