@@ -799,6 +799,9 @@ describe('ChatMessage', () => {
     expect(times).toHaveLength(2)
     expect(times[0]).toHaveClass('hidden', 'pointer-coarse:inline')
     expect(over).toContainElement(times[1] as HTMLElement)
+    writeText.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }))
+    expect(writeText).toHaveBeenCalledWith('one\n\ntwo')
     // Without showTime a touch screen shows no time for it
     rerender(<ChatMessage entry={entry} joinsNext />)
     expect(container.querySelectorAll('time')).toHaveLength(1)
