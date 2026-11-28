@@ -393,6 +393,37 @@ describe('ChatView', () => {
     expect(screen.queryByRole('button', { name: 'New messages' })).toBeNull()
   })
 
+  it('offers a round jump to the end while reading above, with nothing new', () => {
+    set({ entries: entries(2) })
+    const { rerender } = render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 800 })
+    fireEvent.scroll(list)
+    expect(
+      screen.queryByRole('button', { name: 'Scroll to bottom' }),
+    ).toBeNull()
+    // Scrolled up: the round button, not the new-messages one
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    expect(screen.queryByRole('button', { name: 'New messages' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Scroll to bottom' }))
+    expect(list.scrollTop).toBe(1000)
+    expect(
+      screen.queryByRole('button', { name: 'Scroll to bottom' }),
+    ).toBeNull()
+    // A new entry while above: the new-messages button takes its place
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    set({ entries: entries(3) })
+    rerender(<ChatView {...props} />)
+    expect(
+      screen.getByRole('button', { name: 'New messages' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Scroll to bottom' }),
+    ).toBeNull()
+  })
+
   it('scrolling back to the bottom clears the jump', () => {
     set({ entries: entries(2) })
     const { rerender } = render(<ChatView {...props} />)

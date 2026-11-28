@@ -31,6 +31,7 @@ export default {
   'chat.view.showEarlier': 'Show earlier messages',
   'chat.view.empty': 'No messages yet.',
   'chat.view.newMessages': 'New messages',
+  'chat.view.scrollToBottom': 'Scroll to bottom',
   // A pane with only its shell (components/start-agent-panel.tsx)
   'chat.start.title': 'Start an agent in this pane',
   'chat.start.starting': 'Starting {agent}…',

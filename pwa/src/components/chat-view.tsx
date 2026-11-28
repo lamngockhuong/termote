@@ -528,77 +528,110 @@ function AgentChat({
           </IconButton>
         )}
       </header>
-      <section
-        ref={listRef}
-        onScroll={onScroll}
-        // A run clicked or focused inside stays open once the agent is done
-        onFocusCapture={(e) => keepRunAt(e, runs)}
-        onClickCapture={(e) => keepRunAt(e, runs)}
-        // A click or tap that leaves nothing selected: the selection kept is
-        // not quoted (a right click, a tap on the selected text keep it; a
-        // new selection replaces it)
-        onClick={() => {
-          if (session.paneId && document.getSelection()?.isCollapsed) {
-            setChatSelection(session.paneId, null)
-          }
-        }}
-        aria-label={translate('chat.view.conversation')}
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
-        data-native-menu
-      >
-        <ChatFileLinkContext.Provider value={openFile}>
-          <ChatImageViewer paneId={paneId}>
-            <ChatMarkdownContext.Provider value={markdown}>
-              <div ref={contentRef} className="space-y-3">
-                {(hidden > 0 || t.before) && (
-                  <div className="flex justify-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={t.loadingOlder}
-                      onClick={showEarlier}
-                    >
-                      {t.loadingOlder
-                        ? translate('chat.view.loadingOlder')
-                        : translate('chat.view.showEarlier')}
-                    </Button>
-                  </div>
-                )}
-                {visible.length === 0 && (
-                  <p className="text-center text-fg-muted">
-                    {translate('chat.view.empty')}
-                  </p>
-                )}
-                <ChatTranscriptList
-                  entries={t.entries}
-                  hidden={hidden}
-                  runs={runs}
-                  working={status === 'working'}
-                  waiting={status === 'blocked'}
-                  settled={settled}
-                  enters={(id, index) => isNew(id) && index > firstKnown}
-                />
-                {status === 'working' ? (
-                  <ChatActivity
-                    paneId={
-                      chatInputAgent(session.agentName)
-                        ? session.paneId
-                        : undefined
-                    }
-                    status={status}
-                    agent={agent}
+      {/* The jump to the end sits on the list's bottom edge, above the
+          subagents and questions under it */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <section
+          ref={listRef}
+          onScroll={onScroll}
+          // A run clicked or focused inside stays open once the agent is done
+          onFocusCapture={(e) => keepRunAt(e, runs)}
+          onClickCapture={(e) => keepRunAt(e, runs)}
+          // A click or tap that leaves nothing selected: the selection kept is
+          // not quoted (a right click, a tap on the selected text keep it; a
+          // new selection replaces it)
+          onClick={() => {
+            if (session.paneId && document.getSelection()?.isCollapsed) {
+              setChatSelection(session.paneId, null)
+            }
+          }}
+          aria-label={translate('chat.view.conversation')}
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
+          data-native-menu
+        >
+          <ChatFileLinkContext.Provider value={openFile}>
+            <ChatImageViewer paneId={paneId}>
+              <ChatMarkdownContext.Provider value={markdown}>
+                <div ref={contentRef} className="space-y-3">
+                  {(hidden > 0 || t.before) && (
+                    <div className="flex justify-center">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={t.loadingOlder}
+                        onClick={showEarlier}
+                      >
+                        {t.loadingOlder
+                          ? translate('chat.view.loadingOlder')
+                          : translate('chat.view.showEarlier')}
+                      </Button>
+                    </div>
+                  )}
+                  {visible.length === 0 && (
+                    <p className="text-center text-fg-muted">
+                      {translate('chat.view.empty')}
+                    </p>
+                  )}
+                  <ChatTranscriptList
+                    entries={t.entries}
+                    hidden={hidden}
+                    runs={runs}
+                    working={status === 'working'}
+                    waiting={status === 'blocked'}
+                    settled={settled}
+                    enters={(id, index) => isNew(id) && index > firstKnown}
                   />
-                ) : (
-                  chatInputAgent(session.agentName) &&
-                  session.paneId && (
-                    <ChatBackground paneId={session.paneId} status={status} />
-                  )
-                )}
-              </div>
-            </ChatMarkdownContext.Provider>
-          </ChatImageViewer>
-        </ChatFileLinkContext.Provider>
-      </section>
+                  {status === 'working' ? (
+                    <ChatActivity
+                      paneId={
+                        chatInputAgent(session.agentName)
+                          ? session.paneId
+                          : undefined
+                      }
+                      status={status}
+                      agent={agent}
+                    />
+                  ) : (
+                    chatInputAgent(session.agentName) &&
+                    session.paneId && (
+                      <ChatBackground paneId={session.paneId} status={status} />
+                    )
+                  )}
+                </div>
+              </ChatMarkdownContext.Provider>
+            </ChatImageViewer>
+          </ChatFileLinkContext.Provider>
+        </section>
+        {unseen ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <Button
+              size="sm"
+              variant="primary"
+              className="pointer-events-auto shadow-md"
+              onClick={jumpToBottom}
+            >
+              <ArrowDown size={14} aria-hidden="true" />
+              {translate('chat.view.newMessages')}
+            </Button>
+          </div>
+        ) : (
+          // Scrolled up with nothing new: a round button back to the end
+          !atBottom && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+              <IconButton
+                size="sm"
+                variant="secondary"
+                className="pointer-events-auto rounded-full! shadow-md"
+                aria-label={translate('chat.view.scrollToBottom')}
+                title={translate('chat.view.scrollToBottom')}
+                onClick={jumpToBottom}
+              >
+                <ArrowDown size={16} aria-hidden="true" />
+              </IconButton>
+            </div>
+          )
+        )}
+      </div>
       {/* Only Claude Code's and OpenCode's sessions have a subagent tree */}
       {subagentAgent(session.agentName) && paneId && (
         <ChatSubagents
@@ -637,19 +670,6 @@ function AgentChat({
           onAnswered={p.refresh}
           onChanged={p.show}
         />
-      )}
-      {unseen && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          <Button
-            size="sm"
-            variant="primary"
-            className="pointer-events-auto shadow-md"
-            onClick={jumpToBottom}
-          >
-            <ArrowDown size={14} aria-hidden="true" />
-            {translate('chat.view.newMessages')}
-          </Button>
-        </div>
       )}
     </div>
   )
