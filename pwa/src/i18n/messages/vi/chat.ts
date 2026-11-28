@@ -27,6 +27,7 @@ export default {
   'chat.view.showEarlier': 'Xem tin nhắn cũ hơn',
   'chat.view.empty': 'Chưa có tin nhắn nào.',
   'chat.view.newMessages': 'Có tin nhắn mới',
+  'chat.view.scrollToBottom': 'Cuộn xuống cuối',
   'chat.start.title': 'Khởi động một agent trong pane này',
   'chat.start.starting': 'Đang khởi động {agent}…',
   'chat.input.readOnly': 'Chỉ đọc',
