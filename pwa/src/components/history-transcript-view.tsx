@@ -1,11 +1,12 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { historyImageAgent } from '../chat-agents'
+import { useChatCommands } from '../hooks/use-chat-commands'
 import { useHistoryTranscript } from '../hooks/use-history-transcript'
 import type { HistoryAgent, TranscriptEntry } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
-import { ChatMarkdownContext } from './chat-message'
+import { ChatCommandsContext, ChatMarkdownContext } from './chat-message'
 import {
   keepRun,
   keepRunAt,
@@ -34,6 +35,7 @@ export function HistoryTranscriptView({
 }: Props) {
   const { t } = useT()
   const h = useHistoryTranscript(paneId, agent, sessionId)
+  const commands = useChatCommands(undefined, agent)
   if (!h.loaded) {
     return (
       <p className="p-6 text-center text-fg-muted">{t('chat.view.loading')}</p>
@@ -51,18 +53,20 @@ export function HistoryTranscriptView({
   // An image chip opens the image where the server serves an old session's
   // images; elsewhere it stays plain text.
   return (
-    <TranscriptReader
-      entries={h.entries}
-      hasOlder={h.hasOlder}
-      loadingOlder={h.loadingOlder}
-      loadOlder={h.loadOlder}
-      scroll="end"
-      working={false}
-      notify={notify}
-      openFile={openFile}
-      imagePane={historyImageAgent(agent) ? paneId : ''}
-      testId="history-transcript"
-    />
+    <ChatCommandsContext.Provider value={commands}>
+      <TranscriptReader
+        entries={h.entries}
+        hasOlder={h.hasOlder}
+        loadingOlder={h.loadingOlder}
+        loadOlder={h.loadOlder}
+        scroll="end"
+        working={false}
+        notify={notify}
+        openFile={openFile}
+        imagePane={historyImageAgent(agent) ? paneId : ''}
+        testId="history-transcript"
+      />
+    </ChatCommandsContext.Provider>
   )
 }
 

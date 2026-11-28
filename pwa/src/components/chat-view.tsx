@@ -12,6 +12,7 @@ import type { ViewProps } from '../app-views'
 import { agentLabel, chatInputAgent, subagentAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import { useChatCommands } from '../hooks/use-chat-commands'
 import { useDomSelection } from '../hooks/use-dom-selection'
 import {
   FOLLOW_NOTICES,
@@ -35,7 +36,7 @@ import { ChatActivity, ChatBackground } from './chat-activity-row'
 import { ChatAsks } from './chat-asks'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
-import { ChatMarkdownContext } from './chat-message'
+import { ChatCommandsContext, ChatMarkdownContext } from './chat-message'
 import { ChatSubagents } from './chat-subagents'
 import {
   keepRun,
@@ -216,6 +217,7 @@ function AgentChat({
   hiddenGroupIds,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
+  const commands = useChatCommands(session.paneId, session.agentName)
   const { t: translate } = useT()
   // A message that came in after the conversation showed fades in: not its
   // history, nor older messages loaded above it (before the first one known)
@@ -552,52 +554,57 @@ function AgentChat({
           <ChatFileLinkContext.Provider value={openFile}>
             <ChatImageViewer paneId={paneId}>
               <ChatMarkdownContext.Provider value={markdown}>
-                <div ref={contentRef} className="space-y-3">
-                  {(hidden > 0 || t.before) && (
-                    <div className="flex justify-center">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={t.loadingOlder}
-                        onClick={showEarlier}
-                      >
-                        {t.loadingOlder
-                          ? translate('chat.view.loadingOlder')
-                          : translate('chat.view.showEarlier')}
-                      </Button>
-                    </div>
-                  )}
-                  {visible.length === 0 && (
-                    <p className="text-center text-fg-muted">
-                      {translate('chat.view.empty')}
-                    </p>
-                  )}
-                  <ChatTranscriptList
-                    entries={t.entries}
-                    hidden={hidden}
-                    runs={runs}
-                    working={status === 'working'}
-                    waiting={status === 'blocked'}
-                    settled={settled}
-                    enters={(id, index) => isNew(id) && index > firstKnown}
-                  />
-                  {status === 'working' ? (
-                    <ChatActivity
-                      paneId={
-                        chatInputAgent(session.agentName)
-                          ? session.paneId
-                          : undefined
-                      }
-                      status={status}
-                      agent={agent}
+                <ChatCommandsContext.Provider value={commands}>
+                  <div ref={contentRef} className="space-y-3">
+                    {(hidden > 0 || t.before) && (
+                      <div className="flex justify-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={t.loadingOlder}
+                          onClick={showEarlier}
+                        >
+                          {t.loadingOlder
+                            ? translate('chat.view.loadingOlder')
+                            : translate('chat.view.showEarlier')}
+                        </Button>
+                      </div>
+                    )}
+                    {visible.length === 0 && (
+                      <p className="text-center text-fg-muted">
+                        {translate('chat.view.empty')}
+                      </p>
+                    )}
+                    <ChatTranscriptList
+                      entries={t.entries}
+                      hidden={hidden}
+                      runs={runs}
+                      working={status === 'working'}
+                      waiting={status === 'blocked'}
+                      settled={settled}
+                      enters={(id, index) => isNew(id) && index > firstKnown}
                     />
-                  ) : (
-                    chatInputAgent(session.agentName) &&
-                    session.paneId && (
-                      <ChatBackground paneId={session.paneId} status={status} />
-                    )
-                  )}
-                </div>
+                    {status === 'working' ? (
+                      <ChatActivity
+                        paneId={
+                          chatInputAgent(session.agentName)
+                            ? session.paneId
+                            : undefined
+                        }
+                        status={status}
+                        agent={agent}
+                      />
+                    ) : (
+                      chatInputAgent(session.agentName) &&
+                      session.paneId && (
+                        <ChatBackground
+                          paneId={session.paneId}
+                          status={status}
+                        />
+                      )
+                    )}
+                  </div>
+                </ChatCommandsContext.Provider>
               </ChatMarkdownContext.Provider>
             </ChatImageViewer>
           </ChatFileLinkContext.Provider>
